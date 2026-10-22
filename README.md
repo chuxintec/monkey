@@ -4,7 +4,7 @@ Python 驱动的离线 Cocos 资源解析与原生工程候选工具。当前为
 
 已实现两条明确的 2.4.15 输入路径：编辑器工程 JSON/meta，以及发布 bundle 的 compiled-v1/pack-v1/texture-pack-v1。工具不执行源脚本，不自动翻译业务、不恢复服务器、不模拟源引擎运行时。
 
-当前可运行 `catalog / inspect / normalize / plan / export / verify / handoff`。可生成 Unity 6000.6.2f1、uGUI 2.0.0 的资源、Editor 导入指令和原生 View 引用脚本；**实际 Editor 导入/保存回读、原版画面对照与业务均尚未执行**。Cocos 3.8.8 输出和增量 apply 仍为计划项。
+当前可运行 `catalog / inspect / normalize / plan / export / verify / handoff`。可生成 Unity 6000.6.2f1、uGUI 2.0.0 的图像、原BitmapFont/源TTF文字、有限布局/按钮/遮罩、Editor 导入指令和原生 View 引用脚本；**实际 Editor 导入/保存回读、原版画面对照与业务均尚未执行**。Cocos 3.8.8 输出和增量 apply 仍为计划项。
 
 ## 本地使用
 
@@ -22,7 +22,7 @@ Python 最低 3.11，本次实际验证为 macOS arm64 / Python 3.14.7。Pillow 
 
 - [实际进度与下一步](docs/PLAN.md)
 - [命令、支持矩阵与边界](docs/USAGE.md)
-- [首批离线验证](docs/validation/2026-10-22-offline.md)
+- [首批离线验证](docs/validation/2026-10-22-offline.md)、[首屏字体/UI续包](docs/validation/2026-10-22-reward-font-ui.md)
 - [架构合同](docs/ARCHITECTURE.md)、[原实施方案](docs/IMPLEMENTATION.md)
 - [算法与依赖来源](docs/PROVENANCE.md)
 

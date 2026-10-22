@@ -6,3 +6,7 @@
 - [Pillow](https://pypi.org/project/pillow/12.2.0/) 固定 12.2.0。[texture2ddecoder](https://pypi.org/project/texture2ddecoder/1.0.6/) 固定 1.0.6 可选，仅使用 ASTC decode；BGRA→RGBA 按[作者文档](https://github.com/K0lb3/texture2ddecoder)处理。来源为 PyPI 官方索引，依赖安装只在本项目 `.venv`。未启用 PVRTC 等其他 codec。
 - Unity profile 来自只读核对现有 6000.6.2f1 与 uGUI 2.0.0 清单。编译校验使用现有 Unity 引擎/Editor DLL 和现有 uGUI/TMP DLL，不复制这些 DLL 到产品，不运行原游戏或 Editor。此证据仅证明 adapter API/类型可编译。
 - 本轮无远端仓库、推送、发布、全局安装、引擎安装或付费生成。Python 最低 3.11 的跨版本实测仍未执行；当前宿主为 3.14.7。
+
+CONTINUE-01新增依据：冻结主包game.js的zh字体选择经人工只读核对，绑定JSON带整文件hash、字节范围及匹配source-manifest hash；没有执行或复制业务JS到产品。原TTF的字形覆盖由本项目标准库SFNT cmap4/12预检，渲染仍交给Unity原生字体接口。BitmapFont的逻辑字框及未缩放字距差异通过原字段和独立反例核对，转换器不嵌入Cocos运行时。
+
+字段/default与字形坐标语义核对了Cocos官方明确tag的 [Widget](https://github.com/cocos/cocos-engine/blob/v2.4.15/cocos2d/core/components/CCWidget.js)、[Bitmap label](https://github.com/cocos/cocos-engine/blob/v2.4.15/cocos2d/core/renderer/utils/label/bmfont.js)；仅作格式/可观察语义参考，未复制源引擎实现到产品。TMP接口/序列化字段与RGBA bitmap材质行为只读核对现有uGUI包源码，并通过当前Unity程序集窄编译。

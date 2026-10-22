@@ -3,7 +3,7 @@ from importlib.resources import files
 from pathlib import Path
 import uuid
 from .. import __version__
-from ..io import safe, inside, read, load, sha, encoded, new_output, finish, write_json, diagnostic
+from ..io import safe, inside, read, load, sha, encoded, new_output, finish, write_json, diagnostic, stage_document
 from ..sources.compiled import fail
 
 PROFILE = 'unity-6000.6.2f1-ugui'
@@ -13,14 +13,34 @@ def guid(namespace, identity):
     return uuid.uuid5(uuid.NAMESPACE_URL, 'monkey/'+namespace+'/'+identity).hex
 
 
-def plan(ir_path, namespace, output):
+def plan(ir_path, namespace, output, bindings_path=None):
     ir_path = safe(ir_path)
-    ir = load(read(ir_path))
+    ir = stage_document(ir_path)
     if ir.get('schemaVersion') != 1 or ir.get('sourceProfile') not in ('cocos-2.4.15-bundle','cocos-2.4.15-project'):
         fail('UNSUPPORTED_IR', '$', 'Expected normalize schema 1')
     source_files = load(read(ir_path.parent/'manifest.json'))['files']
     expected = {f['path']: f['sha256'] for f in source_files}
     diagnostics = list(ir['diagnostics'])
+    binding_receipt=None;label_bindings={}
+    if bindings_path:
+        raw=read(bindings_path);binding=load(raw)
+        if binding.get('sourceManifestSha256')!=ir['sourceManifestSha256']:
+            fail('BINDING_SOURCE_MISMATCH',str(bindings_path),'Binding targets a different source manifest')
+        evidence={x['sha256']:x for x in ir.get('evidenceFiles',[])}
+        if binding.get('evidenceSha256') not in evidence:
+            fail('BINDING_EVIDENCE_MISSING',str(bindings_path),'Explicit inspect evidence hash is required')
+        offset,length=binding.get('offset'),binding.get('bytes')
+        if type(offset) is not int or type(length) is not int or offset<0 or length<=0 or offset+length>evidence[binding['evidenceSha256']]['bytes']:
+            fail('BINDING_EVIDENCE_RANGE',str(bindings_path),'Evidence byte range is invalid')
+        for item in binding.get('labelFonts',[]):
+            if type(item.get('syntheticBold',False)) is not bool or not isinstance(item.get('font'),str):
+                fail('INVALID_FONT_BINDING',str(bindings_path),'Font identity and syntheticBold must be typed')
+            if item['component'] in label_bindings:fail('DUPLICATE_BINDING',item['component'],'Duplicate component binding')
+            label_bindings[item['component']]=item
+        known_ids={c['sourceId'] for c in ir['components'] if c['type']=='cc.Label'}
+        if set(label_bindings)-known_ids:fail('UNKNOWN_BINDING_COMPONENT',str(bindings_path),'Binding references unknown Label')
+        binding_receipt=dict(sha256=sha(raw),**binding)
+        diagnostics=[d for d in diagnostics if not (d.get('sourceId') in label_bindings and d['message'].startswith('system font requires'))]
     textures, copies = [], []
     def resource(relative, identity, role):
         source = inside(ir_path.parent, relative)
@@ -40,8 +60,15 @@ def plan(ir_path, namespace, output):
                              border=[0,0,0,0],size=frame['originalSize'],originalSize=frame['originalSize'],offset=[0,0]))
     assets=[]
     for asset in ir['assets']:
-        assets.append(dict(id=asset['sourceId'],kind=asset['kind'],path=resource(asset['path'],asset['sourceId'],'native')))
-    resource_ids = {a['id'] for a in assets}
+        assets.append(dict(id=asset['sourceId'],kind=asset['kind'],path=resource(asset['path'],asset['sourceId'],'native'),fontCoverage=asset.get('fontCoverage')))
+    bitmap_fonts=[]
+    for font in ir.get('bitmapFonts',[]):
+        item={k:v for k,v in font.items() if k!='atlasImage'}
+        item['id']=font['sourceId']
+        item['path']=resource(font['atlasImage'],font['sourceId']+'@atlas','bitmap-atlas')
+        item['fontPath']='Assets/Generated/Art/'+guid(namespace,font['sourceId'])+'.asset'
+        bitmap_fonts.append(item)
+    resource_ids = {a['id'] for a in assets if a['kind']=='cc.TTFFont'}|{f['id'] for f in bitmap_fonts}
     sprite_ids = {s['id'] for s in textures}
     nodes = ir['nodes']
     node_ids = {n['sourceId'] for n in nodes}
@@ -65,9 +92,22 @@ def plan(ir_path, namespace, output):
             if cursor['sourceId'] in seen:
                 fail('NODE_CYCLE',n['sourceId'],'Parent cycle')
             seen.add(cursor['sourceId']);cursor=next(v for v in nodes if v['sourceId']==cursor['parent'])
+    native_types={'cc.Sprite','cc.Label','cc.Widget','cc.Mask','cc.ScrollView','cc.Layout','cc.Button','cc.LabelOutline'}
+    native_materials={f['sourceId'] for f in ir.get('materials',[]) if f['nativeRole']=='standard-ugui'}
+    def resolve_id(value):
+        seen=set()
+        while value in ir.get('aliases',{}):
+            if value in seen:fail('REDIRECT_CYCLE',value,'IR alias cycle')
+            seen.add(value);value=ir['aliases'][value]
+        return value
     components=[]
     for c in ir['components']:
         entry=dict(c)
+        if c['sourceId'] in label_bindings:
+            bind=label_bindings[c['sourceId']]
+            if c.get('font') is not None:fail('BINDING_REPLACES_EXPLICIT_FONT',c['sourceId'],'Only absent system-font references may be source-bound')
+            entry['font']=bind['font']
+            entry['bold']=bind.get('syntheticBold',False)
         for field in ('spriteFrame','font'):
             value=entry.get(field);seen=set()
             while value in ir.get('aliases',{}):
@@ -75,21 +115,86 @@ def plan(ir_path, namespace, output):
                 seen.add(value);value=ir['aliases'][value]
             if field in entry:entry[field]=value
         c=entry
-        entry['convertible']=c['type'] in ('cc.Sprite','cc.Label') and c['node'] in node_ids
+        entry['convertible']=c['type'] in native_types and c['node'] in node_ids
+        entry['nativeId']=guid(namespace,c['sourceId'])
+        if any(resolve_id(mat) not in native_materials for mat in c.get('materials',[])):
+            entry['convertible']=False
+            diagnostics.append(diagnostic('CUSTOM_MATERIAL_HANDOFF',c['sourceId'],'Material is not recognized standard UI texture',c['sourceId']))
         if c['type']=='cc.Sprite':
-            if c.get('spriteFrame') not in sprite_ids or c['mode'] not in (0,1):
+            if c.get('spriteFrame') is not None and c.get('spriteFrame') not in sprite_ids or c['mode'] not in (0,1,2):
                 entry['convertible']=False
                 diagnostics.append(diagnostic('SPRITE_NOT_CONVERTIBLE',c['sourceId'],'Missing frame or unsupported mode',c['sourceId']))
-            if not c.get('trim',True) and c['mode']==1:
+            if c.get('spriteFrame') is None:
+                entry['needsSpriteBinding']=True
+                diagnostics.append(diagnostic('SOURCE_SPRITE_UNBOUND',c['sourceId'],'Source Sprite has no frame; native Image is disabled until AI binds an actual Sprite and enables it',c['sourceId']))
+            if not c.get('trim',True) and c['mode'] in (1,2):
                 entry['convertible']=False
                 diagnostics.append(diagnostic('SLICED_UNTRIMMED_UNSUPPORTED',c['sourceId'],'Needs Cocos size-mode evidence',c['sourceId']))
         elif c['type']=='cc.Label':
+            if c.get('italic') or c.get('underline'):
+                entry['convertible']=False
+                diagnostics.append(diagnostic('LABEL_STYLE_UNSUPPORTED',c['sourceId'],'Italic/underline require explicit native style mapping',c['sourceId']))
             if c.get('font') not in resource_ids:
                 entry['convertible']=False
                 diagnostics.append(diagnostic('FONT_NOT_CONVERTIBLE',c['sourceId'],'No imported matching font; no fallback text',c['sourceId']))
+            ttf=next((a for a in assets if a['id']==c.get('font') and a.get('fontCoverage')),None)
+            if ttf:
+                from ..assets.ttf import missing
+                absent=missing(ttf['fontCoverage'],c['text'])
+                if absent:
+                    entry['convertible']=False
+                    diagnostics.append(diagnostic('SOURCE_FONT_GLYPHS_MISSING',c['sourceId'],'Original TTF lacks codepoints: '+str(absent),c['sourceId']))
+            font=next((f for f in bitmap_fonts if f['id']==c.get('font')),None)
+            if font:
+                from ..assets.bitmap import single_line
+                try:
+                    entry['sourceBold']=entry.get('bold',False)
+                    entry['bold']=False
+                    entry['bitmapProbe']=single_line(font,c['text'],c['fontSize'],c.get('spacing',0))
+                    codepoints=list(map(ord,c['text']))
+                    actual_pairs={(codepoints[i],codepoints[i+1]) for i in range(len(codepoints)-1)}
+                    if c['fontSize']!=font['pointSize'] and any((k['first'],k['second']) in actual_pairs and k['advance'] for k in font['kernings']):
+                        fail('BITMAP_KERNING_SCALE_UNSUPPORTED',c['sourceId'],'Source pair offsets are unscaled, native TMP scales font features; this text needs a reviewed font variant')
+                except ValueError as error:
+                    entry['convertible']=False
+                    diagnostics.append(diagnostic(getattr(error,'code','BITMAP_LAYOUT_UNSUPPORTED'),c['sourceId'],str(error),c['sourceId']))
             if c.get('overflow') != 0:
                 entry['convertible']=False
             diagnostics.append(diagnostic('LABEL_METRICS_NOT_VERIFIED',c['sourceId'],'TMP line metrics need engine/reference comparison',c['sourceId']))
+        elif c['type']=='cc.Widget':
+            node=by_node.get(c['node'],{})
+            if c['flags'] not in (0,45) or c['target'] or not all(c['absolute']) or node.get('scale',[1,1])[:2]!=[1,1] or node.get('rotation')!=[0,0,0,1]:
+                entry['convertible']=False
+                diagnostics.append(diagnostic('WIDGET_SUBSET_UNSUPPORTED',c['sourceId'],'Only parent-relative absolute full-stretch or disabled flags supported',c['sourceId']))
+        elif c['type']=='cc.Mask':
+            if c['maskType']!=0 or c['inverted']:
+                entry['convertible']=False
+                diagnostics.append(diagnostic('MASK_SUBSET_UNSUPPORTED',c['sourceId'],'Only non-inverted rectangular mask supported',c['sourceId']))
+        elif c['type']=='cc.ScrollView':
+            if c['horizontal'] or c['vertical'] or c['content'] not in node_ids:
+                entry['convertible']=False
+                diagnostics.append(diagnostic('SCROLL_SUBSET_UNSUPPORTED',c['sourceId'],'First subset preserves disabled axes and native content/viewport references',c['sourceId']))
+        elif c['type']=='cc.Layout':
+            if c['layoutType'] not in (1,2,3) or c['resize']!=1 or c['affectedByScale'] or any(v!=int(v) for v in c['padding']):
+                entry['convertible']=False
+                diagnostics.append(diagnostic('LAYOUT_SUBSET_UNSUPPORTED',c['sourceId'],'Only container-resize simple/grid layout without scale expansion supported',c['sourceId']))
+            if c['layoutType']==3:
+                children=[by_node[k] for k in by_node[c['node']]['children'] if by_node[k]['active']]
+                sizes={tuple(child['size']) for child in children}
+                if len(sizes)>1 or c['startAxis']!=0:
+                    entry['convertible']=False
+                    diagnostics.append(diagnostic('GRID_SUBSET_UNSUPPORTED',c['sourceId'],'Only horizontal-first uniform child sizes supported',c['sourceId']))
+                entry['effectiveCellSize']=list(next(iter(sizes),tuple(c['cellSize'])))
+        elif c['type']=='cc.Button':
+            if c['transition'] not in (0,3) or c['target'] not in (None,c['node']):
+                entry['convertible']=False
+                diagnostics.append(diagnostic('BUTTON_SUBSET_UNSUPPORTED',c['sourceId'],'Only self-targeted none/scale transitions supported',c['sourceId']))
+            if c['events']:
+                diagnostics.append(diagnostic('BUTTON_BUSINESS_UNBOUND',c['sourceId'],'Native Button generated; original handlers remain AI work: '+','.join(e['handler'] or '?' for e in c['events']),c['sourceId']))
+        elif c['type']=='cc.LabelOutline':
+            label=next((x for x in ir['components'] if x['node']==c['node'] and x['type']=='cc.Label'),None)
+            if not label:entry['convertible']=False
+            diagnostics.append(diagnostic('OUTLINE_METRICS_NOT_VERIFIED',c['sourceId'],'Bitmap outline is baked; TTF outline width needs actual pixel comparison',c['sourceId']))
         if not entry['convertible']:
             diagnostics.append(diagnostic('COMPONENT_HANDOFF',c['sourceId'],'Native mapping unavailable for '+str(c['type']),c['sourceId']))
         components.append(entry)
@@ -100,8 +205,9 @@ def plan(ir_path, namespace, output):
         target.write_bytes(read(inside(ir_path.parent,copy['source'])))
         copy['source']='resources/'+target.name
     result=dict(schemaVersion=1,toolVersion=__version__,targetProfile=PROFILE,namespace=namespace,
-                sourceIrSha256=sha(read(ir_path)),designSize=[750,1334],pixelsPerUnit=100,
-                textures=textures,assets=assets,nodes=nodes,components=components,copies=copies,
+                sourceIrSha256=sha(read(ir_path)),sourceManifestPath=ir.get('sourceManifestPath'),sourceManifestSha256=ir['sourceManifestSha256'],
+                sourceRoots=ir.get('sourceRoots',{}),sourceLocations=ir.get('sourceLocations',{}),designSize=[750,1334],pixelsPerUnit=100,
+                textures=textures,assets=assets,bitmapFonts=bitmap_fonts,bindings=binding_receipt,nodes=nodes,components=components,copies=copies,
                 diagnostics=diagnostics,galleryOnly=not bool(nodes),editorValidation='not_run')
     write_json(out/'plan.json',result)
     return finish(out,result)
@@ -122,7 +228,7 @@ def export(plan_path, output):
         if not c['target'].startswith('Assets/Generated/Art/'):
             fail('UNSAFE_TARGET',c['target'],'Unexpected target root')
     out=new_output(output,[plan_path.parent])
-    for folder in ['Assets/Generated/Art','Assets/Generated/Views','Assets/Generated/Scenes',
+    for folder in ['Assets/Generated/Art','Assets/Generated/Controllers','Assets/Generated/Views','Assets/Generated/Scenes',
                    'Assets/Monkey/Editor','Assets/Manual','Packages','ProjectSettings','Analysis']:
         (out/folder).mkdir(parents=True,exist_ok=True)
     ownership=[]
@@ -137,13 +243,13 @@ def export(plan_path, output):
     adapter_path=out/'Assets/Monkey/Editor/MonkeyImporter.cs';adapter_path.write_bytes(adapter)
     Path(str(adapter_path)+'.meta').write_text('fileFormatVersion: 2\nguid: '+guid(p['namespace'],'editor-adapter')+'\n')
     # Only the typed, finite import instruction subset is sent to the Editor.
-    instruction={key:p[key] for key in ('designSize','pixelsPerUnit','textures','assets','nodes','components','galleryOnly')}
+    instruction={key:p.get(key,[]) for key in ('designSize','pixelsPerUnit','textures','assets','bitmapFonts','nodes','components','galleryOnly')}
     instruction['sourceDiagnosticCount']=len(p['diagnostics'])
     instruction['prefabGuid']=guid(p['namespace'],'native-prefab')
     instruction['sceneGuid']=guid(p['namespace'],'native-scene')
     write_json(out/'Assets/Monkey/Editor/import-plan.json',instruction)
     write_json(out/'Packages/manifest.json',dict(dependencies={'com.unity.ugui':'2.0.0',
-               'com.unity.modules.ui':'1.0.0','com.unity.modules.imgui':'1.0.0'}))
+               'com.unity.modules.ui':'1.0.0','com.unity.modules.imgui':'1.0.0','com.unity.modules.input':'1.0.0','com.unity.modules.animation':'1.0.0'}))
     (out/'ProjectSettings/ProjectVersion.txt').write_text('m_EditorVersion: 6000.6.2f1\n')
     (out/'Assets/Manual/README.md').write_text('AI/人工业务代码区。生成区默认不覆盖；缺口见工程根 Analysis/handoff.json。\n')
     (out/'README.md').write_text('Unity 原生资源/UI候选，非可玩游戏。\n\n打开后执行 Tools > Monkey > Import Candidate。\n'
@@ -151,21 +257,52 @@ def export(plan_path, output):
         '或用独立 batchmode -projectPath 此目录 -executeMethod MonkeyImporter.ImportBatch。\n'
         '导入成功后删除 Assets/Monkey 仍保留原生可编辑资产；Player 不读取转换 JSON。\n'
         '真实编辑器/画面对照/业务尚未验证，见 Analysis。\n')
+    groups={}
+    module_names={n['sourceId'].split('#')[0]:n['name'] for n in p['nodes'] if n['parent'] is None}
+    component_types={c['sourceId']:c['type'] for c in p['components']}
+    def cause(d):
+        code=d['code'];message=d['message'].lower()
+        if component_types.get(d.get('sourceId')) in ('cc.SortOrder','cc.SortRoot'):return 'render-order'
+        if any(term in code for term in ('FONT','LABEL','BITMAP','OUTLINE')):return 'text-and-font-metrics'
+        if any(term in code for term in ('SPRITE','TEXTURE','NATIVE','REFERENCE','REDIRECT')):return 'asset-binding'
+        if any(term in code for term in ('NODE','WIDGET','LAYOUT','GRID','SCROLL','MASK')):return 'native-layout'
+        if code=='BUTTON_BUSINESS_UNBOUND':return 'button-business-handlers'
+        if any(term in code for term in ('IDENTITY','CONFIG')):return 'source-format'
+        if any(term in message for term in ('cc.sortorder','cc.sortroot')):return 'render-order'
+        return 'unknown-components-and-behavior'
+    for d in p['diagnostics']:
+        sid=d.get('sourceId') or 'source-config';module=sid.split('#',1)[0] if '#' in sid else 'resources'
+        key=(module,cause(d));groups.setdefault(key,[]).append(d)
     tasks=[]
-    for i,d in enumerate(p['diagnostics']):
-        tasks.append(dict(taskId=f'gap-{i+1:04d}',sourceRefs=[d.get('sourceId'),d.get('location')],
-                          gaps=[d],generatedTargets=['Assets/Generated/Views/Candidate.prefab'],
-                          allowedPaths=['Assets/Manual/'],dependencies=['matching original evidence'],
-                          verificationScope=['affected UI in real Editor','source reference comparison']))
+    for (module,root_cause),gaps in sorted(groups.items()):
+        task_id='module-'+sha((module+'/'+root_cause).encode())[:12]
+        tasks.append(dict(taskId=task_id,module=module,moduleName=module_names.get(module,'Resources'),rootCause=root_cause,
+            sourceRefs=sorted({str(d.get('sourceId') or d.get('location')) for d in gaps}),
+            sourceManifest=dict(path=p.get('sourceManifestPath'),sha256=p.get('sourceManifestSha256')),
+            sourceLocations=[dict(location=d.get('location'),sourceId=d.get('sourceId')) for d in gaps],
+            gaps=gaps,generatedTargets=['Assets/Generated/Views/Candidate.prefab'],
+            allowedPaths=['Assets/Manual/'],dependencies=['matching original evidence'],
+            verificationScope=['affected UI module in real Editor','source reference comparison']))
     write_json(out/'Analysis/handoff.json',dict(schemaVersion=1,tasks=tasks,
                verification=dict(static='pending',editor='not_run',visual='not_run',business='not_run')))
-    write_json(out/'Analysis/source-map.json',dict(assets=ownership,
-        nodes=[dict(sourceId=n['sourceId'],target='Assets/Generated/Views/Candidate.prefab',name=n['name']) for n in p['nodes']]))
+    write_json(out/'Analysis/source-map.json',dict(assets=ownership,sourceRoots=p.get('sourceRoots',{}),sourceLocations=p.get('sourceLocations',{}),
+        fonts=[dict(sourceId=f['id'],target=f['fontPath'],atlas=f['path']) for f in p.get('bitmapFonts',[])]+[dict(sourceId=a['id'],target=str(Path(a['path']).with_suffix('.asset'))) for a in p['assets'] if a['kind']=='cc.TTFFont'],
+        nodes=[dict(sourceId=n['sourceId'],target='Assets/Generated/Views/Candidate.prefab',name=n['name']) for n in p['nodes']],
+        components=[dict(sourceId=c['sourceId'],node=c['node'],type=c['type'],convertible=c['convertible'],
+            target='Assets/Generated/Views/Candidate.prefab',viewField={'cc.Sprite':'Images','cc.Label':'Labels','cc.Button':'Buttons'}.get(c['type']),
+            bindingEvidence='Actual indices and native fileIDs require Analysis/editor-readback.json') for c in p['components']]))
+    if p.get('bindings'):write_json(out/'Analysis/font-bindings.json',p['bindings'])
     report=dict(schemaVersion=1,toolVersion=__version__,targetProfile=PROFILE,namespace=p['namespace'],
                 planSha256=sha(read(plan_path)),diagnostics=p['diagnostics'],editorValidation='not_run',
                 visualValidation='not_run',businessValidation='not_run',galleryOnly=p['galleryOnly'])
     write_json(out/'Analysis/candidate.json',report)
     return finish(out,report)
+
+
+def close(actual,expected,tolerance=.001):
+    if isinstance(expected,list):
+        return isinstance(actual,list) and len(actual)==len(expected) and all(close(a,b,tolerance) for a,b in zip(actual,expected))
+    return type(actual) in (int,float) and abs(actual-expected)<=tolerance
 
 
 def verify(candidate, output, level='static'):
@@ -194,12 +331,49 @@ def verify(candidate, output, level='static'):
             by_node={n['sourceId']:n for n in rb.get('nodes',[])}
             for spec in instruction['nodes']:
                 actual=by_node.get(spec['sourceId'])
-                if not actual or any(actual.get(k)!=spec[v] for k,v in [('size','size'),('pivot','anchor'),('position','position'),('active','active')]):
+                if not actual or any(not close(actual.get(k),spec[v]) for k,v in [('size','size'),('pivot','anchor'),('position','position')]) or actual.get('active')!=spec['active']:
                     diagnostics.append(diagnostic('NODE_READBACK_MISMATCH',spec['sourceId'],'Saved RectTransform differs from plan'))
+            if not rb.get('editableRoundtrip'):
+                diagnostics.append(diagnostic('EDITABLE_ROUNDTRIP_NOT_VERIFIED','Assets/Generated/Views/EditableProbe.prefab','Native edit/save/reopen proof is absent or failed'))
+            by_font={f['id']:f for f in rb.get('fonts',[])}
+            for spec in instruction.get('bitmapFonts',[]):
+                actual=by_font.get(spec['id'])
+                if not actual or actual.get('glyphCount',0)<len(spec['glyphs']) or not close(actual.get('pointSize'),spec['pointSize']) or not close(actual.get('lineHeight'),spec['lineHeight']):
+                    diagnostics.append(diagnostic('BITMAP_FONT_READBACK_MISMATCH',spec['id'],'Saved static font glyph count or metrics differ'))
+            by_label={l['sourceId']:l for l in rb.get('labels',[])}
+            node_specs={n['sourceId']:n for n in instruction['nodes']}
+            for spec in instruction['components']:
+                if spec['type']!='cc.Label' or not spec['convertible']:continue
+                actual=by_label.get(spec['sourceId']);font=by_font.get(spec.get('font'))
+                if not actual or not font or actual.get('fontGuid')!=font.get('guid') or not font.get('guid') or actual.get('text')!=spec['text'] or not close(actual.get('fontSize'),spec['fontSize']) or not actual.get('allCharactersPresent'):
+                    diagnostics.append(diagnostic('LABEL_FONT_READBACK_MISMATCH',spec['sourceId'],'Saved text/font/GUID/glyph coverage differs; no fallback accepted'))
+                    continue
+                if spec.get('bitmapProbe'):
+                    geometry=by_node.get(spec['node'],{});node=node_specs[spec['node']]
+                    size=geometry.get('size',node['size']);pivot=geometry.get('pivot',node['anchor'])
+                    probe=spec['bitmapProbe'];glyphs=actual.get('glyphBounds',[])
+                    expected=[b for b in probe['boxes'] if b['width']>0 and b['height']>0]
+                    if len(glyphs)!=len(expected):
+                        diagnostics.append(diagnostic('BITMAP_QUAD_READBACK_MISMATCH',spec['sourceId'],'Visible glyph count differs'))
+                        continue
+                    origin_x=-pivot[0]*size[0]+spec['horizontalAlign']*.5*(size[0]-probe['inkRight'])
+                    origin_top=(1-pivot[1])*size[1]-spec['verticalAlign']*.5*(size[1]-spec['fontSize'])
+                    for actual_glyph,box in zip(glyphs,expected):
+                        intended=dict(left=origin_x+box['x'],top=origin_top-box['top'],width=box['width'],height=box['height'])
+                        if actual_glyph.get('unicode')!=box['unicode'] or any(not close(actual_glyph.get(key),value,.03) for key,value in intended.items()):
+                            diagnostics.append(diagnostic('BITMAP_QUAD_READBACK_MISMATCH',spec['sourceId'],'Glyph origin/size differs from source metric probe'))
+                            break
+            view_refs={v['sourceId']:v for v in rb.get('viewReferences',[])}
+            for spec in instruction['components']:
+                if spec['convertible'] and spec['type'] in ('cc.Sprite','cc.Label','cc.Button'):
+                    binding=view_refs.get(spec['sourceId'])
+                    if not binding or not binding.get('bound') or binding.get('index',-1)<0 or not binding.get('prefabFileId'):
+                        diagnostics.append(diagnostic('VIEW_REFERENCE_READBACK_MISMATCH',spec['sourceId'],'Serialized native View reference or fileID is missing'))
             for required in ('Assets/Generated/Views/Candidate.prefab','Assets/Generated/Scenes/Candidate.unity'):
                 if required not in native:
                     diagnostics.append(diagnostic('NATIVE_ARTIFACT_MISSING',required,'No saved native artifact hash'))
             editor='partial' if rb.get('diagnostics') else 'pass'
+            if any(d['code']!='EDITOR_NOT_RUN' for d in diagnostics):editor='fail'
     for item in m['files']:
         path=inside(root,item['path'])
         expected=native.get(item['path']) if level=='editor' and item['path'].endswith('.meta') else item['sha256']
@@ -223,7 +397,7 @@ def verify(candidate, output, level='static'):
         diagnostics.append(diagnostic('TARGET_LAYOUT_INVALID','Assets','Missing Editor adapter or runtime IR found'))
     out=new_output(output,[root])
     result=dict(schemaVersion=1,toolVersion=__version__,candidateManifestSha256=sha(read(root/'manifest.json')),
-                diagnostics=diagnostics,staticValidation='pass' if not diagnostics else 'conflict',
+                diagnostics=diagnostics,staticValidation='conflict' if any(d['code'] in ('GENERATED_FILE_CHANGED','DUPLICATE_TARGET_GUID','TARGET_REFERENCE_MISSING','TARGET_LAYOUT_INVALID','NATIVE_FILE_CHANGED') for d in diagnostics) else 'pass',
                 editorValidation=editor,visualValidation='not_run',businessValidation='not_run')
     write_json(out/'verification.json',result)
     return finish(out,result)
@@ -238,10 +412,12 @@ def handoff(candidate, output):
     lines=['# AI接续工作包','', '这是候选工程，Editor/原版画面对照/业务分别按验证记录处理。',
            '仅修改 Assets/Manual；生成区需要明确解除所有权后才可手改。','']
     for task in package['tasks']:
-        lines.extend(['## '+task['taskId'],'',
+        lines.extend(['## '+task.get('moduleName',task.get('module','Module'))+' / '+task.get('rootCause',task['taskId']),'',
+                      '任务：'+task['taskId'],
                       '来源：'+str(task['sourceRefs']),
                       '目标：'+', '.join(task['generatedTargets']),
-                      '缺口：'+'; '.join(g['code']+': '+g['message'] for g in task['gaps']),
+                      '根因：'+task.get('rootCause','unknown')+'；详细诊断 '+str(len(task['gaps']))+' 条，见同目录 handoff.json。',
+                      '摘要：'+'; '.join(dict.fromkeys(g['code'] for g in task['gaps'])),
                       '验证：'+', '.join(task['verificationScope']),''])
     (out/'HANDOFF.md').write_text('\n'.join(lines)+'\n',encoding='utf-8')
     return finish(out,dict(schemaVersion=1,diagnostics=[],tasks=len(package['tasks']),toolVersion=__version__))

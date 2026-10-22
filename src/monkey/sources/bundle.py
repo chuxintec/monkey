@@ -168,7 +168,7 @@ class Bundle:
         return entry
 
 
-def inspect(config, selection, output, dependency_sources=()):
+def inspect(config, selection, output, dependency_sources=(), evidence_sources=()):
     if len(dependency_sources)>15:
         fail('BUNDLE_BUDGET','$','At most 16 explicit bundles')
     primary = Bundle(config)
@@ -216,7 +216,20 @@ def inspect(config, selection, output, dependency_sources=()):
             native_version = bundle.version('native', index, key)
             folder = bundle.root / 'native' / key[:2]
             if native_version is not None or any(folder.glob(key + '.*')):
-                native_path = bundle.select('native', key, native_version, None)
+                native_name=None
+                if entry.get('document'):
+                    native_name=entry['document']['instances'][entry['document']['root']].get('_native')
+                if native_name and not native_name.startswith('.'):
+                    if Path(native_name).name!=native_name:
+                        fail('UNSAFE_NATIVE_NAME',sid,'Native basename must not contain directories')
+                    stem=key+('.'+native_version if native_version else '')
+                    directory=inside(bundle.root,f'native/{key[:2]}/{stem}')
+                    native_path=inside(directory,native_name)
+                    if not native_path.is_file():
+                        # Some source profiles publish a direct versioned file instead.
+                        native_path=bundle.select('native',key,native_version,None)
+                else:
+                    native_path = bundle.select('native', key, native_version, None)
                 bundle.record(native_path)
                 entry['native'] = native_path.relative_to(bundle.root).as_posix()
                 if entry['document'] is None:
@@ -238,11 +251,16 @@ def inspect(config, selection, output, dependency_sources=()):
             if sha(read(inside(bundle.root, relative))) != info['sha256']:
                 fail('SOURCE_CHANGED', relative, 'Source changed during inspection')
             inputs.append(dict(bundle=name,**info))
-    out = new_output(output, [b.root for b in bundles.values()])
+    if len(evidence_sources)>8:fail('EVIDENCE_BUDGET','$','At most eight explicit source evidence files')
+    evidence=[]
+    for path in evidence_sources:
+        path=safe(path);raw=read(path)
+        evidence.append(dict(path=str(path),sha256=sha(raw),bytes=len(raw)))
+    out = new_output(output, [*[b.root for b in bundles.values()],*[safe(p) for p in evidence_sources]])
     report = dict(schemaVersion=1, toolVersion=__version__, sourceProfile=PROFILE,
                   sourceVersion='2.4.15', versionEvidence='explicit profile declaration; compiled header validated',
                   sourceRoot=str(primary.root), sourceRoots={name:str(b.root) for name,b in bundles.items()},
-                  bundle=primary.config['name'], selection=selection,
+                  bundle=primary.config['name'], selection=selection,evidenceFiles=evidence,
                   inputs=sorted(inputs, key=lambda x: (x['bundle'],x['path'])),
                   assets=sorted(assets, key=lambda x: x['sourceId']), diagnostics=diagnostics)
     write_json(out / 'source-manifest.json', report)

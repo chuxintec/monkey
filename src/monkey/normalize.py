@@ -3,8 +3,9 @@ import math
 from pathlib import Path
 from PIL import Image
 from . import __version__
-from .io import safe, inside, read, load, sha, encoded, new_output, finish, write_json, diagnostic
+from .io import safe, inside, read, load, sha, encoded, new_output, finish, write_json, diagnostic, stage_document
 from .sources.compiled import fail, ParseError
+from .assets.bitmap import normalize_font
 
 MAX_PIXELS = 16_777_216
 Image.MAX_IMAGE_PIXELS = MAX_PIXELS
@@ -84,7 +85,7 @@ def sprite(atlas, frame):
 
 def normalize(manifest_path, output):
     manifest_path = safe(manifest_path)
-    m = load(read(manifest_path))
+    m = stage_document(manifest_path)
     if m.get('sourceProfile') not in ('cocos-2.4.15-bundle','cocos-2.4.15-project') or m.get('schemaVersion') != 1:
         fail('UNSUPPORTED_MANIFEST', '$', 'Expected inspect schema 1')
     roots = {name:safe(path) for name,path in m.get('sourceRoots',{m['bundle']:m['sourceRoot']}).items()}
@@ -96,9 +97,12 @@ def normalize(manifest_path, output):
         if sha(raw) != expected[(bundle,relative)]['sha256']:
             fail('SOURCE_CHANGED', relative, 'Source no longer matches inspect manifest')
         return raw
+    for evidence in m.get('evidenceFiles',[]):
+        if sha(read(evidence['path']))!=evidence['sha256']:
+            fail('SOURCE_CHANGED',evidence['path'],'Source evidence no longer matches inspect manifest')
     for bundle,relative in expected:
         checked(relative,bundle)
-    out = new_output(output, [*roots.values(), manifest_path.parent])
+    out = new_output(output, [*roots.values(),manifest_path.parent,*[safe(e['path']) for e in m.get('evidenceFiles',[])]])
     (out / 'assets').mkdir()
     diagnostics = list(m['diagnostics'])
     by_id = {a['sourceId']:a for a in m['assets']}
@@ -111,7 +115,8 @@ def normalize(manifest_path, output):
             seen.add(key);key=aliases[key]
         return key
     result = dict(schemaVersion=1, toolVersion=__version__, sourceProfile=m['sourceProfile'],
-                  sourceManifestSha256=sha(read(manifest_path)), aliases=aliases, assets=[], spriteFrames=[], nodes=[],
+                  sourceManifestSha256=sha(read(manifest_path)),sourceManifestPath=str(manifest_path),sourceRoots=m.get('sourceRoots',{m['bundle']:m['sourceRoot']}),
+                  sourceLocations={a['sourceId']:dict(bundle=a.get('bundle',m['bundle']),importPath=a.get('importPath'),nativePath=a.get('native')) for a in m['assets']}, evidenceFiles=m.get('evidenceFiles',[]),aliases=aliases, assets=[], spriteFrames=[], bitmapFonts=[],materials=[], nodes=[],
                   components=[], diagnostics=diagnostics,
                   coordinateConvention=dict(origin='center anchor', x='right', y='up', units='pixels'))
     for asset in m['assets']:
@@ -156,12 +161,25 @@ def normalize(manifest_path, output):
                 suffix = Path(path).suffix.lower()
                 if suffix in ('.ttf', '.mp3', '.wav', '.ogg', '.png', '.jpg', '.jpeg'):
                     target = 'assets/' + name + suffix
-                    (out / target).write_bytes(checked(path,asset.get('bundle',m['bundle'])))
-                    result['assets'].append(dict(sourceId=sid, kind=kind, path=target))
+                    raw=checked(path,asset.get('bundle',m['bundle']))
+                    metadata={}
+                    if kind=='cc.TTFFont':
+                        from .assets.ttf import coverage
+                        try:metadata['fontCoverage']=coverage(raw)
+                        except ParseError as error:
+                            diagnostics.append(diagnostic(error.code,path,str(error),sid));continue
+                    (out / target).write_bytes(raw)
+                    result['assets'].append(dict(sourceId=sid, kind=kind, path=target,**metadata))
                 else:
                     diagnostics.append(diagnostic('UNSUPPORTED_NATIVE', path, suffix, sid))
             elif not path:
                 diagnostics.append(diagnostic('MISSING_NATIVE', sid, 'No native binding', sid))
+        elif kind == 'cc.Material':
+            if value.get('_name')=='builtin-2d-sprite' and value.get('_techniqueData',{}).get('0',{}).get('defines',{})=={'USE_TEXTURE':True}:
+                result['materials'].append(dict(sourceId=sid,nativeRole='standard-ugui'))
+            else:diagnostics.append(diagnostic('UNSUPPORTED_MATERIAL',asset.get('importPath',sid),'Custom effect/defines require material mapping',sid))
+        elif kind == 'cc.BitmapFont':
+            continue
         elif kind == 'redirect':
             continue
         elif kind in ('cc.Prefab', 'cc.SceneAsset'):
@@ -194,6 +212,19 @@ def normalize(manifest_path, output):
                     diagnostics.extend(diagnostic('UNSUPPORTED_COMPONENT_SEMANTIC', location, g, component['sourceId']) for g in gaps)
         else:
             diagnostics.append(diagnostic('UNSUPPORTED_ASSET', asset.get('importPath', sid), str(kind), sid))
+    frames={f['sourceId']:f for f in result['spriteFrames']}
+    for asset in m['assets']:
+        if asset.get('kind')!='cc.BitmapFont':continue
+        value=asset['document']['instances'][asset['document']['root']]
+        atlas_ref=resolved(ref(value.get('spriteFrame'),asset['sourceId']))
+        frame=frames.get(atlas_ref)
+        try:
+            if not frame:fail('BITMAP_ATLAS_MISSING',asset['sourceId'],str(atlas_ref))
+            font=normalize_font(value,asset['sourceId'],atlas_ref,frame['originalSize'])
+            font['atlasImage']=frame['originalImage']
+            result['bitmapFonts'].append(font)
+        except (ParseError,KeyError,ValueError) as error:
+            diagnostics.append(diagnostic(getattr(error,'code','INVALID_BITMAP_FONT'),asset.get('importPath',''),str(error),asset['sourceId']))
     write_json(out / 'ir.json', result)
     return finish(out, result)
 
@@ -235,7 +266,7 @@ def node_ir(namespace, index, obj):
         position, rotation, scale = values[:3], values[3:7], values[7:10]
     else:
         position, rotation, scale = [0,0,0], [0,0,0,1], [1,1,1]
-        gaps.append('transform encoding missing; default preview transform requires review')
+        if '_trs' in obj: gaps.append('unrecognized transform encoding; identity requires review')
     if obj.get('_skewX', 0) or obj.get('_skewY', 0):
         gaps.append('skew unsupported')
     size = vector(obj.get('_contentSize'), ['width','height'], [0,0])
@@ -254,22 +285,52 @@ def node_ir(namespace, index, obj):
 
 def component_ir(namespace, index, obj):
     typ = obj.get('__type__')
-    base = dict(sourceId=namespace+'#'+str(index), type=typ, node=ref(obj.get('node'),namespace), enabled=obj.get('_enabled',True))
+    base = dict(sourceId=namespace+'#'+str(index), type=typ, node=ref(obj.get('node'),namespace), enabled=obj.get('_enabled',True),materials=[ref(v,namespace) for v in obj.get('_materials',[]) if v])
     gaps = []
     if typ == 'cc.Sprite':
         base.update(spriteFrame=ref(obj.get('_spriteFrame'),namespace), mode=obj.get('_type',0),
                     sizeMode=obj.get('_sizeMode',0), trim=obj.get('_isTrimmedMode',True))
-        if base['mode'] not in (0,1): gaps.append('sprite mode '+str(base['mode']))
-        known = {'_spriteFrame','_type','_sizeMode','_isTrimmedMode','_fillType','_fillCenter','_fillStart','_fillRange','_atlas'}
+        if base['mode'] not in (0,1,2): gaps.append('sprite mode '+str(base['mode']))
+        known = {'_materials','_spriteFrame','_type','_sizeMode','_isTrimmedMode','_fillType','_fillCenter','_fillStart','_fillRange','_atlas'}
     elif typ == 'cc.Label':
         base.update(text=obj.get('_string',obj.get('_N$string','')),font=ref(obj.get('_N$file'),namespace),
                     fontSize=obj.get('_fontSize',40),lineHeight=obj.get('_lineHeight',40),
-                    horizontalAlign=obj.get('_horizontalAlign',0),verticalAlign=obj.get('_verticalAlign',0),
+                    horizontalAlign=obj.get('_N$horizontalAlign',obj.get('_horizontalAlign',0)),verticalAlign=obj.get('_N$verticalAlign',obj.get('_verticalAlign',0)),
+                    bold=bool(obj.get('_styleFlags',0)&1),italic=bool(obj.get('_styleFlags',0)&2),underline=bool(obj.get('_styleFlags',0)&4),
+                    spacing=obj.get('_spacingX',0),systemFont=obj.get('_isSystemFontUsed',True),
                     overflow=obj.get('_overflow',0),wrap=obj.get('_enableWrapText',True))
         known = {'_string','_N$string','_N$file','_fontSize','_lineHeight','_horizontalAlign','_verticalAlign',
-                 '_overflow','_enableWrapText','_isSystemFontUsed','_fontFamily','_N$fontFamily','_cacheMode','_styleFlags','_spacingX'}
-        if not base['font']: gaps.append('system/bitmap font requires explicit matching font')
+                 '_N$horizontalAlign','_N$verticalAlign','_materials','_overflow','_enableWrapText','_isSystemFontUsed','_fontFamily','_N$fontFamily','_cacheMode','_styleFlags','_spacingX'}
+        if not base['font']: gaps.append('system font requires source-backed explicit matching font binding')
         if base['overflow'] != 0: gaps.append('label overflow mode requires native mapping')
+    elif typ == 'cc.Widget':
+        base.update(flags=obj.get('_alignFlags',0),target=ref(obj.get('_target'),namespace),
+                    margins=[obj.get(k,0) for k in ('_left','_bottom','_right','_top')],
+                    absolute=[obj.get(k,True) for k in ('_isAbsLeft','_isAbsBottom','_isAbsRight','_isAbsTop')],alignMode=obj.get('alignMode',1))
+        known={'_alignFlags','_target','_left','_bottom','_right','_top','_isAbsLeft','_isAbsBottom','_isAbsRight','_isAbsTop','_originalWidth','_originalHeight','alignMode'}
+    elif typ == 'cc.Mask':
+        base.update(maskType=obj.get('_type',obj.get('_N$type',0)),inverted=obj.get('_inverted',obj.get('_N$inverted',False)))
+        known={'_type','_N$type','_inverted','_N$inverted','_alphaThreshold','_N$alphaThreshold','_spriteFrame','_materials','_segments'}
+    elif typ == 'cc.ScrollView':
+        base.update(content=ref(obj.get('_N$content'),namespace),horizontal=obj.get('horizontal',True),vertical=obj.get('vertical',True))
+        known={'_N$content','horizontal','vertical','_N$horizontalScrollBar','_N$verticalScrollBar','bounceDuration','brake','elastic','inertia','scrollEvents','cancelInnerEvents'}
+        if obj.get('scrollEvents'):gaps.append('scroll events need business binding')
+    elif typ == 'cc.Layout':
+        base.update(layoutType=obj.get('_N$layoutType',0),resize=obj.get('_resize',0),
+                    spacingXY=[obj.get('_N$spacingX',0),obj.get('_N$spacingY',0)],
+                    padding=[obj.get('_N$paddingLeft',0),obj.get('_N$paddingBottom',0),obj.get('_N$paddingRight',0),obj.get('_N$paddingTop',0)],
+                    horizontalDirection=obj.get('_N$horizontalDirection',0),verticalDirection=obj.get('_N$verticalDirection',1),
+                    startAxis=obj.get('_N$startAxis',0),cellSize=vector(obj.get('_cellSize'),['width','height'],[40,40]),
+                    affectedByScale=obj.get('_affectedByScale',False))
+        known={'_N$layoutType','_resize','_N$spacingX','_N$spacingY','_N$paddingLeft','_N$paddingRight','_N$paddingTop','_N$paddingBottom','_N$horizontalDirection','_N$verticalDirection','_N$startAxis','_cellSize','_layoutSize','_affectedByScale'}
+    elif typ == 'cc.Button':
+        base.update(target=ref(obj.get('_N$target'),namespace),transition=obj.get('_N$transition',0),
+                    zoomScale=obj.get('zoomScale',1.2),duration=obj.get('duration',.1),interactable=obj.get('interactable',True),
+                    events=[dict(target=ref(e.get('target'),namespace),component=e.get('_componentId'),handler=e.get('handler'),customData=e.get('customEventData','')) for e in obj.get('clickEvents',[])])
+        known={'_N$target','_N$transition','zoomScale','duration','interactable','clickEvents','_N$normalColor','_N$pressedColor','_N$hoverColor','_N$disabledColor','_N$normalSprite','_N$pressedSprite','_N$hoverSprite','_N$disabledSprite','_normalMaterial','_pressedMaterial','_hoverMaterial','_disabledMaterial','_N$autoGrayEffect','_N$enableAutoGrayEffect'}
+    elif typ == 'cc.LabelOutline':
+        base.update(width=obj.get('_width',1),outlineColor=vector(obj.get('_color'),['r','g','b','a'],[255]*4))
+        known={'_width','_color'}
     else:
         base['supported'] = False
         gaps.append('component '+str(typ)+' requires adapter or AI implementation')

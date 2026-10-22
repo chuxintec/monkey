@@ -59,6 +59,15 @@ def write_json(path, value):
     path.write_bytes(encoded(value))
 
 
+def stage_document(path):
+    """Verify the generated document against its owning stage manifest."""
+    path=safe(path);raw=read(path)
+    manifest=load(read(path.parent/'manifest.json'))
+    expected=next((f['sha256'] for f in manifest.get('files',[]) if f['path']==path.name),None)
+    if expected!=sha(raw):fail('STAGE_DOCUMENT_CHANGED',str(path),'Document differs from its owning stage manifest')
+    return load(raw)
+
+
 def new_output(path, inputs=()):
     path = safe(path)
     for item in inputs:

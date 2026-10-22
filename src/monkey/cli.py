@@ -17,6 +17,7 @@ def main(argv=None):
     p = sub.add_parser('inspect')
     p.add_argument('--source', required=True)
     p.add_argument('--source-profile', choices=[PROFILE,PROJECT_PROFILE], required=True)
+    p.add_argument('--evidence-source',action='append',default=[])
     p.add_argument('--dependency-source',action='append',default=[])
     p.add_argument('--asset-index', type=int, action='append', required=True)
     p.add_argument('--out', required=True)
@@ -30,6 +31,7 @@ def main(argv=None):
     p = sub.add_parser('plan')
     p.add_argument('--ir',required=True)
     p.add_argument('--namespace',required=True)
+    p.add_argument('--bindings')
     p.add_argument('--target-profile',choices=[UNITY_PROFILE],required=True)
     p.add_argument('--out',required=True)
     p = sub.add_parser('export')
@@ -52,16 +54,16 @@ def main(argv=None):
             return 0
         if args.command == 'inspect':
             if args.source_profile == PROJECT_PROFILE:
-                if args.dependency_source: parser.error('Editable project does not accept bundle dependencies')
+                if args.dependency_source or args.evidence_source: parser.error('Editable project does not accept bundle dependencies')
                 result=inspect_project(args.source,args.asset_index,args.out)
             else:
-                result = inspect(args.source, args.asset_index, args.out,args.dependency_source)
+                result = inspect(args.source, args.asset_index, args.out,args.dependency_source,args.evidence_source)
         elif args.command == 'catalog':
             result=catalog(args.source,args.out)
         elif args.command == 'normalize':
             result = normalize(args.manifest, args.out)
         elif args.command == 'plan':
-            result = plan(args.ir,args.namespace,args.out)
+            result = plan(args.ir,args.namespace,args.out,args.bindings)
         elif args.command == 'export':
             result = export(args.plan,args.out)
         elif args.command == 'verify':
