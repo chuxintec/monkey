@@ -410,7 +410,7 @@ def handoff(candidate, output):
     package['candidateManifestSha256']=sha(read(root/'manifest.json'))
     write_json(out/'handoff.json',package)
     lines=['# AI接续工作包','', '这是候选工程，Editor/原版画面对照/业务分别按验证记录处理。',
-           '仅修改 Assets/Manual；生成区需要明确解除所有权后才可手改。','']
+           '仅修改目标的 Manual/manual 区；生成区需要明确解除所有权后才可手改。','']
     for task in package['tasks']:
         lines.extend(['## '+task.get('moduleName',task.get('module','Module'))+' / '+task.get('rootCause',task['taskId']),'',
                       '任务：'+task['taskId'],

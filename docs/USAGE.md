@@ -57,7 +57,8 @@
 | 有限UI子集 | 父级绝对全拉伸Widget；容器resize H/V及均匀水平Grid；矩形非反转Mask；双轴禁用ScrollView；自目标none/scale Button。使用原生组/Animator，不写源布局运行时。复杂/动态子集仍handoff |
 | 原空Sprite/点击回调 | 空frame生成禁用Image并保留待绑定项，防止Unity默认白框；原handler只记录，Button没有假回调或默认成功 |
 | Animation/Spine、自定义脚本、事件 | 不生成空回调或假业务；交 AI 包 |
-| Cocos 3.8.8 输出、diff/apply | planned，CLI 不伪装提供 |
+| Cocos 3.8.8 输出 | 离线 candidate；Creator 原生导入/画面对照 not_run |
+| diff/apply | planned，接续开发 |
 
 `candidate` 表示本命令的离线范围完成，不表示游戏可玩；`partial` 表示已出报告但存在诊断。退出码 0/1/2 分别为声明范围完成、有待处理诊断、参数/IO/协议错误。所有阶段创建新目录，不覆盖输入、旧候选或人工文件。
 
@@ -74,3 +75,13 @@ CONTINUE-01只给原奖励页zh场景的3个系统Label绑定了已取得的zh-b
 隔离Unity第一次导入需要TMP资源时，adapter只在该候选工程使用官方`TMP_PackageResourceImporter.ImportResources(true,false,false)`，不弹交互窗口、不导入Examples、不修改引擎或肥鹅。新Scene包含固定750×1334设计坐标框、原生Canvas/EventSystem，Editor导入后会尝试离屏捕获`Analysis/native-page.png`；只有文件和真实回读存在才是Unity画面。`scripts/probe_bitmap.py`产物明确标OFFLINE，不是Unity预览。
 
 机器交接包按模块/根因聚合并保留全部明细。真实View数组索引和Prefab component fileID必须读Editor回执；在此之前只提供字段/目标路径，不猜fileID。
+
+## Creator 3.8.8 候选
+
+`plan --target-profile cocos-3.8.8`读取同一schema 1 IR；可用同一`--bindings`证据收据。`export`按plan目标选择emitter。输出`assets/generated/art`的PNG/原TTF/标准BMFont及根meta、`extensions/monkey-import`的Editor-only薄扩展、Analysis映射与AI包；人工业务放`assets/manual`。不随Player解释IR。
+
+资源窗口明确授权后才打开隔离工程，在资产导入就绪后执行`Monkey / Import isolated candidate`一次。扩展检查项目UUID、3.8.8版本和生成内容hash，查询原生SpriteFrame/Texture UUID，保留原生subMeta并设置尺寸/trim/九宫格；创建独立原生节点树并经Creator serializer保存Scene、重新加载回读。已有Scene或回执即拒绝覆盖。未执行时不含实际Scene，不声称真实显示通过。
+
+当前支持Node/UITransform/UIOpacity、simple/sliced/tiled Sprite、原BitmapFont/TTF Label、Label原生描边、必要Widget/Layout/Button/矩形Mask/静止ScrollView子集。未知脚本、动态滚动和事件业务留handoff；字体度量、布局行为与同状态画面仍需真实比较。根UUID按namespace/source ID稳定产生；子资源UUID不在Python拼接猜测。
+
+CONTINUE-02明确允许v0.1待验时推进v0.2/v0.3离线工作，两目标的Editor/视觉状态分别记录。

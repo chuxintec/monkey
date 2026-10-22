@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "monkey-native"
-version = "0.1.0.dev1"
+version = "0.2.0.dev1"
 description = "Offline, evidence-traceable Cocos native asset conversion candidates"
 requires-python = ">=3.11"
 dependencies = ["Pillow==12.2.0"]
@@ -19,5 +19,5 @@ where = ["src"]
 astc = ["texture2ddecoder==1.0.6"]
 
 [tool.setuptools.package-data]
-"monkey.targets" = ["*.cs"]
+"monkey.targets" = ["*.cs", "*.js"]
 "monkey" = ["licenses/*.txt"]

@@ -79,7 +79,7 @@ v0.2出口：同一normalize结果可选择生成两个目标之一；Cocos实�
 | M01 解析/IR/资源 | 离线子集 candidate | 两类2.4.15输入reader、pack/redirect/来源hash、旋转trim九宫格、PNG/JPEG/可选ASTC；真实11张SpriteFrame与原件hash核验。真实源工程/更多native格式待扩 |
 | M02 Unity输出 | partial，Editor not_run | plan/export、原生Editor适配器/View引用脚本、静态verify、离线C#编译已通过；48个组件有原生结构候选（含13个源空Sprite保持禁用）；5处文字、必要布局/按钮/遮罩已补，需独立Editor窗口 |
 | M03 代表页与AI交接 | 离线partial | 奖励窗口36来源资产/48节点/82组件，11张SpriteFrame、原字体及160条诊断已按8个模块根因组交接；真实同状态页面/输入/AI业务补全未验 |
-| v0.2 Cocos输出 | 已规划 | 复用IR，v0.1后推进 |
+| v0.2 Cocos输出 | 离线 candidate，Creator not_run | 同一IR→3.8.8工程资产/meta/原生导入扩展；见续包02验收 |
 | v0.3 增量/交付 | 已规划 | 核心版本/身份/冲突保护从M01开始，完整体验后收口 |
 
 新事实更新本表与简短变更记录，历史引用不抹除。不要生成与本表重复的每日任务库或为每次点击生成集成JSON。
@@ -90,7 +90,7 @@ v0.2出口：同一normalize结果可选择生成两个目标之一；Cocos实�
 
 下一步顺序：协调monkey隔离Unity6000.6.2f1工程资源窗口 → 执行首个代表候选导入/保存回读，修复真实API或引用问题 → 依据真实BitmapFont/布局/按钮缺口扩映射，完成一个真正图/字/九宫格页面及有依据的对照。未拿窗口时可以继续字体/组件的离线解析和合成反例；不能擅自占用肥鹅Editor。首次跨聊天申请曾被自动审批拒绝；用户现已直接授权发送，进展与窗口申请已成功送达总监并收到核对反馈。窗口本身尚未释放。
 
-v0.1出口仍未通过，不进入v0.2目标端实现，不发布、不推送、不自动安装引擎。
+当时顺序为v0.1出口前不进v0.2；该顺序已被2026-10-22用户后续版本指令（CONTINUE-02）替代。v0.1出口仍未通过；不发布、不推送、不自动安装引擎。
 
 ## 2026-10-22 CONTINUE-01：首屏字体与原生UI
 
@@ -101,3 +101,11 @@ v0.1出口仍未通过，不进入v0.2目标端实现，不发布、不推送、
 最新候选：`outputs/unity-reward-10`，继承首批`unity-reward-04`同一页面/namespace。窄编译见`.runtime/adapter-compile-15`；资源/来源/字体详证与边界见 [续包验收](validation/2026-10-22-reward-font-ui.md)。本轮仅新增/受影响检查，不重跑无变化的9组基线，不扩Cocos/Spine或Player构建。
 
 下一步：获得总监明确释放的最多12分钟独立Unity窗口后，首次导入10号候选，保存Prefab/Scene/字体，读回图像边距、字形四角/字体GUID、原生View引用；执行原生克隆的编辑/保存/重开探针并捕获真实Unity PNG。若发现问题只修该影响点。窗口由总监接手协调，向肥鹅的协调授权仍待用户处理；本执行已获直接授权向总监发送申请且送达，不代转肥鹅、不启动第二Editor或抢焦点。离线字体/映射/报告开发已持续推进到待实导候选，Editor、同状态原版画面对照及工具v0.1出口仍待验，不因业务未实现无限推迟工具阶段。
+
+## 2026-10-22 CONTINUE-02：后续版本接续
+
+用户已明确继续后续版本，覆盖先实导v0.1才进入v0.2的旧顺序；`9a86f03`与`unity-reward-10`保留。v0.1依然partial，Unity Editor/画面对照not_run。
+
+v0.2已以同一`reward-ir-11`及字体证据输出`outputs/creator-reward-02`：25个图像/字体资产、48节点、48个组件候选，155诊断按模块/根因成组交接；Python不增加源reader。资产根UUID稳定，图像子资源由Creator importer决定，离线只校验逻辑闭包，实际UUID闭包待回读。3组Creator定向检查和两份JS语法检查通过；没有启动Creator，也没有写肥鹅Cocos。详见[续包02验收](validation/2026-10-22-creator.md)。
+
+下一步不等普通ACK：执行v0.3 manifest diff、登记输出与expected-manifest约束的dry-run/apply、人工冲突保护。引擎窗口仍未释放，不启动第二Unity或Creator。

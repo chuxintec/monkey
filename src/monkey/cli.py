@@ -7,6 +7,7 @@ from .sources.compiled import ParseError
 from .sources.project import inspect as inspect_project, catalog, PROFILE as PROJECT_PROFILE
 from .normalize import normalize
 from .targets.unity import plan, export, verify, handoff, PROFILE as UNITY_PROFILE
+from .targets import cocos
 
 
 def main(argv=None):
@@ -32,7 +33,7 @@ def main(argv=None):
     p.add_argument('--ir',required=True)
     p.add_argument('--namespace',required=True)
     p.add_argument('--bindings')
-    p.add_argument('--target-profile',choices=[UNITY_PROFILE],required=True)
+    p.add_argument('--target-profile',choices=[UNITY_PROFILE,cocos.PROFILE],required=True)
     p.add_argument('--out',required=True)
     p = sub.add_parser('export')
     p.add_argument('--plan',required=True)
@@ -47,7 +48,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         if args.command == 'capabilities':
-            print(json.dumps(dict(version=__version__, profiles=[PROFILE,PROJECT_PROFILE],
+            print(json.dumps(dict(version=__version__, profiles=[PROFILE,PROJECT_PROFILE], targetProfiles=[UNITY_PROFILE,cocos.PROFILE],
                 implemented=['catalog','inspect','normalize','plan','export','verify','handoff'], planned=['diff','apply'],
                 compiledFormats=['compiled-v1','pack-v1','texture-pack-v1'],
                 imageFormats=['PNG','JPEG','ASTC (optional pinned decoder)'], targetEditorValidation='not_run'), ensure_ascii=False))
@@ -63,11 +64,15 @@ def main(argv=None):
         elif args.command == 'normalize':
             result = normalize(args.manifest, args.out)
         elif args.command == 'plan':
-            result = plan(args.ir,args.namespace,args.out,args.bindings)
+            result = (cocos.plan if args.target_profile==cocos.PROFILE else plan)(args.ir,args.namespace,args.out,args.bindings)
         elif args.command == 'export':
-            result = export(args.plan,args.out)
+            from .io import read, load
+            profile=load(read(args.plan)).get('targetProfile')
+            result = (cocos.export if profile==cocos.PROFILE else export)(args.plan,args.out)
         elif args.command == 'verify':
-            result = verify(args.candidate,args.out,args.level)
+            from .io import safe, read, load
+            profile=load(read(safe(args.candidate)/'manifest.json')).get('targetProfile')
+            result = (cocos.verify if profile==cocos.PROFILE else verify)(args.candidate,args.out,args.level)
         else:
             result = handoff(args.candidate,args.out)
         print(json.dumps(dict(status=result['status'], assets=len(result.get('assets',[])),
