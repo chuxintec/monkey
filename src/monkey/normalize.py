@@ -1,0 +1,279 @@
+"""Typed conversion-time IR; never a target runtime interpreter."""
+import math
+from pathlib import Path
+from PIL import Image
+from . import __version__
+from .io import safe, inside, read, load, sha, encoded, new_output, finish, write_json, diagnostic
+from .sources.compiled import fail, ParseError
+
+MAX_PIXELS = 16_777_216
+Image.MAX_IMAGE_PIXELS = MAX_PIXELS
+
+
+def open_texture(raw, suffix):
+    from io import BytesIO
+    if suffix != '.astc':
+        image = Image.open(BytesIO(raw))
+        if image.format not in ('PNG','JPEG'):
+            fail('UNSUPPORTED_IMAGE_ENCODING', '$', 'Only PNG/JPEG content is accepted')
+        return image
+    if len(raw) < 16 or raw[:4] != bytes.fromhex('13aba15c'):
+        fail('INVALID_ASTC', '$.header', 'Invalid ASTC header')
+    bx, by, bz = raw[4:7]
+    w, h, depth = [int.from_bytes(raw[i:i+3], 'little') for i in (7,10,13)]
+    valid = {(4,4),(5,4),(5,5),(6,5),(6,6),(8,5),(8,6),(8,8),(10,5),(10,6),(10,8),(10,10),(12,10),(12,12)}
+    if (bx,by) not in valid or bz != 1 or depth != 1 or min(w,h) <= 0 or w*h > MAX_PIXELS:
+        fail('INVALID_ASTC', '$.header', 'Unsupported ASTC dimensions or pixel budget')
+    size = ((w+bx-1)//bx)*((h+by-1)//by)*16
+    if len(raw) != size+16:
+        fail('INVALID_ASTC', '$.payload', 'ASTC payload size mismatch')
+    try:
+        import texture2ddecoder
+        from importlib.metadata import version
+        if version('texture2ddecoder') != '1.0.6':
+            fail('DEPENDENCY_VERSION', '$', 'Expected texture2ddecoder==1.0.6')
+    except ImportError:
+        fail('DEPENDENCY_MISSING', '$', 'Install project extra astc; no automatic install')
+    decoded = texture2ddecoder.decode_astc(raw[16:],w,h,bx,by)
+    if len(decoded) != w*h*4:
+        fail('INVALID_ASTC', '$', 'Decoder returned incorrect byte count')
+    return Image.frombytes('RGBA',(w,h),decoded,'raw','BGRA')
+
+
+def numbers(value, count, location):
+    if not isinstance(value, list) or len(value) != count or any(type(x) not in (int, float) or not math.isfinite(x) for x in value):
+        fail('INVALID_GEOMETRY', location, 'Expected finite numeric vector')
+    return value
+
+
+def sprite(atlas, frame):
+    x, y, w, h = numbers(frame.get('rect'), 4, '$.rect')
+    ow, oh = numbers(frame.get('originalSize', [w, h]), 2, '$.originalSize')
+    ox, oy = numbers(frame.get('offset', [0, 0]), 2, '$.offset')
+    insets = numbers(frame.get('capInsets', [0, 0, 0, 0]), 4, '$.capInsets')
+    rotated = frame.get('rotated', 0)
+    if type(rotated) is not int or rotated not in (0, 1):
+        fail('INVALID_ROTATION', '$.rotated', 'Expected 0 or 1')
+    if any(v != int(v) for v in [x, y, w, h, ow, oh]) or min(w, h, ow, oh) <= 0 or min(x, y, *insets) < 0:
+        fail('INVALID_GEOMETRY', '$.rect', 'Invalid pixel dimensions/insets')
+    x, y, w, h, ow, oh = map(int, [x, y, w, h, ow, oh])
+    if ow * oh > MAX_PIXELS or max(ow,oh)>16384:
+        fail('PIXEL_BUDGET', '$.originalSize', 'Image exceeds pixel budget')
+    if insets[0] + insets[2] > w or insets[1] + insets[3] > h:
+        fail('INVALID_INSETS', '$.capInsets', 'Borders exceed trimmed frame')
+    cw, ch = (h, w) if rotated else (w, h)
+    if x + cw > atlas.width or y + ch > atlas.height:
+        fail('ATLAS_BOUNDS', '$.rect', 'Frame outside atlas')
+    trimmed = atlas.crop((x, y, x + cw, y + ch)).convert('RGBA')
+    if rotated:
+        trimmed = trimmed.transpose(Image.Transpose.ROTATE_90)
+    # Cocos offset is center-relative, y up; PNG origin is top left.
+    left, top = (ow - w) / 2 + ox, (oh - h) / 2 - oy
+    if left != int(left) or top != int(top):
+        fail('SUBPIXEL_TRIM', '$.offset', 'Cannot reconstruct fractional pixel placement losslessly')
+    left, top = int(left), int(top)
+    if left < 0 or top < 0 or left + w > ow or top + h > oh:
+        fail('TRIM_BOUNDS', '$.offset', 'Trim rectangle exceeds original size')
+    full = Image.new('RGBA', (ow, oh))
+    full.paste(trimmed, (left, top))
+    return trimmed, full, dict(rect=[x,y,w,h], rotated=bool(rotated), originalSize=[ow,oh],
+                              offset=[ox,oy], trimOrigin=[left,top], capInsets=insets,
+                              capInsetsOrder=['left','top','right','bottom'],
+                              colorSpace='unknown', premultipliedAlpha='unknown')
+
+
+def normalize(manifest_path, output):
+    manifest_path = safe(manifest_path)
+    m = load(read(manifest_path))
+    if m.get('sourceProfile') not in ('cocos-2.4.15-bundle','cocos-2.4.15-project') or m.get('schemaVersion') != 1:
+        fail('UNSUPPORTED_MANIFEST', '$', 'Expected inspect schema 1')
+    roots = {name:safe(path) for name,path in m.get('sourceRoots',{m['bundle']:m['sourceRoot']}).items()}
+    expected = {(i.get('bundle',m['bundle']),i['path']):i for i in m['inputs']}
+    def checked(relative,bundle):
+        if (bundle,relative) not in expected:
+            fail('UNTRACKED_INPUT', relative, 'Source not in manifest')
+        raw = read(inside(roots[bundle], relative))
+        if sha(raw) != expected[(bundle,relative)]['sha256']:
+            fail('SOURCE_CHANGED', relative, 'Source no longer matches inspect manifest')
+        return raw
+    for bundle,relative in expected:
+        checked(relative,bundle)
+    out = new_output(output, [*roots.values(), manifest_path.parent])
+    (out / 'assets').mkdir()
+    diagnostics = list(m['diagnostics'])
+    by_id = {a['sourceId']:a for a in m['assets']}
+    aliases = {a['sourceId']:a['redirectTarget'] for a in m['assets'] if a.get('redirectTarget')}
+    def resolved(key):
+        seen=set()
+        while key in aliases:
+            if key in seen:
+                fail('REDIRECT_CYCLE',key,'Bundle redirection cycle')
+            seen.add(key);key=aliases[key]
+        return key
+    result = dict(schemaVersion=1, toolVersion=__version__, sourceProfile=m['sourceProfile'],
+                  sourceManifestSha256=sha(read(manifest_path)), aliases=aliases, assets=[], spriteFrames=[], nodes=[],
+                  components=[], diagnostics=diagnostics,
+                  coordinateConvention=dict(origin='center anchor', x='right', y='up', units='pixels'))
+    for asset in m['assets']:
+        sid = asset['sourceId']
+        name = sha(sid.encode())[:24]
+        doc = asset.get('document')
+        if doc:
+            objects = doc['instances']
+            value = objects[doc['root']]
+            kind = value.get('__type__', asset.get('kind'))
+        else:
+            objects, value, kind = [], {}, asset.get('kind')
+        if kind == 'cc.SpriteFrame':
+            frame = value.get('data', {})
+            texture = frame.get('texture')
+            texture_key = texture.get('__uuid__') if isinstance(texture, dict) else texture
+            if texture_key is None and len(asset['references']) == 1:
+                texture_key = asset['references'][0]
+            source = by_id.get(resolved(asset.get('bundle',m['bundle'])+':'+str(texture_key)), {})
+            path = source.get('native')
+            try:
+                if not path:
+                    fail('MISSING_TEXTURE', sid, 'No exact native texture binding: ' + str(texture_key))
+                if Path(path).suffix.lower() not in ('.png', '.jpg', '.jpeg', '.astc'):
+                    fail('UNSUPPORTED_TEXTURE', path, 'Only PNG/JPEG decoders enabled; no ASTC fallback')
+                from io import BytesIO
+                with open_texture(checked(path,source.get('bundle',m['bundle'])), Path(path).suffix.lower()) as image:
+                    if image.width * image.height > MAX_PIXELS:
+                        fail('PIXEL_BUDGET', path, 'Atlas exceeds pixel budget')
+                    trimmed, full, semantic = sprite(image, frame)
+                trimmed_path, full_path = f'assets/{name}.png', f'assets/{name}-original.png'
+                trimmed.save(out / trimmed_path)
+                full.save(out / full_path)
+                result['spriteFrames'].append(dict(sourceId=sid, textureRef=source['sourceId'],
+                    image=trimmed_path, originalImage=full_path, **semantic))
+            except (ParseError, OSError, Image.DecompressionBombError) as error:
+                diagnostics.append(diagnostic(getattr(error, 'code', 'IMAGE_ERROR'),
+                    getattr(error, 'location', sid), str(error), sid))
+        elif kind in ('cc.Texture2D', 'cc.TTFFont', 'cc.AudioClip', 'native'):
+            path = asset.get('native')
+            if path and kind != 'cc.Texture2D':
+                suffix = Path(path).suffix.lower()
+                if suffix in ('.ttf', '.mp3', '.wav', '.ogg', '.png', '.jpg', '.jpeg'):
+                    target = 'assets/' + name + suffix
+                    (out / target).write_bytes(checked(path,asset.get('bundle',m['bundle'])))
+                    result['assets'].append(dict(sourceId=sid, kind=kind, path=target))
+                else:
+                    diagnostics.append(diagnostic('UNSUPPORTED_NATIVE', path, suffix, sid))
+            elif not path:
+                diagnostics.append(diagnostic('MISSING_NATIVE', sid, 'No native binding', sid))
+        elif kind == 'redirect':
+            continue
+        elif kind in ('cc.Prefab', 'cc.SceneAsset'):
+            # Nodes/components remain conversion-time data; unknown fields reported downstream.
+            for index, obj in enumerate(objects):
+                typ = obj.get('__type__') if isinstance(obj, dict) else None
+                location = f"{asset.get('importPath')}#instances/{index}"
+                if typ == 'cc.Node':
+                    obj = dict(obj)
+                    refs = []
+                    for ordinal, value in enumerate(obj.get('_components', [])):
+                        if isinstance(value, dict) and '__type__' in value:
+                            inline_index = f'{index}/components/{ordinal}'
+                            inline_id = sid+'#'+inline_index
+                            component, component_gaps = component_ir(sid, inline_index, value)
+                            result['components'].append(component)
+                            diagnostics.extend(diagnostic('UNSUPPORTED_COMPONENT_SEMANTIC',location+f'/_components/{ordinal}',g,inline_id) for g in component_gaps)
+                            refs.append({'__sourceId__':inline_id})
+                        elif value is None:
+                            diagnostics.append(diagnostic('MISSING_COMPONENT',location+f'/_components/{ordinal}','Null serialized component',sid+'#'+str(index)))
+                        else:
+                            refs.append(value)
+                    obj['_components'] = refs
+                    node, gaps = node_ir(sid, index, obj)
+                    result['nodes'].append(node)
+                    diagnostics.extend(diagnostic('UNSUPPORTED_NODE_FIELD', location, g, node['sourceId']) for g in gaps)
+                elif typ not in ('cc.Prefab', 'cc.PrefabInfo', 'cc.Scene', None):
+                    component, gaps = component_ir(sid, index, obj)
+                    result['components'].append(component)
+                    diagnostics.extend(diagnostic('UNSUPPORTED_COMPONENT_SEMANTIC', location, g, component['sourceId']) for g in gaps)
+        else:
+            diagnostics.append(diagnostic('UNSUPPORTED_ASSET', asset.get('importPath', sid), str(kind), sid))
+    write_json(out / 'ir.json', result)
+    return finish(out, result)
+
+
+def ref(value, namespace):
+    if value is None:
+        return None
+    if isinstance(value, dict) and isinstance(value.get('__sourceId__'),str):
+        return value['__sourceId__']
+    if isinstance(value, dict) and type(value.get('__id__')) is int:
+        return namespace + '#' + str(value['__id__'])
+    if isinstance(value, dict) and isinstance(value.get('__uuid__'), str):
+        return namespace.split(':', 1)[0] + ':' + value['__uuid__']
+    fail('INVALID_REFERENCE', namespace, 'Expected typed object/resource reference')
+
+
+def vector(value, keys, default):
+    if value is None:
+        return default
+    if isinstance(value, dict) and '__value_type__' in value:
+        values = value['values']
+        if len(keys) == 4 and len(values) == 1 and type(values[0]) is int:
+            packed = values[0]
+            return [(packed >> shift) & 255 for shift in (0,8,16,24)]
+        return numbers(values, len(keys), '$.value_type')
+    if isinstance(value, dict):
+        return numbers([value.get(k, d) for k,d in zip(keys,default)], len(keys), '$.vector')
+    fail('INVALID_VECTOR', '$', 'Unknown vector encoding')
+
+
+def node_ir(namespace, index, obj):
+    gaps = []
+    t = obj.get('_trs', {})
+    values = t.get('array', t.get('values', [])) if isinstance(t, dict) else t if isinstance(t, list) else []
+    if values:
+        if len(values) == 1 and isinstance(values[0], list):
+            values = values[0]
+        numbers(values, 10, '$._trs')
+        position, rotation, scale = values[:3], values[3:7], values[7:10]
+    else:
+        position, rotation, scale = [0,0,0], [0,0,0,1], [1,1,1]
+        gaps.append('transform encoding missing; default preview transform requires review')
+    if obj.get('_skewX', 0) or obj.get('_skewY', 0):
+        gaps.append('skew unsupported')
+    size = vector(obj.get('_contentSize'), ['width','height'], [0,0])
+    anchor = vector(obj.get('_anchorPoint'), ['x','y'], [.5,.5])
+    color = vector(obj.get('_color'), ['r','g','b','a'], [255]*4)
+    known = {'__type__','_name','_objFlags','_parent','_children','_active','_components','_prefab','_opacity',
+             '_color','_contentSize','_anchorPoint','_trs','_eulerAngles','_skewX','_skewY','_groupIndex','groupIndex','_id','_zIndex'}
+    gaps.extend('unknown node field: ' + key for key in obj if key not in known)
+    return dict(sourceId=namespace+'#'+str(index), name=obj.get('_name','Node'),
+                parent=ref(obj.get('_parent'),namespace), children=[ref(v,namespace) for v in obj.get('_children',[])],
+                position=position, rotation=rotation, scale=scale,
+                size=size, anchor=anchor,
+                active=obj.get('_active',True), color=color,
+                opacity=obj.get('_opacity',255), components=[ref(v,namespace) for v in obj.get('_components',[])]), gaps
+
+
+def component_ir(namespace, index, obj):
+    typ = obj.get('__type__')
+    base = dict(sourceId=namespace+'#'+str(index), type=typ, node=ref(obj.get('node'),namespace), enabled=obj.get('_enabled',True))
+    gaps = []
+    if typ == 'cc.Sprite':
+        base.update(spriteFrame=ref(obj.get('_spriteFrame'),namespace), mode=obj.get('_type',0),
+                    sizeMode=obj.get('_sizeMode',0), trim=obj.get('_isTrimmedMode',True))
+        if base['mode'] not in (0,1): gaps.append('sprite mode '+str(base['mode']))
+        known = {'_spriteFrame','_type','_sizeMode','_isTrimmedMode','_fillType','_fillCenter','_fillStart','_fillRange','_atlas'}
+    elif typ == 'cc.Label':
+        base.update(text=obj.get('_string',obj.get('_N$string','')),font=ref(obj.get('_N$file'),namespace),
+                    fontSize=obj.get('_fontSize',40),lineHeight=obj.get('_lineHeight',40),
+                    horizontalAlign=obj.get('_horizontalAlign',0),verticalAlign=obj.get('_verticalAlign',0),
+                    overflow=obj.get('_overflow',0),wrap=obj.get('_enableWrapText',True))
+        known = {'_string','_N$string','_N$file','_fontSize','_lineHeight','_horizontalAlign','_verticalAlign',
+                 '_overflow','_enableWrapText','_isSystemFontUsed','_fontFamily','_N$fontFamily','_cacheMode','_styleFlags','_spacingX'}
+        if not base['font']: gaps.append('system/bitmap font requires explicit matching font')
+        if base['overflow'] != 0: gaps.append('label overflow mode requires native mapping')
+    else:
+        base['supported'] = False
+        gaps.append('component '+str(typ)+' requires adapter or AI implementation')
+        known = set()
+    ignored = {'__type__','_name','_objFlags','node','_enabled','_id'}
+    gaps.extend('unknown component field: '+key for key in obj if key not in known|ignored)
+    return base, gaps
