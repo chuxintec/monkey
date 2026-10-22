@@ -62,7 +62,7 @@ def plan(ir_path,namespace,output,bindings_path=None):
     supported={'cc.Sprite','cc.Label','cc.Widget','cc.Mask','cc.ScrollView','cc.Layout','cc.Button','cc.LabelOutline'}
     materials={m['sourceId'] for m in ir.get('materials',[]) if m['nativeRole']=='standard-ugui'}
     for src in ir['components']:
-        c=dict(src);sid=c['sourceId'];c['convertible']=c['type'] in supported
+        c=dict(src);sid=c['sourceId'];c['convertible']=c['type'] in supported and c.get('node') in {n['sourceId'] for n in ir['nodes']}
         if sid in bindings:c.update(font=bindings[sid]['font'],bold=bindings[sid].get('syntheticBold',False))
         for field in ['font','spriteFrame']:
             if field in c:c[field]=resolve(c[field])
@@ -102,6 +102,10 @@ def plan(ir_path,namespace,output,bindings_path=None):
             if c['layoutType'] not in (1,2,3) or c['resize']!=1 or c['affectedByScale']:gap('LAYOUT_SUBSET_UNSUPPORTED','Only unscaled container resize')
         if not c['convertible']:diagnostics.append(diagnostic('COMPONENT_HANDOFF',sid,'Unsupported native mapping: '+c['type'],sid))
         c['nativeType']=('cc.Label' if c['type']=='cc.LabelOutline' else c['type']) if c['convertible'] else None;components.append(c)
+    for c in components:
+        if c['type']=='cc.LabelOutline' and c['convertible'] and not any(x['type']=='cc.Label' and x['node']==c['node'] and x['convertible'] for x in components):
+            c['convertible']=False;c['nativeType']=None
+            diagnostics.append(diagnostic('MISSING_OUTLINE_LABEL',c['sourceId'],'Label dependency could not be converted',c['sourceId']))
     out=new_output(output,[path.parent]);(out/'resources').mkdir()
     for i,c in enumerate(copies):
         raw=c.pop('text',None)
@@ -179,10 +183,23 @@ def verify(candidate,output,level='static'):
             expected_components={c['sourceId'] for c in plan['components'] if c['convertible']}
             good=good and {c['sourceId'] for c in rb.get('components',[])}==expected_components
             good=good and {n['sourceId'] for n in rb.get('nodes',[])}=={n['sourceId'] for n in plan['nodes']}
+            def near(actual,expected):
+                return isinstance(actual,list) and len(actual)==len(expected) and all(type(x) in (int,float) and abs(x-y)<.001 for x,y in zip(actual,expected))
+            frames={f['sourceId']:f for f in rb.get('frames',[])}
+            for sid,a in expected_assets.items():
+                if a['kind']=='sprite':
+                    f=frames.get(sid,{})
+                    good=good and f.get('uuid')==actual_assets.get(sid,{}).get('spriteFrameUuid')
+                    good=good and f.get('textureUuid')==actual_assets.get(sid,{}).get('textureUuid')
+                    good=good and near(f.get('rect'),a.get('trimOrigin',[0,0])+a['size']) and near(f.get('originalSize'),a['originalSize'])
+                    good=good and near(f.get('offset'),a['offset']) and near(f.get('border'),a['border'])
+            good=good and all(isinstance(n.get('nodeUuid'),str) and n['nodeUuid'] for n in rb.get('nodes',[]))
+            good=good and all(isinstance(c.get('componentUuid'),str) and c['componentUuid'] for c in rb.get('components',[]))
             good=good and 'assets/generated/views/Candidate.scene' in native and bool(rb.get('sceneUuid'))
             if not good:diagnostics.append(diagnostic('EDITOR_READBACK_FAILED',str(rb_path),'Native identities/counts/version differ'))
             editor='pass' if good else 'fail'
     for f in m['files']:
+        if f.get('owner')=='manual':continue
         target=inside(root,f['path']);expected=native.get(f['path'],f['sha256'])
         if not target.is_file() or sha(read(target))!=expected:diagnostics.append(diagnostic('GENERATED_FILE_CHANGED',f['path'],'Generated file differs'))
     for relative,h in native.items():

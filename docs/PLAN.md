@@ -80,7 +80,7 @@ v0.2出口：同一normalize结果可选择生成两个目标之一；Cocos实�
 | M02 Unity输出 | partial，Editor not_run | plan/export、原生Editor适配器/View引用脚本、静态verify、离线C#编译已通过；48个组件有原生结构候选（含13个源空Sprite保持禁用）；5处文字、必要布局/按钮/遮罩已补，需独立Editor窗口 |
 | M03 代表页与AI交接 | 离线partial | 奖励窗口36来源资产/48节点/82组件，11张SpriteFrame、原字体及160条诊断已按8个模块根因组交接；真实同状态页面/输入/AI业务补全未验 |
 | v0.2 Cocos输出 | 离线 candidate，Creator not_run | 同一IR→3.8.8工程资产/meta/原生导入扩展；见续包02验收 |
-| v0.3 增量/交付 | 已规划 | 核心版本/身份/冲突保护从M01开始，完整体验后收口 |
+| v0.3 增量/交付 | 离线增量已实现，正式交付待验 | diff/register/dry-run/apply、manual/retained边界、事务备份及可移位包；引擎门槛仍独立 |
 
 新事实更新本表与简短变更记录，历史引用不抹除。不要生成与本表重复的每日任务库或为每次点击生成集成JSON。
 
@@ -109,3 +109,11 @@ v0.2出口：同一normalize结果可选择生成两个目标之一；Cocos实�
 v0.2已以同一`reward-ir-11`及字体证据输出`outputs/creator-reward-02`：25个图像/字体资产、48节点、48个组件候选，155诊断按模块/根因成组交接；Python不增加源reader。资产根UUID稳定，图像子资源由Creator importer决定，离线只校验逻辑闭包，实际UUID闭包待回读。3组Creator定向检查和两份JS语法检查通过；没有启动Creator，也没有写肥鹅Cocos。详见[续包02验收](validation/2026-10-22-creator.md)。
 
 下一步不等普通ACK：执行v0.3 manifest diff、登记输出与expected-manifest约束的dry-run/apply、人工冲突保护。引擎窗口仍未释放，不启动第二Unity或Creator。
+
+## 2026-10-22 CONTINUE-02：v0.3 登记输出增量
+
+已实现schema 1的diff/register/apply。当前工作区outputs登记基线，默认dry-run，写入必须expected-manifest与同一预览收据一致；source ID、稳定逻辑身份与内容hash区分。保护人工区与生成区人工改动，拒绝缺失、symlink、非规范路径、输入篡改、目标占位、跨profile/namespace和陈旧预览。移除项保留并标记retained；写前备份，普通中途写盘失败回滚并留journal。
+
+8组增量反例与受影响Creator/目标输出检查共15例通过。真实奖励页仅在`creator-incremental-base`隔离副本先执行版本元数据更新，再执行Creator薄扩展更新，两次登记基线→diff→dry-run→apply→静态验证通过；不是业务变化或引擎实测。原`unity-reward-10`、`creator-reward-02`冻结manifest不变；增量验证后的最新可实导候选为`outputs/creator-reward-04`，Unity新导出兼容候选为`outputs/unity-reward-v03-02`。详见[增量验收](validation/2026-10-22-incremental.md)。
+
+本次可离线推进的两个续包均已落地；v0.1/v0.2的真实导入、可编辑重开、画面对照与v0.3正式交付尚未通过，不能标为工具发布。引擎资源窗口仍未释放。没有新增引擎、服务、项目、Agent、外发肥鹅协调、全局安装或远程推送。下一步按明确资源窗口实导冻结Unity/Creator候选，处理实际失败路径；未支持的原生对象和业务仍按8组AI包推进，不自行扩新产品范围。

@@ -104,7 +104,22 @@ module.exports = {
                 refs.push({sourceId:c.sourceId,nodeUuid:n.uuid,componentUuid:comp.uuid,type:c.type});
                 if(c.type==='cc.Label')labels.push({sourceId:c.sourceId,text:comp.string,fontUuid:comp.font&&comp.font._uuid});
             }
-            return {nodeCount:saved.length,nodes:[...mapped].map(([sourceId,n])=>({sourceId,nodeUuid:n.uuid,name:n.name})),components:refs,labels};
+            const frames=[];
+            for(const a of plan.assets.filter(a=>a.kind==='sprite')) {
+                // Resolve from saved Sprite where available or load the importer-owned subresource.
+                const candidates=saved.flatMap(n=>n.getComponents(cc.Sprite)).map(s=>s.spriteFrame).filter(Boolean);
+                let sf=candidates.find(f=>f._uuid&&f._uuid.split('@')[0]===a.uuid);
+                if(!sf) {
+                    // Native importer identities are sent by the main process for unused source assets.
+                    if(!a.spriteFrameUuid)throw Error('Native SpriteFrame identity required for readback');
+                    sf=await loadAsset(a.spriteFrameUuid,cc.SpriteFrame);
+                }
+                frames.push({sourceId:a.sourceId,uuid:sf._uuid,textureUuid:sf.texture&&sf.texture._uuid,
+                    rect:[sf.rect.x,sf.rect.y,sf.rect.width,sf.rect.height],originalSize:[sf.originalSize.width,sf.originalSize.height],
+                    offset:[sf.offset.x,sf.offset.y],border:[sf.insetLeft,sf.insetTop,sf.insetRight,sf.insetBottom]});
+            }
+            return {nodeCount:saved.length,nodes:[...mapped].map(([sourceId,n])=>({sourceId,nodeUuid:n.uuid,name:n.name,
+                position:[n.position.x,n.position.y,n.position.z],size:[n.getComponent(cc.UITransform).width,n.getComponent(cc.UITransform).height]})),components:refs,labels,frames};
         }
     }
 };

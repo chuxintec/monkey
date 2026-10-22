@@ -293,7 +293,7 @@ def export(plan_path, output):
             bindingEvidence='Actual indices and native fileIDs require Analysis/editor-readback.json') for c in p['components']]))
     if p.get('bindings'):write_json(out/'Analysis/font-bindings.json',p['bindings'])
     report=dict(schemaVersion=1,toolVersion=__version__,targetProfile=PROFILE,namespace=p['namespace'],
-                planSha256=sha(read(plan_path)),diagnostics=p['diagnostics'],editorValidation='not_run',
+                planSha256=sha(read(plan_path)),sourceRoots=p.get('sourceRoots',{}),sourceManifestSha256=p.get('sourceManifestSha256'),diagnostics=p['diagnostics'],editorValidation='not_run',
                 visualValidation='not_run',businessValidation='not_run',galleryOnly=p['galleryOnly'])
     write_json(out/'Analysis/candidate.json',report)
     return finish(out,report)

@@ -8,6 +8,8 @@ from .sources.project import inspect as inspect_project, catalog, PROFILE as PRO
 from .normalize import normalize
 from .targets.unity import plan, export, verify, handoff, PROFILE as UNITY_PROFILE
 from .targets import cocos
+from . import incremental
+from pathlib import Path
 
 
 def main(argv=None):
@@ -45,11 +47,20 @@ def main(argv=None):
     p = sub.add_parser('handoff')
     p.add_argument('--candidate',required=True)
     p.add_argument('--out',required=True)
+    p = sub.add_parser('diff')
+    p.add_argument('--before',required=True);p.add_argument('--after',required=True);p.add_argument('--out',required=True)
+    p = sub.add_parser('register')
+    p.add_argument('--candidate',required=True);p.add_argument('--out',required=True)
+    p = sub.add_parser('apply')
+    p.add_argument('--target',required=True);p.add_argument('--candidate',required=True)
+    p.add_argument('--expected-manifest',required=True);p.add_argument('--out',required=True)
+    p.add_argument('--write',action='store_true');p.add_argument('--preview')
     args = parser.parse_args(argv)
     try:
         if args.command == 'capabilities':
             print(json.dumps(dict(version=__version__, profiles=[PROFILE,PROJECT_PROFILE], targetProfiles=[UNITY_PROFILE,cocos.PROFILE],
-                implemented=['catalog','inspect','normalize','plan','export','verify','handoff'], planned=['diff','apply'],
+                schemaVersion=1, implemented=['catalog','inspect','normalize','plan','export','verify','handoff','diff','register','apply'], planned=[],
+                targetValidation={UNITY_PROFILE:dict(static='implemented',editor='not_run',visual='not_run'),cocos.PROFILE:dict(static='implemented',editor='not_run',visual='not_run')},
                 compiledFormats=['compiled-v1','pack-v1','texture-pack-v1'],
                 imageFormats=['PNG','JPEG','ASTC (optional pinned decoder)'], targetEditorValidation='not_run'), ensure_ascii=False))
             return 0
@@ -65,10 +76,22 @@ def main(argv=None):
             result = normalize(args.manifest, args.out)
         elif args.command == 'plan':
             result = (cocos.plan if args.target_profile==cocos.PROFILE else plan)(args.ir,args.namespace,args.out,args.bindings)
+        elif args.command == 'diff':
+            result=incremental.diff(args.before,args.after,args.out)
+        elif args.command == 'apply':
+            result=incremental.apply(args.target,args.candidate,args.expected_manifest,args.out,Path.cwd(),args.write,args.preview)
+        elif args.command == 'register':
+            from .io import new_output, write_json, finish
+            record=incremental.register(args.candidate,Path.cwd())
+            out=new_output(args.out,[Path(args.candidate).resolve()]);write_json(out/'registration.json',record)
+            result=finish(out,dict(schemaVersion=1,diagnostics=[],registration=record))
         elif args.command == 'export':
             from .io import read, load
             profile=load(read(args.plan)).get('targetProfile')
             result = (cocos.export if profile==cocos.PROFILE else export)(args.plan,args.out)
+            output_path=Path(args.out).resolve()
+            if output_path.is_relative_to(Path.cwd()/'outputs'):
+                incremental.register(output_path,Path.cwd())
         elif args.command == 'verify':
             from .io import safe, read, load
             profile=load(read(safe(args.candidate)/'manifest.json')).get('targetProfile')

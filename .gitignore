@@ -20,3 +20,4 @@ samples/private/
 **/Temp/
 **/Logs/
 **/UserSettings/
+.monkey/

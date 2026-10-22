@@ -58,11 +58,11 @@
 | 原空Sprite/点击回调 | 空frame生成禁用Image并保留待绑定项，防止Unity默认白框；原handler只记录，Button没有假回调或默认成功 |
 | Animation/Spine、自定义脚本、事件 | 不生成空回调或假业务；交 AI 包 |
 | Cocos 3.8.8 输出 | 离线 candidate；Creator 原生导入/画面对照 not_run |
-| diff/apply | planned，接续开发 |
+| diff/register/apply | 已实现；默认dry-run，expected-manifest与预览收据保护写入 |
 
 `candidate` 表示本命令的离线范围完成，不表示游戏可玩；`partial` 表示已出报告但存在诊断。退出码 0/1/2 分别为声明范围完成、有待处理诊断、参数/IO/协议错误。所有阶段创建新目录，不覆盖输入、旧候选或人工文件。
 
-计划资源、源文件及候选清单均带 hash。静态 verify 会检测包清单等生成文件的修改；Editor verify 允许引擎生成的 meta，只接受与保存回读匹配的 hash。当前不提供 apply，不能宣称已有完整增量合并能力。
+计划资源、源文件及候选清单均带 hash。静态 verify 会检测包清单等生成文件的修改；Editor verify 允许引擎生成的 meta，只接受与保存回读匹配的 hash。现有受控apply见下文；仍不支持任意目录同步、自动删除或自动合并人工代码。
 
 ## 带依据的动态字体绑定
 
@@ -85,3 +85,41 @@ CONTINUE-01只给原奖励页zh场景的3个系统Label绑定了已取得的zh-b
 当前支持Node/UITransform/UIOpacity、simple/sliced/tiled Sprite、原BitmapFont/TTF Label、Label原生描边、必要Widget/Layout/Button/矩形Mask/静止ScrollView子集。未知脚本、动态滚动和事件业务留handoff；字体度量、布局行为与同状态画面仍需真实比较。根UUID按namespace/source ID稳定产生；子资源UUID不在Python拼接猜测。
 
 CONTINUE-02明确允许v0.1待验时推进v0.2/v0.3离线工作，两目标的Editor/视觉状态分别记录。
+
+## v0.3 登记、差异与受控应用
+
+当前CLI JSON合同schemaVersion=1，IR仍为schema 1。`capabilities --json`分别列源profile、两个目标profile及各目标真实验证状态。文件逻辑身份由目标profile/namespace/路径与source-map来源ID表达，内容SHA-256另列；不能把内容变更当成来源身份变更。
+
+输出只在当前工作区的`outputs/<candidate>`登记，状态保存在`.monkey/outputs.json`，绑定绝对根、profile/namespace、来源根与manifest hash。CLI在该目录export后自动登记；其他目录可生成候选，但不能作为apply目标。旧候选或移位后未经登记的候选可用`register --candidate ... --out ...`验证并登记；不通过手改registry更新基线。原Unity10冻结候选保持原位不登记改写。
+
+```sh
+monkey diff --before outputs/base --after outputs/next --out outputs/change-report
+monkey register --candidate outputs/base --out outputs/registration-report
+monkey apply --target outputs/base --candidate outputs/next \
+  --expected-manifest <base-manifest-sha256> --out outputs/apply-preview
+monkey apply --target outputs/base --candidate outputs/next \
+  --expected-manifest <same-base-manifest-sha256> --write \
+  --preview outputs/apply-preview/application.json --out outputs/apply-result
+```
+
+默认apply只预览；写入必须有先前stage-hash保护的dry-run收据，且预览、当前内容、目标manifest与登记hash一致。路径必须规范化且不能包含符号链接或穿越片段，profile/namespace不能跨线合并。diff分别列added/changed/removed/unchanged/manual及manualConflicts；修改、缺失、目标占位、未知生成区文件、输入候选篡改或保留项被重引入都会拒绝相关写入。
+
+生成区由manifest登记，`Assets/Manual/`和`assets/manual/`属于人工区。工具可初始化README脚手架但登记为manual，后续apply不覆盖、创建或删除人工区文件；人工文件hash仅作初始记录，静态verify与apply不据此覆盖人工内容；人工修改的生成文件作为冲突处理。Editor重写meta及新增原生输出尚不支持自动收编，必须停下处理，不把引擎生成和人工修改混为可覆盖文件。
+
+removed文件保留在原路径，合并后的manifest将其标记retained，记录desired/applied-from manifest及retainedRemovedPaths；不会宣称目标逐字等于新候选。retained文件再次生成且内容变化时拒绝覆盖，目前没有自动所有权释放或垃圾清理命令。
+
+写入前在`.monkey/transactions/<id>/`保存旧文件、manifest、registry和事务journal；同工作区使用更新锁。普通写盘失败会回滚自身已写文件；发现外部并发修改则保留该修改并标记recovery-required，不能承诺任意断电场景自动恢复。遗留update.lock需先检查对应journal，不自动删锁。该能力只处理登记生成文件，不是通用目录同步器，不写源工程。
+
+## 两目标能力矩阵（当前开发候选）
+
+| 能力 | Unity 6000.6.2f1/uGUI | Creator 3.8.8 |
+|---|---|---|
+| 同一2.4.15 IR、图像/原字体 | 离线支持既有子集 | 离线支持既有子集 |
+| 原生节点/UI、必要布局/按钮/遮罩 | Editor-only C#候选 | Editor-only JS薄扩展候选 |
+| 静态依赖/hash/AI包 | 通过代表切片 | 通过同源代表切片 |
+| 源数值/业务脚本 | 正式JSON/业务待原生实现 | 正式JSON/业务待原生实现 |
+| 登记、diff、受控apply | 定向人工区用例通过 | 定向用例及真实候选副本通过 |
+| 实际导入/保存/重开、画面对照/输入 | not_run | not_run |
+| 动态滚动、未知脚本/事件、Spine | unsupported/handoff | unsupported/handoff |
+
+最低Python3.11与Windows运行环境尚未实测；当前验证环境为macOS arm64/Python3.14.7。开发wheel不是正式发行，不含原素材或测试样本。

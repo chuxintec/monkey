@@ -88,7 +88,7 @@ def diagnostic(code, location, message, source_id=None):
 
 def finish(out, report):
     report['files'] = [dict(path=p.relative_to(out).as_posix(), sha256=sha(p.read_bytes()),
-                            bytes=p.stat().st_size, owner='generated')
+                            bytes=p.stat().st_size, owner=('manual' if p.relative_to(out).as_posix().startswith(('Assets/Manual/','assets/manual/')) else 'generated'))
                        for p in sorted(out.rglob('*')) if p.is_file() and p != out / 'manifest.json']
     if sum(f['bytes'] for f in report['files']) > 256*1024*1024:
         fail('OUTPUT_BUDGET',str(out),'Candidate exceeds 256 MiB output budget')
