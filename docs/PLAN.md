@@ -289,3 +289,9 @@ own PID86974已09:38:17Z正常exit0且launcher回收；原生方法613.60秒comp
 Unity回读38,845,894字节，原生Candidate.prefab42,815,767字节；已将生成回读读取上限单独设128MiB/8m节点、原生文件改流式SHA，不放宽原始输入解析上限。离线复核得到2005诊断：NODE613、BITMAP_QUAD834、VIEW_REFERENCE557、ProjectVersion正规化1。真实1694独立Prefab、24784节点、16934Sprites、Missing Script0、Scene重开和editable roundtrip通过，但几何/文字/引用未通过，不能当还原完成。
 
 Creator新独立outputs/acceptance/full07-creator-window-01，接管09:40:41Z，内部10:08:41Z/外层10:10:41Z。own PID91737于09:41:58Z启动并实际绑定新路径，资产导入首次发现5份fnt页图缺失：原生按字体同目录basename查找，当前布局跨fonts/images。未调用importCandidate、独立Prefab/Scene实际0。按首失败停止，09:43:08Z正常TERM own child exit-15已reap，资源释放，未动旧Creator42007/肥鹅。下一必要修复字体页图同目录、Unity原始Sprite变体引用与几何/字体诊断；新候选后按已批准同规则验证，不借旧窗口无依据重启。
+
+## 2026-10-23 full08 Creator与位图atlas补核
+
+16dbbb7已生成full08双目标；Creator manifest eeb9718a6b828b3d7d30cbe2ef61275ef7c4bd93692d265730067cc59297965c，static/name/routing通过，IR非名称不变。当前Creator新窗口outputs/acceptance/full08-creator-window-01，接管10:10:08Z、内部10:38:08Z/外层10:40:08Z；无Unity主进程、旧Creator42007低活动，正常审批后启动自有child，先核实际导入再调用方法。
+
+审阅full07真实native-page.png发现白色字块，5个保存的BitmapFont atlas及material主纹理引用为0；旧字形几何回读未覆盖纹理GUID。full08 Unity不启动，保留中间候选。新增强同步atlas导入、版本/material/atlas一起初始化、保存后GUID硬校验及回读验证；C#编译/负面引用测试已通过，需新Unity候选验证，不能只因702个ink几何匹配即称视觉正确。

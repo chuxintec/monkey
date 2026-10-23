@@ -49,12 +49,12 @@ public static class MonkeyImporter
     }
     [Serializable] public class BitmapProbe { public float advance,inkRight; }
     [Serializable] public class BitmapSpec {
-        public string id, path, fontPath; public float pointSize, lineHeight, ascent, descent;
+        public string id, path, fontPath, atlasGuid; public float pointSize, lineHeight, ascent, descent;
         public int[] atlasSize; public GlyphSpec[] glyphs; public KerningSpec[] kernings;
     }
     [Serializable] public class GlyphSpec { public uint unicode, index; public int[] rect; public float[] metrics; }
     [Serializable] public class KerningSpec { public uint first, second; public float advance; }
-    [Serializable] public class FontResult { public string id, guid; public int glyphCount, characterCount; public float pointSize, lineHeight; }
+    [Serializable] public class FontResult { public string id, guid, atlasGuid, materialAtlasGuid; public int glyphCount, characterCount; public float pointSize, lineHeight; }
     [Serializable] public class LabelResult { public string sourceId, text, fontGuid, geometryProbe; public float fontSize; public int characterCount; public bool allCharactersPresent; public GlyphBounds[] glyphBounds; }
     [Serializable] public class GlyphBounds { public uint unicode; public float left,top,width,height,quadPadding; }
     [Serializable] public class Readback {
@@ -402,14 +402,16 @@ public static class MonkeyImporter
             atlasImporter.mipmapEnabled = false; atlasImporter.npotScale = TextureImporterNPOTScale.None;
             atlasImporter.textureCompression = TextureImporterCompression.Uncompressed; atlasImporter.maxTextureSize = 16384;
             atlasImporter.SaveAndReimport();
+            AssetDatabase.ImportAsset(spec.path,ImportAssetOptions.ForceSynchronousImport);
             var atlas = AssetDatabase.LoadAssetAtPath<Texture2D>(spec.path);
+            if(atlas==null || AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(atlas))!=spec.atlasGuid)
+                throw new InvalidOperationException("Original bitmap atlas did not import: "+spec.id);
             var shader = tmpBitmapShader;
             if (shader == null) throw new InvalidOperationException("Native TMP bitmap shader unavailable after resource import");
             var font = ScriptableObject.CreateInstance<TMPro.TMP_FontAsset>();
             // Custom Atlas shader samples RGBA, retaining the source font's colored outline.
             var material = new Material(shader); material.name=Path.GetFileNameWithoutExtension(spec.fontPath)+" Material";
             material.mainTexture=atlas; material.SetColor("_FaceColor",Color.white);
-            font.material=material;
             font.name = Path.GetFileNameWithoutExtension(spec.fontPath);
             font.faceInfo = new UnityEngine.TextCore.FaceInfo {
                 familyName=font.name,styleName="Original",pointSize=(int)spec.pointSize,scale=1,
@@ -422,11 +424,15 @@ public static class MonkeyImporter
 
             var serialized = new SerializedObject(font);
             serialized.FindProperty("m_Version").stringValue = "1.1.0";
+            serialized.FindProperty("m_Material").objectReferenceValue=material;
+            var atlasReferences=serialized.FindProperty("m_AtlasTextures");atlasReferences.arraySize=1;
+            atlasReferences.GetArrayElementAtIndex(0).objectReferenceValue=atlas;
             serialized.FindProperty("m_AtlasWidth").intValue = spec.atlasSize[0];
             serialized.FindProperty("m_AtlasHeight").intValue = spec.atlasSize[1];
             serialized.FindProperty("m_AtlasPadding").intValue = 0;
             serialized.FindProperty("m_AtlasRenderMode").intValue=(int)UnityEngine.TextCore.LowLevel.GlyphRenderMode.RASTER;
             serialized.ApplyModifiedPropertiesWithoutUndo();CheckEngineErrors();
+            font.atlasTextures=new[]{atlas};font.material=material;material.SetTexture("_MainTex",atlas);
             foreach (var g in spec.glyphs) {
                 var glyph = new UnityEngine.TextCore.Glyph(g.index,
                     new UnityEngine.TextCore.GlyphMetrics(g.metrics[0],g.metrics[1],g.metrics[2],g.metrics[3],g.metrics[4]),
@@ -441,8 +447,14 @@ public static class MonkeyImporter
                 });
             }
             AssetDatabase.CreateAsset(font,spec.fontPath);AssetDatabase.AddObjectToAsset(material,font);
-            font.ReadFontAssetDefinition();EditorUtility.SetDirty(font);AssetDatabase.SaveAssetIfDirty(font);
-            fonts[spec.id]=font;
+            font.ReadFontAssetDefinition();EditorUtility.SetDirty(material);EditorUtility.SetDirty(font);AssetDatabase.SaveAssetIfDirty(font);
+            AssetDatabase.ImportAsset(spec.fontPath,ImportAssetOptions.ForceSynchronousImport);
+            var persisted=AssetDatabase.LoadAssetAtPath<TMPro.TMP_FontAsset>(spec.fontPath);
+            if(persisted==null || persisted.atlasTextures.Length!=1 || persisted.atlasTextures[0]==null || persisted.material==null || persisted.material.mainTexture==null ||
+                AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(persisted.atlasTextures[0]))!=spec.atlasGuid ||
+                AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(persisted.material.mainTexture))!=spec.atlasGuid)
+                throw new InvalidOperationException("Saved bitmap atlas/material binding differs: "+spec.id);
+            fonts[spec.id]=persisted;
         }
         // Additive preview scene preserves any previously open scene.
         NativeCheckpoint("hierarchy",0,plan.nodes.Length);
@@ -708,6 +720,8 @@ public static class MonkeyImporter
                     active=target.gameObject.activeSelf,componentTypes=target.GetComponents<Component>().Select(c=>c.GetType().FullName).ToArray()};
             }).ToArray(),
             fonts=fonts.Select(pair=>new FontResult { id=pair.Key,guid=AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(pair.Value)),
+                atlasGuid=pair.Value.atlasTextures.Length>0 && pair.Value.atlasTextures[0]!=null?AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(pair.Value.atlasTextures[0])):"",
+                materialAtlasGuid=pair.Value.material!=null && pair.Value.material.mainTexture!=null?AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(pair.Value.material.mainTexture)):"",
                 glyphCount=pair.Value.glyphTable.Count,characterCount=pair.Value.characterTable.Count,
                 pointSize=pair.Value.faceInfo.pointSize,lineHeight=pair.Value.faceInfo.lineHeight }).ToArray(),
             labels=plan.components.Where(c=>c.convertible && c.type=="cc.Label").Select(c=>

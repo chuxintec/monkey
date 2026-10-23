@@ -79,6 +79,15 @@ class CreatorTests(unittest.TestCase):
             self.assertTrue((fnt.parent/page).is_file())
             self.assertEqual(sha((fnt.parent/page).read_bytes()),atlas['sha256'])
             self.assertEqual(cocos.verify(r/'candidate',r/'checked')['staticValidation'],'pass')
+            from monkey.targets import unity
+            u=unity.plan(r/'ir/ir.json','bitmap-adjacency',r/'unity-plan')
+            unity.export(r/'unity-plan/plan.json',r/'unity')
+            spec=u['bitmapFonts'][0]
+            write_json(r/'unity/Analysis/editor-readback.json',dict(status='imported',unityVersion='6000.6.2f1',missingScripts=0,
+                diagnostics=[],nativeFiles=[],nodes=[],sprites=[],labels=[],fonts=[dict(id=spec['id'],guid='font',
+                    glyphCount=len(spec['glyphs']),pointSize=spec['pointSize'],lineHeight=spec['lineHeight'],atlasGuid='',materialAtlasGuid='')]))
+            checked=unity.verify(r/'unity',r/'unity-checked','editor')
+            self.assertTrue(any(d['code']=='BITMAP_ATLAS_READBACK_MISMATCH' for d in checked['diagnostics']))
 
     def test_ir_and_plan_tampering_rejected(self):
         with tempfile.TemporaryDirectory() as temp:

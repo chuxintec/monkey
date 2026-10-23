@@ -14,3 +14,7 @@ Unity实跑副本outputs/acceptance/full07-window-01/UnityProject，原生方法
 - 保存树回读一次建立源ID→真实RectTransform映射，避免每Label/View反复建立全量字典；组件构建每128项检查预算/引擎错误。
 
 20项定向检查通过，3个Creator JS语法检查通过；修改后的C#原生API编译通过，均非Editor验证。计划生成全新full08并顺序原生核对，full07候选/实跑工程/截图保持冻结；20重复Layout继续明确待适配。
+
+## 实际截图补充
+
+full07预览可见白色字块；5个保存的BitmapFont中m_AtlasTextures[0]及材质_MainTex引用为0。因此字形geometry与图片绑定必须独立核验。full08 Unity冻结为未运行中间候选；新增atlasGuid typed计划、强同步导入/非空和原GUID检查、同时初始化material/version/atlas引用、保存后回读与最终FontResult atlas/material GUID核对。该修复已C# API compile pass，负面atlas绑定测试通过，未原生验证。旧回读不会因此自动通过。

@@ -69,6 +69,7 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
     for font in ir.get('bitmapFonts',[]):
         item={k:v for k,v in font.items() if k!='atlasImage'}
         item['id']=font['sourceId']
+        item['atlasGuid']=guid(namespace,font['sourceId']+'@atlas')
         item['path']=resource(font['atlasImage'],font['sourceId']+'@atlas','bitmap-atlas')
         item['fontPath']=naming.path(font['sourceId'],'.asset','Assets/Generated/Art')
         bitmap_fonts.append(item)
@@ -396,6 +397,8 @@ def verify(candidate, output, level='static'):
                 actual=by_font.get(spec['id'])
                 if not actual or actual.get('glyphCount',0)<len(spec['glyphs']) or not close(actual.get('pointSize'),spec['pointSize']) or not close(actual.get('lineHeight'),spec['lineHeight']):
                     diagnostics.append(diagnostic('BITMAP_FONT_READBACK_MISMATCH',spec['id'],'Saved static font glyph count or metrics differ'))
+                if spec.get('atlasGuid') and (not actual or actual.get('atlasGuid')!=spec['atlasGuid'] or actual.get('materialAtlasGuid')!=spec['atlasGuid']):
+                    diagnostics.append(diagnostic('BITMAP_ATLAS_READBACK_MISMATCH',spec['id'],'Saved font and material must reference the original atlas GUID'))
             by_label={l['sourceId']:l for l in rb.get('labels',[])}
             node_specs={n['sourceId']:n for n in instruction['nodes']}
             for spec in instruction['components']:
