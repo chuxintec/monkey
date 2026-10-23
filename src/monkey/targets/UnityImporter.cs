@@ -23,7 +23,10 @@ public static class MonkeyImporter
     static Shader tmpBitmapShader,tmpDistanceShader;
     static TmpResourceResult tmpResourceResult;
     [Serializable] public class SourcePrefabSpec { public string sourceId,root,path; public string[] nodes; public int nodeCount; }
-    [Serializable] public class SourcePrefabResult { public string sourceId,path,guid; public int nodeCount,missingScripts; }
+    [Serializable] public class SourcePrefabResult {
+        public string sourceId,path,guid,geometryPhase; public int nodeCount,missingScripts,layoutSettlePasses;
+        public bool savedReloaded,referencesVerified; public NodeResult[] nodes; public string[] referenceFailures;
+    }
     [Serializable] public class MotionKey { public float time,value; public string interpolation; }
     [Serializable] public class MotionProbe { public float time,value; }
     [Serializable] public class MotionTrack { public string node,path,nativeType,nativeProperty; public MotionKey[] keys; public MotionProbe[] probes; }
@@ -629,8 +632,7 @@ public static class MonkeyImporter
                 label.UpdateMeshPadding();
             }
         }
-        Canvas.ForceUpdateCanvases();
-        UnityEngine.UI.LayoutRebuilder.ForceRebuildLayoutImmediate(designRect);
+        SettleNativeLayout(canvas);
         if (plan.galleryOnly)
         {
             var i=0;
@@ -664,25 +666,40 @@ public static class MonkeyImporter
             if(sourcePrefabResults.Count%16==0)NativeCheckpoint("source-prefabs",sourcePrefabResults.Count,plan.sourcePrefabs.Length);
             if(!spec.path.StartsWith("Assets/Generated/Views/Sources/",StringComparison.Ordinal) || spec.path.Contains("..") || File.Exists(spec.path))
                 throw new InvalidOperationException("Invalid or existing source prefab path: "+spec.path);
-            var originalRoot=nodeMap[spec.root].GetComponent<RectTransform>();
-            var clone=UnityEngine.Object.Instantiate(originalRoot.gameObject,(Transform)null,false);
-            var cloneRoot=clone.GetComponent<RectTransform>();
-            cloneRoot.anchorMin=originalRoot.anchorMin;cloneRoot.anchorMax=originalRoot.anchorMax;
-            cloneRoot.pivot=originalRoot.pivot;cloneRoot.sizeDelta=originalRoot.sizeDelta;
-            cloneRoot.anchoredPosition3D=originalRoot.anchoredPosition3D;
-            cloneRoot.localRotation=originalRoot.localRotation;cloneRoot.localScale=originalRoot.localScale;
-            clone.name=nodeMap[spec.root].name;
-            try {
-                var sourcePrefab=PrefabUtility.SaveAsPrefabAsset(clone,spec.path,out bool saved);
-                if(!saved || sourcePrefab==null)throw new InvalidOperationException("Source prefab save failed: "+spec.sourceId);
-            } finally { UnityEngine.Object.DestroyImmediate(clone); }
+            // SaveAsPrefabAsset serializes this subtree without modifying it.
+            // A managed active Instantiate can run layout lifecycle callbacks
+            // while the cloned hierarchy is still initializing.
+            var sourcePrefab=PrefabUtility.SaveAsPrefabAsset(nodeMap[spec.root],spec.path,out bool saved);
+            if(!saved || sourcePrefab==null)throw new InvalidOperationException("Source prefab save failed: "+spec.sourceId);
             var contents=PrefabUtility.LoadPrefabContents(spec.path);
             try {
+                int passes=SettleNativeLayout(contents);
                 var transforms=contents.GetComponentsInChildren<Transform>(true);
                 int missing=transforms.Sum(t=>GameObjectUtility.GetMonoBehavioursWithMissingScriptCount(t.gameObject));
                 if(transforms.Length!=spec.nodeCount || missing!=0)throw new InvalidOperationException("Source prefab reopen mismatch: "+spec.sourceId);
+                var mapped=SavedNodeMap(plan.nodes,contents,spec,nodeSpecs);
+                var referenceFailures=new List<string>();
+                foreach(var c in plan.components.Where(c=>c.convertible&&mapped.ContainsKey(c.node))) {
+                    var go=mapped[c.node].gameObject;bool valid=true;
+                    if(c.type=="cc.Sprite") {
+                        var image=go.GetComponent<UnityEngine.UI.Image>();
+                        valid=image!=null && (string.IsNullOrEmpty(c.spriteFrame)?image.sprite==null:image.sprite==spriteMap[c.spriteFrame+(c.trim?"":"@original")]);
+                    } else if(c.type=="cc.Label" || c.type=="cc.LabelOutline") {
+                        var label=go.GetComponent<TMPro.TextMeshProUGUI>();
+                        valid=label!=null && (c.type=="cc.LabelOutline" || (label.font==fonts[c.font]&&label.text==c.text));
+                    } else if(c.type=="cc.Button") {
+                        var button=go.GetComponent<UnityEngine.UI.Button>();valid=button!=null&&button.targetGraphic==go.GetComponent<UnityEngine.UI.Graphic>();
+                    } else if(c.type=="cc.ScrollView") {
+                        var scroll=go.GetComponent<UnityEngine.UI.ScrollRect>();valid=scroll!=null&&mapped.ContainsKey(c.content)&&scroll.content==mapped[c.content];
+                    } else if(c.type=="cc.Mask")valid=go.GetComponent<UnityEngine.UI.RectMask2D>()!=null;
+                    else if(c.type=="cc.Layout")valid=go.GetComponent<UnityEngine.UI.LayoutGroup>()!=null;
+                    if(!valid)referenceFailures.Add(c.sourceId);
+                }
                 sourcePrefabResults.Add(new SourcePrefabResult {sourceId=spec.sourceId,path=spec.path,
-                    guid=AssetDatabase.AssetPathToGUID(spec.path),nodeCount=transforms.Length,missingScripts=missing});
+                    guid=AssetDatabase.AssetPathToGUID(spec.path),nodeCount=transforms.Length,missingScripts=missing,
+                    savedReloaded=true,geometryPhase="native-layout-settled-v1",layoutSettlePasses=passes,
+                    nodes=spec.nodes.Select(id=>DescribeNode(nodeSpecs[id],mapped[id])).ToArray(),
+                    referencesVerified=referenceFailures.Count==0,referenceFailures=referenceFailures.ToArray()});
             } finally { PrefabUtility.UnloadPrefabContents(contents); }
         }
         NativeCheckpoint("candidate-save",0,1);
@@ -703,6 +720,8 @@ public static class MonkeyImporter
         if(!scene.IsValid() || !scene.isLoaded)throw new InvalidOperationException("Saved scene reopen failed");
         instance=scene.GetRootGameObjects().FirstOrDefault(go=>go.GetComponent<MonkeyCandidateView>()!=null);
         if(instance==null)throw new InvalidOperationException("Reopened scene has no serialized candidate view");
+        SettleNativeLayout(instance);
+        if(!EditorSceneManager.SaveScene(scene,ScenePath))throw new InvalidOperationException("Settled native scene save failed");
         NativeCheckpoint("scene-reopen",1,1);
         NativeCheckpoint("native-readback",0,1);
         var savedNodeMap=SavedNodeMap(plan.nodes,instance);
@@ -722,10 +741,7 @@ public static class MonkeyImporter
             nodes=plan.nodes.Select(n=>{
                 // Resolve the reloaded scene once by sibling-index paths, independent of names.
                 var target=savedNodeMap[n.sourceId];
-                var rect=(RectTransform)target;
-                return new NodeResult {sourceId=n.sourceId,hierarchy=target.name,size=new[]{rect.rect.width,rect.rect.height},
-                    pivot=new[]{rect.pivot.x,rect.pivot.y},position=new[]{rect.localPosition.x,rect.localPosition.y,rect.localPosition.z},
-                    active=target.gameObject.activeSelf,componentTypes=target.GetComponents<Component>().Select(c=>c.GetType().FullName).ToArray()};
+                return DescribeNode(n,target);
             }).ToArray(),
             fonts=fonts.Select(pair=>new FontResult { id=pair.Key,guid=AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(pair.Value)),
                 atlasGuid=pair.Value.atlasTextures.Length>0 && pair.Value.atlasTextures[0]!=null?AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(pair.Value.atlasTextures[0])):"",
@@ -838,21 +854,45 @@ public static class MonkeyImporter
         button.transition=UnityEngine.UI.Selectable.Transition.Animation;
         EditorUtility.SetDirty(controller);AssetDatabase.SaveAssetIfDirty(controller);
     }
-    static Dictionary<string,RectTransform> SavedNodeMap(NodeSpec[] nodes,GameObject instance) {
-        var byId=nodes.ToDictionary(n=>n.sourceId);
-        var roots=nodes.Where(n=>string.IsNullOrEmpty(n.parent) || !byId.ContainsKey(n.parent)).ToArray();
-        var design=instance.transform.Find("DesignRoot");
-        if(design==null || design.childCount!=roots.Length)throw new InvalidOperationException("Saved source root boundary differs");
+    static NodeResult DescribeNode(NodeSpec source,RectTransform rect) {
+        return new NodeResult {sourceId=source.sourceId,hierarchy=rect.name,size=new[]{rect.rect.width,rect.rect.height},
+            pivot=new[]{rect.pivot.x,rect.pivot.y},position=new[]{rect.localPosition.x,rect.localPosition.y,rect.localPosition.z},
+            active=rect.gameObject.activeSelf,componentTypes=rect.GetComponents<Component>().Select(c=>c.GetType().FullName).ToArray()};
+    }
+    static int SettleNativeLayout(GameObject root) {
+        var groups=root.GetComponentsInChildren<UnityEngine.UI.LayoutGroup>(true).Where(g=>g.isActiveAndEnabled).Reverse().ToArray();
+        if(groups.Length==0)return 0;
+        var rects=root.GetComponentsInChildren<RectTransform>(true);
+        Func<RectTransform,Vector4> value=r=>new Vector4(r.rect.width,r.rect.height,r.localPosition.x,r.localPosition.y);
+        for(int pass=0;pass<8;pass++) {
+            NativeCheckpoint(nativeProgress.phase,nativeProgress.processed,nativeProgress.total);
+            var before=rects.Select(value).ToArray();
+            // DesignRoot is not an ILayoutController: forcing only that root is
+            // a no-op. Resolve actual native groups, children before parents.
+            foreach(var group in groups)UnityEngine.UI.LayoutRebuilder.ForceRebuildLayoutImmediate((RectTransform)group.transform);
+            Canvas.ForceUpdateCanvases();
+            if(rects.Select((r,i)=>(value(r)-before[i]).sqrMagnitude).All(d=>d<1e-10f))return pass+1;
+        }
+        throw new InvalidOperationException("NATIVE_LAYOUT_DID_NOT_SETTLE");
+    }
+    static Dictionary<string,RectTransform> SavedNodeMap(NodeSpec[] nodes,GameObject instance,SourcePrefabSpec prefab=null,Dictionary<string,NodeSpec> byId=null) {
+        byId=byId??nodes.ToDictionary(n=>n.sourceId);
         var mapped=new Dictionary<string,RectTransform>();
         var pending=new Stack<KeyValuePair<NodeSpec,Transform>>();
-        for(int i=roots.Length-1;i>=0;i--)pending.Push(new KeyValuePair<NodeSpec,Transform>(roots[i],design.GetChild(i)));
+        if(prefab!=null)pending.Push(new KeyValuePair<NodeSpec,Transform>(byId[prefab.root],instance.transform));
+        else {
+            var roots=nodes.Where(n=>string.IsNullOrEmpty(n.parent) || !byId.ContainsKey(n.parent)).ToArray();
+            var design=instance.transform.Find("DesignRoot");
+            if(design==null || design.childCount!=roots.Length)throw new InvalidOperationException("Saved source root boundary differs");
+            for(int i=roots.Length-1;i>=0;i--)pending.Push(new KeyValuePair<NodeSpec,Transform>(roots[i],design.GetChild(i)));
+        }
         while(pending.Count>0) {
             var pair=pending.Pop();var source=pair.Key;var target=pair.Value as RectTransform;
             if(target==null || target.childCount<source.children.Length)throw new InvalidOperationException("Saved source node boundary differs: "+source.sourceId);
             mapped.Add(source.sourceId,target);
             for(int i=source.children.Length-1;i>=0;i--)pending.Push(new KeyValuePair<NodeSpec,Transform>(byId[source.children[i]],target.GetChild(i)));
         }
-        if(mapped.Count!=nodes.Length)throw new InvalidOperationException("Saved source node count differs");
+        if(mapped.Count!=(prefab==null?nodes.Length:prefab.nodeCount))throw new InvalidOperationException("Saved source node count differs");
         return mapped;
     }
     static LabelResult ReadSavedLabel(ComponentSpec spec,RectTransform saved,bool bitmap) {

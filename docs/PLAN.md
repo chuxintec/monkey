@@ -347,3 +347,11 @@ Creator03 own16625于13:49:50Z启动、13:50:08Z normal TERM exit-15/reap；实�
 Creator批处理重验04（候选仍03）新登记：锚点13:55:23Z，内部14:23:23Z/外层14:25:23Z，方法1200秒；ps未见引擎主进程，controller4f2c13a已同步texture-metadata合同，同manifesta4908311bc31d68dfa414189d6c7c40cce93dd38894c337c8a57e1759864bf26，新outputs/acceptance/creator-font-geometry-probe-04。只正常回收自有child，不顺延截止。
 
 Creator批处理重验04 own17180于13:55:39Z启动、13:55:55Z normal TERM exit-15/reap；方法1.715秒completed，3 Prefab几何/字体及内部引用通过，但外层严格Sprite回读失败。归类11 SpriteFrame存在旧trim/border，API证据保存meta 51次total195ms、folder refresh524ms只扫目录，不能代替逐资产原生重导入。新补公共reimport-asset(uuid)等待屏障，仍8路有界，个别Sprite差异输出明确expected/actual；5定向检查及JS语法pass。新候选04 manifest5cfc0a2644d9a68c994dff40611f8a3d19a49857ddb51820ae0fef243fa6cb06，static pass，需新独立验证，不把1.7秒当性能通过。
+
+Creator批处理/重导入探针05（候选04）新登记：锚点13:59:01Z，内部14:27:01Z/外层14:29:01Z，方法1200秒；ps未见冲突引擎，仅新acceptance/creator-font-geometry-probe-05。固定manifest5cfc0a2644d9a68c994dff40611f8a3d19a49857ddb51820ae0fef243fa6cb06，首新错停止保存，不顺延。
+
+Creator05（候选04）原生结果：own17562已正常TERM exit-15/reap，Verification editor/static pass且零诊断；67资产/76节点/16原字体/3 Prefab/Scene严格几何/字体/边框与裁切/内部引用通过。原生reimport屏障已证明确保批处理后metadata生效；方法时长与API计数见execution-result及editor-readback，不再沿用1.715秒失败数据。开始生成Creator-only全量10，复用Unity10已核源阶段和1776 Spine页图，不重跑源reader/像素/AST。Unity243继续离线归类，发现nested Layout重载时序与SourcePrefab仅count/missing证据缺口，后续补正常UI稳定后几何/引用核对；尚未宣称独立Prefab几何全通过。
+
+Unity剩余243离线分类：74仅size/无直接父Layout、132仅position/父Layout、4 size+position/父Layout、8仅size/父Layout，25带自身Widget（18 size/7 size+position）。这些是检查范围而非已证明独立根因；9个几何变更布局无活动孩子，root Widget设计父尺寸及缓存几何另待判断。现有Settle在无ILayoutController的DesignRoot上强刷实际跳过下树；新增只调用真正原生LayoutGroup的有界稳定过程，未稳定8轮即失败，不循环追逐源期望。独立Prefab改直接SaveAsPrefabAsset自有子树，避免活动Instantiate初始化缓存；正常保存重载后新增逐节点几何与字体/Sprite/内部组件引用证据，旧full07/10只有count/missing结论不追认。
+
+新Unity小探针05复用原normalize，仅7原图/413节点/502组件/70帧及全部16字体；涵盖旧3图、nested/empty Layout及Widget实际反例。manifest73aab725465ae1e80e4d47f3b70f1c9f1481b8b995b2769c064911d16c7d57aa，static pass；.private/layout-settle-compile-01 C# pass，18项相关检查通过。源码/像素/AST未重跑。Creator-only全量10已生成manifest7fb3a4b7f996da9402ae1ecc9f9b921ab874e49046b63ea86938d143e08c770c，三项离线核对在途。

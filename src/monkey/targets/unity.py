@@ -283,6 +283,7 @@ def export(plan_path, output):
     instruction['tmpResources']=dict(packageName='com.unity.ugui',packageVersion='2.6.0',resource='Package Resources/TMP Essential Resources.unitypackage',importMode='package-completion-callback')
     instruction['glyphReadback']='native-quad-padding-v1'
     instruction['sceneRoundtrip']=True
+    instruction['sourcePrefabReadback']='native-layout-settled-v1'
     instruction['sourceDiagnosticCount']=len(p['diagnostics'])
     instruction['prefabGuid']=guid(p['namespace'],'native-prefab')
     instruction['sceneGuid']=guid(p['namespace'],'native-scene')
@@ -381,11 +382,22 @@ def verify(candidate, output, level='static'):
                 diagnostics.append(diagnostic('SCENE_ROUNDTRIP_NOT_VERIFIED','Candidate.unity','Saved scene was not normally closed/reopened before native readback'))
             json_assets={a['id']:a for a in rb.get('jsonAssets',[])}
             actual_prefabs={a['sourceId']:a for a in rb.get('sourcePrefabs',[])}
+            expected_nodes={n['sourceId']:n for n in instruction['nodes']}
             for spec in instruction.get('sourcePrefabs',[]):
                 actual=actual_prefabs.get(spec['sourceId'],{})
                 target=spec['path']
                 if not actual.get('guid') or actual.get('nodeCount')!=spec['nodeCount'] or actual.get('missingScripts')!=0 or actual.get('path')!=target or target not in native:
                     diagnostics.append(diagnostic('SOURCE_PREFAB_NOT_VERIFIED',spec['sourceId'],'Independent native prefab save/reopen evidence is absent or inconsistent'))
+                if instruction.get('sourcePrefabReadback')=='native-layout-settled-v1':
+                    saved_nodes={n['sourceId']:n for n in actual.get('nodes',[])}
+                    if actual.get('savedReloaded') is not True or actual.get('geometryPhase')!='native-layout-settled-v1' or set(saved_nodes)!=set(spec['nodes']):
+                        diagnostics.append(diagnostic('SOURCE_PREFAB_GEOMETRY_NOT_VERIFIED',spec['sourceId'],'Saved native hierarchy geometry evidence is absent'))
+                    for sid in spec['nodes']:
+                        source=expected_nodes[sid];saved=saved_nodes.get(sid,{})
+                        if any(not close(saved.get(key),source[field]) for key,field in [('size','size'),('pivot','anchor'),('position','position')]) or saved.get('active')!=source['active']:
+                            diagnostics.append(diagnostic('SOURCE_PREFAB_GEOMETRY_MISMATCH',sid,'Independent saved prefab differs: '+target))
+                    if actual.get('referencesVerified') is not True or actual.get('referenceFailures'):
+                        diagnostics.append(diagnostic('SOURCE_PREFAB_REFERENCE_MISMATCH',spec['sourceId'],'Saved component references differ: '+str(actual.get('referenceFailures'))))
             for spec in instruction['assets']:
                 if spec['kind']=='cc.JsonAsset':
                     actual=json_assets.get(spec['id'],{})
