@@ -38,3 +38,9 @@ convert可重复`--dependency-source`，仅依赖清单及实际消费的缓存�
 - probe03独立Unity6副本own67435于2026-10-23T18:40:58.386769Z启动、18:41:04.978708Z exit0/reaped；16项严格检查通过，3个真实Sprite引用、MissingScript0、独立editable Prefab保存/重导/重载及引用身份保持，status=resource_subset_verified。公开convert本身仍只生成候选，此原生段为独立受控验证，不能声称公开`--native`已接通Unity来源。
 
 完整启动Bundle缓存仅3/4匹配：`sharedassets1.assets`/pathID `4`需要`Assets/Textures/astc/512/pangzhijiangsi.a976bf1d.txt`，现有另hash同名不能代用。该轮blocked且未写派生bundle/启动Provider或Editor。启动106MB缺TypeTree、CODEPHPY保护方法、完整场景/视觉/业务及全Research逐项目输出仍未闭合。
+
+### 精确缺件补齐后的新启动候选
+
+总监事件monkey-zombie-exact-texture-found-20261024-01提供只GET一次的精确原件。核对原包game.js的DATA_CDN明示地址、逻辑键、65552B/SHA `6c11b424ba429c442664e0fc4eb212030fad8255800755bd894b3c96596fa018`及ASTC8x8/512x512长度；不以文件名hash算法作未证明的身份保证。私有输入池104项，manifest SHA `887c4c3dc35d1f96dcfb9472c01827a46274232ae207f6e8b2ae26207319dcfb`。新hydrate02四键全部匹配、非纹理对象hash保持，派生SHA `f8d91af0216b0d9527e3ae5c72765e7095a15c5ef5710d2061faad9fcbd8ec46`；旧缺件失败不变。
+
+公开convert startup02实际完成候选：5输入/3554576B，Provider2484文件/11019493B、自有child正常退出/原件hash不变；1173份原/Provider代码隔离，schema恢复0，deadbeef占位0。106MB缺schema与方法体未恢复，原生尚未运行，不能用缺占位0冒称无MissingScript或完整项目通过。

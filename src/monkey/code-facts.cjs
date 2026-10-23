@@ -22,8 +22,8 @@ while(stack.length){
    const scope=[...parents].reverse().find(p=>['FunctionExpression','FunctionDeclaration','Program'].includes(p.type));
    const body=fn.body.type==='BlockStatement'?fn.body.body:[];
    let semantic={kind:'unsupported',reason:'Statement/type/evaluation semantics require recovery'};
-   if(prototype&&fn.params.length===0&&body.length===1&&body[0].type==='ReturnStatement'&&field(body[0].argument))semantic={kind:'read-instance-field',field:field(body[0].argument)};
-   if(prototype&&fn.params.length===1&&fn.params[0].type==='Identifier'&&body.length===1){
+   if(prototype&&fn.type==='FunctionExpression'&&!fn.async&&!fn.generator&&fn.params.length===0&&body.length===1&&body[0].type==='ReturnStatement'&&field(body[0].argument))semantic={kind:'read-instance-field',field:field(body[0].argument)};
+   if(prototype&&fn.type==='FunctionExpression'&&!fn.async&&!fn.generator&&fn.params.length===1&&fn.params[0].type==='Identifier'&&body.length===1){
     const e=body[0].type==='ExpressionStatement'?body[0].expression:null;
     if(e?.type==='AssignmentExpression'&&e.operator==='='&&field(e.left)&&e.right.type==='Identifier'&&e.right.name===fn.params[0].name)semantic={kind:'write-instance-field',field:field(e.left),parameter:fn.params[0].name};
    }

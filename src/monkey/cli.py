@@ -78,6 +78,12 @@ def main(argv=None):
     p = sub.add_parser('project-model', help='Inspect explicit target asset path slots and identity without moving files')
     p.add_argument('--candidate', required=True)
     p.add_argument('--out', required=True)
+    p = sub.add_parser('code-emit', help='Emit source-proven numeric field methods as C# and default TypeScript; unknown methods stay pending')
+    p.add_argument('--source',required=True)
+    p.add_argument('--code-model',required=True)
+    p.add_argument('--numeric-field',action='append',required=True,help='Explicit numeric call-subdomain contract; not a global JS type inference')
+    p.add_argument('--cocos-code-language',choices=['ts','js'],default='ts')
+    p.add_argument('--out',required=True)
     p = sub.add_parser('code-model', help='Inspect named methods and evidenced semantic candidates without executing JavaScript')
     p.add_argument('--source', required=True)
     p.add_argument('--module-name', required=True)
@@ -135,7 +141,7 @@ def main(argv=None):
     try:
         if args.command == 'capabilities':
             print(json.dumps(dict(version=__version__, profiles=[PROFILE,PROJECT_PROFILE], targetProfiles=[UNITY_PROFILE,cocos.PROFILE],
-                schemaVersion=1, unitySourceProfile=dict(name='unityfs-unitypy-1.25.3-assetripper-2.0.0',status='partial',inputs='explicit-bundle-files-and-exact-local-texture-cache',editor='one-prefab-schema-reference-save-reload-verified',publicNative=False,methodsRecovered=0), implemented=['convert','catalog','inspect','normalize','plan','export','verify','handoff','diff','register','apply','preflight','native-import','research-matrix','code-model','project-model','inspect-unity','export-unity','unity-code-model','index-unity','hydrate-unity'], planned=[],
+                schemaVersion=1, unitySourceProfile=dict(name='unityfs-unitypy-1.25.3-assetripper-2.0.0',status='partial',inputs='explicit-bundle-files-and-exact-local-texture-cache',editor='one-prefab-schema-reference-save-reload-verified',publicNative=False,methodsRecovered=0), implemented=['convert','catalog','inspect','normalize','plan','export','verify','handoff','diff','register','apply','preflight','native-import','research-matrix','code-model','code-emit','project-model','inspect-unity','export-unity','unity-code-model','index-unity','hydrate-unity'], planned=[],
                 targetValidation={UNITY_PROFILE:dict(static='implemented',editor='representative-subset-verified',visual='not_run'),cocos.PROFILE:dict(static='implemented',editor='representative-subset-verified',visual='not_run')},
                 compiledFormats=['compiled-v1','pack-v1','texture-pack-v1'],
                 containerFormats=['plain-wxapkg','APK-ZIP','Cocos-resource-directory'],
@@ -144,6 +150,10 @@ def main(argv=None):
                 imageFormats=['PNG','JPEG','ASTC (optional pinned decoder)'],animationSchemaVersion=1,
                 animationSubset=['local-position','local-scale','opacity','linear','constant-step','Normal','Loop'],animationEvents='manual-contract-only', targetEditorValidation='representative-subsets-only'), ensure_ascii=False))
             return 0
+        if args.command == 'code-emit':
+            from .code_emit import emit
+            result=emit(args.source,args.code_model,args.out,args.numeric_field,args.cocos_code_language)
+            print(json.dumps(result,ensure_ascii=False));return 1
         if args.command == 'hydrate-unity':
             from .unity_textures import hydrate
             result=hydrate(args.source,args.texture_cache,args.provider_python,args.out,args.budget_seconds)

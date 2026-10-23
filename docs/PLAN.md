@@ -457,3 +457,8 @@ full14 Unity actual own53301 exit0/reap/方法475.455秒/强verify零诊断；�
 原生probe03自有child67435、锚点2026-10-23T18:40:58.386769Z、内部19:08:58.386769Z/外层19:10:58.386769Z、方法1200秒，实际18:41:04.978708Z exit0/reap；16严格门通过：类注册、16字段/几何/GUID与十进制fileID、MissingScript0、3真实Sprite引用，独立editable copy保存/重导/重载引用保持。仅resource_subset_verified，原方法/视觉/玩法未验；公开Unity--native尚未整合。probe01/02冻结结果不变。
 
 启动Bundle精确纹理仅3/4，缺Assets/Textures/astc/512/pangzhijiangsi.a976bf1d.txt（sharedassets1.assets/pathID4），另hashf656c6db不是替代证据。本轮hydration blocked，不写派生包/启动Provider或Editor。另106MB缺TypeTree、CODEPHPY保护方法仍在；向总监报告具体原件条件，同时继续v0.2具名C#/TS和typed格式化，不等待ACK。15项定向检查通过（首次命令缺PYTHONPATH后按src:tests正确重跑），不代替上述实际Editor结果。
+
+
+总监source-assistance事件monkey-zombie-exact-texture-found-20261024-01后，核原包DATA_CDN明示URL与新增精确原件65552B/SHA6c11b424ba429c442664e0fc4eb212030fad8255800755bd894b3c96596fa018，ASTC8x8/512x512及长度匹配，复制到monkey私有池。104项新pool SHA887c4c3dc35d1f96dcfb9472c01827a46274232ae207f6e8b2ae26207319dcfb；startup hydrate02四键齐全、非纹理raw hash不变。公开startup convert02完成5输入3554576B候选、2484 Provider文件11019493B，自有child退出、原件不变，1173代码隔离/schema0/原生not_run；106MB和受保护方法仍不恢复。旧缺件状态保持。
+
+代码具名输出第一组：code-emit --source --code-model --numeric-field value --cocos-code-language ts|js（默认ts）。重新静态解析核源/hash/方法语义，拒绝篡改模型；仅显式number调用子域的字段setter/getter生成非空实现，C#double?未初始化与TS undefined分别明示。NumberLabel真实6方法→2实现/4pending，待补不放空成功函数。箭头/async/generator函数不误判普通this方法。4定向反例通过，含仅运行生成JS验证undefined/负零/NaN/Infinity/独立实例/原Label字符串不变。真实输出C#compile通过，TS5.8.2/Creator3.8.8公开SDK target strict通过、错误字符串调用TS2345拒绝；官方SDK自身82项full-strict声明诊断独立记录，skipLibCheck只隔离上游声明，不放宽生成target。Creator原生注册/5引用与Unity5引用尚not_run，未并入convert，当前继续下一组。
