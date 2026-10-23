@@ -239,6 +239,10 @@ def verify(candidate,output,level='static'):
             if set(actual_prefabs)!=set(expected_prefabs):good=False
             for sid,spec in expected_prefabs.items():
                 actual=actual_prefabs.get(sid,{})
+                for mismatch in actual.get('geometryMismatches',[]):
+                    good=False
+                    diagnostics.append(diagnostic('PREFAB_GEOMETRY_MISMATCH',mismatch.get('sourceId',sid),
+                        'Saved native geometry differs: '+str(mismatch)))
                 expected_components={c['sourceId'] for c in plan['components'] if c['convertible'] and c['node'] in set(spec['nodes'])}
                 valid=(set(actual.get('components',[]))==expected_components and actual.get('path')==spec['path'] and bool(actual.get('uuid')) and
                        actual.get('nodeCount')==spec['nodeCount'] and actual.get('savedReloaded') is True and

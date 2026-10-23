@@ -46,6 +46,7 @@ public static class MonkeyImporter
         public string target,content,nativeId; public int flags,maskType,layoutType,resize,horizontalDirection,verticalDirection,startAxis,transition;
         public bool inverted,horizontal,vertical,interactable; public float zoomScale,duration,width;
         public float[] margins,spacingXY,padding,effectiveCellSize,outlineColor;
+        public bool crossAxisScale; public float crossAxisAlignment;
     }
     [Serializable] public class BitmapProbe { public float advance,inkRight; }
     [Serializable] public class BitmapSpec {
@@ -586,7 +587,13 @@ public static class MonkeyImporter
                     group.enabled=spec.enabled;group.padding=padding;
                     group.childControlWidth=false;group.childControlHeight=false;
                     group.childForceExpandWidth=false;group.childForceExpandHeight=false;
-                    group.childAlignment=TextAnchor.MiddleCenter;
+                    if(spec.layoutType==1) {
+                        group.childScaleHeight=spec.crossAxisScale;
+                        group.childAlignment=spec.crossAxisAlignment==0?TextAnchor.LowerCenter:spec.crossAxisAlignment==1?TextAnchor.UpperCenter:TextAnchor.MiddleCenter;
+                    } else {
+                        group.childScaleWidth=spec.crossAxisScale;
+                        group.childAlignment=spec.crossAxisAlignment==0?TextAnchor.MiddleLeft:spec.crossAxisAlignment==1?TextAnchor.MiddleRight:TextAnchor.MiddleCenter;
+                    }
                     group.reverseArrangement=spec.layoutType==1?spec.horizontalDirection==1:spec.verticalDirection==0;
                     group.spacing=spec.layoutType==1?spec.spacingXY[0]:spec.spacingXY[1];
                     if(spec.layoutType==1)fitter.horizontalFit=UnityEngine.UI.ContentSizeFitter.FitMode.PreferredSize;

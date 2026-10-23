@@ -83,6 +83,12 @@ module.exports = {
                     if(!(label.font instanceof cc.BitmapFont)) {label.enableOutline=true;label.outlineColor=color(c.outlineColor);label.outlineWidth=c.width;}
                     nativeRefs.push({sourceId:c.sourceId,nodeUuid:label.node.uuid,componentUuid:label.uuid,type:c.type});
                 }
+                // Components are built in an isolated, non-running Scene. Flush the
+                // public Label API after all properties/outlines so the default
+                // "Label" measurement cannot leak into the saved UITransform.
+                for(const c of plan.components.filter(c=>c.convertible&&c.type==='cc.Label')) {
+                    checkTime(plan);nodes.get(c.node).getComponent(cc.Label).updateRenderData(true);
+                }
                 const animationAssets=[];
                 for(const spec of plan.animations||[])if(spec.convertible) {
                     const clip=motion.create(spec,nodes);const raw=EditorExtends.serialize(clip);

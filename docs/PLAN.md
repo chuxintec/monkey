@@ -2,13 +2,15 @@
 
 完工/阻塞/交付与续推按[DIRECTOR-CONTINUATION](/Users/wangmeng/Documents/Manager/standards/DIRECTOR-CONTINUATION.md)执行；本聊天已原生核验人类授权`01a166b4-5c18-78f3-8cc2-c0d07dd46a20`，总监路由`01a14c8c-6402-7d03-bab8-ec7ea8051abf`。更新本PLAN后以稳定事件ID报告，已批准就绪下一包连续推进，不因报告或普通ACK停下。
 
-## 当前：full07原生差异收口
+## 当前：全量原生差异收口，代表探针后集中复验
 
-Unity实际原生工程为`outputs/acceptance/full07-window-01/UnityProject`：1694独立Prefab、Scene重开和editable roundtrip已完成，Missing Script0；离线回读仍有613几何、834字形、557引用及1项ProjectVersion正规化差异，尚未还原通过。Creator full08实际副本为`outputs/acceptance/full08-creator-window-01/CocosProject`：5份fnt页图邻接修复已由原生导入证明，全部生成BitmapFont缓存；界面工具只绑定旧42007，未能调用新进程520的菜单，Prefab/Scene仍未执行。所有本轮自有child均退出释放。
+全量实际依据仍为 `outputs/acceptance/full07-window-01/UnityProject`：1694独立Prefab、Scene及editable roundtrip完成、Missing Script0；原始回读2005差异（613几何/834字形/557引用/1版本），不是还原通过。full08 Creator已证明5份fnt页图闭包。冻结候选与acceptance实际工程、历史失败目录分开保留。
 
-当前成组修复：Creator字体页图同目录并保持UUID；Unity空Sprite字段兼容、源父pivot不依赖配置顺序、未使用TTF保留原生资源、隐藏文字独立原生测量及TMP实测padding对应墨迹范围、全量回执有界读取和原生文件流式SHA。20重复Layout仍待适配；不放宽容差，不以保存成功替代几何/文字/引用。full08 Unity还未运行，保存的旧BitmapFont atlas/material空引用已补硬校验；Creator显式CLI自动执行入口已接入，工程路径/manifest/期限绑定、等asset-db和scene ready后一次调用，默认打开不执行。检查后生成全新full09，两端顺序自登记≤30分钟原生复验。肥鹅已由用户暂停，无需再等其窗口回执。
+最新Unity探针03实际16原字体/3 Prefab/76节点/Scene重开/编辑重开完成，8个Label字形及5份atlas/material绑定通过，仅1个带缩放布局节点位置不同。Creator探针01已通过显式CLI就绪等待和自动方法调用，3 Prefab及Scene实际保存；保存重载的Label尺寸错误，因首个差异停止，不能报告Editor通过。own10498于13:19:49Z正常TERM exit-15、已reap；当前无本轮原生child。
 
-`outputs/full-foodstreet-07/{UnityProject,CocosProject}`是冻结导出候选；上述acceptance目录才是实际引擎处理过的工程；full01–06及先前窗口是历史结果，均保留。后续来源profile在当前差额收拢后继续。
+下一组成组修复：Unity按所有活动子节点的原始位置选择可精确表达的uGUI cross-axis对齐/缩放；不能由同一标准对齐表达的原布局明确handoff，保留烘焙几何，不放宽容差。Creator隔离Scene在所有Label属性/outline完成后调用公开updateRenderData(true)，避免默认Label尺寸进入保存；Prefab回读收集所有几何差异并保持验证失败。17项定向检查与C#程序集编译通过，尚未原生证明。新小探针Unity04、Creator02已生成/static pass，顺序有界实测后再集中全量10。源reader/像素/AST未重跑，肥鹅/GREA/服务/存档不变。
+
+CLI通用CDN获取、更多来源profile及完整游戏业务仍未交付；肥鹅明确URL获取回执已补入原项目。用户目标矩阵为所有Cocos原包→Unity6/Creator3.8.8/both；所有Unity、Laya/LayaAir、Egret、自研/其他引擎→Unity6，按实际profile逐个实现，不以范围代替已支持能力。
 
 ## 历史依据与全量候选记录
 
@@ -307,3 +309,15 @@ full08 own520已在10:15:39Z正常TERM exit-15/reap释放；5份font imported=tr
 full09已完成双目标生成，static/name/routing通过。Creator manifest6cfdf3b778d06872bf08d986bb456cf7fb8b294cf943ab89264c450e0c4ed27f首次通过公共CLI启动own8150，绑定正确副本；就绪查询返回类型触发NATIVE_READINESS_SCHEMA_INVALID，实际方法未执行。正常TERM后30秒仍pending，原回执保留；10:38:43Z ps查无8150、后续全引擎查询为空，release-followup.json另记退出已观察但exitCode未知，不伪称launcher回收。当前补缺省/未初始化响应等待与实际值记录，双true才执行，其他类型拒绝；Cocos正常退出等待使用现有窗口清理余量，最多120秒不强杀。
 
 Unity代表探针outputs/acceptance/native-font-geometry-probe-01含3真实源图/76节点、11 TTF/5位图字体，own5893已10:30:40Z exit1/reap，字体阶段首份atlas检查拒绝。原始atlas meta textureShape=2（Cube），默认Texture2D加载为空；新增明确Texture2D及合法初始meta版本，GUID保持。全量Unity09不启动，先用同一小探针验证，避免为此再导1.5GB纹理。探针02描述字符串误写four但组列表实际3，未实跑；探针03描述/组列表一致，后续以03为准。
+
+## 2026-10-23 代表探针实证
+
+Unity探针03于13:15:36Z启动own9923，13:15:55Z exit0/reap，方法2.10秒。3真实图76节点、16原字体、3独立Prefab、Scene重开与editable roundtrip完成；8 Label包括隐藏clone的字形/原atlas与material GUID均通过，557空Sprite共因在选择内无View引用错。仅剩gameAsset:0004370a-24bc-402a-9d80-b0664a84df2b#18布局节点几何不符，保持未通过，不放宽容差。原生截图保留探针acceptance；不推成全量已验。
+
+当前顺序运行Creator小探针outputs/acceptance/creator-font-geometry-probe-01，67资产/76节点/3Prefab计划，manifest6783ac2f1057de8c05ef33af9ad14a53cf00c7d1fc378a7415ece5616c31f8dd；内部13:45:15Z/外层13:47:15Z，方法1200秒，只自有child。确认就绪返回和实际调用后再集中全量复验。
+
+## 2026-10-23 Creator探针01实际保存及下一组修复
+
+own10498于13:18:29Z启动、13:19:49Z exit-15/reap。方法63.168秒，显式CLI实际完成67资产/76节点/3 Prefab与Scene保存，在Prefab几何回读首个descLabel尺寸错误停止。离线读取保存的Prefab发现8个Label均为默认85.63x40，源44.17x32等，字体/string/fontSize字段真实正确；隔离Scene未刷新渲染测量是当前待验共因。不是字体丢失或就绪失败。新实现最终统一updateRenderData(true)，逐Prefab完整收集差异、逐项仍拒绝通过，不让首个差异遮住后续证据。
+
+Unity探针03唯一List节点#18位置-297→-270，直接父VerticalLayout驱动横向时未考虑scale1.1。原生标准uGUI可通过childScaleWidth恢复；新增按全部活动子节点检验的精确cross-axis映射，非共同对齐明确handoff，不伪造已转换。当前全量793份启用无scale expansion线性Layout中661中心不缩放/7边缘/4中心带cross-scale可表达、121需要handoff（含其他冲突/子集限制，最终分母以新计划为准）。C# compile .private/cross-axis-compile-01 pass；17项相关检查通过。小探针04 Unity manifest fdc0a10f0ab064d0640d7c4d80c6b72fe399bd8be1eb7f614bf7006965c9a1d4；Creator02 manifest8c954ab6f36e2fd9c7ae07e06a2dacc9affb6848e812e92551f5b94e03c6e5c5，两个static pass，原生待验。

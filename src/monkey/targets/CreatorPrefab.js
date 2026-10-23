@@ -20,15 +20,14 @@ function read(prefab,spec,plan,info) {
     const root=cc.instantiate(prefab);
     try {
         if(root.parent)throw Error('Saved prefab has external parent');
-        const sources=new Map(plan.nodes.map(n=>[n.sourceId,n]));const mapped=new Map();
+        const sources=new Map(plan.nodes.map(n=>[n.sourceId,n]));const mapped=new Map(),geometryMismatches=[];
         function match(sid,node) {
             const src=sources.get(sid),ui=node.getComponent(cc.UITransform);
             if(!src||src.name!==node.name||src.children.length!==node.children.length||!ui)throw Error('Prefab hierarchy differs: '+sid);
-            if(!near([node.position.x,node.position.y,node.position.z],src.position)||
-               !near([node.scale.x,node.scale.y,node.scale.z],src.scale)||
-               !near([node.rotation.x,node.rotation.y,node.rotation.z,node.rotation.w],src.rotation)||
-               !near([ui.width,ui.height],src.size)||!near([ui.anchorX,ui.anchorY],src.anchor)||node.active!==src.active)
-                throw Error('Prefab local geometry differs: '+sid);
+            const actual={position:[node.position.x,node.position.y,node.position.z],scale:[node.scale.x,node.scale.y,node.scale.z],
+                rotation:[node.rotation.x,node.rotation.y,node.rotation.z,node.rotation.w],size:[ui.width,ui.height],anchor:[ui.anchorX,ui.anchorY],active:node.active};
+            const fields=Object.keys(actual).filter(key=>key==='active'?actual[key]!==src[key]:!near(actual[key],src[key]));
+            if(fields.length)geometryMismatches.push({sourceId:sid,fields,expected:Object.fromEntries(fields.map(key=>[key,src[key]])),actual:Object.fromEntries(fields.map(key=>[key,actual[key]]))});
             mapped.set(sid,node);src.children.forEach((child,i)=>match(child,node.children[i]));
         }
         match(spec.root,root);
@@ -44,7 +43,7 @@ function read(prefab,spec,plan,info) {
             if(c.type==='cc.Widget'&&comp.target!==node.parent)throw Error('Prefab widget reference differs');
             components.push(c.sourceId);
         }
-        return {...info,nodeCount:mapped.size,savedReloaded:true,geometryVerified:true,referencesVerified:true,components};
+        return {...info,nodeCount:mapped.size,savedReloaded:true,geometryVerified:geometryMismatches.length===0,geometryMismatches,referencesVerified:true,components};
     } finally {root.destroy();}
 }
 module.exports={serialize,read};

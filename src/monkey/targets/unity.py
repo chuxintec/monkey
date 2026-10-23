@@ -190,6 +190,15 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
                     entry['convertible']=False
                     diagnostics.append(diagnostic('GRID_SUBSET_UNSUPPORTED',c['sourceId'],'Only horizontal-first uniform child sizes supported',c['sourceId']))
                 entry['effectiveCellSize']=list(next(iter(sizes),tuple(c['cellSize'])))
+            elif c['layoutType'] in (1,2) and entry['convertible'] and c['enabled']:
+                from .unity_layout import cross_axis_mapping
+                parent=by_node[c['node']]
+                mapping=cross_axis_mapping(c,parent,[by_node[k] for k in parent['children']])
+                if mapping is None:
+                    entry['convertible']=False
+                    diagnostics.append(diagnostic('LAYOUT_CROSS_AXIS_HANDOFF',c['sourceId'],
+                        'Source child cross-axis positions cannot be retained by one native uGUI alignment',c['sourceId']))
+                else:entry.update(mapping)
         elif c['type']=='cc.Button':
             if c['transition'] not in (0,3) or c['target'] not in (None,c['node']):
                 entry['convertible']=False
