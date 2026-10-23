@@ -8,7 +8,7 @@ PROFILE = 'unity-serialized-unitypy-1.25.3'
 MAX_BYTES = 128 * 1024 * 1024
 
 
-def inspect(source, provider_python, output, budget_seconds=120):
+def inspect(source, provider_python, output, budget_seconds=120, schema_manifest=None):
     if not 1 <= budget_seconds <= 1200:
         fail('UNITY_PROVIDER_BUDGET', '$', 'Expected 1..1200 seconds')
     source = safe(source)
@@ -20,13 +20,22 @@ def inspect(source, provider_python, output, budget_seconds=120):
     if not python.is_file():
         fail('UNITY_PROVIDER_MISSING', str(python), 'Explicit provider Python is unavailable')
     raw = read(source, max_bytes=MAX_BYTES)
-    out = new_output(output, [source, python.parent])
+    pool = None
+    if schema_manifest:
+        from ..unity_schemas import frozen_pool
+        pool = frozen_pool(schema_manifest)
+    out = new_output(output, [source, python.parent, *([safe(schema_manifest), *[Path(r['path']) for r in pool['files']]] if pool else [])])
     receipt = dict(schemaVersion=1, sourceProfile=PROFILE, status='started', source=dict(path=str(source), bytes=len(raw), sha256=sha(raw)),
                    providerPythonSha256=sha(read(python,max_bytes=MAX_BYTES)), budgetSeconds=budget_seconds,
                    sourceCodeExecuted=False, editor='not_run', processExited=False)
     write_json(out/'inspection.json',receipt)
+    arguments = [str(source),str(out/'typed-objects.json')]
+    if pool:
+        write_json(out/'schema-job.json',dict(source=str(source),schemaPool=pool))
+        receipt['schemaManifestSha256'] = pool['sourceManifestSha256']
+        arguments = ['--inspect-with-schemas',str(out/'schema-job.json'),str(out/'typed-objects.json')]
     with (out/'provider.log').open('wb') as log:
-        process = subprocess.Popen([str(requested_python), '-I', '-B', str(Path(__file__).with_name('unity_worker.py')),str(source),str(out/'typed-objects.json')],
+        process = subprocess.Popen([str(requested_python), '-I', '-B', str(Path(__file__).with_name('unity_worker.py')),*arguments],
                                    cwd=out, stdout=log, stderr=subprocess.STDOUT)
         receipt['pid'] = process.pid
         try:

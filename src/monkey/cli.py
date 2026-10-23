@@ -73,6 +73,7 @@ def main(argv=None):
     p.add_argument('--budget-seconds', type=int, default=600)
     p = sub.add_parser('inspect-unity', help='Strict typed inspection of an explicit Unity serialized file or AssetBundle')
     p.add_argument('--source', required=True)
+    p.add_argument('--schema-manifest', help='Explicit frozen bundle pool; borrow only identical version/platform/script/type hashes')
     p.add_argument('--provider-python', required=True, help='Existing Python with UnityPy 1.25.3; never installed automatically')
     p.add_argument('--out', required=True)
     p.add_argument('--budget-seconds', type=int, default=120)
@@ -184,7 +185,7 @@ def main(argv=None):
             return 1
         if args.command == 'inspect-unity':
             from .sources.unity_serialized import inspect as inspect_unity
-            result = inspect_unity(args.source,args.provider_python,args.out,args.budget_seconds)
+            result = inspect_unity(args.source,args.provider_python,args.out,args.budget_seconds,schema_manifest=args.schema_manifest)
             print(json.dumps(result,ensure_ascii=False))
             return 0 if result['status']=='inspected' else 1
         if args.command == 'format-project':

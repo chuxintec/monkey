@@ -526,3 +526,5 @@ Unity格式none native01 own74623于20:17:39.052866Z→20:17:58.020921Z exit0/re
 单命令synthetic native02完成：orchestration completed_native_stages，Unity76820 exit0/reaped/strict0/editor partial、Creator77095正常TERM/reaped/strict0/editor pass。首轮缺meta回执失败不改；新修捕获全部自有assets并封存/复验所有此前已分配资源/脚本GUID/UUID，Importer扩写允许、ID重换即使重记native hash仍拒绝。相关30检查+身份变更反例通过。真实Unity129节点 none/grea比较6门全true，91既有meta GUID保持、5代码绑定/数值边界/Scene与独立Prefab保存重载通过；首次Prefab GUID 3e4eb429eb2f3409e99e030c7ab2721a/92ba4d626843745b18205e873c7b5e04按来源映射记录，不当旧ID。当前生成式Unity/Creator格式与公开fresh编排已实证，直接Unity provider格式、自动代码发现/接线、Research扩展仍未闭合，继续开发。
 
 U独立离线metadata-only新线索：启动40条Mono类型表对应27唯一script_id+old_type_hash身份，冻结600包含744嵌入Mono类型，其中18类可精确匹配。只做表/类型树匹配，未解析额外对象正文/解码纹理/执行源代码，不视为106MB已恢复。下一按版本/平台/精确哈希借取类型树并严格read校验，不放松字段/长度；原CODEPHPY方法仍未知。
+
+事件monkey-v02-unity-schema-borrow-20261024-01：公开inspect-unity新增显式--schema-manifest，固定池≤2000文件/1GiB、逐包SHA；版本/平台/script_id/old_type_hash全相同才借TypeTree，布局旗标全哈希，歧义即拒绝。严格check_read=True真实70MB成功，启动总1567/1603、36未解析；原始SHA不变，worker77699 exit0/reaped，补充schema/provenance与embedded分列。13定向检查通过；此包仅正文解析，导出器/代码生成尚未消费借取结构，旧startup02/schema0不追认。下一继续自动源码接线与Research来源适配，不因受保护方法/未匹配36结构停全部开发。

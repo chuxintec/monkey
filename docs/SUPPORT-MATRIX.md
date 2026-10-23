@@ -6,7 +6,7 @@
 |---|---|---|---|
 |Cocos Creator2.4.15发布bundle|Unity6 / Cocos3.8.8 / both|partial：full14双端各1694 Prefab/24784节点保存重开与完整几何/引用回读零诊断；Unity资源partial/Creator资源pass，业务/视觉/交互未验收|先收拢肥鹅当前包|
 |Cocos Creator2.4.15可编辑工程子集|Unity6 / Cocos3.8.8 / both|supported_static有限子集，非全版本/全组件承诺|按新增真实输入反例扩展|
-|Unity2021.3.30f1 IL2CPP-Wasm|Unity6|partial：显式Bundle及依赖→Unity6候选已实现；代表1 Prefab/16字段/3 Sprite引用保存重载通过。启动1603对象/1497严格读数/106MB缺类型、1精确纹理键缺失；整包及业务未完成|U，用户最新打开《向僵尸开炮》优先|
+|Unity2021.3.30f1 IL2CPP-Wasm|Unity6|partial：显式Bundle及依赖→Unity6候选已实现；代表1 Prefab/16字段/3 Sprite引用保存重载通过。启动4精确纹理已齐；显式冻结类型树池严格读到1567/1603对象，仍36MB缺结构；补充类型树尚未进入导出器，整包及业务未完成|U，用户最新打开《向僵尸开炮》优先|
 |Unity任意版本其他Mono/IL2CPP来源|Unity6|planned，逐serializedFile/AssetBundle/provider/profile增加|U|
 |Unity6来源|Unity6|planned，需明确版本真实样本|U|
 |Cocos Creator3.8.7发布资源|Unity6 / Cocos3.8.8 / both|planned，《下方了》真实app-config插件声明3.8.7已读，资源正文待核|C，U后|

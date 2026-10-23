@@ -77,7 +77,49 @@ def schema_node(node,depth=0):
     return dict(name=node.m_Name,type=node.m_Type,children=[schema_node(n,depth+1) for n in node.m_Children])
 
 
-def inspect_bytes(raw):
+def type_identity(asset, serialized_type):
+    if serialized_type is None or serialized_type.class_id != 114:
+        return None
+    script_id, old_hash = serialized_type.script_id, serialized_type.old_type_hash
+    if len(script_id) != 16 or len(old_hash) != 16 or not any(script_id) or not any(old_hash):
+        return None
+    return (asset.unity_version, str(asset.target_platform), script_id.hex(), old_hash.hex())
+
+
+def full_schema(node):
+    # Include layout/alignment/version flags, not just field names and types.
+    return [{k:v for k,v in n.items() if k != 'm_Children'} for n in node.to_dict_list()]
+
+
+def schema_pool(assets, job):
+    import UnityPy
+    wanted = {type_identity(a, o.serialized_type) for a in assets for o in a.objects.values()
+              if o.type.name == 'MonoBehaviour' and not (o.serialized_type and o.serialized_type.node)} - {None}
+    matches, total = {}, 0
+    for row in job['files']:
+        source = Path(row['path'])
+        with source.open('rb') as stream: raw = stream.read(MAX_BYTES+1)
+        total += len(raw)
+        if len(raw) != row['bytes'] or len(raw) > MAX_BYTES or digest(raw) != row['sha256'] or total > 1024*1024*1024:
+            raise ValueError('Frozen schema pool identity or budget changed')
+        env = UnityPy.load(raw)
+        for asset in env.assets:
+            for typ in asset.types:
+                key = type_identity(asset, typ)
+                if key not in wanted or typ.node is None: continue
+                encoded = json.dumps(full_schema(typ.node), sort_keys=True, separators=(',',':')).encode()
+                schema_hash = digest(encoded)
+                if key in matches and matches[key]['sha256'] != schema_hash:
+                    raise ValueError('Ambiguous exact-identity TypeTree in frozen pool')
+                record = matches.setdefault(key, dict(node=typ.node, sha256=schema_hash, sources=[]))
+                provenance = dict(bundleSha256=digest(raw), file=asset.name)
+                if provenance not in record['sources']: record['sources'].append(provenance)
+        with source.open('rb') as stream: after = stream.read(MAX_BYTES+1)
+        if digest(after) != row['sha256']: raise ValueError('Schema source changed while reading')
+    return matches
+
+
+def inspect_bytes(raw, schema_job=None):
     import UnityPy
     if UnityPy.__version__ != PROVIDER_VERSION:
         raise RuntimeError('Expected UnityPy ' + PROVIDER_VERSION)
@@ -87,12 +129,13 @@ def inspect_bytes(raw):
         raise ValueError('No serialized files found')
     if sum(len(f.objects) for f in assets) > MAX_OBJECTS:
         raise ValueError('Object budget exceeded')
-    files, objects, schemas = [], [], {}
+    borrowed = schema_pool(assets, schema_job) if schema_job else {}
+    files, objects, schemas, borrowed_schemas = [], [], {}, {}
     for index, asset in enumerate(assets):
         file_id = str(index)
         externals = [dict(fileId=str(i+1), path=e.path, guid=e.guid.hex()) for i, e in enumerate(asset.externals)]
         files.append(dict(id=file_id, name=asset.name, unityVersion=asset.unity_version,
-                          sourceTypeTreeEnabled=asset._enable_type_tree, externals=externals, objects=len(asset.objects)))
+                          targetPlatform=str(asset.target_platform), sourceTypeTreeEnabled=asset._enable_type_tree, externals=externals, objects=len(asset.objects)))
         for obj in asset.objects.values():
             row = dict(file=file_id, pathId=identifier(obj.path_id), classId=int(obj.type), type=obj.type.name,
                        bytes=obj.byte_size, rawSha256=digest(obj.get_raw_data()), references=[],
@@ -101,8 +144,16 @@ def inspect_bytes(raw):
                 shape=schema_node(obj.serialized_type.node)
                 shape_id=digest(json.dumps(shape,sort_keys=True,separators=(',',':')).encode())
                 schemas[shape_id]=shape;row['embeddedSchemaId']=shape_id
+            exact = borrowed.get(type_identity(asset, obj.serialized_type)) if obj.type.name == 'MonoBehaviour' and not (obj.serialized_type and obj.serialized_type.node) else None
+            if exact:
+                shape = schema_node(exact['node'])
+                shape_id = digest(json.dumps(shape,sort_keys=True,separators=(',',':')).encode())
+                borrowed_schemas[shape_id] = shape
+                row.update(typeTreeSource='exact-frozen-bundle', borrowedSchemaId=shape_id,
+                    schemaProvenance=dict(identity=list(type_identity(asset,obj.serialized_type)), layoutSha256=exact['sha256'],
+                        sourceManifestSha256=schema_job['sourceManifestSha256'], sources=exact['sources']))
             try:
-                typed = obj.read_typetree(check_read=True)
+                typed = obj.read_typetree(nodes=exact['node'], check_read=True) if exact else obj.read_typetree(check_read=True)
                 row['data'] = portable(typed, row['references'])
                 if obj.type.name=='Texture2D' and isinstance(typed,dict):row['texturePayload']=texture_payload(typed)
                 name = typed.get('m_Name') if isinstance(typed,dict) else None
@@ -115,10 +166,10 @@ def inspect_bytes(raw):
                 row['error'] = dict(type=type(error).__name__, message=str(error).splitlines()[0][:240])
             objects.append(row)
     return dict(schemaVersion=1, sourceFamily='unity', provider=dict(name='UnityPy',version=PROVIDER_VERSION),
-                identifierEncoding='signed-int64-decimal-string-v1', files=files, objects=objects, embeddedSchemas=schemas,
+                identifierEncoding='signed-int64-decimal-string-v1', files=files, objects=objects, embeddedSchemas=schemas, borrowedSchemas=borrowed_schemas,
                 summary=dict(serializedFiles=len(files), objects=len(objects),
                              parsed=sum(o['status']=='parsed' for o in objects),
-                             unparsed=sum(o['status']=='unparsed' for o in objects), externalTextureTokens=sum(o.get('texturePayload',{}).get('kind')=='external-key-token-candidate' for o in objects), types=dict(Counter(o['type'] for o in objects))),
+                             unparsed=sum(o['status']=='unparsed' for o in objects), borrowedSchemaParsed=sum(o['status']=='parsed' and o['typeTreeSource']=='exact-frozen-bundle' for o in objects), externalTextureTokens=sum(o.get('texturePayload',{}).get('kind')=='external-key-token-candidate' for o in objects), types=dict(Counter(o['type'] for o in objects))),
                 sourceCodeExecuted=False, externalFilesResolved=False, nativeExport='not_run')
 
 
@@ -224,12 +275,17 @@ def index_manifest(manifest_path,output):
 
 
 def main():
-    source, output = map(Path, sys.argv[1:])
+    schema_job = None
+    if sys.argv[1] == '--inspect-with-schemas':
+        job = json.loads(Path(sys.argv[2]).read_text())
+        source, output = Path(job['source']), Path(sys.argv[3])
+        schema_job = job['schemaPool']
+    else: source, output = map(Path, sys.argv[1:])
     with source.open('rb') as stream:
         raw = stream.read(MAX_BYTES+1)
     if len(raw) > MAX_BYTES:
         raise ValueError('Input byte budget exceeded')
-    data = inspect_bytes(raw)
+    data = inspect_bytes(raw, schema_job)
     data['source'] = dict(bytes=len(raw), sha256=digest(raw))
     encoded = (json.dumps(data,ensure_ascii=False,allow_nan=False,separators=(',',':'))+'\n').encode()
     if len(encoded) > MAX_BYTES:

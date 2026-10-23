@@ -44,3 +44,14 @@ convert可重复`--dependency-source`，仅依赖清单及实际消费的缓存�
 总监事件monkey-zombie-exact-texture-found-20261024-01提供只GET一次的精确原件。核对原包game.js的DATA_CDN明示地址、逻辑键、65552B/SHA `6c11b424ba429c442664e0fc4eb212030fad8255800755bd894b3c96596fa018`及ASTC8x8/512x512长度；不以文件名hash算法作未证明的身份保证。私有输入池104项，manifest SHA `887c4c3dc35d1f96dcfb9472c01827a46274232ae207f6e8b2ae26207319dcfb`。新hydrate02四键全部匹配、非纹理对象hash保持，派生SHA `f8d91af0216b0d9527e3ae5c72765e7095a15c5ef5710d2061faad9fcbd8ec46`；旧缺件失败不变。
 
 公开convert startup02实际完成候选：5输入/3554576B，Provider2484文件/11019493B、自有child正常退出/原件hash不变；1173份原/Provider代码隔离，schema恢复0，deadbeef占位0。106MB缺schema与方法体未恢复，原生尚未运行，不能用缺占位0冒称无MissingScript或完整项目通过。
+
+### 精确借取类型树（仅正文读取）
+
+```sh
+monkey inspect-unity --source /path/to/startup.bundle --provider-python /path/to/python \
+  --schema-manifest /path/to/frozen-bundles.json --out /path/to/fresh-inspection
+```
+
+池格式与`index-unity`一致：schemaVersion=1，files中明确path/bytes/sha256，最多2000项、合计1GiB。只借用源Unity完整版本、targetPlatform、非零script_id和old_type_hash全部相同的嵌入MonoBehaviour TypeTree；字段名称相同不足以匹配。完整结构含alignment/version等布局标志参与哈希，同身份不同结构拒绝，不静默选择。正文仍check_read=True，不补零、不忽略剩余字节。报告分列borrowedSchemas/schemaProvenance与源embeddedSchemas，记录池/包/布局SHA和原始对象hash；未知方法不执行或生成空类。
+
+向僵尸开炮新公开CLI实测`outputs/unity-startup-schema-inspection-01`：600个已冻结Bundle、27种启动脚本类型中18种匹配，70个MonoBehaviour严格完整读出；总计1567/1603对象，仍36未解析。自有worker77699 exit0/reaped，原包SHA不变，typed snapshot SHA `fb211bf98dca828f21bfd230e344424901f956a7197addca095e72efee9a9de3`。这项尚未接入AssetRipper导出链，不能追认startup02的schema0已修复，更不能等同原生/玩法通过。13项定向检查包含版本/平台/两种哈希错配、布局冲突、严格尾字节失败与显式清单拒绝；原生未启动。
