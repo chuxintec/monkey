@@ -41,6 +41,10 @@ def main(argv=None):
     p.add_argument('--unity-editor', help='Exact installed Unity executable for --native')
     p.add_argument('--creator-editor', help='Exact installed CocosCreator executable for --native')
     p.add_argument('--native-budget-seconds', type=int, default=1200, help='Method budget per Editor, 1..1200; each window is at most 30 minutes')
+    p.add_argument('--remote-manifest', help='Explicit URL/path/SHA/byte download manifest; requires --input-set')
+    p.add_argument('--remote-cache-root', help='Read-only root for paths in the remote manifest')
+    p.add_argument('--acquisition-out', help='Fresh acquired-files workspace; default OUTPUT-acquired')
+    p.add_argument('--remote-budget-seconds', type=int, default=900, help='Acquisition budget, 30..3600 seconds')
     p = sub.add_parser('native-import',help='Plan or explicitly execute a bounded Unity/Creator import in a fresh copy')
     p.add_argument('--candidate',required=True);p.add_argument('--out',required=True)
     p.add_argument('--editor-path',required=True);p.add_argument('--expected-manifest',required=True)
@@ -96,12 +100,16 @@ def main(argv=None):
                 compiledFormats=['compiled-v1','pack-v1','texture-pack-v1'],
                 containerFormats=['plain-wxapkg','APK-ZIP','Cocos-resource-directory'],
                 packageWorkflow=dict(fileAccounting='implemented',staticModuleRecovery='partial',codeDrafts='source-linked-contracts',
-                                     nativeObjectRecovery='shared-ir-supported-subset',packageResume='hash-checked',inputSets='explicit-local-roots',editorOrchestration='manifest-bound-native-import-command',remoteAcquisition='not_implemented'),
+                                     nativeObjectRecovery='shared-ir-supported-subset',packageResume='hash-checked',inputSets='explicit-local-roots',editorOrchestration='manifest-bound-native-import-command',remoteAcquisition='explicit-manifest-bounded-fetch'),
                 imageFormats=['PNG','JPEG','ASTC (optional pinned decoder)'],animationSchemaVersion=1,
                 animationSubset=['local-position','local-scale','opacity','linear','constant-step','Normal','Loop'],animationEvents='manual-contract-only', targetEditorValidation='representative-subsets-only'), ensure_ascii=False))
             return 0
         if args.command == 'convert':
             from .convert import convert, resume, recipe
+            if not args.remote_manifest and any((args.remote_cache_root,args.acquisition_out,args.remote_budget_seconds!=900)):
+                parser.error('remote options require --remote-manifest')
+            if args.remote_manifest and (not args.input_set or args.resume):
+                parser.error('--remote-manifest requires a fresh conversion with explicit --input-set')
             if not args.native and any((args.native_out,args.unity_editor,args.creator_editor,args.native_budget_seconds!=1200)):
                 parser.error('native options require --native')
             if args.native and (args.offline or args.resume or args.recipe):
@@ -124,19 +132,38 @@ def main(argv=None):
                         args.dependency_source,args.evidence_source,args.bindings,args.animation,args.source_profile)):
                     parser.error('package conversion requires --source/--target/--out; slice options are unsupported')
                 from .package import convert_package
+                selection=None
+                if args.input_set and (args.native or args.remote_manifest):
+                    from .inputs import input_set
+                    selection=input_set(args.input_set)
+                acquired=None;remote_settings=None
+                acquisition_out=Path(args.acquisition_out).resolve() if args.acquisition_out else Path(args.out).resolve().with_name(Path(args.out).resolve().name+'-acquired')
+                if args.remote_manifest:
+                    from .acquisition import prepare
+                    remote_settings=prepare(args.remote_manifest,acquisition_out,selection,args.remote_cache_root,args.remote_budget_seconds,[Path(args.out).resolve()])
                 native_settings=None
                 if args.native:
                     from .orchestration import options
                     if args.input_set:
-                        from .inputs import input_set
-                        source_roots=[r['path'] for r in input_set(args.input_set)['inputs']]
+                        source_roots=[r['path'] for r in selection['inputs']]
                     else:source_roots=[args.source]
+                    if remote_settings:source_roots.append(acquisition_out)
                     native_settings=options(args.out,args.target,args.native_out,args.unity_editor,args.creator_editor,args.native_budget_seconds,source_roots)
-                result=convert_package(args.source,args.target,args.out,args.namespace or 'monkey-project',args.offline,args.input_set,reuse_source_stages=args.reuse_source_stages)
+                conversion_input_set=args.input_set
+                if remote_settings:
+                    from .acquisition import acquire
+                    acquired=acquire(remote_settings,args.offline);conversion_input_set=str(acquired['inputSet'])
+                    if args.reuse_source_stages and Path(conversion_input_set).resolve()!=Path(args.input_set).resolve():
+                        raise ValueError('New acquired files require fresh source stages; acquired evidence is preserved')
+                result=convert_package(args.source,args.target,args.out,args.namespace or 'monkey-project',args.offline,conversion_input_set,reuse_source_stages=args.reuse_source_stages)
+                if acquired:
+                    from .acquisition import attach
+                    attach(result,args.out,acquired)
                 summary=dict(status=result['workflowStatus'],resultKind=result['resultKind'],
                      completed=result['completed'],projects=result['projects'],inputFiles=result['inputFiles'],
                      inputBytes=result['inputBytes'],diagnostics=len(result['diagnostics']),nextAction=result['nextAction'],
                      report=str(Path(args.out).resolve()/'conversion-result.json'))
+                if acquired:summary['remoteAcquisition']=dict(acquired['summary'],receipt=str(acquired['receipt']))
                 if native_settings:
                     from .orchestration import run
                     summary['nativeExecution']=run(result,native_settings)

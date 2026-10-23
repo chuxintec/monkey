@@ -19,6 +19,15 @@ bin/monkey convert --source /path/to/game.wxapkg --target both --out outputs/my-
 
 按Unity→Creator顺序在`outputs/my-game-native/`的新副本中运行，每段最多30分钟、方法默认1200秒；未退出、原生错误或回读差异会停止后续段。单目标只提供对应编辑器参数。`--native-out`可指定另一个全新目录；不能与`--offline`混用。候选、原生核对与游戏业务分别记录，仍有源组件/业务缺口时退出码保持1。
 
+已有明确CDN/远程包清单时，可将获取并入同一命令：
+
+```sh
+bin/monkey convert --input-set inputs.json --remote-manifest downloads.json \
+  --remote-cache-root /path/to/read-only-cache --target both --out outputs/game
+```
+
+清单包含`url`、相对`path`及可选的`sha256`/`bytes`。匹配原输入的缓存只读复用，新文件在独立`outputs/game-acquired/`下载并接入输入；404、哈希冲突和预算结束各有回执。也可再加`--native`及对应Editor参数。当前按明确清单获取，尚未从所有原包自动发现全部CDN地址；未知地址仍列缺口。
+
 当前已接入明文wxapkg、APK和资源目录的全文件盘点；输出`UnityProject/`、`CocosProject/`（单目标只生成对应项），两工程分别自包含。原包所有文件按原生可复制、去重映射、原格式待转、代码证据、明确运行时排除分类，报告为`conversion-result.json`。未知资源/不可编译初稿在`SourceRecovery/`，源UUID、逻辑键、代码候选和AI模块任务在`Analysis/`；每个工程含`AGENTS.md`与`Docs/START-HERE.md`。
 
 可恢复资源优先保留原Cocos路径与名称，GUID/UUID只作身份；派生变体、真实冲突或无名回退另有明确映射。见`Analysis/*name-map.json`。
@@ -36,7 +45,7 @@ bin/monkey convert --resume outputs/my-unity --input-set inputs.json
 
 静态AST支持有限literal loader/System.register和RF区域候选；恢复的源代码＋TS/C#合同初稿不等于业务已转译。Node为静态解析所需宿主，Acorn8.15.0已固定并随包提供，不执行输入JS。没有Node或格式未支持时保留完整源文件并报告缺口。
 
-**当前是全输入留存＋受支持对象的原生工程候选，尚未完成全对象及游戏业务转换**。已接入2.4.15共享IR：支持的节点图、SpriteFrame、字体及JsonAsset生成原生导入计划；未知组件及Spine运行时接入等保留证据和缺口。默认返回needs_action，`--offline`为partial，退出码1；不能当完整转换成功。通用CDN获取尚未接入CLI，未取得的远程分包不包含。
+**当前是全输入留存＋受支持对象的原生工程候选，尚未完成全对象及游戏业务转换**。已接入2.4.15共享IR：支持的节点图、SpriteFrame、字体及JsonAsset生成原生导入计划；未知组件及Spine运行时接入等保留证据和缺口。默认返回needs_action，`--offline`为partial，退出码1；不能当完整转换成功。CDN支持明确清单获取，未声明或获取失败的远程分包仍保留缺口。
 
 已有2.4.15切片转换链继续可用：`--target unity|cocos`、`--asset-index`/recipe，结果在`project/`；其完成候选支持`--resume`身份续验。包级工程支持按哈希校验续跑并归档原候选；人工修改会阻止覆盖。`convert --native`接续原生阶段；已有冻结候选也可单独使用`native-import`，固定manifest/工程/期限，实际保存后回读。人工业务代码增量合并未实现。详见[命令说明](docs/USAGE.md)。
 

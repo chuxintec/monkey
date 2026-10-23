@@ -4,11 +4,11 @@
 
 ## 当前：Unity全量原生差异收口，Creator全量实测在途
 
-最新Unity全量实际副本为 `outputs/acceptance/full10-unity-window-01/UnityProject`：1694独立Prefab/24784节点/16934 Sprite/16原字体保存、Scene及editable roundtrip完成、Missing Script0；严格回读剩243项NODE几何差异，字形/字体atlas与material/10508 View引用/版本零差异。旧full07原2005项保留历史（613几何/834字形/557引用/1版本）。full10独立Prefab当时只核节点数/MissingScript，不能追认为逐项几何已通过；尚无原版画面/业务通过。
+最新Unity全量实际副本为 `outputs/acceptance/full11-unity-window-01/UnityProject`：1694独立Prefab/24784节点/16934 Sprite/16原字体保存、Scene及editable roundtrip完成、Missing Script0；严格回读剩12个相同节点的Scene/独立Prefab几何差异（各12项），字形/字体atlas与material/10508 View引用/版本零差异。旧full07原2005项保留历史（613几何/834字形/557引用/1版本）。full11已新增独立Prefab逐节点几何/引用及Scale/Quaternion实测；full10当时只核count/missing，历史不追认；尚无原版画面/业务通过。
 
-Creator实际小探针05（候选04）已editor/static pass零诊断：67资产/76节点/16原字体/3独立Prefab/Scene保存重载，实际字体、Sprite裁切边框、几何及内部引用核对通过，方法1.636秒、own17562已正常退出/reap。中间进度协议与metadata屏障失败各自保留，不把旧失败时间当性能通过。全量Creator10 `outputs/full-foodstreet-10-creator/CocosProject` manifest7fb3a4b7f996da9402ae1ecc9f9b921ab874e49046b63ea86938d143e08c770c，static/name/routing全pass；full10实际own20570已14:18:41Z normal TERM exit-15/reap；16978资产阶段完成，但assemble命中SceneFacade单次RPC的30秒超时，实际Prefab/Scene0。当前新增Editor-only短调用任务接口，待新小样/全量实证，旧窗口已释放。
+Creator实际小探针05（候选04）已editor/static pass零诊断：67资产/76节点/16原字体/3独立Prefab/Scene保存重载，实际字体、Sprite裁切边框、几何及内部引用核对通过，方法1.636秒、own17562已正常退出/reap。中间进度协议与metadata屏障失败各自保留，不把旧失败时间当性能通过。全量Creator10 `outputs/full-foodstreet-10-creator/CocosProject` manifest7fb3a4b7f996da9402ae1ecc9f9b921ab874e49046b63ea86938d143e08c770c，static/name/routing全pass；full10实际own20570已14:18:41Z normal TERM exit-15/reap；16978资产阶段完成，但assemble命中SceneFacade单次RPC的30秒超时，实际Prefab/Scene0。新增Editor-only短调用任务接口已由3图76节点小探针实际editor/static pass零诊断证明，own23510已退出/reap，方法1.811秒；全量仍待新候选验证，旧窗口已释放。
 
-Unity代码已成组修复实际LayoutGroup有界稳定、直接原生保存子树、独立Prefab保存重载逐节点/字体Sprite及内部引用核对；新增localScale/Quaternion原生读数。7原图413节点探针05/06证明nested布局主偏移、根Widget隔离上下文与inactive Widget/空容器反例；最终剩一个广告占位父319高/活动孩子0x0，已明确LAYOUT_CACHED_CONTAINER_HANDOFF保留几何，等动态内容adapter，不以0高fitter覆盖。根Widget缺父上下文、inactive缓存、空布局、cross-axis不可表达分别handoff，不能算已转换行为。`.private/full-local-transform-compile-01` C#与11项定向检查通过，未改.001容差；新全量Unity11已复用既有源阶段生成（manifesta4e286808cae2d8b758a6fd9968d2542e05f5f6066276a78ff6b45d05ffaa9db），三项离线核对在途，尚未新原生验证，不追认全量243已解决。
+Unity代码已成组修复实际LayoutGroup有界稳定、直接原生保存子树、独立Prefab保存重载逐节点/字体Sprite及内部引用核对；新增localScale/Quaternion原生读数。7原图413节点探针05/06证明nested布局主偏移、根Widget隔离上下文与inactive Widget/空容器反例；最终剩一个广告占位父319高/活动孩子0x0，已明确LAYOUT_CACHED_CONTAINER_HANDOFF保留几何，等动态内容adapter，不以0高fitter覆盖。根Widget缺父上下文、inactive缓存、空布局、cross-axis不可表达分别handoff，不能算已转换行为。`.private/full-local-transform-compile-01` C#与11项定向检查通过，未改.001容差；新全量Unity11已复用既有源阶段生成（manifesta4e286808cae2d8b758a6fd9968d2542e05f5f6066276a78ff6b45d05ffaa9db），static/name/routing三项离线核对全pass，尚未新原生验证，不追认全量243已解决。
 
 两端全量显式输入始终17201文件/884709704字节，1776 Spine闭包/原图复用、原reader/像素/AST不重跑，原件/肥鹅/GREA/服务/存档不变。候选、acceptance实际工程、历史结果分别保留。
 
@@ -375,3 +375,15 @@ Creator10全量新登记：锚点14:15:31Z，内部14:43:31Z/外层14:45:31Z，�
 full10 own20570于14:16:33Z启动、14:18:41Z normal TERM exit-15/reap；方法87.821秒，16978资产metadata/重导入/原生身份阶段完成后assemble触发SceneFacadeManager.executeSceneScriptMethod timeout（约30秒RPC上限）。实际独立Prefab/Scene0。API计数与耗时保存，错误保留；没有重跑原失败工程、没有顺延窗口或修改引擎。
 
 新增CreatorJobs编辑期任务合同：beginJob只白名单assemble/readSaved，立即返回jobId；jobStatus短调用读进度；takeJob只消费完成结果一次。所有任务仍绑定nativeDeadlineMs，过期/首错停止、foreign ID/重入/未知方法拒绝；每256节点/组件及16 Prefab协作yield，Renderer资产加载不再占据一次长RPC。只把可转换组件/动画送原生任务，未转换数据仍完整留在冻结plan/SourceRecovery与handoff，不改分母。接口错误只记首行，避免SceneFacade把全plan参数灌入错误回执。19项定向检查和4 JS语法检查通过；新3图76节点Creator任务小探针01 manifest55a58f191c323c1e2ab7f620aa0809a86b0666fced709563f098b246b3f40270，static pass，真实新接口尚待验，不能把小样性能推成全量通过。
+
+Creator短调用job探针01新登记：锚点14:28:00Z，内部14:56:00Z/外层14:58:00Z，方法1200秒；ps无冲突主进程，只新acceptance/creator-job-probe-01，manifest55a58f191c323c1e2ab7f620aa0809a86b0666fced709563f098b246b3f40270，首错停、不顺延。
+
+Creator job小探针01 own23510已正常TERM exit-15/reap，方法1.811秒；真实beginJob/jobStatus/takeJob贯通assemble及readSaved，16原字体/3 Prefab/76节点/Scene实际保存重载，editor/static pass零诊断；新增合同不等于全量超过30秒场景已通过。Unity11三项离线核对全部pass，完整输入/非名称IR/17329身份/1776Spine复用不变，准备顺序全量新原生段。
+
+Unity11全量新登记：锚点14:29:57Z，内部14:57:57Z/外层14:59:57Z，方法1200秒；ps无主引擎冲突。manifest a4e286808cae2d8b758a6fd9968d2542e05f5f6066276a78ff6b45d05ffaa9db，新acceptance/full11-unity-window-01，严格Scene/独立Prefab几何、localScale/Quaternion和引用核对，首新错停，不顺延。Creator11只离线生成，不并发引擎。
+
+Unity11 actual own24527已exit0/reap，方法445.702秒，1694独立Prefab/24784节点/16934 Sprite/16原字体/Scene重开与editable roundtrip完成。新增独立Prefab引用门无错，Scale/Quaternion回读无新增错；仅剩同12节点的SOURCE_PREFAB_GEOMETRY12+NODE12，全为Grid相关。严格验证口径更强，不能把新增独立Prefab计为新源节点分母；原243→12 SourceNode差异，旧候选不改。类型为Grid方向对齐、scaled child、缓存容器与graphic布局最小尺寸，下一成组修复；不为单字段重冷全库。Creator11 manifest6ec3ea8804cc10415b22b021b990756dcbf94ba307a033a570b4a427d8f34f65 static/name/routing全pass，准备顺序新原生段。
+
+Creator11全量job段新登记：锚点14:50:29Z，内部15:18:29Z/外层15:20:29Z，方法1200秒；ps未见引擎冲突，新acceptance/full11-creator-window-01，固定manifest6ec3ea8804cc10415b22b021b990756dcbf94ba307a033a570b4a427d8f34f65。短调用job已小样实证、全量仍未验；首新错误停/正常回收自有child，不顺延。
+
+CDN通用CLI增量已接入：convert --input-set --remote-manifest（可带cache-root/native），原输入匹配SHA只读复用且不重复复制，新文件在独立acquisition根有界获取并派生输入集；失败/404/身份冲突单列、原件不动；签名URL只留哈希及origin。4路、128MiB单文件/1GiB总量、明确origin跳转及30..3600秒预算；--offline只核缓存。每个新候选原生manifest最终封存前追加Analysis/acquisition证据并回写最终身份，不修改已有冻结候选、不改package/reader算法或绕过源阶段校验。6获取+5顺序编排定向检查通过，含模拟下载→实际合成转换→模拟native的完整单命令；真实通用网络传输待单独核验，原先肥鹅手工实际GET事实不借作该实现实证。
