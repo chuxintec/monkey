@@ -391,3 +391,7 @@ CDN通用CLI增量已接入：convert --input-set --remote-manifest（可带cach
 Creator11全量own28471于14:51:30Z启动、14:57:44Z normal TERM exit-15/reap，方法333.375秒；已完成1694独立Prefab和1 Scene实际保存，新的job架构已越过30秒RPC限制。readSaved首个层级差异为SourceRoot ProgressBoardHomeEntrance、原资产HomeEntrance.prefab被原生Importer规范为HomeEntrance（257份源根名与原文件名不同）；原生文件节点数/子级与UITransform存在，非丢节点。当前先核对全部原生文件的asset-basename规范，再显式定义根名policy/sourceRootName映射，不宽松跳过子级或几何。冻结失败副本不改。
 
 Unity最后12节点Grid成组：childAlignment须随startCorner方向，Grid fitter使用MinSize防止图片preferred尺寸干扰；scaled child、缓存height与实际cell extent不符、sliced/tiled graphic minHeight大于网格extent分别handoff保留源几何。布局helper移回unity.py使现有target-plan算法指纹完整覆盖，不改source/signatures、不设绕过白名单。12项定向检查与C# compile .private/grid-direction-minfit-compile-01通过；9原图397节点的GridProbe07 manifest14ccc41556f06060db9f828ff889f7ca483da854bfc0fcc578121b29eddc931b，未重读源/解码像素/AST，待实际原生验证。
+
+Creator11原生已保存1694 Prefab逐文件只读对账：1694/1694根名均严格等于原资产文件basename，其中257与源Root.name不同，未见其他命名值。新增creator-asset-basename-v1在plan冻结时给出sourceRootName/nativeRootName，序列化显式采用原生名；Scene源根名与全部子级仍保持源值，回读只在根应用精确规则，层级/几何/引用仍严检。新增单个成组handoff审查依赖Root.name的业务代码；不改文件原路径/UUID，也不隐去源原名。8 geometry/5 Cocos/3 Jobs/4 native-host/6 preflight与获取定向检查通过；native/foreign-child-name反例不会被根名规则掩盖。
+
+通用获取层真实网络探针已执行：从已有明确Femsj配置URL实际GET 347021字节，SHA与原下载清单一致，downloaded1/missing0/无本地缓存复用；只写monkey/.private/remote-network-probe-01及回执，未改肥鹅原件。该结果独立于先前肥鹅19 GET/16627本地SHA，不借用旧事实；通用自动发现未知CDN地址仍未实现。

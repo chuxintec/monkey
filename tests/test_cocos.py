@@ -47,6 +47,9 @@ class CreatorTests(unittest.TestCase):
             self.assertEqual(len(p['sourcePrefabs']),1)
             spec=p['sourcePrefabs'][0]
             self.assertEqual(spec['nodeCount'],1)
+            self.assertEqual(spec['rootNamePolicy'],'creator-asset-basename-v1')
+            self.assertEqual(spec['nativeRootName'],Path(spec['path']).stem)
+            self.assertEqual(spec['sourceRootName'],next(n['name'] for n in p['nodes'] if n['sourceId']==spec['root']))
             self.assertTrue(spec['path'].endswith('/UI/fixture.prefab'),spec['path'])
             cocos.export(r/'plan/plan.json',r/'candidate')
             instruction=load(read(r/'candidate/extensions/monkey-import/import-plan.json'))

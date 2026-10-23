@@ -113,6 +113,12 @@ if(result.geometryVerified!==false||result.geometryMismatches.length!==2||!resul
 plan.nodes[0].size=[100,32];plan.nodes[1].size=[85.63,32];
 const clean=adapter.read(root,{root:'root',nodes:['root','child'],nodeCount:2},plan,{});
 if(!clean.geometryVerified||clean.geometryMismatches.length)throw Error('Exact geometry rejected');
+const named={root:'root',nodes:['root','child'],nodeCount:2,path:'assets/prefabs/NativeRoot.prefab',rootNamePolicy:'creator-asset-basename-v1',sourceRootName:'root',nativeRootName:'NativeRoot'};
+root.name='NativeRoot';
+const normalized=adapter.read(root,named,plan,{});
+if(normalized.sourceRootName!=='root'||normalized.nativeRootName!=='NativeRoot')throw Error('Root-name evidence absent');
+child.name='tampered';let rejected=false;try{adapter.read(root,named,plan,{})}catch(e){rejected=/hierarchy differs: child/.test(e.message)};
+if(!rejected)throw Error('Root policy hid a child rename');child.name='label';
 process.stdout.write(JSON.stringify(result));
 '''
         result=subprocess.run(['node','-e',script,str(adapter),str(adapter.with_name('CreatorJobs.js'))],capture_output=True,text=True,check=True)

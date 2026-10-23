@@ -113,8 +113,12 @@ def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None):
     from .prefabs import plan_prefabs
     prefabs,prefab_gaps=plan_prefabs(ir,components)
     diagnostics.extend(prefab_gaps)
+    by_node={n['sourceId']:n for n in ir['nodes']}
     for prefab in prefabs:
         prefab['path']=naming.path(prefab['sourceId'],'.prefab','assets/generated/prefabs')
+        prefab['rootNamePolicy']='creator-asset-basename-v1'
+        prefab['sourceRootName']=by_node[prefab['root']]['name']
+        prefab['nativeRootName']=Path(prefab['path']).stem
     from .common import reject_layout_conflicts
     diagnostics.extend(reject_layout_conflicts(components))
     from ..assets.animation import plan_clips
@@ -176,6 +180,13 @@ def export(plan_path,output):
         components=[dict(sourceId=c['sourceId'],node=c['node'],nativeType=c['nativeType']) for c in p['components']],
         sourceRoots=p['sourceRoots'],sourceLocations=p['sourceLocations'],subresources='actual UUIDs require native importer readback'))
     handoff_tasks=tasks(p['components'],[d for d in p['diagnostics'] if not d['code'].startswith('ANIMATION_')],'assets/generated/views/Candidate.scene','assets/manual/')
+    normalized=[dict(sourceId=s['sourceId'],path=s['path'],sourceRootName=s['sourceRootName'],nativeRootName=s['nativeRootName'])
+                for s in p.get('sourcePrefabs',[]) if s.get('rootNamePolicy')=='creator-asset-basename-v1' and s['sourceRootName']!=s['nativeRootName']]
+    if normalized:
+        handoff_tasks.append(dict(taskId='creator-prefab-root-names',module='creator-prefabs',rootCause='native-prefab-root-name-compatibility',
+            sourceRefs=[s['sourceId'] for s in normalized],gaps=[dict(code='CREATOR_PREFAB_ROOT_NAME_POLICY',
+                message='Creator normalizes root names to asset basenames. Source names remain in Scene/source-map; review name-dependent business code.')],
+            generatedTargets=['Analysis/source-map.json'],allowedPaths=['assets/manual/'],verificationScope=['native root-name policy','name-dependent business code'],rootNames=normalized))
     if p.get('animations') or any(d['code'].startswith('ANIMATION_') for d in p['diagnostics']):
         from ..assets.animation import handoff_task
         handoff_tasks.append(handoff_task(p['animations'],p['diagnostics']))
@@ -251,6 +262,8 @@ def verify(candidate,output,level='static'):
                 valid=(set(actual.get('components',[]))==expected_components and actual.get('path')==spec['path'] and bool(actual.get('uuid')) and
                        actual.get('nodeCount')==spec['nodeCount'] and actual.get('savedReloaded') is True and
                        actual.get('geometryVerified') is True and actual.get('referencesVerified') is True and spec['path'] in native)
+                if spec.get('rootNamePolicy')=='creator-asset-basename-v1':
+                    valid=valid and all(actual.get(key)==spec[key] for key in ['rootNamePolicy','sourceRootName','nativeRootName'])
                 if not valid:
                     good=False;diagnostics.append(diagnostic('SOURCE_PREFAB_NOT_VERIFIED',sid,'Independent Creator prefab save/reload evidence absent or inconsistent'))
             from ..assets.animation import verify_native
