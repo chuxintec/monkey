@@ -30,3 +30,8 @@ Unity11992/28514、Creator12568/28514源组件进入当前转换子集；1006 Cr
 ## CLI本地制品
 
 monkey_native-0.3.0.dev1-py3-none-any.whl，223337字节，SHA256 a1fee4bd2efa48f8349ced34bbf13032bbeb0c32b1c5daba60d03c9f6b1d1e58。包含55条目，导入器、Grid原生组件、Acorn和许可证齐全，无私有样本/转换产物。通过项目私有target安装后，在独立cwd确认实际加载安装模块并完成合成wxapkg五文件→双端候选；没有全局安装或发布。dist/full14-local/BUILD.json及.private/wheel-smoke-14/smoke.stdout为本机回执。
+
+
+## v0.2 源字段回查补充
+
+2026-10-24后续NumberLabel接线核对发现旧normalizer漏读`_N$overflow`别名。离线精确源ID对账：full14已转换的1006 Label中89个受影响（85个源SHRINK=2、4个源RESIZE_HEIGHT=3）；旧source overflow=0说明不适用于这些对象。旧候选/native几何与引用检查读回通过事实保持，表示当时生成合同的读回，不证明这些原动态overflow语义已恢复。原生视觉/业务本来未验；v0.1/tag/候选/原IR不反写，v0.2读取器修正精确别名及冲突拒绝，后续必须按真实模式另行生成验证。

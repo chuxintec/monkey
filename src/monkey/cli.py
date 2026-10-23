@@ -81,6 +81,7 @@ def main(argv=None):
     p = sub.add_parser('code-emit', help='Emit source-proven numeric field methods as C# and default TypeScript; unknown methods stay pending')
     p.add_argument('--source',required=True)
     p.add_argument('--code-model',required=True)
+    p.add_argument('--namespace',default='monkey-project')
     p.add_argument('--numeric-field',action='append',required=True,help='Explicit numeric call-subdomain contract; not a global JS type inference')
     p.add_argument('--cocos-code-language',choices=['ts','js'],default='ts')
     p.add_argument('--out',required=True)
@@ -152,7 +153,7 @@ def main(argv=None):
             return 0
         if args.command == 'code-emit':
             from .code_emit import emit
-            result=emit(args.source,args.code_model,args.out,args.numeric_field,args.cocos_code_language)
+            result=emit(args.source,args.code_model,args.out,args.numeric_field,args.cocos_code_language,args.namespace)
             print(json.dumps(result,ensure_ascii=False));return 1
         if args.command == 'hydrate-unity':
             from .unity_textures import hydrate

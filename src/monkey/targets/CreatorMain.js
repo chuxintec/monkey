@@ -160,7 +160,7 @@ module.exports = {
             }
             collect('assets/generated');
             const rb = {...saved, assets, sceneUuid:scene.uuid, creatorVersion:Editor.App.version, projectUuid:project.uuid,
-                manifestSha256:hash(manifestRaw), nativeFiles,apiTiming};
+                manifestSha256:hash(manifestRaw), nativeFiles,apiTiming,numericCodeExercise:result.numericCodeExercise||[]};
             fs.writeFileSync(within(root,'Analysis/editor-readback.json'),JSON.stringify(rb,null,2)+'\n',{flag:'wx'});
             return {sceneUuid:scene.uuid,nodeCount:rb.nodeCount,editorValidation:'readback-recorded'};
         }

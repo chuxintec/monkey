@@ -369,14 +369,16 @@ def component_ir(namespace, index, obj):
         if base['mode'] not in (0,1,2): gaps.append('sprite mode '+str(base['mode']))
         known = {'_materials','_spriteFrame','_type','_sizeMode','_isTrimmedMode','_fillType','_fillCenter','_fillStart','_fillRange','_atlas'}
     elif typ == 'cc.Label':
+        if '_overflow' in obj and '_N$overflow' in obj and obj['_overflow'] != obj['_N$overflow']:
+            fail('LABEL_OVERFLOW_ALIAS_CONFLICT',base['sourceId'],'Conflicting serialized Label overflow aliases')
         base.update(text=obj.get('_string',obj.get('_N$string','')),font=ref(obj.get('_N$file'),namespace),
                     fontSize=obj.get('_fontSize',40),lineHeight=obj.get('_lineHeight',40),
                     horizontalAlign=obj.get('_N$horizontalAlign',obj.get('_horizontalAlign',0)),verticalAlign=obj.get('_N$verticalAlign',obj.get('_verticalAlign',0)),
                     bold=bool(obj.get('_styleFlags',0)&1),italic=bool(obj.get('_styleFlags',0)&2),underline=bool(obj.get('_styleFlags',0)&4),
                     spacing=obj.get('_spacingX',0),systemFont=obj.get('_isSystemFontUsed',True),
-                    overflow=obj.get('_overflow',0),wrap=obj.get('_enableWrapText',True))
+                    overflow=obj.get('_overflow',obj.get('_N$overflow',0)),wrap=obj.get('_enableWrapText',True))
         known = {'_string','_N$string','_N$file','_fontSize','_lineHeight','_horizontalAlign','_verticalAlign',
-                 '_N$horizontalAlign','_N$verticalAlign','_materials','_overflow','_enableWrapText','_isSystemFontUsed','_fontFamily','_N$fontFamily','_cacheMode','_styleFlags','_spacingX'}
+                 '_N$horizontalAlign','_N$verticalAlign','_materials','_overflow','_N$overflow','_enableWrapText','_isSystemFontUsed','_fontFamily','_N$fontFamily','_cacheMode','_styleFlags','_spacingX'}
         if not base['font']: gaps.append('system font requires source-backed explicit matching font binding')
         if base['overflow'] != 0: gaps.append('label overflow mode requires native mapping')
     elif typ == 'cc.Widget':

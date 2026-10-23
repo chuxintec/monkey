@@ -8,11 +8,13 @@ const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
 const range=n=>({start:Buffer.byteLength(source.slice(0,n.start)),end:Buffer.byteLength(source.slice(0,n.end))});
 const property=n=>n?.type==='MemberExpression'&&!n.computed&&n.property.type==='Identifier'?n.property.name:null;
 const field=n=>n?.type==='MemberExpression'&&n.object.type==='ThisExpression'?property(n):null;
-const methods=[],calls=[],members=[],stack=[[ast,[],0]];let count=0;
+const methods=[],calls=[],classScopes=[],registrations=[],members=[],stack=[[ast,[],0]];let count=0;
 while(stack.length){
  const [n,parents,depth]=stack.pop();if(++count>1000000||depth>256)throw Error('AST budget');
  if(n.type==='CallExpression'){
   const method=property(n.callee);if(method)calls.push({method,sourceBytes:range(n)});
+  if(method==='push'&&property(n.callee.object)==='_RF'&&n.callee.object.object.type==='Identifier'&&n.callee.object.object.name==='cc'&&n.arguments.length===3&&n.arguments[1].type==='Literal'&&typeof n.arguments[1].value==='string'&&n.arguments[2].type==='Literal'&&typeof n.arguments[2].value==='string')registrations.push({identity:n.arguments[1].value,name:n.arguments[2].value,sourceBytes:range(n)});
+  if(n.callee.type==='FunctionExpression'&&n.arguments.length===1&&property(n.arguments[0])==='Label'&&n.arguments[0].object.type==='Identifier'&&n.arguments[0].object.name==='cc')classScopes.push({scopeBytes:range(n.callee),constructorAliases:n.callee.body.body.filter(x=>x.type==='FunctionDeclaration').map(x=>x.id.name),baseArgument:'cc.Label',inheritanceHelper:'unresolved-source-helper',sourceBytes:range(n)});
  }
  if(n.type==='AssignmentExpression'&&n.operator==='='&&property(n.left)&&['FunctionExpression','ArrowFunctionExpression'].includes(n.right.type)){
   const fn=n.right,pname=property(n.left),owner=n.left.object;
@@ -39,5 +41,5 @@ while(stack.length){
  }
 }
 methods.sort((a,b)=>a.sourceBytes.start-b.sourceBytes.start);
-process.stdout.write(JSON.stringify({schemaVersion:1,source:{sha256:hash(raw),bytes:raw.length},methods,calls,sourceExecuted:false,
+process.stdout.write(JSON.stringify({schemaVersion:1,source:{sha256:hash(raw),bytes:raw.length},methods,calls,classScopes,registrations,sourceExecuted:false,
   scope:'AST facts; field-copy semantics only; types and enclosing aliases require explicit contract'}));

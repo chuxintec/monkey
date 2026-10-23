@@ -462,3 +462,30 @@ full14 Unity actual own53301 exit0/reap/方法475.455秒/强verify零诊断；�
 总监source-assistance事件monkey-zombie-exact-texture-found-20261024-01后，核原包DATA_CDN明示URL与新增精确原件65552B/SHA6c11b424ba429c442664e0fc4eb212030fad8255800755bd894b3c96596fa018，ASTC8x8/512x512及长度匹配，复制到monkey私有池。104项新pool SHA887c4c3dc35d1f96dcfb9472c01827a46274232ae207f6e8b2ae26207319dcfb；startup hydrate02四键齐全、非纹理raw hash不变。公开startup convert02完成5输入3554576B候选、2484 Provider文件11019493B，自有child退出、原件不变，1173代码隔离/schema0/原生not_run；106MB和受保护方法仍不恢复。旧缺件状态保持。
 
 代码具名输出第一组：code-emit --source --code-model --numeric-field value --cocos-code-language ts|js（默认ts）。重新静态解析核源/hash/方法语义，拒绝篡改模型；仅显式number调用子域的字段setter/getter生成非空实现，C#double?未初始化与TS undefined分别明示。NumberLabel真实6方法→2实现/4pending，待补不放空成功函数。箭头/async/generator函数不误判普通this方法。4定向反例通过，含仅运行生成JS验证undefined/负零/NaN/Infinity/独立实例/原Label字符串不变。真实输出C#compile通过，TS5.8.2/Creator3.8.8公开SDK target strict通过、错误字符串调用TS2345拒绝；官方SDK自身82项full-strict声明诊断独立记录，skipLibCheck只隔离上游声明，不放宽生成target。Creator原生注册/5引用与Unity5引用尚not_run，未并入convert，当前继续下一组。
+
+
+NumberLabel Unity代表接线段登记：outputs/number-label-unity-bind-probe-02，MainUi129节点/5原脚本引用，实际资源GUID闭包132文件3297014B（其余7个GUID为包/内置或待原生解析，不假称全内闭合），生成方法+通用Editor验证器已编译。启动器先查ps无主Editor、仅自有最小副本；真实锚点启动前固定在native-plan，内部+28/外层+30分钟/方法1200秒，首新失败停止，不延长、不改full14或原源码。将验证数字边界/实例隔离、5 TMP引用/文字字体/全部节点几何及保存重载；当前尚not_run。
+
+
+NumberLabel接线probe02 own69237于19:12:28.284136Z→19:12:36.937026Z exit1/reaped、saved=false：129节点/根GUID正确，但原五自定义脚本从未映射TMP组件，严格绑定前置失败。旧full14真实1006 Label不包含这5个，不能把不存在的目标文字组件当已有。源RF+IIFE cc.Label参数/构造别名/方法作用域现已静态绑定，原helper仍不执行；增加有限Label字段projection，非Label业务序列化字段出现即拒绝，原5组件身份/未知4方法保留。
+
+同时核出Label序列化_N$overflow别名被旧normalizer漏读；已修精确别名/冲突拒绝，未重写旧IR/候选。原NumberLabel实际overflow2（SHRINK）保持，不能说原源模式0。新native03明确仅baked文本/数值读写：按原字串/原位图字体/颜色/对齐投射TMP，原SHRINK动态行为待补，不宣称视觉通过；位图bold沿既有源字形规则避免二次加粗。补齐实际字体/着色器include依赖，186文件4744978B。修正后新段仍先ps无冲突、独立新副本、实际锚点+28/+30/方法1200秒，首次新失败停；不会重跑旧失败副本。
+
+
+接线probe03 own69932于19:18:52.806299Z→19:19:01.434561Z exit1/reaped、saved=false，原件不变；创建TMP阶段空引用。离线核精确UGUI TMP_Settings源码：AddComponent初始化必需Resources/TMP Settings资源，前一最小闭包漏掉该隐式入口。新probe04在显式原资源闭包加入原TMP Settings及其GUID递归依赖，新增强前置TMP_Settings.instance/阶段与完整异常回执；不以加判空跳过Glyph门。不改旧副本，ps无冲突后新+28/+30/1200段，首次新错停。Label SHIRNK动态行为仍handoff，数字方法与静态文字/字体/几何分别验。
+
+
+probe04 own70396于19:20:54.346031Z→19:21:03.474011Z exit1/reaped、saved=false：TMP Settings前置已过，首个glyph门失败；保存副本与原件均未改。原Prefab没有Canvas，沿既有已实证ReadSavedLabel的隔离active Canvas clone测量策略修正新验证器，全部源树保持inactive/几何不动；不删glyph门、不增容差。新probe05已独立复制并编译，仍相同显式5字串/原字体/129节点，新的有界段，不在失败工程重试。
+
+离线source字段审计另证：full14原生1006个converted Label中89个有未读到的_N$overflow非零（85为SHRINK2、4为RESIZE_HEIGHT3），原native几何/引用通过事实保留，但源overflow=0说法对这89个不成立；动态behavior原就not_run/handoff，不因此晋级。旧v0.1/IR/候选不改，v0.2新reader已精确读别名，需按真实模式重建后验证。
+
+
+NumberLabel Unity probe05 own70833于19:23:17.534061Z→19:23:27.140130Z exit0/reaped；129节点、根GUID0eaedff19bd76487f9f32a796d094f94保持，MissingScript0，5个真实源脚本→NumberLabel+原字体TMP引用绑定/独立状态/数字边界/未初始化状态通过，保存重载5处绑定全在、全部节点几何保持、源full14 Prefab SHA不变。原script四未知方法、SHRINK动态字体行为、原版视觉/交互仍未恢复。glyph采用隔离active Canvas clone强验，不改原树。probe02–04失败均冻结，不追认。继续Creator TS真实注册/5处原生绑定；未并入公开convert。
+
+
+Creator NumberLabel TS原生段准备：candidate03仅MainUi129节点、同5原RF组件，重新投射原Label序列化字段；明确native CLAMP静态几何策略，原SHRINK2及4业务方法仍handoff。有限code adapter以注册类实例/原字体/字串绑定，不执行源JS/helper。通用Editor模块先检实际class注册/数字边界/实例隔离，再保存Scene+独立Prefab、重载核实际classId/原组件映射/未初始化态；未导入TS meta标native_assignment_pending，读回真实ID，不捏造稳定UUID。25定向检查通过（新增可选模块依赖已在旧非code几何路径按需加载，未削弱几何反例）。只新outputs/number-label-creator-native-01，先ps无引擎冲突、启动锚点+28/+30/方法1200秒，首错停/正常回收，不改Unity结果或原件。
+
+
+Creator TS native01 own71766于19:28:21.200824Z→19:28:41.202280Z正常TERM exit-15/reaped，editor pass/0诊断，候选804703d0010a88fc25608e2fa519b3d94e7785e1a391cef3ba7c2a544685cd7c。真实注册NumberLabel、MainUi129节点，Scene与独立Prefab5原脚本接线/实际classId/字串字体/完整几何、数字边界/实例隔离、保存重载未初始化态通过。首次实际自动UUID86325443-58b5-4b92-b0e4-bc27ec362d46、classId86325RDWLVLkrDkvCfsNi1G；原TS meta ver4.0.24已读。未冒称这个自动ID跨fresh项目恒定；后续code-emit新增namespace+源RF稳定meta，新的固定meta模式需格式阶段再验。JS importer metadata仍待实证，不捏造模板。
+
+成组状态见docs/CODE-SUBSET.md。具名C#/TS原生代表已从facts/candidate推进到5绑定数值子集；公开convert集成、第二来源模块、typed none/grea格式化及全Research逐case仍未闭合，继续开发、不推送v0.2。

@@ -21,7 +21,7 @@ class CodeEmitTests(unittest.TestCase):
             test=runtime/'test.mjs';test.write_text('''import assert from 'node:assert/strict';
 import { Meter } from './assets/generated/scripts/Meter.js';
 const a=new Meter(),b=new Meter(); assert.equal(a.getValue(),undefined);
-for(const value of [0,-0,1,Number.MAX_VALUE,NaN,Infinity,-Infinity]) { a.initValue(value); assert.ok(Object.is(a.getValue(),value)); assert.equal(b.getValue(),undefined); assert.equal(a.string,'untouched'); }
+for(const value of [0,-0,1,Number.MAX_VALUE,NaN,Infinity,-Infinity]) { a.initValue(value); assert.ok(Object.is(a.getValue(),value)); assert.equal(b.getValue(),undefined); assert.equal(a.string,undefined); }
 assert.equal(typeof a.asyncValue,'undefined');assert.equal(typeof a.arrow,'undefined');''')
             run=subprocess.run(['node',str(test)],capture_output=True,text=True)
             self.assertEqual(run.returncode,0,run.stderr)

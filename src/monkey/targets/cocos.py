@@ -95,7 +95,8 @@ def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None):
                 available={g['unicode'] for g in font_by_id[c['font']]['glyphs']}
                 if any(ord(ch) not in available for ch in c['text'] if ch not in '\r\n'):gap('SOURCE_FONT_GLYPHS_MISSING','Bitmap lacks glyphs')
                 c['bold']=False
-            if c['overflow']!=0 or c.get('italic') or c.get('underline'):gap('LABEL_SUBSET_UNSUPPORTED','First subset: no overflow/style synthesis')
+            numeric_baked=c.get('sourceScriptIdentity') and c.get('codeClassName') and c.get('numericMethods') and c['overflow']==2 and not c.get('wrap')
+            if (c['overflow']!=0 and not numeric_baked) or c.get('italic') or c.get('underline'):gap('LABEL_SUBSET_UNSUPPORTED','Nonzero overflow requires an explicit presentation adapter; no style synthesis')
             if c['convertible']:
                 c.update(nativeOverflow=1,sizingPolicy='source-baked-clamp-v1')
                 diagnostics.append(diagnostic('LABEL_AUTOSIZE_SEMANTICS_HANDOFF',sid,
@@ -177,6 +178,7 @@ def export(plan_path,output):
     ext=out/'extensions/monkey-import'
     for name in ['main.js','scene.js']:(ext/name).write_bytes(files('monkey.targets').joinpath('Creator'+('Main.js' if name=='main.js' else 'Scene.js')).read_bytes())
     (ext/'execution.js').write_bytes(files('monkey.targets').joinpath('CreatorExecution.js').read_bytes())
+    (ext/'numeric-code.js').write_bytes(files('monkey.targets').joinpath('CreatorNumericCode.js').read_bytes())
     (ext/'prefab.js').write_bytes(files('monkey.targets').joinpath('CreatorPrefab.js').read_bytes())
     (ext/'batch.js').write_bytes(files('monkey.targets').joinpath('CreatorBatch.js').read_bytes())
     (ext/'jobs.js').write_bytes(files('monkey.targets').joinpath('CreatorJobs.js').read_bytes())

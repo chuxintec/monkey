@@ -221,7 +221,11 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
                     entry['convertible']=False
                     diagnostics.append(diagnostic(getattr(error,'code','BITMAP_LAYOUT_UNSUPPORTED'),c['sourceId'],str(error),c['sourceId']))
             if c.get('overflow') != 0:
-                entry['convertible']=False
+                numeric_baked=c.get('sourceScriptIdentity') and c.get('codeClassName') and c.get('numericMethods') and c.get('overflow')==2 and not c.get('wrap')
+                if numeric_baked:
+                    entry['presentationPolicy']='source-baked-numeric-label-v1'
+                    diagnostics.append(diagnostic('LABEL_OVERFLOW_SEMANTICS_HANDOFF',c['sourceId'],'Numeric Label retains baked text/rect; source SHRINK behavior remains pending',c['sourceId']))
+                else:entry['convertible']=False
             diagnostics.append(diagnostic('LABEL_METRICS_NOT_VERIFIED',c['sourceId'],'TMP line metrics need engine/reference comparison',c['sourceId']))
         elif c['type']=='cc.Widget':
             node=by_node.get(c['node'],{})

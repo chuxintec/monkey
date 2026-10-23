@@ -40,10 +40,11 @@ function read(prefab,spec,plan,info) {
         }
         match(spec.root,root);
         if(mapped.size!==spec.nodeCount||spec.nodes.some(id=>!mapped.has(id)))throw Error('Prefab node boundary differs');
-        const assets=new Map(plan.assets.map(a=>[a.sourceId,a]));const components=[];
+        const assets=new Map(plan.assets.map(a=>[a.sourceId,a]));const components=[];const numericCodeBindings=[];
         for(const c of plan.components.filter(c=>c.convertible&&mapped.has(c.node))) {
             const node=mapped.get(c.node),comp=node.getComponent(cc[c.type==='cc.LabelOutline'?'Label':c.type.slice(3)]);
             if(!comp)throw Error('Prefab component missing: '+c.sourceId);
+            if(c.codeClassName)numericCodeBindings.push(require('./numeric-code.js').read(comp,c));
             if(c.type==='cc.Sprite'&&c.spriteFrame&&(!comp.spriteFrame||comp.spriteFrame._uuid!==assets.get(c.spriteFrame).spriteFrameUuid))throw Error('Prefab sprite reference differs');
             if(c.type==='cc.Label'&&(!comp.font||comp.font._uuid!==assets.get(c.font).uuid||comp.string!==c.text))throw Error('Prefab font/text reference differs');
             if(c.type==='cc.Label'&&comp.overflow!==(c.nativeOverflow??c.overflow))throw Error('Prefab Label overflow policy differs');
@@ -54,7 +55,7 @@ function read(prefab,spec,plan,info) {
             components.push(c.sourceId);
         }
         return {...info,nodeCount:mapped.size,savedReloaded:true,geometryVerified:geometryMismatches.length===0,geometryMismatches,referencesVerified:true,components,
-            rootNamePolicy:spec.rootNamePolicy||'source-name-v1',sourceRootName:sources.get(spec.root).name,nativeRootName:root.name};
+            numericCodeBindings,rootNamePolicy:spec.rootNamePolicy||'source-name-v1',sourceRootName:sources.get(spec.root).name,nativeRootName:root.name};
     } finally {root.destroy();}
 }
 module.exports={serialize,read};

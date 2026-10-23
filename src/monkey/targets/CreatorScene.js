@@ -5,6 +5,7 @@ const motion=require('./animation.js');
 const prefabs=require('./prefab.js');
 const batch=require('./batch.js');
 const jobs=require('./jobs.js');
+const numeric=require('./numeric-code.js');
 const color = a => new cc.Color(...a);
 const checkTime=plan=>{if(plan.nativeDeadlineMs&&Date.now()>=plan.nativeDeadlineMs)throw Error('NATIVE_BUDGET_EXHAUSTED');};
 const loadAsset = (uuid, type) => new Promise((resolve,reject) => cc.assetManager.loadAny({uuid}, (e,a) => {
@@ -52,7 +53,7 @@ module.exports = {
                     const node=nodes.get(n.sourceId);node.parent=n.parent?nodes.get(n.parent):design;
                 }
                 for(const n of plan.nodes)for(let i=0;i<n.children.length;i++)nodes.get(n.children[i]).setSiblingIndex(i);
-                const nativeRefs=[];
+                const nativeRefs=[];const codeEntries=[];
                 let componentProgress=0;
                 for(const c of plan.components) {
                     if(componentProgress%256===0){jobs.progress('components',componentProgress,plan.components.length);await new Promise(resolve=>setTimeout(resolve,0));}componentProgress++;
@@ -64,7 +65,7 @@ module.exports = {
                         comp.spriteFrame=c.spriteFrame?native.get(c.spriteFrame):null;comp.color=color(source.color);
                         comp.enabled=c.enabled&&!c.needsSpriteBinding;
                     } else if(c.type==='cc.Label') {
-                        comp=node.addComponent(cc.Label);comp.overflow=c.nativeOverflow??c.overflow;comp.useSystemFont=false;comp.font=native.get(c.font);
+                        comp=node.addComponent(c.codeClassName?numeric.type(c):cc.Label);if(c.codeClassName)codeEntries.push({component:comp,spec:c});comp.overflow=c.nativeOverflow??c.overflow;comp.useSystemFont=false;comp.font=native.get(c.font);
                         comp.string=c.text;comp.fontSize=c.fontSize;comp.lineHeight=c.lineHeight;comp.spacingX=c.spacing;
                         comp.horizontalAlign=c.horizontalAlign;comp.verticalAlign=c.verticalAlign;
                         comp.enableWrapText=c.wrap;comp.isBold=!!c.bold;comp.color=color(source.color);
@@ -99,6 +100,7 @@ module.exports = {
                 for(const c of plan.components.filter(c=>c.convertible&&c.type==='cc.Label')) {
                     checkTime(plan);nodes.get(c.node).getComponent(cc.Label).updateRenderData(true);
                 }
+                const numericCodeExercise=numeric.exercise(codeEntries);
                 const animationAssets=[];
                 for(const spec of plan.animations||[])if(spec.convertible) {
                     const clip=motion.create(spec,nodes);const raw=EditorExtends.serialize(clip);
@@ -109,7 +111,7 @@ module.exports = {
                 const serialized=EditorExtends.serialize(asset);
                 const sourcePrefabs=await prefabs.serialize(plan,nodes);
                 return {serialized:typeof serialized==='string'?serialized:JSON.stringify(serialized),nativeRefs,animationAssets,
-                    sourcePrefabs,
+                    sourcePrefabs,numericCodeExercise,
                     nodes:plan.nodes.map(n=>({sourceId:n.sourceId,nodeUuid:nodes.get(n.sourceId).uuid})),...describe(scene,plan)};
             } finally {scene.destroy();}
         },
@@ -126,10 +128,11 @@ module.exports = {
                 mapped.set(sid,n);src.children.forEach((id,i)=>match(id,n.children[i]));
             }
             plan.nodes.filter(n=>n.parent===null).forEach((n,i)=>match(n.sourceId,design.children[i]));
-            const labels=[];const refs=[];
+            const labels=[];const refs=[];const numericCodeBindings=[];
             for(const c of plan.components.filter(c=>c.convertible)) {
                 const n=mapped.get(c.node);const type=c.type==='cc.LabelOutline'?'Label':c.type.slice(3);const comp=n.getComponent(cc[type]);
                 if(!comp)throw Error('Saved component missing: '+c.type);
+                if(c.codeClassName)numericCodeBindings.push(numeric.read(comp,c));
                 if(c.type==='cc.Label'&&comp.overflow!==(c.nativeOverflow??c.overflow))throw Error('Saved Label overflow policy differs: '+c.sourceId);
                 if(c.type==='cc.Sprite'&&comp.sizeMode!==(c.nativeSizeMode??c.sizeMode))throw Error('Saved Sprite sizing policy differs: '+c.sourceId);
                 refs.push({sourceId:c.sourceId,nodeUuid:n.uuid,componentUuid:comp.uuid,type:c.type});
@@ -174,7 +177,7 @@ module.exports = {
                 if(!info)throw Error('Saved prefab identity absent');
                 sourcePrefabs.push(prefabs.read(await loadAsset(info.uuid,cc.Prefab),spec,plan,info));
             }
-            return {sourcePrefabs,jsonAssets,fontPages,animations,nodeCount:saved.length,nodes:[...mapped].map(([sourceId,n])=>({sourceId,nodeUuid:n.uuid,name:n.name,
+            return {sourcePrefabs,jsonAssets,fontPages,animations,numericCodeBindings,nodeCount:saved.length,nodes:[...mapped].map(([sourceId,n])=>({sourceId,nodeUuid:n.uuid,name:n.name,
                 position:[n.position.x,n.position.y,n.position.z],size:[n.getComponent(cc.UITransform).width,n.getComponent(cc.UITransform).height],
                 pivot:[n.getComponent(cc.UITransform).anchorX,n.getComponent(cc.UITransform).anchorY],scale:[n.scale.x,n.scale.y,n.scale.z],
                 rotation:[n.rotation.x,n.rotation.y,n.rotation.z,n.rotation.w],active:n.active})),components:refs,labels,frames};
