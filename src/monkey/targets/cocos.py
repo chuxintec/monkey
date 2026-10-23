@@ -228,10 +228,12 @@ def verify(candidate,output,level='static'):
             for sid,a in expected_assets.items():
                 if a['kind']=='sprite':
                     f=frames.get(sid,{})
-                    good=good and f.get('uuid')==actual_assets.get(sid,{}).get('spriteFrameUuid')
-                    good=good and f.get('textureUuid')==actual_assets.get(sid,{}).get('textureUuid')
-                    good=good and near(f.get('rect'),a.get('trimOrigin',[0,0])+a['size']) and near(f.get('originalSize'),a['originalSize'])
-                    good=good and near(f.get('offset'),a['offset']) and near(f.get('border'),a['border'])
+                    expected=dict(uuid=actual_assets.get(sid,{}).get('spriteFrameUuid'),textureUuid=actual_assets.get(sid,{}).get('textureUuid'),
+                                  rect=a.get('trimOrigin',[0,0])+a['size'],originalSize=a['originalSize'],offset=a['offset'],border=a['border'])
+                    mismatches=[key for key,value in expected.items() if (f.get(key)!=value if key in ('uuid','textureUuid') else not near(f.get(key),value))]
+                    if mismatches:
+                        good=False;diagnostics.append(diagnostic('SPRITE_READBACK_MISMATCH',sid,
+                            'Saved native sprite differs: '+str({key:dict(expected=expected[key],actual=f.get(key)) for key in mismatches})))
             good=good and all(isinstance(n.get('nodeUuid'),str) and n['nodeUuid'] for n in rb.get('nodes',[]))
             good=good and all(isinstance(c.get('componentUuid'),str) and c['componentUuid'] for c in rb.get('components',[]))
             good=good and path_for('assets/generated/views/Candidate.scene') in native and bool(rb.get('sceneUuid'))

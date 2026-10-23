@@ -343,3 +343,7 @@ Unity10实际own14717于13:38:24Z启动、13:48:28Z exit0/reap，方法437.966�
 Creator03批处理探针新登记：锚点13:49:23Z，内部14:17:23Z/外层14:19:23Z，方法1200秒；ps未见引擎冲突，只启动新outputs/acceptance/creator-font-geometry-probe-03，manifesta4908311bc31d68dfa414189d6c7c40cce93dd38894c337c8a57e1759864bf26。验证同源67资产/76节点/3 Prefab，严格geometry/reference不变；首错保存后停止，不顺延截止。
 
 Creator03 own16625于13:49:50Z启动、13:50:08Z normal TERM exit-15/reap；实际texture-metadata 59/67在0.114秒，但宿主validate_progress阶段白名单未同步新texture-metadata，NATIVE_HOST_FAILED。新错已保留，未到Scene/Prefab。补显式phase及未知phase仍拒绝的定向测试，6项通过；只需修宿主，不重导同字节候选，下一新acceptance04验证同冻结Creator03。
+
+Creator批处理重验04（候选仍03）新登记：锚点13:55:23Z，内部14:23:23Z/外层14:25:23Z，方法1200秒；ps未见引擎主进程，controller4f2c13a已同步texture-metadata合同，同manifesta4908311bc31d68dfa414189d6c7c40cce93dd38894c337c8a57e1759864bf26，新outputs/acceptance/creator-font-geometry-probe-04。只正常回收自有child，不顺延截止。
+
+Creator批处理重验04 own17180于13:55:39Z启动、13:55:55Z normal TERM exit-15/reap；方法1.715秒completed，3 Prefab几何/字体及内部引用通过，但外层严格Sprite回读失败。归类11 SpriteFrame存在旧trim/border，API证据保存meta 51次total195ms、folder refresh524ms只扫目录，不能代替逐资产原生重导入。新补公共reimport-asset(uuid)等待屏障，仍8路有界，个别Sprite差异输出明确expected/actual；5定向检查及JS语法pass。新候选04 manifest5cfc0a2644d9a68c994dff40611f8a3d19a49857ddb51820ae0fef243fa6cb06，static pass，需新独立验证，不把1.7秒当性能通过。

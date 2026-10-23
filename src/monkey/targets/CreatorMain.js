@@ -67,6 +67,9 @@ module.exports = {
                     // Subresource IDs are assigned by the native importer and retained, never synthesized.
                     if(Object.entries(desired).some(([key,value])=>u[key]!==value)) {
                         Object.assign(u,desired);await timedReq('save-asset-meta', a.uuid, JSON.stringify(m));
+                        // A folder refresh does not reimport changed subresource
+                        // metadata. Await the public per-asset reimport barrier.
+                        await timedReq('reimport-asset',a.uuid);
                     }
                 }
                 prepared++;
