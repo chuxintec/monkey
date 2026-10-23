@@ -144,7 +144,7 @@
         "36 startup objects without exact schema",
         "borrowed field instance values in Scene",
         "CODEPHPY and unavailable methods",
-        "public Unity-source native/format integration",
+        "public native profile does not yet cover startup scenes/borrowed instance values",
         "visual and gameplay"
       ],
       "sourceRevision": "273",
@@ -261,15 +261,19 @@
       "caseId": "ffeb5de0b10fdd29022e2114",
       "evidence": [
         {
-          "path": "outputs/unity2021-wuxia-closure-package-01/conversion-result.json",
-          "sha256": "666b51690c23ce5905425452a3375b99a0da551712500c6f95c1a97df4813c2f"
+          "path": "outputs/unity2021-wuxia-native-package-02/conversion-result.json",
+          "sha256": "e9a732f70173c3c856b7a6cbd32f7e30f6b825aa6626e8adffeb4b0d72085ebb"
         },
         {
-          "path": "outputs/unity2021-wuxia-package-01/conversion-result.json",
-          "sha256": "dad6cdfc9f8f73a9a4a7fd8b5c218aa606543b68c849007275ef4bd4b7602d77"
+          "path": "outputs/unity2021-wuxia-native-package-02-native/execution-result.json",
+          "sha256": "b07a0191ecdee862331603e3f64ddb7c43bfc48fbbbde0ab82114f45af22cd48"
+        },
+        {
+          "path": "outputs/unity2021-wuxia-startup-package-03/conversion-result.json",
+          "sha256": "bc1b0c5eddb0b615cff7931f0c60525a70ee76d9aa3c1891bc968bcf49988231"
         }
       ],
-      "export": "partial-dependency-closed-config-prefab-and-one-field-class; startup-blocked",
+      "export": "partial-dependency-closed-config-and-startup-resource-candidates",
       "metadataHint": {
         "backend": "wasm",
         "confidence": "metadata_hint_only",
@@ -279,14 +283,13 @@
       },
       "metadataSha256": "c166ac44fc02beb3d885e63b87aa0df606977d579d914ad2bc0398c25575894a",
       "name": "武侠大明星",
-      "native": "not_run",
+      "native": "public-131-Sprite-reference-leaf-Prefab-save-reload-verified; startup-not-run",
       "profile": "unityfs-unitypy-1.25.3-assetripper-2.0.0",
       "read": "partial-1468-of-1559-startup-objects; exact-config-bundle",
       "remaining": [
-        "startup missing logo.24de1a47, cm_frame_smalltips.041d0ce7, EmojiOne.c4a4a55d",
-        "native confirmation of 131 dependency-closed Sprite references",
-        "91 startup objects without schema",
-        "source methods and native/visual/gameplay"
+        "91 startup objects without schema; 1142 quarantined source code files",
+        "startup native and source methods/visual/gameplay",
+        "native format pinned all 134 resources; no real positive moves verified"
       ],
       "sourceRevision": "124",
       "targets": [

@@ -157,7 +157,7 @@ def main(argv=None):
         if args.command == 'capabilities':
             print(json.dumps(dict(version=__version__, profiles=[PROFILE,PROJECT_PROFILE,'cocos-2.4.11-bundle','cocos-3.8.7-bundle','cocos-2.1.2-resource','generic-image-resources-v1'], targetProfiles=[UNITY_PROFILE,cocos.PROFILE],
                 additionalPackageProfiles={'cocos-2.1.2-resource':dict(scope='version-proven-resource-subset',native='211-source-frames-both-targets-verified',graphs='pending',operations=['package-convert']), 'generic-image-resources-v1':dict(scope='derived-original-image-gallery-only',families=['laya','layaair','egret','eraget','custom','other'],targets=['unity6'],native='Egret-16-derived-images-verified',sourceGraphs='not-restored',operations=['package-convert']), 'cocos-2.4.11-bundle':dict(scope='version-proven-published-bundle-subset',native='91-source-graphs-both-targets-verified',operations=['package-convert']), 'cocos-3.8.7-bundle':dict(scope='version-proven-published-resource-subset',native='986-source-frames-both-targets-verified',graphs='pending',operations=['package-convert'])},
-                schemaVersion=1, formatting=dict(implemented=['unity-creator-unimported-owned-grea-v1','fresh-package-convert-none-grea'],pending=['direct-unity-provider-format'],rejected=['materialized-native-assets-require-a-future-native-move-adapter']), unitySourceProfile=dict(name='unityfs-unitypy-1.25.3-assetripper-2.0.0',status='partial',inputs='explicit-unity-bundle-or-webdata-files-and-exact-local-texture-cache',additionalContainers=['UnityWebData1.0'],invalidTexturePolicy='block-default-explicit-quarantine-retains-original',dependencyClosure='explicit-frozen-pool-exact-serialized-file-closure',editor='one-prefab-schema-reference-save-reload-verified',publicNative=False,methodsRecovered=0), implemented=['convert','catalog','inspect','normalize','plan','export','verify','handoff','diff','register','apply','preflight','native-import','research-matrix','code-model','code-emit','format-project','project-model','inspect-unity','export-unity','unity-code-model','index-unity','hydrate-unity'], planned=[],
+                schemaVersion=1, formatting=dict(implemented=['unity-creator-unimported-owned-grea-v1','fresh-package-convert-none-grea'],pending=['unity-general-scene-native-format','unity-source-positive-native-move-sample'],rejected=['materialized-native-assets-require-a-future-native-move-adapter']), unitySourceProfile=dict(name='unityfs-unitypy-1.25.3-assetripper-2.0.0',status='partial',inputs='explicit-unity-bundle-or-webdata-files-and-exact-local-texture-cache',additionalContainers=['UnityWebData1.0'],invalidTexturePolicy='block-default-explicit-quarantine-retains-original',dependencyClosure='explicit-frozen-pool-exact-serialized-file-closure',editor='one-prefab-schema-reference-save-reload-verified',publicNative=True,nativeProfile='unity-leaf-prefab-sprite-array-v1',nativeFormatting='typed-resource-moves-with-dynamic-path-pins; real sample pinned all 134 assets',methodsRecovered=0), implemented=['convert','catalog','inspect','normalize','plan','export','verify','handoff','diff','register','apply','preflight','native-import','research-matrix','code-model','code-emit','format-project','project-model','inspect-unity','export-unity','unity-code-model','index-unity','hydrate-unity'], planned=[],
                 targetValidation={UNITY_PROFILE:dict(static='implemented',editor='representative-subset-verified',visual='not_run'),cocos.PROFILE:dict(static='implemented',editor='representative-subset-verified',visual='not_run')},
                 compiledFormats=['compiled-v1','pack-v1','texture-pack-v1'],
                 containerFormats=['plain-wxapkg','APK-ZIP','Cocos-resource-directory'],
@@ -249,15 +249,31 @@ def main(argv=None):
                 from .sources.unity_serialized import container_kind
                 with safe_source(source_file).open('rb') as stream:unity_source=container_kind(stream.read(16)) is not None
             if unity_source:
-                if args.numeric_code_contract:parser.error('Numeric JS code contracts require Cocos package sources')
-                if args.format=='grea':parser.error('Direct Unity recovery profile formatting is not implemented yet; preserve a none candidate')
+                if args.numeric_code_contract or args.cocos_code_language!='ts':parser.error('Numeric JS code contracts/language selection require Cocos package sources')
+                if args.format=='grea' and not args.native:parser.error('Unity source --format grea requires --native for typed AssetDatabase moves')
+                if args.native and args.offline:parser.error('--native cannot combine with --offline')
+                if args.native and (not args.unity_editor or args.creator_editor):parser.error('Unity source --native requires only --unity-editor')
+                if not args.native and any((args.native_out,args.unity_editor,args.creator_editor,args.native_budget_seconds!=1200)):parser.error('native options require --native')
                 if args.target not in ('unity','unity6',UNITY_PROFILE):parser.error('Unity sources target Unity 6 only')
                 if not all((args.source,args.out,args.provider_python,args.asset_ripper)):parser.error('Unity source requires --source --out --provider-python --asset-ripper')
-                if any((args.input_set,args.native,args.resume,args.recipe,args.reuse_source_stages,args.remote_manifest,args.remote_cache_root,args.acquisition_out,args.asset_index,args.all_assets,args.bindings,args.animation,args.evidence_source,args.source_profile,args.namespace,args.native_out,args.unity_editor,args.creator_editor,args.native_budget_seconds!=1200,args.remote_budget_seconds!=900)):
-                    parser.error('Initial Unity bundle profile supports one explicit local source and offline provider export; input sets/native/remote/slice options are not implemented')
+                if any((args.input_set,args.resume,args.recipe,args.reuse_source_stages,args.remote_manifest,args.remote_cache_root,args.acquisition_out,args.asset_index,args.all_assets,args.bindings,args.animation,args.evidence_source,args.source_profile,args.namespace,args.remote_budget_seconds!=900)):
+                    parser.error('Unity source profile accepts explicit bundle/dependency/texture inputs; input sets/remote/slice options are not implemented')
+                native_settings=None
+                if args.native:
+                    from .orchestration import options
+                    from .io import safe,load,read
+                    protected=[args.source,*args.dependency_source,Path(args.asset_ripper).parent,Path(args.provider_python).resolve().parent]
+                    for manifest_path in (args.unity_texture_cache,args.unity_schema_manifest,args.unity_dependency_manifest):
+                        if manifest_path:
+                            manifest_path=safe(manifest_path)
+                            protected.extend([manifest_path,*[manifest_path.parent/row['path']for row in load(read(manifest_path)).get('files',[])]])
+                    native_settings=options(args.out,args.target,args.native_out,args.unity_editor,args.creator_editor,args.native_budget_seconds,protected)
                 from .recover_unity import convert as convert_unity
                 result=convert_unity(args.source,args.out,args.provider_python,args.asset_ripper,args.provider_budget_seconds,dependencies=args.dependency_source,texture_cache=args.unity_texture_cache,schema_manifest=args.unity_schema_manifest,quarantine_invalid_textures=args.unity_quarantine_invalid_textures,dependency_manifest=args.unity_dependency_manifest)
-                print(json.dumps(dict(status=result['status'],completed=result['completed'],resultKind=result['resultKind'],sourceFamily='unity',projects=result['projects'],diagnostics=result['diagnostics'],report=str(Path(args.out).resolve()/'conversion-result.json')),ensure_ascii=False))
+                if native_settings:
+                    from .unity_native import finish_conversion
+                    result=finish_conversion(result,native_settings,args.format or 'none')
+                print(json.dumps(dict(status=result['status'],completed=result['completed'],resultKind=result['resultKind'],sourceFamily='unity',projects=result['projects'],diagnostics=result['diagnostics'],nativeExecution=result.get('nativeExecution'),format=result['format'],report=str(Path(args.out).resolve()/'conversion-result.json')),ensure_ascii=False))
                 return 1
             if args.provider_python or args.asset_ripper or args.unity_texture_cache or args.unity_schema_manifest or args.unity_dependency_manifest or args.unity_quarantine_invalid_textures or args.provider_budget_seconds!=600:parser.error('Unity provider options require a Unity source')
             from .convert import convert, resume, recipe

@@ -17,11 +17,24 @@ class UnityRouteTests(unittest.TestCase):
     def test_webdata_routes_to_unity_without_executing_container(self):
         with tempfile.TemporaryDirectory() as t:
             root=Path(t).resolve();source=root/'game.data';source.write_bytes(b'UnityWebData1.0\0explicit')
-            result=dict(status='partial',completed=False,resultKind='candidate',projects=[],diagnostics=[])
+            result=dict(status='partial',completed=False,resultKind='candidate',projects=[],diagnostics=[],format=dict(profile='none',applied=False))
             with patch('monkey.recover_unity.convert',return_value=result) as convert,contextlib.redirect_stdout(io.StringIO()):
                 main(['convert','--source',str(source),'--target','unity6','--out',str(root/'out'),'--provider-python','provider','--asset-ripper','ripper'])
             convert.assert_called_once()
             self.assertFalse((root/'out').exists())
+
+    def test_public_unity_native_grea_routes_to_bounded_stage_and_needs_editor(self):
+        with tempfile.TemporaryDirectory() as t:
+            root=Path(t).resolve();source=root/'game.ab';source.write_bytes(b'UnityFS\0dummy')
+            providers=root/'providers';providers.mkdir();provider=providers/'provider';provider.write_text('provider')
+            editor=root/'Unity';editor.write_text('not executed')
+            result=dict(status='partial',completed=False,resultKind='candidate',projects=[],diagnostics=[],format=dict(profile='none',applied=False))
+            argv=['convert','--source',str(source),'--target','unity6','--out',str(root/'out'),'--provider-python',str(provider),'--asset-ripper',str(provider),'--format','grea']
+            with contextlib.redirect_stderr(io.StringIO()),self.assertRaises(SystemExit):main(argv)
+            self.assertFalse((root/'out').exists())
+            with patch('monkey.recover_unity.convert',return_value=result),patch('monkey.unity_native.finish_conversion',return_value=result)as finish,contextlib.redirect_stdout(io.StringIO()):
+                status=main([*argv,'--native','--unity-editor',str(editor)])
+            self.assertEqual(status,1);self.assertEqual(finish.call_args.args[2],'grea')
 
     def test_similar_or_truncated_signatures_do_not_classify(self):
         from monkey.sources.unity_serialized import container_kind

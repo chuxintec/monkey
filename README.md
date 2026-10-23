@@ -1,6 +1,6 @@
 # monkey
 
-本地v0.2开发中：fresh package `convert`默认`--format none`，可选`--format grea`（先完整导出、再typed后处理，Unformatted保留基线），支持顺序`--native`；直接Unity provider恢复的grea暂拒绝。代码具名子集与原生接线、格式范围及真实证据分别见[CODE-SUBSET](docs/CODE-SUBSET.md)、[FORMATTING](docs/FORMATTING.md)。下文v0.1发布事实对应不可变Release，不把开发分支当新发布。
+本地v0.2开发中：fresh package `convert`默认`--format none`，可选`--format grea`（先完整导出、再typed后处理，Unformatted保留基线），支持顺序`--native`；Unity源包已接入受限叶Prefab的公开native与grea路径保护，见[Unity源验证](docs/providers/UNITY-SOURCE-NATIVE.md)；不代表通用Scene/已导入工程迁移。代码具名子集与原生接线、格式范围及真实证据分别见[CODE-SUBSET](docs/CODE-SUBSET.md)、[FORMATTING](docs/FORMATTING.md)。下文v0.1发布事实对应不可变Release，不把开发分支当新发布。
 
 开发版`convert --numeric-code-contract numeric.json`可在同一命令里发现精确源模块、生成有据C#/默认TypeScript并绑定原组件，再格式化/原生导入；当前有限Label数值调用子域及声明格式见[CODE-SUBSET](docs/CODE-SUBSET.md)。未知业务方法继续保留待补。
 

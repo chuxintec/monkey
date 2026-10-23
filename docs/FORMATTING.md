@@ -5,7 +5,7 @@ monkey format-project --project unimported-creator-candidate --profile grea --pr
 monkey format-project --project unimported-creator-candidate --plan fresh-preview/format-plan.json --out fresh-formatted
 ```
 
-当前支持未导入、归属明确、使用新typed output-path导入器的生成式Unity/Creator候选。公开package convert默认none、显式--format grea执行导出后的独立阶段；两端均准备成功才晋升canonical，原工程保留Unformatted。格式失败保留基线且阻止native。已导入资产首期拒绝，native move不是本版前置。直接Unity恢复provider的格式化尚未实现，显式拒绝；不能声称整组v0.2已完成。legacy game-standard-v1、Library/已导入、未知文件/人工漂移拒绝；不在原工程就地移动。
+当前支持未导入、归属明确、使用新typed output-path导入器的生成式Unity/Creator候选。公开package convert默认none、显式--format grea执行导出后的独立阶段；两端均准备成功才晋升canonical，原工程保留Unformatted。格式失败保留基线且阻止native。已导入资产首期拒绝，native move不是本版前置。直接Unity来源新增[受限叶Prefab原生后处理](providers/UNITY-SOURCE-NATIVE.md)，其余来源形状仍在Editor启动前拒绝；不能声称整组v0.2已完成。legacy game-standard-v1、Library/已导入、未知文件/人工漂移拒绝；不在原工程就地移动。
 
 按真实类型将资源放assets/content/images/sprites、fonts、config/recovered、animations、prefabs，Scene放assets/scenes，已证明的Label脚本放assets/scripts/presentation/ui、状态类放domain/state。不创造没有职责的空框架。只改ProjectModel资产路径槽、明确代码artifact/meta、source-map/name-map目标字段、handoff生成目标与导入器outputPaths；SourceId/UUID/原名/正文/逻辑key/数值资源原字节保持。BMFont只从明确font→atlas关系重发单page字段，不重写glyph数值。
 
@@ -29,3 +29,5 @@ Unity MainUi none/grea：113路径变化/183物理文件移动，Scene/Prefab代
 旧整体字符串/JSON/代码替换写入器已退役，targets/layout.py只读旧manifest物理路径兼容；新生成只用typed槽和位置配置。数值JSON字节、脚本/原名/逻辑key不重写。格式化package resume暂拒绝并保留原工程，需fresh输出。
 
 JS次选已纳入fresh Creator格式：script UUID/meta原字节保持，只有typed脚本路径移动；生成的assets/package.json保持在assets根，不影响extensions的CommonJS入口。格式前强核代码合同中该JSON的SHA及精确type=module，漂移即拒绝。真实5绑定JS注册与公开单命令grea/native合成接线均已执行，范围与失败见CODE-SUBSET.md。
+
+Unity来源公开native/grea已在武侠131引用Prefab通过，136既有meta GUID保持。134个Sprite/Texture因Resources或bundle名固定，实际移动0；不借此宣称真实资源搬移已验。基础none与grea工程分别保留，普通未知Scene/借取实例值仍阻断native。
