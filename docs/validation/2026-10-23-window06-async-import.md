@@ -23,3 +23,11 @@ C# ImportBatchAsync：先核对Editor/新候选状态、计划SHA和注册包身
 ## 定向验证
 
 新增3项launcher边界测试：真实CLI默认不调用Popen/不创建Project；冻结文件变化拒绝执行；模拟外层到期仅terminate自己持有的child且无kill、保留副本且拒绝复跑；非法时间合同在输出前拒绝。模拟进程不是引擎成功。structured3与边界4通过，SDK C#离线编译05通过；不重复旧reader/Creator矩阵。
+
+## 新候选07与启动计划
+
+固定emitter实现08d5e98，新Unity单目标`outputs/structured-foodstreet-07/UnityProject`，manifest `bc3305c8a624fa03319c6280508c71738dee9a42a9f0604c06cb8474f55c77e3`。同5097文件/243799340字节留存相等；仍1630独立Prefab计划、30 Spine闭包/1缺bin。emit身份与当前代码一致，Unity本次有变化的静态verify零诊断，证据`outputs/structured-foodstreet-07-unity-check`，原06SHA再次核对不变。
+
+实际执行native-import默认规划，`outputs/structured-foodstreet-07-launch-plan-01/native-plan.json`返回planned/processStarted=false，未创建UnityProject。其中未来时间仅作离线规划检查，不是资源窗口或启动许可；新grant后使用新的实际截止与新目录。
+
+宿主IO错误也会普通终止自己已创建的child，避免日志写入失败遗留引擎；另补模拟journal写失败的反例。当前launcher4项通过，模拟不是实际Unity。此后controller小修与计划源码SHA一起记录，不改变07 emitter制品。没有用新的无-quit执行方式启动Editor，实际许可/完成通知/场景与引用回读仍not_run。

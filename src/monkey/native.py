@@ -117,7 +117,13 @@ def native_import(candidate,output,editor,expected_manifest,budget_seconds,deadl
             try:process.wait(timeout=min(30,max(0.01,(end-now()).total_seconds())))
             except subprocess.TimeoutExpired:pass
         result.update(processExited=process is None or process.poll() is not None,processExitCode=process.poll() if process else None,stopReason=stopped)
-    except OSError as error:result.update(reason='NATIVE_LAUNCH_FAILED',error=str(error))
+    except OSError as error:
+        result.update(reason='NATIVE_HOST_IO_FAILED' if process is not None else 'NATIVE_LAUNCH_FAILED',error=str(error))
+        if process is not None and process.poll() is None:
+            process.terminate()
+            try:process.wait(timeout=min(30,max(0.01,(end-now()).total_seconds())))
+            except subprocess.TimeoutExpired:pass
+        result.update(processExited=process is None or process.poll() is not None,processExitCode=process.poll() if process else None)
     finally:
         for signum,handler in old_handlers.items():signal.signal(signum,handler)
     progress=project/'Analysis/native-progress.json'

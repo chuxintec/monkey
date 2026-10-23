@@ -202,3 +202,4 @@ TMP修复06的Unity单目标已生成，固定实现4deb5ea，manifest a14f96482
 已离线改为importPackageCompleted/failed/cancelled事件驱动，等待时返回Editor循环，不同步判断发起Import等于完成；新ImportBatchAsync拒绝-quit。增加native-import CLI默认规划、显式执行时校验冻结副本并直接持有无-quit Editor PID、预算/总截止/自身普通退出/未退出attention、结束editor verify。菜单入口异步但不退出用户Editor，batch完成自行退出。补正常Scene关闭重开后回读；原地native resume不支持。
 
 launcher3/structured3/边界4及SDK C#离线编译05通过，新执行路径没有启动引擎。新候选准备后报告总监，不复用窗口06；证据docs/validation/2026-10-23-window06-async-import.md。此为实际时序失败后的必要执行层变化，不是扩大平台/安装/部署范围。
+异步候选07已全新生成，emitter08d5e98，manifest bc3305c8a624fa03319c6280508c71738dee9a42a9f0604c06cb8474f55c77e3，Unity静态verify零诊断，原06SHA不变。实际native-import默认规划返回processStarted=false、无Project；规划时间不代表授权窗口。宿主IO失败清理补丁与第四项模拟反例通过。按事件monkey-tmp-async-20261023-01-complete报告固定候选/新执行路径与未验项；没有新实际许可不执行。

@@ -62,6 +62,25 @@ class NativeLauncherTests(unittest.TestCase):
             with self.assertRaises(ParseError) as existing:native.native_import(output=out,**options)
             self.assertEqual(existing.exception.code,'NATIVE_WORKSPACE_EXISTS')
 
+    def test_host_journal_error_still_stops_its_child(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp).resolve();options=self.prepare(root)
+            class Child:
+                pid=31416
+                returncode=None
+                terminated=False
+                def poll(self):return self.returncode
+                def terminate(self):self.terminated=True;self.returncode=-15
+                def wait(self,timeout):return self.returncode
+            child=Child();write=native.write_json
+            def write_with_failure(path,value):
+                if path.name=='execution-journal.json':raise OSError('simulated journal write failure')
+                return write(path,value)
+            with patch.object(native.subprocess,'Popen',return_value=child),patch.object(native,'write_json',side_effect=write_with_failure):
+                result=native.native_import(output=root/'native',execute=True,**options)
+            self.assertTrue(child.terminated);self.assertTrue(result['processExited'])
+            self.assertEqual(result['reason'],'NATIVE_HOST_IO_FAILED')
+
     def test_invalid_time_contract_never_creates_output(self):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp).resolve();options=self.prepare(root)
