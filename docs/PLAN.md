@@ -2,17 +2,15 @@
 
 完工/阻塞/交付与续推按[DIRECTOR-CONTINUATION](/Users/wangmeng/Documents/Manager/standards/DIRECTOR-CONTINUATION.md)执行；本聊天已原生核验人类授权`01a166b4-5c18-78f3-8cc2-c0d07dd46a20`，总监路由`01a14c8c-6402-7d03-bab8-ec7ea8051abf`。更新本PLAN后以稳定事件ID报告，已批准就绪下一包连续推进，不因报告或普通ACK停下。
 
-## 当前：v0.1 发布准备，v0.2 先设计后开发
+## 当前：v0.1 已实际发布，v0.2 设计主体通过并补合同样例
 
-已原生核验用户新授权：总监turn01a169b8-b15c-7ec2-964b-63b9f7c9614b / human01a169b8-b2d8-7d71-8dcf-06f470bfe371。创建私有chuxintec/monkey、提交推送main及v0.1并发布Release，Python版本0.1.0；覆盖此前禁止发布边界。只工具源码/可分发依赖/文档及wheel+sdist+SHA，不含私有游戏/outputs/缓存/玩家档。原生full14复用，不为版本号再跑Editor。后续授权不推定到其他仓库/服务。
+已按用户直接授权（总监human01a169b8-b2d8-7d71-8dcf-06f470bfe371）创建私有https://github.com/chuxintec/monkey，正常推送main与不可变v0.1并发布正式Release https://github.com/chuxintec/monkey/releases/tag/v0.1。Python0.1.0，源码8363fde1ce2f1a5164b5109a16bf558a28f8977c、annotated tag a21c410782d5069c68c888a6ef62785e3c57a9b5。GitHub REST与ls-remote核对private/main/tag/peeled SHA一致，Release draft=false/prerelease=false；wheel223293B SHA30e267edf4e6c8d2df89c3282edb629e8f8d62c671a701b1759b488ac9c6a9d5，sdist350714B SHA7674afdf1dce52e44eefa2a7e0bbdf464cc979fc10e08f8ff9fb4b531e43b362，SHA256SUMS共3附件已实际下载再核对API/local SHA。回执.private/v01-release-audit/published.json。
 
-70e4a3e为已完成full14证据点。全输入17201文件/884709704B，16627 CDN/799052150B缓存SHA匹配；两端各1694独立Prefab/24784节点保存重开、完整geometry/引用强verify零诊断，Unity资源partial/Creator资源pass，详情validation/2026-10-24-full14-single-command.md。914业务占位初稿、部分动态行为/Spine播放/视觉交互仍未完成，未宣称整游戏或全版本通过。旧0.3.0.dev1包/候选/失败回执不改身份。
+发布前main历史路径/blob检查未发现私有原件/产物/凭据特征；9项CLI/编排检查、wheel/sdist内容、sdist重建wheel逐文件一致及隔离安装7合成文件双端CLI烟测通过。无全局安装/新引擎/服务变更。旧0.3.dev/full14证据不改身份；full14资源层零诊断不等于914业务初稿/动态语义/Spine播放/视觉交互完成。
 
-已检查main可达51提交/412历史blob/117历史路径，无.private/outputs/凭据特征/大blob异常，精确回执在.private/v01-release-audit。GitHub实际账号chuxintec，新仓库存在性检查未发现。版本/分发许可/安装说明已收拢，9项定向CLI/编排测试通过；wheel55条目、sdist124条目均核对，隔离已安装模块完成7合成文件→双端候选且CLI/capabilities均0.1.0。正在创建仓库/推送/Release；尚未发布成功，不提前报URL。
+本地已从v0.1建立codex/v0.2，未推该分支。总监event monkey-v02-design-review-20261024-01已通过docs/V0.2-PLAN.md主体（Manager/decisions/20261024-monkey-v01-v02/DESIGN-REVIEW.md），不再等普通ACK。两项具体样例已在V0.2-EXAMPLES.md补齐：真实NumberLabel模块SHA/方法/5处MainUi绑定、C#/实际JS的有据方法和未知接口；同一MainUi的none/grea具体路径、稳定GUID/UUID/引用及v0.1旧自动布局的明确迁移。现在按既定Research发现/阶段结果/CodeModel/ProjectModel→U→C→全Research持续实现，不增加审批。
 
-Unity typed reader首个实验及3项身份/二进制反例已运行；启动数据严格1497/1603 parsed、106缺类型失败；3远程Bundle共1947对象严格读全、PPtr64用十进制字符串。草稿已stash单独保留，未混v0.1、未宣称Unity6工程通过。AssetRipper自有API探针正常退出，没有留运行服务或修改GREA。v0.2先docs/V0.2-PLAN.md审阅，再恢复/实施，不因旧U批准绕过新设计门。
-
-v0.2方案已列实际11Research游戏与未知/缺源状态、独立Unity/Cocos3/旧格式reader、具名C#/实际JS及有据语义/引用合同、--format none|grea（默认none）导出后处理、typed路径/身份/动态key、preview/新输出/人工冲突保护与逐层验收。待提交具体方案给总监核对；不新Agent/改GREA/恢复肥鹅/全局安装。
+Unity typed reader草稿保留在stash，不混v0.1，恢复前先按新合同核对。来源全矩阵11真实游戏已列，unknown/缺源仍在分母。仅工具开发，不恢复暂停游戏或改GREA/服务器，不新Agent。
 
 ## 历史依据与全量候选记录
 
