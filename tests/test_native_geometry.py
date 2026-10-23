@@ -59,6 +59,15 @@ assert.strictEqual(rejected,true);assert.deepStrictEqual(started,[0,1]);
         children[1]['active']=False
         self.assertIsNotNone(cross_axis_mapping(layout,parent,children))
 
+    def test_stretch_requires_source_parent_and_matching_initial_geometry(self):
+        from monkey.targets.unity_layout import widget_geometry_matches
+        widget=dict(margins=[0,0,0,0]);node=dict(size=[750,1334],position=[0,0,0],anchor=[.5,.5])
+        self.assertFalse(widget_geometry_matches(widget,node,None))
+        self.assertTrue(widget_geometry_matches(widget,node,dict(size=[750,1334],anchor=[.5,.5])))
+        # An inactive source panel retains its cached height. Native stretch
+        # anchors would resize it even before activation; this needs an adapter.
+        self.assertFalse(widget_geometry_matches(widget,node,dict(size=[750,1440],anchor=[.5,.5])))
+
     @unittest.skipUnless(shutil.which('node'),'Node unavailable')
     def test_prefab_collects_all_geometry_differences_without_claiming_verified(self):
         adapter=Path(__file__).resolve().parents[1]/'src/monkey/targets/CreatorPrefab.js'

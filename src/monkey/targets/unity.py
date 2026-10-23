@@ -171,6 +171,14 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
             if c['flags'] not in (0,45) or c['target'] or not all(c['absolute']) or node.get('scale',[1,1])[:2]!=[1,1] or node.get('rotation')!=[0,0,0,1]:
                 entry['convertible']=False
                 diagnostics.append(diagnostic('WIDGET_SUBSET_UNSUPPORTED',c['sourceId'],'Only parent-relative absolute full-stretch or disabled flags supported',c['sourceId']))
+            elif c['enabled'] and c['flags']==45:
+                from .unity_layout import widget_geometry_matches
+                parent=by_node.get(node.get('parent'))
+                if not widget_geometry_matches(c,node,parent):
+                    entry['convertible']=False
+                    code='WIDGET_PARENT_CONTEXT_REQUIRED' if parent is None else 'WIDGET_CACHED_GEOMETRY_HANDOFF'
+                    diagnostics.append(diagnostic(code,c['sourceId'],
+                        'Preserve source geometry: missing source parent or cached inactive/stretch geometry requires lifecycle/reference evidence',c['sourceId']))
         elif c['type']=='cc.Mask':
             if c['maskType']!=0 or c['inverted']:
                 entry['convertible']=False
@@ -199,6 +207,10 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
                     diagnostics.append(diagnostic('LAYOUT_CROSS_AXIS_HANDOFF',c['sourceId'],
                         'Source child cross-axis positions cannot be retained by one native uGUI alignment',c['sourceId']))
                 else:entry.update(mapping)
+            if entry['convertible'] and c['enabled'] and not any(by_node[k]['active'] for k in by_node[c['node']]['children']):
+                entry['convertible']=False
+                diagnostics.append(diagnostic('EMPTY_LAYOUT_HANDOFF',c['sourceId'],
+                    'Empty source container size/negative spacing differs from uGUI empty fitter; preserve source geometry pending dynamic-content adapter',c['sourceId']))
         elif c['type']=='cc.Button':
             if c['transition'] not in (0,3) or c['target'] not in (None,c['node']):
                 entry['convertible']=False

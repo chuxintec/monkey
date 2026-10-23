@@ -1,6 +1,17 @@
 """Select native uGUI alignment only when every source child can retain its position."""
 
 
+def widget_geometry_matches(widget, node, parent):
+    if parent is None:
+        return False
+    left,bottom,right,top=widget['margins']
+    size=[parent['size'][0]-left-right,parent['size'][1]-bottom-top]
+    position=[left+node['anchor'][0]*size[0]-parent['anchor'][0]*parent['size'][0],
+              bottom+node['anchor'][1]*size[1]-parent['anchor'][1]*parent['size'][1]]
+    return (all(abs(a-b)<.001 for a,b in zip(size,node['size'])) and
+            all(abs(a-b)<.001 for a,b in zip(position,node['position'])))
+
+
 def cross_axis_mapping(layout, parent, children):
     # Creator linear layouts leave the other axis untouched. uGUI drives both axes;
     # only a shared, representable alignment is safe to emit as a standard group.

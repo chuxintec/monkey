@@ -332,7 +332,7 @@ Unity04 own11411于13:29:12Z启动、13:29:31Z exit0/reap；回读零诊断，76
 
 Unity04 own11411已13:29:31Z exit0/reap，76节点几何/8 Label字形及原字体引用零诊断，Scene及editable roundtrip完成。Creator02 own12108于13:30:01Z启动、13:31:19Z normal TERM exit-15/reap，方法62.123秒，16原字体/3独立Prefab/76节点/8 Label/Scene保存重载、几何及内部引用验证通过，editor/static pass。不能由此称全量/视觉/业务通过。
 
-Unity10全量生成emitter a0fd18b，完整输入与源阶段/Spine页图复用；static/name/routing均pass，无身份或原名漂移。Creator新增有界批处理只改编辑期流程，已有小探针02冻结；新Creator03 manifesta4908311bc31d68dfa414189d6c7c40cce93dd38894c337c8a57e1759864bf26，static pass，待有界实证，不无依据直接启动全量。
+Unity10全量生成emitter a0fd18b，完整输入与源阶段/Spine页图复用；static/name/routing均pass，无身份或原名漂移。Creator新增有界批处理只改编辑期流程，已有小探针02冻结；历史Creator03 manifesta4908311bc31d68dfa414189d6c7c40cce93dd38894c337c8a57e1759864bf26，static pass，待有界实证，不无依据直接启动全量。
 
 Unity10全量原生新登记：锚点13:37:42Z，内部14:05:42Z/外层14:07:42Z，方法1200秒。只读ps未见Unity/Creator主进程，normal exec审批后只启动outputs/acceptance/full10-unity-window-01新副本；首新错误保存后停止，只正常回收自有child，不顺延截止。
 
@@ -355,3 +355,9 @@ Creator05（候选04）原生结果：own17562已正常TERM exit-15/reap，Verif
 Unity剩余243离线分类：74仅size/无直接父Layout、132仅position/父Layout、4 size+position/父Layout、8仅size/父Layout，25带自身Widget（18 size/7 size+position）。这些是检查范围而非已证明独立根因；9个几何变更布局无活动孩子，root Widget设计父尺寸及缓存几何另待判断。现有Settle在无ILayoutController的DesignRoot上强刷实际跳过下树；新增只调用真正原生LayoutGroup的有界稳定过程，未稳定8轮即失败，不循环追逐源期望。独立Prefab改直接SaveAsPrefabAsset自有子树，避免活动Instantiate初始化缓存；正常保存重载后新增逐节点几何与字体/Sprite/内部组件引用证据，旧full07/10只有count/missing结论不追认。
 
 新Unity小探针05复用原normalize，仅7原图/413节点/502组件/70帧及全部16字体；涵盖旧3图、nested/empty Layout及Widget实际反例。manifest73aab725465ae1e80e4d47f3b70f1c9f1481b8b995b2769c064911d16c7d57aa，static pass；.private/layout-settle-compile-01 C# pass，18项相关检查通过。源码/像素/AST未重跑。Creator-only全量10已生成manifest7fb3a4b7f996da9402ae1ecc9f9b921ab874e49046b63ea86938d143e08c770c，三项离线核对在途。
+
+Unity布局稳定探针05新登记：锚点14:07:45Z，内部14:35:45Z/外层14:37:45Z，方法1200秒；ps未见引擎冲突。只新acceptance/native-font-geometry-probe-05，固定manifest73aab725465ae1e80e4d47f3b70f1c9f1481b8b995b2769c064911d16c7d57aa，首新错误停止保存，不顺延。
+
+Unity探针05 own19228已exit0/reap，方法2.607秒；7 Prefab/413节点严格新增回读得到Scene NODE5、独立Prefab几何9，7份字体/Sprite/内部组件引用全部通过。实际UI稳定过程解决所选nested父size/childposition主差额，不追认全量243已解决。剩下source Banner无活动孩子319→0、空负spacing content145→153；根Widget隔离Prefab缺父尺寸→0；inactive Upon缓存1334被native anchor即时拉伸1440。
+
+这些区别并非放宽比较：新增EMPTY_LAYOUT_HANDOFF保留空布局几何待动态内容adapter；全拉伸Widget必须有源父级且烘焙几何与源父/边距一致，缺父级/停用缓存差异分别显式WIDGET_PARENT_CONTEXT_REQUIRED/WIDGET_CACHED_GEOMETRY_HANDOFF。已有转换组件减少会单独报告，不把handoff算行为恢复。Probe06仍7图413节点，manifestd203d620ef86980569c239e843a719806ef351da9a00e08535b3b8e4642ff2f3，static pass，9项相关检查通过；C#未再改、沿用已核compile。宿主进度同时补已有components显式阶段，未知阶段仍拒绝。Creator10 static/name/routing已全部pass、身份稳定、源非命名IR不变。
