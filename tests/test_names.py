@@ -30,6 +30,8 @@ class NameTests(unittest.TestCase):
         self.assertNotEqual(upper.casefold(),lower.casefold())
         self.assertEqual(names.path('b:1','.png','images'),a)
         self.assertEqual(names.report()['collisionPaths'],2)
+        self.assertNotEqual(Path(upper).parent.name.casefold(),Path(lower).parent.name.casefold())
+        self.assertEqual(Names().path('con','.ttf','fonts',metadata=dict(bundle='main',logicalPath='CON.ttf')),'fonts/main/CON_.ttf')
         self.assertEqual(names.path('b:1','','spine'),'spine/游戏/界面/图标/鹅')
         self.assertEqual(Names().path('id','.js','code',metadata=dict(bundle='main',logicalPath='scripts/game.js')),'code/main/scripts/game.js')
 

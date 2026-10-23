@@ -115,3 +115,7 @@ monkey/
 monkey为独立Python产品，GREA保持现有维护边界。先只读比较其`cocos_assets`、`cocos_modules`、`cocos_convert`、`unity_native_assets`和资产台账合同；算法复用需核对许可证/来源并移除本机路径，不能直接import另一个仓库或复制其私有素材。
 
 首版以稳定CLI/JSON合同交付。后续GREA可调用monkey的能力发现、inspect/export/handoff；是否增加GREA provider/MCP由另行维护任务决定。本轮不双写GREA工具实现。
+
+## 已批准来源家族扩展
+
+Unity来源专用typed序列化对象/PPtr/GUID/fileID与固定提取provider；Cocos2/3分别解析真实版本的序列化，共享有据语义而非强制同一原图。来源和目标路由分开，Unity→Unity6，Cocos→Cocos3.8/Unity6/both，Unity→Cocos拒绝。原名与身份、资源账、代码可信度、阶段签名和Editor原生回读为共同合同。当前实现/计划边界见SUPPORT-MATRIX.md，顺序与出口见ENGINE-ROADMAP.md；不是增加文档就宣布已支持。

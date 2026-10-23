@@ -8,13 +8,13 @@
 
 此前四根5097文件仅为局部输入，不是全资料分母。当前对账Evidence清单17216项/905618352字节与source17097项、冻结package-snapshot、plain包、decoded-config、获取缺口和参考资料；原件只读。全新显式input-set经公开CLI生成Unity6/Creator3.8，逐项路由与重复映射、原生/代码/视觉分层核对。旧08/07保持冻结，不复用窗口08申请；实际全量候选就绪后重新报告资源需求。无新Agent，不改肥鹅产品/服务/GREA；联网仅限追加用户批准的明确CDN/配置地址，不扫描目录或装runtime。
 
-用户原生新授权已核验：总监turn01a167a4-ae5a-76c0-bafd-0db3f9dd141f / human message01a167a4-ae8e-7bb1-adea-6f17d9cf2a4d，要求参考AssetDeoce恢复原始名称。当前已将config.paths/源_name贯穿共享命名分配、IR、双端plan/emit、Unity源Prefab、Spine/字库/音频/JSON及有据RF模块初稿，保持身份和原件。旧04冻结，原生验收以即将生成的新命名候选为准，不启动旧04。
+用户原名授权已原生核验（总监turn01a167a4-ae5a-76c0-bafd-0db3f9dd141f / human01a167a4-ae8e-7bb1-adea-6f17d9cf2a4d）。当前新命名全量05已实际完成：冻结c3e97a3，Unity manifest975a7e2ab2ea185fb02daf668aa6c0793c95af63aaf635e2b156eaae0961061c、Creator ebabd779a065fda0df872d800750cc187e79171726bc72a5e81d647f88ffe8d7。双端17201文件/884709704字节入账、静态verify/routing/name audit均零问题，非名称IR完全同04；Unity17329种子GUID/Creator16978 UUID全不变，两端Spine1776闭合/零页图解码且全复用。原reader/像素/AST均未重跑。
 
-新增受校验reuse-source-stages：相同input-set/namespace、完整输入路径SHA一致、旧阶段owner清单及文件SHA全部一致，只接受当前算法或明确838d05b名称元数据迁移。复用已校验源读取/像素/源码证据，重建元数据和两端计划输出；漂移拒绝，不绕过算法签名。Spine页图也按骨骼/atlas/纹理SHA及冻结工程owner回执复用，避免重复图像解码。16项相关检查和当前SDK C#窄编译通过；实样命名预览在.private/full-foodstreet-audit-01/naming-preview.json，最终路径/恢复与消歧统计待新候选实核。
+目标计划逻辑资产Unity10962（原路径10663/仅名称38/回退261）、Creator8912（8618/33/261）；每端655处实际路径消歧，914 RF模块全有据名。全部资源/decoded/模块/原件/Spine引用精确匹配owner，源数字JSON不改。详情validation/2026-10-23-original-names.md。当前工具补边界保护并通过16项相关检查；05不触发这些边界，保持原c3身份不为之重导全库。原生窗口以05为准，旧04/窗口08不再启动。
 
 当前全量04已完成双目标生成与一次集中离线核对：两端17201项/884709704字节全部入账、静态verify零诊断、来源路由/保留字节零问题；23955对象、24784节点/28514组件、1694 Unity独立Prefab计划、8467帧、11 TTF/5位图字库、23 JsonAsset、1776/1776 Spine闭包。代码实现838d05b，914 RF初稿/业务未实现。旧4根5097与全量01–03均保留历史，不能用于覆盖当前分母。
 
-当前等待新的实际原生资源grant：04已包含窗口07字体/场景修复，尚未启动引擎。下一必要gate为Unity6000.6.2f1字体→1694Prefab保存→Scene重开→原生回读/代表页；按1.51GB Assets、16934纹理申请外层30分钟、方法20分钟/内部总截止留2分钟。Creator3.8.8顺序单独验证，先解决可绑定工程窗口，独立Prefab原生适配仍无，不能按全源Prefab恢复通过。没有新实际许可不执行，也不复用窗口08。
+当前等待新的实际原生资源grant：05已包含窗口07字体/场景修复及原名路径，尚未启动引擎。下一必要gate为Unity6000.6.2f1字体→1694Prefab保存→Scene重开→原生回读/代表页；按1.51GB Assets、16934纹理申请外层30分钟、方法20分钟/内部总截止留2分钟。Creator3.8.8顺序单独验证，先解决可绑定工程窗口，独立Prefab原生适配仍无，不能按全源Prefab恢复通过。没有新实际许可不执行，也不复用窗口08。
 
 人类追加CDN/远程包下载已执行：原16627 CDN文件全本地SHA核对、19实际GET中12同原件/7HTTP404，无新增可用文件。9 bundle均散文件且脚本原包内嵌；miniGame代码原包缺URL仍缺。肥鹅获取回执/README已补充，未动产品/角色/服务。详见validation/2026-10-23-full-foodstreet-audit.md的当前最终核对、P0/P1与复跑命令；下面早期状态是历史，不表示本轮阶段未做。
 
@@ -245,3 +245,7 @@ launcher3/structured3/边界4及SDK C#离线编译05通过，新执行路径没�
 全量04最终离线成果/资源申请报告准备事件monkey-foodstreet-full-candidate-20261023-01。后续只在实际grant后推进必要原生gate；没有当前前置满足的额外源码扩展包，不为等待制造测试或新版本。
 
 原名整改实现/16项定向检查及当前SDK C#编译已通过，文档validation/2026-10-23-original-names.md。准备固定实现后用公开--reuse-source-stages从838d05b全量04新建05：校验完整输入、旧source stages、源码证据与Spine页图所有权/SHA，只重建名称元数据和两端目标，不重跑源reader/像素/AST。旧04及所有历史不改；新工程原名覆盖统计和身份完成后申请新原生窗口。
+
+已原生核验后续来源扩展授权（总监turn01a167c9-388f-7920-80b6-961ab237c0d7两条human）：当前肥鹅全量05原名包优先，之后U（指定最新打开向僵尸开炮的Unity来源）再C（下方了3.8.7＋旧格式），无需重问立项。SUPPORT-MATRIX.md/ENGINE-ROADMAP.md与ARCHITECTURE已落地；只读当前已知账号的指定Unity AppID包目录仅见修订273，尚未用正文核Unity版本/后端；Cocos3插件3.8.7字段已真实读取，正文待核。后续实现已批准，未标现有支持，不建游戏开发项目。
+
+命名成组与后续路线文档已就绪，准备报告monkey-original-names-complete-20261023-01；申请05新Unity有界窗口（外层30分钟/方法20分钟/内部留2分钟，首错退出）及顺序Creator窗口。后台按已批准U路线继续当前指定Unity样本身份/正文/provider只读核查，不等ACK；实际资源grant优先。

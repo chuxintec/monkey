@@ -26,7 +26,7 @@ def _trim(value,limit):
 
 class Names:
     def __init__(self, metadata=None):
-        self.metadata=metadata or {};self.records=[];self._claims={};self._allocated={}
+        self.metadata=metadata or {};self.records=[];self._claims={};self._allocated={};self._directories={};self._directory_claims={}
 
     def path(self,sid,suffix,prefix,variant='',metadata=None):
         key=(sid,suffix,prefix,variant)
@@ -48,7 +48,8 @@ class Names:
         for part in [meta.get('bundle') or base.split(':')[0],*relative.split('/')]:
             part=str(part);clean=unicodedata.normalize('NFC',part)
             clean=re.sub(r'[<>:"/\\|?*\x00-\x1f]','_',clean).rstrip(' .') or '_unnamed'
-            if _DEVICE.match(clean):clean+='_' 
+            if _DEVICE.match(clean):
+                first,dot,last=clean.partition('.');clean=first+'_'+dot+last 
             if clean!=part:reasons.append('cross-platform-normalization')
             if len(clean.encode())>80:clean=_trim(clean,64)+'--'+sha(clean.encode())[:8];reasons.append('long-segment')
             parts.append(clean)
@@ -57,7 +58,18 @@ class Names:
         if variant:parts[-1]+='.'+variant;reasons.append('derived-'+variant)
         if len('/'.join(parts).encode())>180:
             parts=[parts[0],_trim(parts[-1],90)+'--'+sha('/'.join(parts).encode())[:8]];reasons.append('long-path')
-        target=prefix.rstrip('/')+'/'+ '/'.join(parts)+suffix
+        parent=prefix.rstrip('/');source_parent=parent
+        directory_parts=parts if not suffix else parts[:-1]
+        for part in directory_parts:
+            source_parent+='/'+part
+            if source_parent in self._directories:
+                parent=self._directories[source_parent];continue
+            candidate=parent+'/'+part;canonical_dir=unicodedata.normalize('NFC',candidate).casefold()
+            if canonical_dir in self._directory_claims and self._directory_claims[canonical_dir]!=source_parent:
+                candidate=parent+'/'+part+'--'+sha(source_parent.encode())[:8];reasons.append('folder-name-collision')
+            self._directories[source_parent]=candidate;self._directory_claims[unicodedata.normalize('NFC',candidate).casefold()]=source_parent
+            parent=candidate
+        target=parent if not suffix else parent+'/'+parts[-1]+suffix
         canonical=unicodedata.normalize('NFC',target).casefold()
         if canonical in self._claims and self._claims[canonical]!=key:
             stem=target[:-len(suffix)] if suffix else target
@@ -75,6 +87,6 @@ class Names:
     def report(self):
         logical={r['sourceId']:r['provenance'] for r in self.records}
         return dict(schemaVersion=1,logicalAssets=len(logical),targetPaths=len(self.records),
-            logicalProvenance=dict(Counter(logical.values())),collisionPaths=sum('name-collision' in r['reasons'] for r in self.records),
+            logicalProvenance=dict(Counter(logical.values())),collisionPaths=sum(any(x in r['reasons'] for x in ('name-collision','folder-name-collision')) for r in self.records),
             normalizedPaths=sum(any(x in r['reasons'] for x in ('cross-platform-normalization','long-segment','long-path')) for r in self.records),
             records=self.records)

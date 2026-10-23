@@ -33,3 +33,41 @@ Spine闭包按SourceRecovery/Spine/<bundle>/<原路径>/<原末段>.bin或.json�
 16项相关检查通过，覆盖名称/中文/大小写/保留名/路径穿越/目录名/扩展名、JSON载荷与引用、相同源码证据复用、输入变化及stage手工漂移拒绝、Spine页图零重复解码。当前SDK C#离线编译02 pass且SHA对应当前导入器；无Editor执行。
 
 当前全量04保持冻结（c084c8c6…/ab1673be…）；下一新命名全量05使用同一输入/namespace和公开CLI复用源阶段，最终原路径可恢复/仅名称/消歧/回退统计与实际工程路径待本轮生成核验补录。名称正确不当作原生保存重开或业务通过。
+
+## 全量05实际结果
+
+公开CLI于本轮实际完成：
+
+```sh
+bin/monkey convert --input-set .private/full-foodstreet-audit-01/inputs.json --target both --namespace foodstreet-full --reuse-source-stages outputs/full-foodstreet-04 --out outputs/full-foodstreet-05
+```
+
+冻结emitter c3e97a3；Unity manifest SHA 975a7e2ab2ea185fb02daf668aa6c0793c95af63aaf635e2b156eaae0961061c，Creator manifest SHA ebabd779a065fda0df872d800750cc187e79171726bc72a5e81d647f88ffe8d7。两端17201项/884709704字节全部有去向；双端静态verify exit0/零诊断，routing audit pass/零问题。
+
+|命名分母|Unity|Creator|
+|---|---:|---:|
+|参与目标计划的逻辑资产|10962|8912|
+|原config路径可恢复|10663|8618|
+|仅源名称可恢复|38|33|
+|无可靠名称回退|261|261|
+|分配目标路径（含派生/待原生资产）|20100|18039|
+|真实重名/派生绑定路径消歧|655|655|
+|跨平台字符/长度处理路径|4|4|
+
+该分母不是23955个全部源对象，也不是17201原始文件；未参与原生资源计划的源对象仍有decoded/原件账。Decoded证据22432项中原config路径22011、仅源名称52、回退369，11035处同逻辑名不同类型等真实冲突以语义类型后缀等消歧。914个RF代码区域全部有据源名，生成1828条模块证据/目标初稿路径，两端均零名称冲突；不是914个业务已实现。输入文件命名账17201条中9907映射config路径，7294保持输入原相对路径（含原本就编码的下载证据），不伪称这些都是作者可读逻辑名。
+
+Unity17329条资源路径、Creator16978条资源路径均精确出现在最终owner清单；全部module/decoded/package路径及所有Spine文件精确匹配owner路径，未依赖macOS大小写宽容。全部目标文件无Windows保留名/非法路径、规范化全路径重复；计划目录大小写拼写冲突0。源图/原始JSON数值与所有非名称IR数据同04逐字段一致（仅排除sourceNames/来源路径与SHA/reuse元数据），name audit pass/零问题。
+
+Unity17329个种子资源GUID、Creator16978个UUID与04逐sourceId完全相同。SourceReaderExecuted=false、pixelDecoderExecuted=false、sourceCodeParserExecuted=false；两端Spine1776/1776闭包、decodedPages=0/reusedPages=1776。没有重跑未变源读取/像素/AST，也没有启动Editor。
+
+原名例已进入实际文件：Unity Assets/Game/Content/Audio/gameAsset/Audio/BGM/bgm_Intro.mp3；Creator assets/audio/Original/gameAsset/Audio/BGM/bgm_Intro.mp3。GuideHand.prefab是Unity独立原生保存计划，尚未落盘；两端实际decoded源图为Analysis/Decoded/gameAsset/Common/Guide/GuideHand.json。Spine骨骼/atlas和原名页图已按命名闭包落盘，不当runtime通过。
+
+边界复测再补了CON.ttf等带扩展名保留名和大小写目录分配保护及c3元数据迁移白名单。05实际无这些边界冲突，保持c3冻结及其原算法身份，不为未触发边界重新全量导出；当前工具16项相关检查通过，C#SDK编译02对应当前导入器（无后续C#变化）。候选/当前实现身份分开，不篡改05签名。
+
+证据：outputs/full-foodstreet-05-name-audit/audit.json，outputs/full-foodstreet-05-routing-audit/audit.json，双端*-check。可复跑审计：
+
+```sh
+.venv/bin/python scripts/audit_names.py --candidate outputs/full-foodstreet-05 --previous outputs/full-foodstreet-04 --out outputs/full-foodstreet-05-name-audit-new
+```
+
+整体仍needs_action/candidate：Unity字体/材质/1694独立Prefab保存/Scene重开和代表页须新窗口；Creator独立Prefab原生适配仍无，现有Scene链须实际验证；Spine runtime/动画/业务未通过。下一窗口以05冻结身份申请，旧窗口08及04不再启动。

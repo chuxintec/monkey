@@ -12,6 +12,8 @@ bin/monkey convert --source /path/to/cocos-resources --target cocos38 --out outp
 
 当前已接入明文wxapkg、APK和资源目录的全文件盘点；输出`UnityProject/`、`CocosProject/`（单目标只生成对应项），两工程分别自包含。原包所有文件按原生可复制、去重映射、原格式待转、代码证据、明确运行时排除分类，报告为`conversion-result.json`。未知资源/不可编译初稿在`SourceRecovery/`，源UUID、逻辑键、代码候选和AI模块任务在`Analysis/`；每个工程含`AGENTS.md`与`Docs/START-HERE.md`。
 
+可恢复资源优先保留原Cocos路径与名称，GUID/UUID只作身份；派生变体、真实冲突或无名回退另有明确映射。见`Analysis/*name-map.json`。
+
 多个已取得的资源目录可在一个本地清单中声明，避免遗漏分包或混入其他版本：
 
 ```sh

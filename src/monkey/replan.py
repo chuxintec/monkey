@@ -12,6 +12,10 @@ from .names import source_names
 _NAMES_V1_FROM=('87e3c05e3e4c3398cc9b33cae2adb23ff114980b50af651c1ff08695817ab56e',
                 '64f902e01c423f08df594009669b9ee7ecb94c66af4fc2610b87c0b8c82eddfa')
 
+# c3e97a3 adds name metadata only; directory/device-name guard changes no geometry.
+_NAMES_V1_C3=('30f3edcd872a12cdd43f10bf6b266797b3cd3bdc014c5afadb05b61b8756e1b7',
+              'a324312d1a35ac0a85830fceb98fdfe57326d97d4b384f64c45d261b69ce66cb')
+
 
 def reuse_source_stages(previous,out,selection,namespace):
     old=safe(previous);out=safe(out)
@@ -21,7 +25,7 @@ def reuse_source_stages(previous,out,selection,namespace):
         fail('REPLAN_SOURCE_IDENTITY',str(old),'Completed input-set and namespace must match exactly')
     signatures=load(read(old/'Structured/stage-signatures.json'));current=phase_signatures()
     pair=tuple(signatures[k]['sha256'] for k in ('inspect','normalize'))
-    if pair not in (_NAMES_V1_FROM,tuple(current[k]['sha256'] for k in ('inspect','normalize'))):
+    if pair not in (_NAMES_V1_FROM,_NAMES_V1_C3,tuple(current[k]['sha256'] for k in ('inspect','normalize'))):
         fail('REPLAN_ALGORITHM_UNSUPPORTED',str(old),'Only exact current stages or the reviewed names-v1 metadata migration are accepted')
     stages={k:stage_manifest(old/'Structured'/k) for k in ('inspect','normalize')}
     for k,manifest in stages.items():
