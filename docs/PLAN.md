@@ -192,3 +192,5 @@ Candidate.scene/editor-readback/真实PNG不存在，5Label绑定、原生Scene�
 13:14:28接管05独立副本，正常审批设置方法600秒/UTC内部13:24:28/外层13:26:28；纹理方法推进完成10358个双变体Sprite，方法49.08秒到fonts6/8，首个新失败为TMP Bitmap shader不可用。Unity自行exit1、包装CLI exit6，13:17:39确认PID17274退出并提前释放。sourcePrefab0、save/reopen/readback not_run，05冻结SHA不变，无窗口重启。
 
 离线证据确认Essential archive存在且原名shader正确，失败工程未生成对应文件；现有辅助方法的物理Packages目录/后备位置均缺。改注册包resolvedPath+实际内置uGUI2.6.0合同，显式Essential导入、同步刷新、原名shader/settings加载/GUID回执与具体未完成诊断，不换字体/Shader；时序未证实已闭合，待新窗口。structured3/包级6/边界4通过，当前SDK C#编译02通过。详情`docs/validation/2026-10-23-window05-tmp-resources.md`。本组只准备新的Unity修复候选，不重复Creator旧矩阵或其他产品。
+TMP修复06的Unity单目标已生成，固定实现4deb5ea，manifest a14f9648201fac01534a8037b3aeca29dd8772d6cd5998eacd2824e573cf14b1，实际依赖合同/emit身份一致，原05SHA不变。准备按事件monkey-tmp-fix-20261023-01-complete上报；没有新实际窗口不启动Editor。
+06有变化的Unity静态verify已零诊断；本组离线修复与候选准备完成，资源导入/字体/原生保存重开仍未验，提交总监协调有依据的下一gate。

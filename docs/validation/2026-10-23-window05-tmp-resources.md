@@ -32,3 +32,10 @@
 官方参考：[AssetDatabase.ImportPackage](https://docs.unity3d.com/6000.0/Documentation/ScriptReference/AssetDatabase.ImportPackage.html)；当前SDK内TMP_PackageResourceImporter.cs提供新API的实际用法，离线C#编译确认PackageInfo及UnityEditor.AssetPackage.Package在6000.6.2f1可访问。ImportPackage旧API编译01只有obsolete warning，改当前SDK新API后02无警告通过。官方资料和编译都不是本机实际资源导入完成证明。
 
 定向检查：structured3项（依赖版本/资源合同、标准目录和原件保护）、包级6项（裸工作区依赖种子改动）、进度/资源错误边界4项通过；没有重复旧reader/图像/Creator原生矩阵。修复后的资源实际导入/同步、Prefab/Scene保存重开和代表几何/引用均待新明确窗口许可。
+
+## 修复候选06
+
+新生成Unity单目标`outputs/structured-foodstreet-06/UnityProject`，manifest `a14f9648201fac01534a8037b3aeca29dd8772d6cd5998eacd2824e573cf14b1`；固定实现`4deb5ea80bc081c10981524da91fe97d63f47e91`。同四根5097文件/243799340字节留存相等，仍含1630独立Prefab计划、30 Spine闭包/1缺bin。实际import-plan的tmpResources为com.unity.ugui 2.6.0和原Essential archive，emit身份核对当前源码一致。原05冻结manifest再次核对不变。
+
+仅对本次有变化的Unity候选执行静态verify，未重复Creator/旧reader矩阵。06没有启动Editor；资源实际完成导入和所有原生gate仍待新授权窗口。
+06 Unity静态verify零诊断，证据`outputs/structured-foodstreet-06-unity-check`；没有运行其Editor。
