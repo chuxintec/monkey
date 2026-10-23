@@ -95,13 +95,14 @@ def _build(project):
         for item in updated.get('assets',[]):
             old=assets.get(item.get('sourceId'))
             if old and old['path']in rewrites and 'sha256'in item:item['sha256']=sha(rewrites[old['path']])
-        emission=updated.get('codeEmission')
-        if isinstance(emission,dict)and emission.get('scriptPath')in changes:emission['scriptPath']=changes[emission['scriptPath']]
+        for owner in [updated,*updated.get('modules',[])]:
+            emission=owner.get('codeEmission')
+            if isinstance(emission,dict)and emission.get('scriptPath')in changes:emission['scriptPath']=changes[emission['scriptPath']]
         for collection in ['nodes','components']:
             for item in updated.get(collection,[]):
                 if item.get('target')in changes:item['target']=changes[item['target']]
         return updated
-    for path in ['Analysis/source-map.json','Analysis/candidate.json']:
+    for path in ['Analysis/source-map.json','Analysis/candidate.json','Analysis/code-index.json']:
         if path in owners:edits[path]=encoded(rewrite_report(load(read(root/path,max_bytes=128*1024*1024),max_nodes=8_000_000)))
     path='Analysis/name-map.json'
     if path in owners:

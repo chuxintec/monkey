@@ -88,12 +88,15 @@ def build(project):
     edits={PLAN_PATH:encoded(document2),'Analysis/output-paths.json':encoded(PATHS)}
     def report(data):
         result=replace_slots(data,import_plan_model(data,unity.PROFILE)['pathSlots'],changes)
+        for owner in [result,*result.get('modules',[])]:
+            emission=owner.get('codeEmission')
+            if isinstance(emission,dict)and emission.get('scriptPath')in changes:emission['scriptPath']=changes[emission['scriptPath']]
         for collection in ['nodes','components','fonts']:
             for item in result.get(collection,[]):
                 for key in ['target','atlas']:
                     if item.get(key)in changes:item[key]=changes[item[key]]
         return result
-    for path in ['Analysis/source-map.json','Analysis/candidate.json']:
+    for path in ['Analysis/source-map.json','Analysis/candidate.json','Analysis/code-index.json']:
         if path in files:edits[path]=encoded(report(load(read(root/path,max_bytes=128*1024*1024),max_nodes=8_000_000)))
     for path in ['Analysis/name-map.json','Analysis/handoff.json']:
         if path not in files:continue

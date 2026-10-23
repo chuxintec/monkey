@@ -28,7 +28,7 @@ def validated_ir(stage):
     return derived,ir
 
 
-def recover(tree, roots, configs, source_profile, out, profiles, namespace):
+def recover(tree, roots, configs, source_profile, out, profiles, namespace, code_emission=None):
     from . import __version__
     stage=out/'Structured';stage.mkdir(exist_ok=True)
     result=dict(schemaVersion=1,status='pending',sourceProfile=source_profile,stages=[],projects={})
@@ -96,6 +96,9 @@ def recover(tree, roots, configs, source_profile, out, profiles, namespace):
             result.setdefault('reused',[]).append(dict(stage='normalize',sha256=sha(stage_bytes(stage/'normalize/ir.json'))))
         else:ir=normalize(stage/'inspect/source-manifest.json',stage/'normalize')
         ir_path,ir=validated_ir(stage)
+        if code_emission:
+            from .package_code import project_ir
+            ir_path,ir=project_ir(ir_path,inspected,code_emission,stage/'code-ir')
         result['stages'].append(dict(stage='normalize',status=stage_manifest(ir_path)['status'],nodes=len(ir['nodes']),components=len(ir['components'])))
         result['objectTypes']=dict(Counter(a.get('kind') or 'unknown' for a in inspected['assets']))
         result['normalized']=dict(spriteFrames=len(ir['spriteFrames']),fonts=sum(a['kind']=='cc.TTFFont' for a in ir['assets']),
@@ -120,6 +123,9 @@ def recover(tree, roots, configs, source_profile, out, profiles, namespace):
                 import uuid
                 temporary=stage/'Emitted'/(key+'-'+str(uuid.uuid4()))
             manifest=adapter.export(stage/(key+'-plan')/'plan.json',temporary)
+            if code_emission:
+                from .package_code import install
+                install(code_emission,temporary,profile,manifest,plan)
             manifest['format']=dict(profile='none',applied=False)
             finish(temporary,manifest)
             temporary.rename(out/key)

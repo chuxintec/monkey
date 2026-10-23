@@ -12,7 +12,31 @@ monkey code-emit --source original-module.js --code-model fresh-facts/code-model
 
 只有RF原名/身份、IIFE cc.Label参数、构造别名和方法作用域吻合时，才生成显式Label/TMP表现适配。原继承/decorator helper并未执行或恢复；有限Label字段projection拒绝丢弃未知序列化业务字段。原`_N$overflow`精确读取，冲突拒绝；数字小样的SHRINK用明确baked静态呈现，动态缩字不算恢复。
 
-源码输出与工程绑定目前分层：code-emit输出两种目标代码与AI入口，不自动将6个方法全部接入convert。Unity脚本GUID和默认TS脚本UUID由namespace+源身份确定、独立于目标路径；Creator TS meta4.0.24来自实际3.8.8导入回读。固定meta的新输出仍须真实验证；JS importer metadata尚未实证，未猜模板。
+`code-emit`可以单独输出代码子集；包级`convert --numeric-code-contract numeric.json`已接入相同发现/生成/组件投射/双目标导出链。它不自动补齐所有方法。Unity脚本GUID和默认TS脚本UUID由namespace+源身份确定、独立于目标路径；Creator TS meta4.0.24来自实际3.8.8导入回读。固定meta的新输出仍须真实验证；JS importer metadata尚未实证，包级绑定明确拒绝js选项，独立code-emit仍可生成次选JS证据。
+
+## 包级单命令
+
+```sh
+monkey convert --input-set inputs.json --target both --out fresh \
+  --numeric-code-contract numeric.json --cocos-code-language ts --format grea
+```
+
+`numeric.json`为明确调用子域声明，字段如下（moduleSha256替换为静态恢复模块原始字节的完整SHA256）：
+
+```json
+{
+  "schemaVersion": 1,
+  "kind": "numeric-call-subdomain-v1",
+  "moduleName": "Meter",
+  "registrationId": "original-rf-identity",
+  "moduleSha256": "exact-module-sha256",
+  "numericField": "value"
+}
+```
+
+当前一次声明一个源级Label类/数值字段与唯一setter/getter。CLI自动在本次原包静态恢复结果中唯一匹配RF身份/原名，重核模块SHA/方法事实，生成C#/默认TS，按全部原组件身份建立绑定；未知序列化业务字段、重复模块/owner、非Label继承或缺失getter/setter会停止声明分支，不退成“声明成功”的基线工程。原始声明/模块/待补方法均保留工程内部。`--format grea`只移动明确脚本路径和报告槽，GUID/UUID保持；已有代码投射包的resume/reuse暂拒绝，保留旧候选。可加`--native`及编辑器参数顺序实导。
+
+公开单命令合成native01完成7输入/1原组件：Unity own78528于2026-10-23T20:57:53.848046Z→20:58:04.054183Z exit0/reaped；Creator own78894于20:58:04.082896Z→20:58:20.932724Z正常TERM exit-15/reaped。两端严格回读0差异、生成类实际注册/原组件绑定、负零/NaN/Infinity/未初始化、文本引用、Scene+独立Prefab保存重开通过；Unity editor partial保留未实现方法，Creator资源editor pass。它验证自动包级链，不能替代下方真实5组件分母，也不代表业务完成。
 
 ## 实际NumberLabel证据
 

@@ -528,3 +528,7 @@ Unity格式none native01 own74623于20:17:39.052866Z→20:17:58.020921Z exit0/re
 U独立离线metadata-only新线索：启动40条Mono类型表对应27唯一script_id+old_type_hash身份，冻结600包含744嵌入Mono类型，其中18类可精确匹配。只做表/类型树匹配，未解析额外对象正文/解码纹理/执行源代码，不视为106MB已恢复。下一按版本/平台/精确哈希借取类型树并严格read校验，不放松字段/长度；原CODEPHPY方法仍未知。
 
 事件monkey-v02-unity-schema-borrow-20261024-01：公开inspect-unity新增显式--schema-manifest，固定池≤2000文件/1GiB、逐包SHA；版本/平台/script_id/old_type_hash全相同才借TypeTree，布局旗标全哈希，歧义即拒绝。严格check_read=True真实70MB成功，启动总1567/1603、36未解析；原始SHA不变，worker77699 exit0/reaped，补充schema/provenance与embedded分列。13定向检查通过；此包仅正文解析，导出器/代码生成尚未消费借取结构，旧startup02/schema0不追认。下一继续自动源码接线与Research来源适配，不因受保护方法/未匹配36结构停全部开发。
+
+事件monkey-v02-package-code-native-20261024-01：包级convert --numeric-code-contract已自动唯一发现RF原名/身份/模块SHA→重核语义→C#/默认TS→全部对应组件投射→双端导出→none/grea→原生编排。当前显式一个Label类/数值字段/唯一setter/getter，非number调用不假推类型、未知方法保留；自定义序列化业务字段拒绝，投射失败不报baseline成功；原始声明和源码留工程内部。JS包级绑定/投射包resume/reuse尚拒绝。格式化同步typed scriptPath到manifest/code-index，既有ID不改。26定向检查和证据留存后11关联检查通过。
+
+公开合成7输入native01：Unity78528于20:57:53.848046Z→20:58:04.054183Z exit0/reaped、strict0/editor partial；Creator78894于20:58:04.082896Z→20:58:20.932724Z正常TERM/reaped、strict0/editor pass。1实际生成类/原组件绑定、数值边界/文本保持/Scene+独立Prefab保存重开通过；真实NumberLabel5组件旧证据分列。当前outputs/number-label-full-package-01正在新鲜全量原输入离线单命令运行，不复用旧89overflow有误IR，不改肥鹅工程。另U借取schema已接入字段模型试跑得2类11字段/12实例，尚在源基类/外部表规则收口及消费导出中，不能提前报原生恢复。

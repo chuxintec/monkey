@@ -26,6 +26,8 @@ def main(argv=None):
     p.add_argument('--asset-ripper', help='Existing exact AssetRipper 2.0.0 provider executable')
     p.add_argument('--provider-budget-seconds', type=int, default=600)
     p.add_argument('--unity-texture-cache',help='Explicit local ASTC cache pool for supported Unity texture-key hydration')
+    p.add_argument('--numeric-code-contract',help='Explicit source module identity and numeric-call field contract; fresh package conversion only')
+    p.add_argument('--cocos-code-language',choices=['ts','js'],default='ts',help='Cocos code output; TypeScript first (package JS binding pending verification)')
     p.add_argument('--reuse-source-stages',help='Fresh package output using verified source stages; supports names-v1 metadata migration')
     p.add_argument('--input-set', help='Explicit local roots and identity/provenance manifest (schema 1)')
     p.add_argument('--target', choices=['unity','cocos','unity6','cocos38','both',UNITY_PROFILE,cocos.PROFILE])
@@ -205,6 +207,9 @@ def main(argv=None):
             print(json.dumps(discover(args.root,args.out),ensure_ascii=False))
             return 0
         if args.command == 'convert':
+            if args.numeric_code_contract and any((args.resume,args.recipe,args.reuse_source_stages,args.asset_index,args.bindings,args.animation)):
+                parser.error('--numeric-code-contract requires fresh package source stages')
+            if args.cocos_code_language!='ts' and not args.numeric_code_contract:parser.error('--cocos-code-language requires --numeric-code-contract')
             if args.format is not None and (args.resume or args.recipe):parser.error('--format requires a fresh package conversion; resume/recipe retain their declared contract')
             source_file=Path(args.source) if args.source else None
             unity_source=args.source_family=='unity'
@@ -212,6 +217,7 @@ def main(argv=None):
                 from .io import safe as safe_source
                 with safe_source(source_file).open('rb') as stream:unity_source=stream.read(9).startswith((b'UnityFS\0',b'UnityRaw\0',b'UnityWeb\0'))
             if unity_source:
+                if args.numeric_code_contract:parser.error('Numeric JS code contracts require Cocos package sources')
                 if args.format=='grea':parser.error('Direct Unity recovery profile formatting is not implemented yet; preserve a none candidate')
                 if args.target not in ('unity','unity6',UNITY_PROFILE):parser.error('Unity sources target Unity 6 only')
                 if not all((args.source,args.out,args.provider_python,args.asset_ripper)):parser.error('Unity source requires --source --out --provider-python --asset-ripper')
@@ -244,6 +250,7 @@ def main(argv=None):
             source_path=Path(args.source) if args.source else None
             package_mode=args.input_set or args.package or args.target in ('both','unity6','cocos38') or (source_path is not None and
                 (source_path.suffix.lower() in ('.apk','.wxapkg') or source_path.is_dir() and not args.asset_index and not args.recipe))
+            if args.numeric_code_contract and not package_mode:parser.error('--numeric-code-contract requires package conversion')
             if package_mode:
                 if not all((args.source or args.input_set,args.target,args.out)) or args.source and args.input_set or any((args.resume,args.recipe,args.asset_index,
                         args.dependency_source,args.evidence_source,args.bindings,args.animation,args.source_profile)):
@@ -272,7 +279,7 @@ def main(argv=None):
                     acquired=acquire(remote_settings,args.offline);conversion_input_set=str(acquired['inputSet'])
                     if args.reuse_source_stages and Path(conversion_input_set).resolve()!=Path(args.input_set).resolve():
                         raise ValueError('New acquired files require fresh source stages; acquired evidence is preserved')
-                result=convert_package(args.source,args.target,args.out,args.namespace or 'monkey-project',args.offline,conversion_input_set,reuse_source_stages=args.reuse_source_stages,format_profile=args.format or 'none')
+                result=convert_package(args.source,args.target,args.out,args.namespace or 'monkey-project',args.offline,conversion_input_set,reuse_source_stages=args.reuse_source_stages,format_profile=args.format or 'none',code_contract=args.numeric_code_contract,cocos_code_language=args.cocos_code_language)
                 if acquired:
                     from .acquisition import attach
                     attach(result,args.out,acquired)

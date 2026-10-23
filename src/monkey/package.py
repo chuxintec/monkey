@@ -81,14 +81,19 @@ def _input_entries(unit):
     return entries(unit['path'])
 
 
-def convert_package(source, target, output, namespace='monkey-project',offline=False,input_set_path=None,resume_state=None,reuse_source_stages=None,format_profile='none'):
+def convert_package(source, target, output, namespace='monkey-project',offline=False,input_set_path=None,resume_state=None,reuse_source_stages=None,format_profile='none',code_contract=None,cocos_code_language='ts'):
     if format_profile not in ('none','grea'):fail('FORMAT_PROFILE',str(format_profile),'Expected none or grea')
     from .inputs import input_set
+    code_spec=None
+    if code_contract:
+        from .package_code import declaration
+        code_spec=declaration(code_contract,cocos_code_language)
+        if resume_state or reuse_source_stages:fail('PACKAGE_CODE_FRESH_ONLY',str(code_contract),'Code projection currently requires fresh source stages')
     selection=input_set(input_set_path) if input_set_path else None
     source=safe(input_set_path or source)
     roots=selection['inputs'] if selection else [dict(id='source',path=source,config=None)]
     profiles=[unity.PROFILE,cocos.PROFILE] if target=='both' else [TARGETS[target]]
-    out=safe(output) if resume_state else new_output(output,[source,*[r['path'] for r in roots]]);stage='inventory'
+    out=safe(output) if resume_state else new_output(output,[source,*[r['path'] for r in roots],*([safe(code_contract)]if code_spec else [])]);stage='inventory'
     report=dict(schemaVersion=1,toolVersion=__version__,status='partial',workflowStatus='partial' if offline else 'needs_action',resultKind='candidate',
                 completed=False,mode='package',namespace=namespace,sourceKind='input-set' if selection else 'directory' if source.is_dir() else source.suffix.lower()[1:],
                 gameIdentity=dict(appId='unknown',appVersion='unknown',validation='not_verified'),
@@ -167,6 +172,12 @@ def convert_package(source, target, output, namespace='monkey-project',offline=F
                     for mod in found:
                         mod['entryType']='module_candidate';mod['sourceFile']=row['path'];mod['sourceId']=row['sourceId']+'#'+str(mod['name'] or mod['candidate_id'])+'@'+str(mod['source_bytes']['start'])
                         recovered.append(mod)
+        code_emission=None
+        if code_spec:
+            stage='source-code-emission'
+            from .package_code import prepare
+            code_emission=prepare(recovered,code_spec,namespace,out/'CodeEmission')
+            report['codeEmission']=load(read(code_emission/'package-code.json'))
         # Resolve physical source records for each literal UUID/logical resource key.
         stage='asset-index';asset_index=[];bundles={};by_stem={}
         for row in rows: by_stem.setdefault(Path(row['path']).name.split('.')[0],[]).append(row['path'])
@@ -213,8 +224,10 @@ def convert_package(source, target, output, namespace='monkey-project',offline=F
             from .replan import reuse_source_stages as reuse_stages
             report['sourceStageReuse']=reuse_stages(reuse_source_stages,out,selection,namespace)
         from .structured import recover
-        structured=recover(tree,roots,configs,source_profile,out,profiles,namespace)
+        structured=recover(tree,roots,configs,source_profile,out,profiles,namespace,code_emission=code_emission)
         report['structuredRecovery']=structured
+        if code_spec and (structured['status']=='failed' or set(structured.get('projects',{}))!=set(profiles)):
+            fail('PACKAGE_CODE_BINDING_INCOMPLETE','Structured/recovery.json','Declared code projection was not exported for every requested target; retain failure evidence')
         if structured['status'] in ('failed','needs_action'):
             report['diagnostics'].append(diagnostic('STRUCTURED_RECOVERY_PENDING','Structured/recovery.json',structured.get('reason','Unresolved structural recovery')))
         stage='target-workspaces'
@@ -272,6 +285,8 @@ def convert_package(source, target, output, namespace='monkey-project',offline=F
             code_index=[];tasks=[]
             for mod in recovered:
                 record={k:v for k,v in mod.items() if k!='source'}
+                if code_emission and mod['sourceId']==report['codeEmission']['sourceModule']:
+                    record['codeEmission']=dict(report['codeEmission'],scriptPath=native_manifest.get('codeEmission',{}).get('scriptPath'),status='numeric_subdomain_planned_native_import')
                 if 'source' in mod:
                     token,cs,ts=drafts(mod,mod['sourceId'])
                     meta=dict(bundle=mod.get('sourceFile','source').split('/')[0],sourceName=mod.get('name'))
@@ -430,6 +445,7 @@ def resume_package(output,input_set_path,offline=False):
     from .inputs import input_set
     from .io import stage_document,stage_bytes
     out=safe(output);raw_receipt=read(out/'conversion-result.json');prior=load(raw_receipt)
+    if prior.get('codeEmission'):fail('PACKAGE_CODE_FRESH_ONLY',str(out),'Code-projected packages currently require a fresh conversion; preserve existing candidates')
     if prior.get('format',{}).get('profile','none')!='none':fail('RESUME_FORMAT_PROFILE_UNSUPPORTED',str(out),'Use a fresh output for a formatted package; existing formatted and unformatted projects are retained')
     declaration=input_set(input_set_path)
     candidate_base=out

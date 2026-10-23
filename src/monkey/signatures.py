@@ -6,7 +6,7 @@ from .io import sha,encoded
 def phase_signatures():
     root=Path(__file__).parent
     groups={
-        'package':['package.py','inputs.py','sources/code.py','sources/index-modules.cjs','sources/containers.py','sources/cache.py','handoff_package.py','replan.py','post_format.py'],
+        'package':['package.py','package_code.py','code_model.py','code_emit.py','code_presentation.py','code-facts.cjs','inputs.py','sources/code.py','sources/index-modules.cjs','sources/containers.py','sources/cache.py','handoff_package.py','replan.py','post_format.py'],
         'inspect':['io.py','inputs.py',*[str(p.relative_to(root)) for p in sorted((root/'sources').glob('*.py'))]],
         'normalize':['io.py','normalize.py',*[str(p.relative_to(root)) for p in sorted((root/'assets').glob('*.py'))]],
         'UnityProject-plan':['io.py','targets/unity.py','targets/common.py','targets/prefabs.py','assets/animation.py'],
