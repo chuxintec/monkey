@@ -53,7 +53,7 @@ def main(argv=None):
     p.add_argument('--unity-editor', help='Exact installed Unity executable for --native')
     p.add_argument('--creator-editor', help='Exact installed CocosCreator executable for --native')
     p.add_argument('--native-budget-seconds', type=int, default=1200, help='Method budget per Editor, 1..1200; each window is at most 30 minutes')
-    p.add_argument('--remote-manifest', help='Explicit URL/path/SHA/byte download manifest; requires --input-set')
+    p.add_argument('--remote-manifest', help='Explicit URL/path/SHA/byte downloads; Cocos requires --input-set, Unity accepts an explicit source container')
     p.add_argument('--remote-cache-root', help='Read-only root for paths in the remote manifest')
     p.add_argument('--acquisition-out', help='Fresh acquired-files workspace; default OUTPUT-acquired')
     p.add_argument('--remote-budget-seconds', type=int, default=900, help='Acquisition budget, 30..3600 seconds')
@@ -256,24 +256,41 @@ def main(argv=None):
                 if not args.native and any((args.native_out,args.unity_editor,args.creator_editor,args.native_budget_seconds!=1200)):parser.error('native options require --native')
                 if args.target not in ('unity','unity6',UNITY_PROFILE):parser.error('Unity sources target Unity 6 only')
                 if not all((args.source,args.out,args.provider_python,args.asset_ripper)):parser.error('Unity source requires --source --out --provider-python --asset-ripper')
-                if any((args.input_set,args.resume,args.recipe,args.reuse_source_stages,args.remote_manifest,args.remote_cache_root,args.acquisition_out,args.asset_index,args.all_assets,args.bindings,args.animation,args.evidence_source,args.source_profile,args.namespace,args.remote_budget_seconds!=900)):
-                    parser.error('Unity source profile accepts explicit bundle/dependency/texture inputs; input sets/remote/slice options are not implemented')
-                native_settings=None
+                if any((args.input_set,args.resume,args.recipe,args.reuse_source_stages,args.asset_index,args.all_assets,args.bindings,args.animation,args.evidence_source,args.source_profile,args.namespace)):
+                    parser.error('Unity source profile accepts explicit bundle/dependency/texture inputs; input sets/slice options are not implemented')
+                if not args.remote_manifest and any((args.remote_cache_root,args.acquisition_out,args.remote_budget_seconds!=900)):parser.error('remote options require --remote-manifest')
+                if args.unity_dependency_manifest and args.dependency_source:parser.error('Choose --unity-dependency-manifest or explicit --dependency-source')
+                native_settings=None;remote_settings=None;acquired=None
+                protected=[]
+                if args.native or args.remote_manifest:
+                    from .unity_acquisition import protected_inputs
+                    protected=protected_inputs(args.source,args.dependency_source,args.unity_texture_cache,args.unity_schema_manifest,args.unity_dependency_manifest,args.provider_python,args.asset_ripper)
+                if args.remote_manifest:
+                    from .unity_acquisition import prepare
+                    from .io import safe
+                    if safe(args.out).exists():parser.error('Choose a fresh conversion output before acquisition')
+                    acquisition_out=safe(args.acquisition_out or str(args.out)+'-acquired')
+                    remote_settings=prepare(args.source,acquisition_out,args.remote_manifest,args.remote_cache_root,args.remote_budget_seconds,[*protected,safe(args.out)])
+                    protected.extend([acquisition_out,remote_settings['manifest']])
+                    if remote_settings['cache']:protected.append(remote_settings['cache'])
                 if args.native:
                     from .orchestration import options
-                    from .io import safe,load,read
-                    protected=[args.source,*args.dependency_source,Path(args.asset_ripper).parent,Path(args.provider_python).resolve().parent]
-                    for manifest_path in (args.unity_texture_cache,args.unity_schema_manifest,args.unity_dependency_manifest):
-                        if manifest_path:
-                            manifest_path=safe(manifest_path)
-                            protected.extend([manifest_path,*[manifest_path.parent/row['path']for row in load(read(manifest_path)).get('files',[])]])
                     native_settings=options(args.out,args.target,args.native_out,args.unity_editor,args.creator_editor,args.native_budget_seconds,protected)
+                inputs=dict(dependencies=args.dependency_source,texture_cache=args.unity_texture_cache,dependency_manifest=args.unity_dependency_manifest)
+                if remote_settings:
+                    from .acquisition import acquire
+                    from .unity_acquisition import merge
+                    acquired=acquire(remote_settings,args.offline)
+                    inputs=merge(acquired,**{k:inputs[k]for k in ('texture_cache','dependency_manifest','dependencies')})
                 from .recover_unity import convert as convert_unity
-                result=convert_unity(args.source,args.out,args.provider_python,args.asset_ripper,args.provider_budget_seconds,dependencies=args.dependency_source,texture_cache=args.unity_texture_cache,schema_manifest=args.unity_schema_manifest,quarantine_invalid_textures=args.unity_quarantine_invalid_textures,dependency_manifest=args.unity_dependency_manifest)
+                result=convert_unity(args.source,args.out,args.provider_python,args.asset_ripper,args.provider_budget_seconds,schema_manifest=args.unity_schema_manifest,quarantine_invalid_textures=args.unity_quarantine_invalid_textures,**inputs)
+                if acquired:
+                    from .unity_acquisition import attach
+                    attach(result,args.out,acquired)
                 if native_settings:
                     from .unity_native import finish_conversion
                     result=finish_conversion(result,native_settings,args.format or 'none')
-                print(json.dumps(dict(status=result['status'],completed=result['completed'],resultKind=result['resultKind'],sourceFamily='unity',projects=result['projects'],diagnostics=result['diagnostics'],nativeExecution=result.get('nativeExecution'),format=result['format'],report=str(Path(args.out).resolve()/'conversion-result.json')),ensure_ascii=False))
+                print(json.dumps(dict(status=result['status'],completed=result['completed'],resultKind=result['resultKind'],sourceFamily='unity',projects=result['projects'],diagnostics=result['diagnostics'],nativeExecution=result.get('nativeExecution'),remoteAcquisition=result.get('acquisition'),format=result['format'],report=str(Path(args.out).resolve()/'conversion-result.json')),ensure_ascii=False))
                 return 1
             if args.provider_python or args.asset_ripper or args.unity_texture_cache or args.unity_schema_manifest or args.unity_dependency_manifest or args.unity_quarantine_invalid_textures or args.provider_budget_seconds!=600:parser.error('Unity provider options require a Unity source')
             from .convert import convert, resume, recipe

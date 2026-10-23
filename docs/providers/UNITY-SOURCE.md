@@ -99,3 +99,18 @@ monkey convert --source /path/to/config.bundle --target unity6 --out /path/to/fr
 池是查找分母，只有精确可达部分进入资源导出；完整冻结池按SHA留SourceRecovery/DependencyLookup并有用途说明，不能把所有查找文件说成已导出资源。导出资源/实际消耗纹理输入计数、查找池计数/字节分列。每项索引源SHA、selected源SHA和最终原件副本再次核对；闭包与索引保留供接续核验。
 
 武侠新`outputs/unity2021-wuxia-closure-package-01`：冻结212包33404614B、49314元数据对象，全部索引成功。自动选中1依赖（主包合计2资源容器），并消费3精确ASTC缓存；实际资源/纹理5输入2271482B，未包含启动缺3纹理的独立分支。Provider97219 exit0/reaped、277文件12586350B、135原生资源、0Unreadable；原先131个缺引用占位降为0。SpriteSaveInfo一类/一个字段的C#与此前SDK编译代码逐字节相同，fresh Provider meta身份不同且分别保持，不冒称跨fresh继承旧GUID。recovery manifest `bd757d050d3afb12567d850d674f3fb125dd74215244e10470984a9beef3b81a`；原方法0、原生读回仍待公开native分支验证。3个source atlas PNG逐RGBA/hash与规范化源缓存按明确上下翻转对齐相同，原版视觉/玩法未验。
+
+## 显式 CDN 清单接入统一 Unity 命令
+
+Unity分支现可复用既有 `--remote-manifest` / `--remote-cache-root` / `--acquisition-out` / `--offline`，不再只接受手动合并后的缓存表。清单仍是原来源声明的精确URL/path，可附SHA/bytes；不猜版本、hash或路径，不执行下载内容。
+
+```sh
+monkey convert --source <original-data.unity3d> --target unity6 --out <fresh-output> \
+  --provider-python <pinned-python> --asset-ripper <pinned-AssetRipper> \
+  --unity-texture-cache <existing-cache.json> \
+  --remote-manifest <declared-downloads.json> --remote-cache-root <verified-cache>
+```
+
+统一acquisition负责显式下载/哈希缓存复用/HTTP缺件回执；Unity适配只做类型输入闭包：`Assets/Textures/astc/...`须真实ASTC头/块长有效，再由源Texture2D精确键/尺寸/mip核验并水合；真实Unity容器加入显式依赖，提供冻结池时加入精确可达查找池。其他文件只作为SourceRecovery/Acquired证据，明确diagnostic，不导入Assets或执行。原缓存同逻辑键不同字节拒绝覆盖。全部可用原件和脱敏acquisition.json在候选冻结前归档；失败或未知项保留，不伪装全游戏资源闭合。Cocos仍使用其input-set，未改变既有接入。
+
+2026-10-24公开真实链 outputs/unity2021-wuxia-acquisition-package-04：初始114项纹理表+3项原URL/精确SHA清单，`--offline`复用本地3文件110848B、0GET/0缺件，6源纹理键全部水合，Provider99626 exit0/reaped、0.655秒，44原生资源/2408文件。候选包含3份原字节和脱敏回执，owned内容逐项核验通过，manifest `bd3caf0ed9e2f8e2487b39282fd6fcf006bc3b4cfc434f362045c560ac38caa2`；acquisition回执SHA `15820ec524708207ca6186bb3cce52475e2297750a5d24fbba2ac37d4151ff80`。没有再次启动Editor；启动整包方法/原生仍未验。混合依赖/证据、同键异字节、坏ASTC、offline不联网、候选在源变化后保持原owned等34定向检查通过。

@@ -269,8 +269,8 @@
           "sha256": "b07a0191ecdee862331603e3f64ddb7c43bfc48fbbbde0ab82114f45af22cd48"
         },
         {
-          "path": "outputs/unity2021-wuxia-startup-package-03/conversion-result.json",
-          "sha256": "bc1b0c5eddb0b615cff7931f0c60525a70ee76d9aa3c1891bc968bcf49988231"
+          "path": "outputs/unity2021-wuxia-acquisition-package-04/conversion-result.json",
+          "sha256": "e6ce9846134c244703a04e0ccaa1cea017151bec2aaf81bc8a03148630f250bd"
         }
       ],
       "export": "partial-dependency-closed-config-and-startup-resource-candidates",

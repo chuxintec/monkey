@@ -572,3 +572,7 @@ Unity typed值预算新增逐对象250000/全请求4000000强限；超大对象�
 总监event monkey-wuxia-exact-textures-found-20261024-01给出的3精确HTTP200/ASTC原件已按回执SHA/块长/尺寸再核并复制私有池，新显式117纹理清单sha2efdbaedd87d35976312307cf2ef19b252add1e0afcb98d03a4696dbd40d7f13；无重复GET、不改WeChat/Research。启动6键全部水合。旧startup02普通沙箱loopback启动60秒超时，Provider98919正常TERM/reaped；新允许loopback环境startup03 Provider99060 exit0/reaped、0.648秒，7实际输入6442729B、2408文件12417811B/44原生资源/0unreadable/0缺引用占位。1142原代码隔离/0字段类/91对象缺结构，native整包/方法/视觉/玩法未验；manifest e06d27982539d72b1e2f7ebd4f14fc72b6771ab343055c9ce3e739819623cd4a。
 
 下一接现有acquisition到Unity输入闭包，精确声明URL可由统一CLI消费，不依赖总监手取；不扩未知URL扫描。继续源atlas/图与代码接续，不重跑已过代表小样、不为gallery扩大完整兼容口径。Research11attempted/9不同范围输出/2blocked/完整游戏0不变，v0.2仍未完成、不推送发布。
+
+事件monkey-v02-unity-acquisition-cli-20261024-01：Unity来源复用既有acquisition到公开convert，支持显式remote-manifest/remote-cache-root/acquisition-out/offline，不再只接受手工合并纹理表。ASTC精确逻辑路径入纹理池，真实Unity容器入显式依赖或冻结精确查找池；未知文件只在SourceRecovery/Acquired保留并diagnostic，不导入Assets。缓存同逻辑键异字节拒绝，实际source尺寸/mip仍由既有水合器强核；不猜URL/hash/版本，不执行下载代码。全可用原件+脱敏回执在native封存前附加，暂存完成再晋升，源变化保留原owned基线。
+
+公开真实offline04使用114原缓存表+3显式精确URL/SHA，localVerified3/110848B、0GET/0missing，6键齐；Provider99626 exit0/reaped、0.655秒，44原生资源/2408文件/0占位，candidate owned全核。recovery bd3caf0ed9e2f8e2487b39282fd6fcf006bc3b4cfc434f362045c560ac38caa2，acquisition receipt15820ec524708207ca6186bb3cce52475e2297750a5d24fbba2ac37d4151ff80。34定向检查通过；未重跑已过Editor。继续源atlas/图适配与代码接续，v0.2未完成，不推送发布。
