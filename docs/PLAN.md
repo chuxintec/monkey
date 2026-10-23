@@ -12,7 +12,7 @@
 
 Research发现CLI已实际实现并扫出11案例（9可检查证据目录/2外部指针），缺源/未知仍在分母且export全部not_run；输出outputs/research-matrix-v02-01，2项动态新增/未知/坏metadata/symlink反例通过。发现不冒充兼容或导出，具名CodeModel CLI已读取真实NumberLabel六方法（2字段读写语义候选/4明确unsupported），逐方法字节范围/SHA与未执行声明，仍未编译或恢复完整业务。2项Unicode范围/源不可执行/重复方法歧义反例通过；ProjectModel已实现精确typed槽/身份/所有权检查，真实Creator sizingProbe03输出282路径槽，15个未物化Prefab身份明确pending而不假造GUID；2项文本/逻辑key不替换、stale/越界反例通过。格式应用尚未实现，接着U固定provider输出。
 
-Unity typed reader草稿保留在stash，不混v0.1，恢复前先按新合同核对。来源全矩阵11真实游戏已列，unknown/缺源仍在分母。仅工具开发，不恢复暂停游戏或改GREA/服务器，不新Agent。
+Unity reader草稿已按合同恢复到v0.2并接入公开convert：一个明确bundle→严格UnityPy→具名TypeTree C#字段→固定AssetRipper本机副本→Unity6候选，原始/Provider空壳隔离、旧VR包明确迁移、缺方法/缺引用保留。真实3122B代表输出原Prefab1/FrameSpritePool16字段、C#编译通过，3外部Sprite未闭合；原生probe01 own65810 exit1/reap，几何/GUID可读但schema组件未注册，未保存，首失败停止冷重跑。启动UnityFS实际1603/1497parsed/106缺类型/4外置纹理令牌，公开convert先blocked且不启动AR。详见providers/UNITY-SOURCE.md；这不是U整包或全版本通过，继续离线定位注册和精确缓存键。来源全矩阵11真实游戏已列，unknown/缺源仍在分母。仅工具开发，不恢复暂停游戏或改GREA/服务器，不新Agent。
 
 ## 历史依据与全量候选记录
 

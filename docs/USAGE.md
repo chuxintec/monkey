@@ -16,6 +16,8 @@ monkey code-model --source /path/to/source-module.js --module-name NumberLabel -
 
 静态具名方法和源字节范围/hash；当前只把实例字段读/写标为语义候选，其余方法明确unsupported。该命令不执行源JS、不生成可用业务代码，partial/exit1；实际代码生成仍在后续实现。
 
+Unity来源首个明确本地bundle的单命令候选转换已接入`convert`，严格依赖版本/隔离/限制及实际证据见[Unity来源Provider](providers/UNITY-SOURCE.md)。这还不是全Unity原包转换或原生通过，启动包外置纹理未闭合时会先blocked。
+
 # v0.1 命令说明
 
 正式工具版本v0.1，Python包0.1.0；`monkey --version`和`monkey capabilities --json`可核对。旧0.3.0.dev1为内部开发候选编号，旧证据不改写；跨toolVersion的resume/reuse按原身份合同拒绝，需明确新输出，不静默改旧候选。

@@ -20,6 +20,10 @@ def main(argv=None):
     cap.add_argument('--json', action='store_true')
     p = sub.add_parser('convert', help='Convert a source project into an isolated native project candidate')
     p.add_argument('--source', help='Local wxapkg/APK, resource/project directory, project.json or bundle config.json')
+    p.add_argument('--source-family', choices=['auto','cocos','unity'], default='auto')
+    p.add_argument('--provider-python', help='Existing Python with UnityPy 1.25.3 for Unity source conversion')
+    p.add_argument('--asset-ripper', help='Existing exact AssetRipper 2.0.0 provider executable')
+    p.add_argument('--provider-budget-seconds', type=int, default=600)
     p.add_argument('--reuse-source-stages',help='Fresh package output using verified source stages; supports names-v1 metadata migration')
     p.add_argument('--input-set', help='Explicit local roots and identity/provenance manifest (schema 1)')
     p.add_argument('--target', choices=['unity','cocos','unity6','cocos38','both',UNITY_PROFILE,cocos.PROFILE])
@@ -46,6 +50,19 @@ def main(argv=None):
     p.add_argument('--remote-cache-root', help='Read-only root for paths in the remote manifest')
     p.add_argument('--acquisition-out', help='Fresh acquired-files workspace; default OUTPUT-acquired')
     p.add_argument('--remote-budget-seconds', type=int, default=900, help='Acquisition budget, 30..3600 seconds')
+    p = sub.add_parser('unity-code-model', help='Recover named C# data fields from embedded Unity TypeTree evidence')
+    p.add_argument('--inspection', required=True)
+    p.add_argument('--out', required=True)
+    p = sub.add_parser('export-unity', help='Export a Unity bundle through an existing fixed AssetRipper in an isolated copy')
+    p.add_argument('--source', required=True)
+    p.add_argument('--asset-ripper', required=True)
+    p.add_argument('--out', required=True)
+    p.add_argument('--budget-seconds', type=int, default=600)
+    p = sub.add_parser('inspect-unity', help='Strict typed inspection of an explicit Unity serialized file or AssetBundle')
+    p.add_argument('--source', required=True)
+    p.add_argument('--provider-python', required=True, help='Existing Python with UnityPy 1.25.3; never installed automatically')
+    p.add_argument('--out', required=True)
+    p.add_argument('--budget-seconds', type=int, default=120)
     p = sub.add_parser('project-model', help='Inspect explicit target asset path slots and identity without moving files')
     p.add_argument('--candidate', required=True)
     p.add_argument('--out', required=True)
@@ -106,7 +123,7 @@ def main(argv=None):
     try:
         if args.command == 'capabilities':
             print(json.dumps(dict(version=__version__, profiles=[PROFILE,PROJECT_PROFILE], targetProfiles=[UNITY_PROFILE,cocos.PROFILE],
-                schemaVersion=1, implemented=['convert','catalog','inspect','normalize','plan','export','verify','handoff','diff','register','apply','preflight','native-import','research-matrix','code-model','project-model'], planned=[],
+                schemaVersion=1, implemented=['convert','catalog','inspect','normalize','plan','export','verify','handoff','diff','register','apply','preflight','native-import','research-matrix','code-model','project-model','inspect-unity','export-unity','unity-code-model'], planned=[],
                 targetValidation={UNITY_PROFILE:dict(static='implemented',editor='representative-subset-verified',visual='not_run'),cocos.PROFILE:dict(static='implemented',editor='representative-subset-verified',visual='not_run')},
                 compiledFormats=['compiled-v1','pack-v1','texture-pack-v1'],
                 containerFormats=['plain-wxapkg','APK-ZIP','Cocos-resource-directory'],
@@ -115,6 +132,20 @@ def main(argv=None):
                 imageFormats=['PNG','JPEG','ASTC (optional pinned decoder)'],animationSchemaVersion=1,
                 animationSubset=['local-position','local-scale','opacity','linear','constant-step','Normal','Loop'],animationEvents='manual-contract-only', targetEditorValidation='representative-subsets-only'), ensure_ascii=False))
             return 0
+        if args.command == 'unity-code-model':
+            from .unity_code_model import model as unity_code_model
+            print(json.dumps(unity_code_model(args.inspection,args.out),ensure_ascii=False))
+            return 1
+        if args.command == 'export-unity':
+            from .providers.assetripper import export as export_unity
+            result=export_unity(args.source,args.asset_ripper,args.out,args.budget_seconds)
+            print(json.dumps(result,ensure_ascii=False))
+            return 1
+        if args.command == 'inspect-unity':
+            from .sources.unity_serialized import inspect as inspect_unity
+            result = inspect_unity(args.source,args.provider_python,args.out,args.budget_seconds)
+            print(json.dumps(result,ensure_ascii=False))
+            return 0 if result['status']=='inspected' else 1
         if args.command == 'project-model':
             from .project_model import inspect as project_model
             print(json.dumps(project_model(args.candidate,args.out),ensure_ascii=False))
@@ -128,6 +159,21 @@ def main(argv=None):
             print(json.dumps(discover(args.root,args.out),ensure_ascii=False))
             return 0
         if args.command == 'convert':
+            source_file=Path(args.source) if args.source else None
+            unity_source=args.source_family=='unity'
+            if args.source_family=='auto' and source_file and source_file.is_file():
+                from .io import safe as safe_source
+                with safe_source(source_file).open('rb') as stream:unity_source=stream.read(9).startswith((b'UnityFS\0',b'UnityRaw\0',b'UnityWeb\0'))
+            if unity_source:
+                if args.target not in ('unity','unity6',UNITY_PROFILE):parser.error('Unity sources target Unity 6 only')
+                if not all((args.source,args.out,args.provider_python,args.asset_ripper)):parser.error('Unity source requires --source --out --provider-python --asset-ripper')
+                if any((args.input_set,args.native,args.resume,args.recipe,args.reuse_source_stages,args.remote_manifest,args.remote_cache_root,args.acquisition_out,args.asset_index,args.all_assets,args.bindings,args.animation,args.dependency_source,args.evidence_source,args.source_profile,args.namespace,args.native_out,args.unity_editor,args.creator_editor,args.native_budget_seconds!=1200,args.remote_budget_seconds!=900)):
+                    parser.error('Initial Unity bundle profile supports one explicit local source and offline provider export; input sets/native/remote/slice options are not implemented')
+                from .recover_unity import convert as convert_unity
+                result=convert_unity(args.source,args.out,args.provider_python,args.asset_ripper,args.provider_budget_seconds)
+                print(json.dumps(dict(status=result['status'],completed=result['completed'],resultKind=result['resultKind'],sourceFamily='unity',projects=result['projects'],diagnostics=result['diagnostics'],report=str(Path(args.out).resolve()/'conversion-result.json')),ensure_ascii=False))
+                return 1
+            if args.provider_python or args.asset_ripper or args.provider_budget_seconds!=600:parser.error('Unity provider options require a Unity source')
             from .convert import convert, resume, recipe
             if not args.remote_manifest and any((args.remote_cache_root,args.acquisition_out,args.remote_budget_seconds!=900)):
                 parser.error('remote options require --remote-manifest')
