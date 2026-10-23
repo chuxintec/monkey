@@ -557,3 +557,10 @@ Unity typed值预算新增逐对象250000/全请求4000000强限；超大对象�
 武侠启动1468/1559正文，6纹理键3缓存匹配/3精确缺件，启动blocked保留；独立4272B配置Bundle实际导出SpriteSaveInfo一类/一个Sprite[]字段、meta保持且Unity6 SDK编译通过。Provider95567 exit0/reaped，9文件16555B、131Sprite引用待补，recovery cb80fa0e7aa18e58a0ded0e6118faa62053200983aca39f3bb74bffdf75e437e。原生not_run。团结原始t9保留、2888/3042正文，Provider实际3042不可读对象/0原生资源；新门exported_evidence_only→blocked、无候选晋升，旧误分类01冻结。新02 Provider93252 exit0/reaped；Lua/资源专用adapter仍缺。天命Research/Manager指向的archives目录当前不存在，明确源定位blocked，不扫描玩家档或恢复项目。
 
 本组35定向检查通过；新增literal settings函数调用拒绝、evidence-only不得晋升两反例另9项通过。样本/输出均私有，工具源码与证据说明留本仓；继续资源闭包、Unity原生消费/格式与未支持adapter，不宣称v0.2已完成，不推送发布。
+
+
+事件monkey-v02-js-and-dependency-closure-20261024-01：JS次选先实际native01失败/TERM reaped，观察javascript importer4.0.24与ESM文件被默认CommonJS解析。按官方模块规范新增assets/package.json局部ESM边界和固定脚本meta，新MainUi129节点/5绑定native02 own96527于22:41:40.702916Z→22:41:58.153501Z正常TERM/reaped、strict0/editorpass；Scene+独立Prefab5绑定/数字/未初始化/文字/几何/UUID→实际classId六门只读审计全true。原4方法/动态SHRINK未恢复。公开JS选项与grea已接通，installer不把package.json当scriptPath，代码注册/回读强核压缩脚本UUID；public合成02 own97084于22:47:18.787472Z→22:47:35.091237Z正常TERM/reaped、strict0，manifest d200ccbdca2a9185fb209dc0b5df281666ec3716bbb319f9c747e06f53131bed。旧public01格式hash变量错误冻结/native未启动；修正未放宽保护。
+
+新增公开--unity-dependency-manifest：完整冻结元数据池内按原external表/精确serialized-file身份递归闭包，环/返回主包/字节相同别名处理，冲突拒绝、缺件列明。武侠212查找包33404614B/49314对象全部索引，自动找到1依赖+3精确ASTC缓存，实际资源5输入2271482B，Provider97219 exit0/reaped、277文件12586350B/135原生资源/0unreadable，131缺引用占位降0；recovery bd757d050d3afb12567d850d674f3fb125dd74215244e10470984a9beef3b81a。查找分母/实际导出分开，全部冻结池原件及索引闭包保留SourceRecovery，SourceC#与已编译代码相同但fresh meta不同、不混旧GUID。原方法0/native尚未跑。23相关检查通过，含脚本UUID反例、精确依赖名/歧义/环/失败索引，不重跑完整full14。
+
+总监event monkey-v02-research-gap-coordination-20261024-01已确认天命源目录缺失并向用户询问新路径；本聊天不再重复扫旧址、不等待该项而停止其他能力。9输出不是v0.2完成，图片gallery不冒充源UI/代码；继续有成果的源atlas/图适配、公开Unity native/格式及代码接续。武侠启动3精确缺纹理的逻辑路径/预期属性/原DATA_CDN静态声明已形成.private/unity-wuxia-current-01/source-assist-request.json，下一成组报告交总监协助；不自行猜别的hash或复制认证。

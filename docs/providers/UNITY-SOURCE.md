@@ -84,3 +84,18 @@ Typed正文另有每对象250000值/全请求4000000值预算。超大ComputeSha
 武侠大明星原启动2021.3.18f1/6326649B SHA `1364a7385c7e295ffc46103acc1e97e80772fe6c58e7fef2302564b2bbe6407a`，1559对象1468严格parsed/91未知；6纹理令牌仅3个精确缓存命中。启动分支明确blocked：缺 `logo.24de1a47`、`cm_frame_smalltips.041d0ce7`、`EmojiOne.c4a4a55d`。独立4272B原Sprite配置bundle有据导出，不被启动缺件阻止：SpriteSaveInfo一类/一个Sprite[]字段保持脚本meta并通过本机Unity6 SDK编译；131Sprite引用仍缺，原方法0/native not_run。Provider95567 exit0/reaped，9文件16555B；recovery manifest `cb80fa0e7aa18e58a0ded0e6118faa62053200983aca39f3bb74bffdf75e437e`。
 
 永远的蔚蓝星球实际团结2022.3.61t9启动1761819B SHA `9fa7315932124bbc118117bc8d9acf12a9e18b95ae20386e827fb5626c908f78`。新inspection逐对象预算后3042对象2888parsed/154未知或预算缺口；全部完整版本保留，没有就近套普通Unity版本。固定AssetRipper虽返回ProjectSettings，但3042个对象全为UnreadableAssets，Assets原生资源0。因此新增强门：Provider receipt分列nativeAssetFiles与unreadableObjectFiles；没有实际原生资源时`exported_evidence_only`，公开convert必须blocked且不晋升Unity候选。旧01误分类partial原件/输出冻结，不追认成功；新02已正确blocked，Provider93252 exit0/reaped。团结原生资源/未知类/Lua方法/玩法仍未支持，不能凭UnityPy能读多数对象说已转换。
+
+
+### 自动精确依赖闭包
+
+```sh
+monkey convert --source /path/to/config.bundle --target unity6 --out /path/to/fresh \
+  --provider-python /path/to/python --asset-ripper /path/to/AssetRipper.GUI.Free \
+  --unity-dependency-manifest /path/to/frozen-bundles.json --unity-texture-cache /path/to/textures.json
+```
+
+依赖池与index-unity相同：显式schemaVersion1/files[path,bytes,sha256]，最多2000包/1GiB。必须完整通过固定Provider元数据索引。只按serialized-file完整身份与原external表收敛可达闭包，不按相近文件名、basename资源名或最近版本猜测；同serialized-file身份对应不同容器字节则拒绝，仅全容器字节相同的别名可等价。环、返回主包、自包含多serialized文件处理明确；缺件单列并保留未解决引用，不从池外读取。该参数与手工--dependency-source互斥。
+
+池是查找分母，只有精确可达部分进入资源导出；完整冻结池按SHA留SourceRecovery/DependencyLookup并有用途说明，不能把所有查找文件说成已导出资源。导出资源/实际消耗纹理输入计数、查找池计数/字节分列。每项索引源SHA、selected源SHA和最终原件副本再次核对；闭包与索引保留供接续核验。
+
+武侠新`outputs/unity2021-wuxia-closure-package-01`：冻结212包33404614B、49314元数据对象，全部索引成功。自动选中1依赖（主包合计2资源容器），并消费3精确ASTC缓存；实际资源/纹理5输入2271482B，未包含启动缺3纹理的独立分支。Provider97219 exit0/reaped、277文件12586350B、135原生资源、0Unreadable；原先131个缺引用占位降为0。SpriteSaveInfo一类/一个字段的C#与此前SDK编译代码逐字节相同，fresh Provider meta身份不同且分别保持，不冒称跨fresh继承旧GUID。recovery manifest `bd757d050d3afb12567d850d674f3fb125dd74215244e10470984a9beef3b81a`；原方法0、原生读回仍待公开native分支验证。3个source atlas PNG逐RGBA/hash与规范化源缓存按明确上下翻转对齐相同，原版视觉/玩法未验。

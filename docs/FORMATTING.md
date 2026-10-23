@@ -9,7 +9,7 @@ monkey format-project --project unimported-creator-candidate --plan fresh-previe
 
 按真实类型将资源放assets/content/images/sprites、fonts、config/recovered、animations、prefabs，Scene放assets/scenes，已证明的Label脚本放assets/scripts/presentation/ui、状态类放domain/state。不创造没有职责的空框架。只改ProjectModel资产路径槽、明确代码artifact/meta、source-map/name-map目标字段、handoff生成目标与导入器outputPaths；SourceId/UUID/原名/正文/逻辑key/数值资源原字节保持。BMFont只从明确font→atlas关系重发单page字段，不重写glyph数值。
 
-Preview包含input manifest/各文件hash/owner、typed路径、资源身份、物理移动和编辑字段。Apply重新生成计划并逐项比较，算法/输入/所有权不同即stale；再次核源文件，输出到fresh目录。大小写/Unicode/路径冲突、人工meta/资源改动、JS脚本meta尚未验证等不静默跳过。纯数值JSON测试保留1.2500、-0.0和恰含旧路径的加载字符串原字节，不做任意JSON/代码全局prefix替换。
+Preview包含input manifest/各文件hash/owner、typed路径、资源身份、物理移动和编辑字段。Apply重新生成计划并逐项比较，算法/输入/所有权不同即stale；再次核源文件，输出到fresh目录。大小写/Unicode/路径冲突、人工meta/资源改动、脚本meta/ESM模块边界不符等不静默跳过。纯数值JSON测试保留1.2500、-0.0和恰含旧路径的加载字符串原字节，不做任意JSON/代码全局prefix替换。
 
 ## 真实MainUi none/grea对照
 
@@ -27,3 +27,5 @@ Unity MainUi none/grea：113路径变化/183物理文件移动，Scene/Prefab代
 公开convert --target both --format grea --native已在合成样本执行第二轮完整端到端：Unity76820 exit0/reaped、Creator77095正常TERM/reaped，strict均0，orchestration=completed_native_stages。首轮因包内原图meta未收进回执严格失败并保留；新回执覆盖自有assets，并逐项核导出前封存GUID/UUID不变，未放宽元数据/内容检查。合成1节点链路不作为真实游戏恢复通过；真实129节点验证独立保留。
 
 旧整体字符串/JSON/代码替换写入器已退役，targets/layout.py只读旧manifest物理路径兼容；新生成只用typed槽和位置配置。数值JSON字节、脚本/原名/逻辑key不重写。格式化package resume暂拒绝并保留原工程，需fresh输出。
+
+JS次选已纳入fresh Creator格式：script UUID/meta原字节保持，只有typed脚本路径移动；生成的assets/package.json保持在assets根，不影响extensions的CommonJS入口。格式前强核代码合同中该JSON的SHA及精确type=module，漂移即拒绝。真实5绑定JS注册与公开单命令grea/native合成接线均已执行，范围与失败见CODE-SUBSET.md。

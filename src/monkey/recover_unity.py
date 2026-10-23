@@ -12,7 +12,7 @@ from .unity_code_model import model as code_model
 CODE_SUFFIXES={'.cs','.dll','.js','.jsc','.wasm','.lua','.so','.dylib'}
 
 
-def convert(source,output,provider_python,asset_ripper,budget_seconds=600,dependencies=None,texture_cache=None,schema_manifest=None,quarantine_invalid_textures=False):
+def convert(source,output,provider_python,asset_ripper,budget_seconds=600,dependencies=None,texture_cache=None,schema_manifest=None,quarantine_invalid_textures=False,dependency_manifest=None):
     if not 30<=budget_seconds<=1200:fail('UNITY_EXPORT_BUDGET','$','Expected 30..1200 seconds')
     source=safe(source);exe=safe(asset_ripper);requested_python=Path(provider_python).absolute();python=safe(requested_python.resolve(strict=True))
     if not source.is_file() or not exe.is_file() or not python.is_file():fail('UNITY_PROVIDER_MISSING','$','Source and existing providers must be files')
@@ -21,11 +21,16 @@ def convert(source,output,provider_python,asset_ripper,budget_seconds=600,depend
     if not kind:fail('UNITY_CONTAINER_UNSUPPORTED',str(source),'Expected an exact Unity bundle or UnityWebData1.0 signature')
     dependencies=[safe(p)for p in (dependencies or [])]
     if len(dependencies)>2000 or len(set([source,*dependencies]))!=len(dependencies)+1:fail('UNITY_DEPENDENCY_SET','$','Duplicate or oversized explicit dependencies')
+    dependency_pool=None
+    if dependency_manifest:
+        if dependencies:fail('UNITY_DEPENDENCY_OPTIONS','$','Use either explicit dependency files or one frozen lookup manifest')
+        from .unity_schemas import frozen_pool
+        dependency_pool=frozen_pool(dependency_manifest)
     schema_pool=None
     if schema_manifest:
         from .unity_schemas import frozen_pool
         schema_pool=frozen_pool(schema_manifest)
-    out=new_output(output,[source,exe.parent,python.parent,*dependencies,*([safe(texture_cache)]if texture_cache else []),*([safe(schema_manifest),*[Path(r['path'])for r in schema_pool['files']]]if schema_pool else [])])
+    out=new_output(output,[source,exe.parent,python.parent,*dependencies,*([safe(dependency_manifest),*[Path(r['path'])for r in dependency_pool['files']]]if dependency_pool else []),*([safe(texture_cache)]if texture_cache else []),*([safe(schema_manifest),*[Path(r['path'])for r in schema_pool['files']]]if schema_pool else [])])
     report=dict(schemaVersion=1,toolVersion=__version__,sourceFamily='unity',sourceProfile=kind+'-unitypy-1.25.3-assetripper-2.0.0',
                 status='partial',workflowStatus='needs_action',completed=False,resultKind='candidate',
                 format=dict(profile='none',applied=False),completionScope='explicit-unity-containers-and-consumed-texture-cache',inputFiles=1+len(dependencies),inputBytes=source.stat().st_size+sum(p.stat().st_size for p in dependencies),projects=[],
@@ -37,8 +42,21 @@ def convert(source,output,provider_python,asset_ripper,budget_seconds=600,depend
     if not inspected.get('sourceUnchanged') or not inspected.get('processExited') or inspected['status'] not in ('inspected','partial'):
         report['status']='failed';save();return report
     report['validation']['source']='partial' if inspected['summary']['unparsed'] else 'pass';save()
+    if dependency_pool:
+        from .unity_dependencies import resolve
+        typed_raw=read(out/'SourceInspection/typed-objects.json',max_bytes=128*1024*1024)
+        if sha(typed_raw)!=inspected['typedObjectsSha256']:fail('UNITY_DEPENDENCY_SOURCE_CHANGED',str(out),'Primary typed inspection changed')
+        lookup=resolve(load(typed_raw,max_nodes=8_000_000),dependency_pool,dependency_manifest,requested_python,out/'DependencyLookup',min(budget_seconds,600))
+        report['dependencyLookup']=lookup
+        dependencies=[Path(r['path'])for r in lookup['dependencies']]
+        report.update(inputFiles=1+len(dependencies),inputBytes=source.stat().st_size+sum(r['bytes']for r in lookup['dependencies']))
+        if lookup['missing']:report['diagnostics'].append(dict(code='UNITY_DEPENDENCY_LOOKUP_MISSING',items=lookup['missing'],message='Only exact serialized-file names resolve; missing resources remain unresolved'))
+        save()
     inspections=[(source,inspected)]
     for index,path in enumerate(dependencies):
+        if dependency_pool:
+            expected=next(r for r in dependency_pool['files']if r['path']==str(path))
+            if path.stat().st_size!=expected['bytes']or fingerprint(path)!=expected['sha256']:fail('UNITY_DEPENDENCY_SOURCE_CHANGED',str(path),'Selected dependency changed after indexing')
         extra=inspect_unity(path,requested_python,out/('DependencyInspection-'+str(index)),min(budget_seconds,120),schema_manifest=schema_manifest)
         inspections.append((path,extra))
         if extra['status'] not in ('inspected','partial') or not extra.get('sourceUnchanged') or not extra.get('processExited'):
@@ -100,6 +118,17 @@ def convert(source,output,provider_python,asset_ripper,budget_seconds=600,depend
             entries.append(dict(path=name,bytes=len(payload),sha256=row['sha256'],disposition='schema-only-frozen-source-not-exported-as-resource'))
         write_json(frozen/'manifest.json',dict(schemaVersion=1,sourceManifestSha256=schema_pool['sourceManifestSha256'],files=entries))
         report['schemaPool']=dict(manifestSha256=schema_pool['sourceManifestSha256'],files=len(entries),bytes=sum(r['bytes']for r in entries),resourcesExported=False,originalsRetained=True)
+    if dependency_pool:
+        frozen=recovery/'DependencyLookup';frozen.mkdir();entries=[]
+        for row in dependency_pool['files']:
+            payload=read(safe(row['path']),max_bytes=128*1024*1024)
+            if len(payload)!=row['bytes']or sha(payload)!=row['sha256']:fail('UNITY_DEPENDENCY_SOURCE_CHANGED',row['path'],'Frozen lookup pool changed before evidence copy')
+            name=row['sha256']+'.bundle';dest=frozen/name
+            if not dest.exists():dest.write_bytes(payload)
+            entries.append(dict(path=name,bytes=len(payload),sha256=row['sha256']))
+        write_json(frozen/'manifest.json',dict(schemaVersion=1,sourceManifestSha256=dependency_pool['sourceManifestSha256'],files=entries,scope='lookup pool; only exact reachable closure exported as resources'))
+        shutil.copy2(out/'DependencyLookup/closure.json',analysis/'dependency-closure.json')
+        shutil.copy2(out/'DependencyLookup/Index/unity-index.json',frozen/'unity-index.json')
     package_path=project/'Packages/manifest.json'
     package=load(read(package_path));shutil.copy2(package_path,analysis/'provider-packages.json')
     removed=[]

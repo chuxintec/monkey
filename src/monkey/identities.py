@@ -36,3 +36,9 @@ def verify(root,manifest):
             if value!=entry['id']:errors.append(diagnostic('ASSIGNED_NATIVE_IDENTITY_CHANGED',path,'Pre-existing resource/script identity changed'))
         except (OSError,ValueError):errors.append(diagnostic('ASSIGNED_NATIVE_IDENTITY_CHANGED',path,'Pre-existing meta missing or invalid'))
     return errors
+
+
+def creator_script_class_id(uuid):
+    if not isinstance(uuid,str)or not re.fullmatch(r'[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}',uuid):fail('CREATOR_SCRIPT_UUID',str(uuid),'Expected assigned canonical script UUID')
+    raw=uuid.replace('-','');alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+    return raw[:5]+''.join(alphabet[int(raw[i:i+3],16)>>6]+alphabet[int(raw[i:i+3],16)&63]for i in range(5,32,3))

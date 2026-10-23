@@ -5,6 +5,12 @@ function type(spec) {
     if(!/^[A-Za-z_][A-Za-z0-9_]*$/.test(spec.codeClassName||''))throw Error('Invalid generated class name');
     const ctor=cc.js.getClassByName(spec.codeClassName);
     if(typeof ctor!=='function'||!(ctor.prototype instanceof cc.Label))throw Error('Generated Label class not registered: '+spec.codeClassName);
+    if(spec.codeScriptUuid) {
+        if(!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(spec.codeScriptUuid))throw Error('Invalid generated script UUID');
+        const raw=spec.codeScriptUuid.replace(/-/g,''),alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';let expected=raw.slice(0,5);
+        for(let i=5;i<32;i+=3){const value=parseInt(raw.slice(i,i+3),16);expected+=alphabet[value>>6]+alphabet[value&63];}
+        if(cc.js.getClassId(ctor,false)!==expected)throw Error('Generated Label registered under a different script UUID');
+    }
     return ctor;
 }
 function methods(component,spec) {

@@ -12,7 +12,7 @@ monkey code-emit --source original-module.js --code-model fresh-facts/code-model
 
 只有RF原名/身份、IIFE cc.Label参数、构造别名和方法作用域吻合时，才生成显式Label/TMP表现适配。原继承/decorator helper并未执行或恢复；有限Label字段projection拒绝丢弃未知序列化业务字段。原`_N$overflow`精确读取，冲突拒绝；数字小样的SHRINK用明确baked静态呈现，动态缩字不算恢复。
 
-`code-emit`可以单独输出代码子集；包级`convert --numeric-code-contract numeric.json`已接入相同发现/生成/组件投射/双目标导出链。它不自动补齐所有方法。Unity脚本GUID和默认TS脚本UUID由namespace+源身份确定、独立于目标路径；Creator TS meta4.0.24来自实际3.8.8导入回读。固定meta的新输出仍须真实验证；JS importer metadata尚未实证，包级绑定明确拒绝js选项，独立code-emit仍可生成次选JS证据。
+`code-emit`可以单独输出代码子集；包级`convert --numeric-code-contract numeric.json`已接入相同发现/生成/组件投射/双目标导出链。它不自动补齐所有方法。Unity脚本GUID和TS/JS脚本UUID由namespace+源身份确定、独立于目标路径；Creator TS meta4.0.24来自实际3.8.8导入回读。固定meta的新输出仍须真实验证；JS importer也已实际回读为javascript4.0.24；包级已接受显式js，生成assets/package.json局部ESM边界。
 
 ## 包级单命令
 
@@ -47,3 +47,12 @@ monkey convert --input-set inputs.json --target both --out fresh \
 - Creator实际初始自动分配脚本UUID86325443-58b5-4b92-b0e4-bc27ec362d46、classId86325RDWLVLkrDkvCfsNi1G，TypeScript meta4.0.24。此自动分配结果不能作为跨新工程/格式恒定身份承诺；后续固定meta用明确新输出验证，不追改该冻结结果。
 
 以上是原生资源接线与数字方法子集，不代表数字动画/SHRINK动态行为/原版视觉/输入/可玩已通过。
+
+
+## JS次选真实注册与公开编排
+
+首JS native01确实失败（own96108，正常TERM/reaped）：未预分配meta导致identity门失败，且默认`.js`按CommonJS解释，原ESM import不能加载；旧结果保留。使用[官方3.8模块规范](https://docs.cocos.com/creator/3.8/manual/en/scripting/modules/spec.html)所声明的最近package.json/type=module规则，在assets根写明确模块边界，保持ESM JS，不改成TS或plugin；extensions仍在该边界外。实际JS importer=javascript/ver4.0.24来自首轮Editor读回，使用已验证meta结构和namespace/RF固定UUID。
+
+新实际MainUi129节点/5原RF绑定JS native02：own96527于22:41:40.702916Z→22:41:58.153501Z正常TERM/reaped，editorpass/strict0。JS classId `d70c6lDSQpbe7+KyntJCtEm` 对应script UUID `d70c6943-490a-5b7b-bf8a-ca7b490ad126`；Scene与独立Prefab各5绑定、未初始化态、数字边界/隔离/原文字体保持、几何和保存重载通过。candidate manifest `1318825850d7e83cd41f051478286afa0c3c095feaf7971594af9a06fcb18a69`。身份独立只读审计 `outputs/number-label-js-identity-audit-01`六门全true，旧输出未改；4未知方法及SHRINK动态行为继续pending。
+
+公开`convert --cocos-code-language js --format grea --native`合成端到端02（7输入/1组件）：own97084于22:47:18.787472Z→22:47:35.091237Z正常TERM/reaped、editorpass/strict0，manifest `d200ccbdca2a9185fb209dc0b5df281666ec3716bbb319f9c747e06f53131bed`。01只在格式计划哈希变量误用处失败，保留未格式化候选、native未启动。修正不放宽源hash保护。脚本移动而assets/package.json边界保持；installer只把.cs/.ts/.js当脚本，不把模块JSON误作scriptPath。新投射带codeScriptUuid，类型注册和读回均强核实际压缩classId，而非只看类名。C#输出不因Creator语言选择而改变。

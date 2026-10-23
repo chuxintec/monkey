@@ -51,6 +51,10 @@ def _build(project):
     contract_path=root/'Analysis/code-contract.json'
     if contract_path.exists():
         contract=load(read(contract_path));kind=contract.get('presentation',{}).get('kind')
+        if contract.get('cocosCodeLanguage')=='js':
+            boundary=next((f for f in contract['files']if f['path']=='Cocos/assets/package.json'),None)
+            module_boundary_raw=read(root/'assets/package.json')
+            if not boundary or sha(module_boundary_raw)!=boundary['sha256']or load(module_boundary_raw)!={'type':'module'}:fail('FORMAT_JS_MODULE_BOUNDARY','assets/package.json','Exact generated ESM package boundary required; it stays at the assets root')
         for entry in contract['files']:
             if not entry['path'].startswith('Cocos/assets/generated/scripts/')or entry['path'].endswith('.meta'):continue
             old=entry['path'].removeprefix('Cocos/')

@@ -36,6 +36,19 @@ def numeric_fixture(root, extra=None):
 
 
 class PackageCodeTests(unittest.TestCase):
+    def test_js_public_export_keeps_esm_boundary_and_formats_actual_script(self):
+        with tempfile.TemporaryDirectory()as tmp:
+            root=Path(tmp).resolve();source,contract=numeric_fixture(root)
+            with contextlib.redirect_stdout(io.StringIO()):
+                main(['convert','--source',str(source),'--target','cocos38','--numeric-code-contract',str(contract),'--cocos-code-language','js','--format','grea','--out',str(root/'out')])
+            project=root/'out/CocosProject';manifest=load(read(project/'manifest.json'))
+            self.assertEqual(manifest['codeEmission']['language'],'js')
+            self.assertEqual(manifest['codeEmission']['scriptPath'],'assets/scripts/presentation/ui/Meter.js')
+            self.assertEqual(load(read(project/'assets/package.json')),{'type':'module'})
+            meta=load(read(project/'assets/scripts/presentation/ui/Meter.js.meta'))
+            self.assertEqual((meta['importer'],meta['ver']),('javascript','4.0.24'))
+            self.assertEqual(meta['uuid'],manifest['codeEmission']['scriptUuid'])
+
     def test_one_public_command_discovers_emits_binds_and_formats_both_targets(self):
         with tempfile.TemporaryDirectory()as tmp:
             root=Path(tmp).resolve();source,contract=numeric_fixture(root)
@@ -69,7 +82,8 @@ class PackageCodeTests(unittest.TestCase):
             spec['data']['moduleSha256']='0'*64
             with self.assertRaisesRegex(ParseError,'SOURCE_CHANGED'):prepare(found,spec,'test',root/'changed')
             self.assertFalse((root/'changed').exists())
-            with self.assertRaisesRegex(ParseError,'JS_PENDING'):declaration(contract,'js')
+            self.assertEqual(declaration(contract,'js')['language'],'js')
+            with self.assertRaises(ParseError):declaration(contract,'lua')
             self.assertEqual(read(source/'game.js'),SCRIPT)
 
     def test_unknown_serialized_business_field_stops_declared_binding_not_baseline_success(self):

@@ -8,12 +8,12 @@ def declaration(path, language='ts'):
     path=safe(path);raw=read(path);data=load(raw)
     if data.get('schemaVersion')!=1 or data.get('kind')!='numeric-call-subdomain-v1':
         fail('PACKAGE_CODE_CONTRACT',str(path),'Expected numeric-call-subdomain-v1 schema 1')
-    if language!='ts':fail('PACKAGE_CODE_JS_PENDING',str(path),'Package binding currently requires verified TypeScript importer metadata')
+    if language not in ('ts','js'):fail('PACKAGE_CODE_LANGUAGE',str(language),'Expected ts or js')
     if set(data)!={'schemaVersion','kind','moduleName','registrationId','moduleSha256','numericField'}:
         fail('PACKAGE_CODE_CONTRACT',str(path),'Unknown or missing contract fields')
     if any(not isinstance(data[k],str)or not data[k]for k in ('moduleName','registrationId','moduleSha256','numericField')):
         fail('PACKAGE_CODE_CONTRACT',str(path),'Expected explicit nonempty source identity and field')
-    return dict(path=str(path),sha256=sha(raw),data=data)
+    return dict(path=str(path),sha256=sha(raw),data=data,language=language)
 
 
 def prepare(recovered, spec, namespace, output):
@@ -29,7 +29,7 @@ def prepare(recovered, spec, namespace, output):
     if sha(declaration_raw)!=spec['sha256']:fail('PACKAGE_CODE_CONTRACT_CHANGED',spec['path'],'Declaration changed before emission')
     out=new_output(output);source=out/'OriginalModule.js';source.write_bytes(raw);(out/'OriginalContract.json').write_bytes(declaration_raw)
     inspect(source,out/'Model',data['moduleName'])
-    emit(source,out/'Model/code-model.json',out/'Emitted',[data['numericField']],'ts',namespace)
+    emit(source,out/'Model/code-model.json',out/'Emitted',[data['numericField']],spec.get('language','ts'),namespace)
     contract=load(read(out/'Emitted/Analysis/code-contract.json'))
     if contract['presentation']['kind']!='label-adapter' or contract['presentation']['sourceRegistration']['identity']!=data['registrationId']:
         fail('PACKAGE_CODE_BASE',module['sourceId'],'Only source-proven native Label adapters currently bind automatically')
@@ -55,7 +55,7 @@ def project_ir(ir_path, inspected, emission, output):
         if sid not in asset_ids:continue
         for c in label_components(asset['document'],sid,contract):
             if c['sourceId']in replacements:fail('PACKAGE_CODE_BINDINGS',c['sourceId'],'Repeated source component')
-            c.update(codeClassName=contract['className'],codeScriptGuid=contract['nativeIdentity']['unityScriptGuid'],numericMethods=report['numericMethods'])
+            c.update(codeClassName=contract['className'],codeScriptGuid=contract['nativeIdentity']['unityScriptGuid'],codeScriptUuid=contract['nativeIdentity']['creatorScriptUuid'],numericMethods=report['numericMethods'])
             replacements[c['sourceId']]=c
     if set(replacements)!=expected:fail('PACKAGE_CODE_BINDINGS',identity,'Projection must cover every original matching component exactly once')
     out=new_output(output,[ir_path,emission])
@@ -84,12 +84,14 @@ def install(emission, project, profile, manifest, plan):
         rel=row['path']if original else row['path'].removeprefix(prefix);dest=inside(project,rel)
         if dest.exists():fail('PACKAGE_CODE_COLLISION',rel,'Refuse to replace an existing generated asset')
         dest.parent.mkdir(parents=True,exist_ok=True);dest.write_bytes(raw)
-        if not original and not rel.endswith('.meta'):script=rel
+        if not original and rel.endswith(('.cs','.ts','.js')):
+            if script is not None:fail('PACKAGE_CODE_TARGET',rel,'Expected one target script')
+            script=rel
     shutil.copy2(contract_path,project/'Analysis/code-contract.json')
     binding_report=load(read(emission/'package-code.json'))
     binding_report['sourceBindings']=[dict(sourceId=c['sourceId'],node=c['node'],state='planned_native_import'if c['convertible']else'blocked_presentation_adapter')for c in plan['components']if c.get('codeClassName')==contract['className']]
     write_json(project/'Analysis/package-code.json',binding_report)
     shutil.copy2(emission/'OriginalContract.json',project/'Analysis/numeric-code-declaration.json')
-    manifest['codeEmission']=dict(language='csharp'if profile==unity.PROFILE else'ts',sourceContractSha256=sha(read(contract_path)),
+    manifest['codeEmission']=dict(language='csharp'if profile==unity.PROFILE else contract.get('cocosCodeLanguage','ts'),sourceContractSha256=sha(read(contract_path)),
         scriptPath=script,scriptGuid=contract['nativeIdentity']['unityScriptGuid']if profile==unity.PROFILE else None,
         scriptUuid=contract['nativeIdentity']['creatorScriptUuid']if profile!=unity.PROFILE else None,sourceRegistration=contract['presentation']['sourceRegistration'])

@@ -22,6 +22,9 @@ def numeric(specs,rows,engine,scope,exercise=None):
             valid=valid and isinstance(spec.get('codeScriptGuid'),str)and bool(re.fullmatch('[0-9a-f]{32}',spec['codeScriptGuid']))and row.get('scriptGuid')==spec['codeScriptGuid']and row.get('bound')is True and _id(row.get('componentFileId'))and _id(row.get('labelFileId'))and row.get('fileIdOwner')in ('persistent-asset','saved-prefab-source')
         else:
             valid=valid and row.get('className')==spec['codeClassName']and all(isinstance(row.get(k),str)and row[k]for k in ('classId','componentUuid','nodeUuid'))
+            if spec.get('codeScriptUuid'):
+                from .identities import creator_script_class_id
+                valid=valid and row.get('classId')==creator_script_class_id(spec['codeScriptUuid'])
         if not valid:errors.append(diagnostic('NUMERIC_CODE_BINDING_READBACK',scope+'/'+source_id,'Saved numeric class/script/reference/identity/state differs',source_id))
     if exercise is not None:
         trials=table(exercise)
