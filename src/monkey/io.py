@@ -102,7 +102,7 @@ def finish(out, report):
     report['files'] = [dict(path=p.relative_to(out).as_posix(), sha256=sha(p.read_bytes()),
                             bytes=p.stat().st_size, owner=('manual' if p.relative_to(out).as_posix().startswith(('Assets/Manual/','assets/manual/')) else 'generated'))
                        for p in sorted(out.rglob('*')) if p.is_file() and p != out / 'manifest.json']
-    limit=(1024 if report.get('scopeMode')=='whole-input' else 256)*1024*1024
+    limit=(4096 if report.get('scopeMode')=='whole-input' else 256)*1024*1024
     if sum(f['bytes'] for f in report['files']) > limit:
         fail('OUTPUT_BUDGET',str(out),'Candidate exceeds declared stage output budget')
     if report.get('scopeMode')=='whole-input':report['limits']=dict(maxOwnedOutputBytes=limit)

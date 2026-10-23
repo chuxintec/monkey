@@ -31,3 +31,7 @@ bin/monkey convert --input-set .private/full-foodstreet-audit-01/inputs.json --t
 ## 首轮实际排查：P1 等价缓存索引
 
 full-foodstreet-01完成17201项双端文件台账，但Structured/recovery.json为DUPLICATE_BUNDLE失败，nativeObjects=pending_adapter，不是结构化成功。原缓存gameAsset时间戳JSON与CDN索引等价，被reader按重复bundle拒绝。修复选择前验证整份索引语义哈希一致，仅在等价组选择实际具备import/native树的根，所有别名/原件留存；索引冲突仍拒绝。缓存裸索引先出现且缺载荷的反例已通过，四项structured检查通过；阶段签名纳入structured.py。新02输出重跑实际失败路径，旧01保持证据，不当Native通过。
+
+人类当前monkey聊天追加批准下载CDN/远程包并补充肥鹅；已实际GET19个已知端点，12响应同原件、7HTTP404，原16627 CDN文件全部本地SHA/长度verified，无新增文件。9远程bundle均isZip=false，脚本原包内嵌；miniGame微信代码分包缺少可下载URL仍缺。肥鹅Analysis/acquisition/monkey-full-20261023-01及Evidence/README已补回执，不改产品/角色/服务。缓存462个wxfile原ID因冻结目录移除usr/gamecaches前缀，按明确前缀重定位全与CDN同hash，原manifest未改。当前full02正在normalize，资源窗口尚未申请/执行。
+
+全量02已解析23955源对象，包含1776 Spine、8467 SpriteFrame、1696 Prefab、358 AudioClip、23 JsonAsset；四个等价缓存索引已正确映射CDN。归一化实际输出约1.6GiB触发旧1GiB owned-output上限，阶段失败且保持证据；这是实际解码膨胀预算而不是漏源。仅whole-input输出上限有界增至4GiB，保留切片256MiB/原始解析32MiB/单文件128MiB/生成文档128MiB限制；生成IR70MiB在已声明128MiB元数据预算内。下一全新03继续，02不原地修改。

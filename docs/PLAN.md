@@ -227,3 +227,7 @@ launcher3/structured3/边界4及SDK C#离线编译05通过，新执行路径没�
 全量来源审计已完成：17216项SHA/字节全部verified，无覆盖目录外新增/缺失；17201项884709704字节入转换，15项20908648字节参考排除，两个plain包27/72条与snapshot匹配。input-set SHA 1fef746ef5f4483aa9605da81aef4a8ed6cea736834b2024169a00c6aa60fff2，64b7c51公开CLI正在生成outputs/full-foodstreet-01双目标。审计见validation/2026-10-23-full-foodstreet-audit.md。
 
 全量01已实际完成17201项双目标台账，但结构化阶段因等价缓存bundle索引重复而失败，不能作为工程转换成功。P1已定位并修复：相同语义索引先核验一致再按实际import/native树选择，保留全部原件和别名回执；冲突索引仍拒绝。新增反例通过，四项structured检查通过；阶段签名纳入structured编排源码，避免复用改变前逻辑。接下来新建02重跑受影响全量结构化链，01失败候选保留。
+
+人类当前monkey聊天追加批准下载CDN/远程包并补充肥鹅；已实际GET19个已知端点，12响应同原件、7HTTP404，原16627 CDN文件全部本地SHA/长度verified，无新增文件。9远程bundle均isZip=false，脚本原包内嵌；miniGame微信代码分包缺少可下载URL仍缺。肥鹅Analysis/acquisition/monkey-full-20261023-01及Evidence/README已补回执，不改产品/角色/服务。缓存462个wxfile原ID因冻结目录移除usr/gamecaches前缀，按明确前缀重定位全与CDN同hash，原manifest未改。当前full02正在normalize，资源窗口尚未申请/执行。
+
+全量02已解析23955源对象，包含1776 Spine、8467 SpriteFrame、1696 Prefab、358 AudioClip、23 JsonAsset；四个等价缓存索引已正确映射CDN。归一化实际输出约1.6GiB触发旧1GiB owned-output上限，阶段失败且保持证据；这是实际解码膨胀预算而不是漏源。仅whole-input输出上限有界增至4GiB，保留切片256MiB/原始解析32MiB/单文件128MiB/生成文档128MiB限制；生成IR70MiB在已声明128MiB元数据预算内。下一全新03继续，02不原地修改。
