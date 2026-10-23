@@ -46,6 +46,9 @@ def main(argv=None):
     p.add_argument('--remote-cache-root', help='Read-only root for paths in the remote manifest')
     p.add_argument('--acquisition-out', help='Fresh acquired-files workspace; default OUTPUT-acquired')
     p.add_argument('--remote-budget-seconds', type=int, default=900, help='Acquisition budget, 30..3600 seconds')
+    p = sub.add_parser('project-model', help='Inspect explicit target asset path slots and identity without moving files')
+    p.add_argument('--candidate', required=True)
+    p.add_argument('--out', required=True)
     p = sub.add_parser('code-model', help='Inspect named methods and evidenced semantic candidates without executing JavaScript')
     p.add_argument('--source', required=True)
     p.add_argument('--module-name', required=True)
@@ -103,7 +106,7 @@ def main(argv=None):
     try:
         if args.command == 'capabilities':
             print(json.dumps(dict(version=__version__, profiles=[PROFILE,PROJECT_PROFILE], targetProfiles=[UNITY_PROFILE,cocos.PROFILE],
-                schemaVersion=1, implemented=['convert','catalog','inspect','normalize','plan','export','verify','handoff','diff','register','apply','preflight','native-import','research-matrix','code-model'], planned=[],
+                schemaVersion=1, implemented=['convert','catalog','inspect','normalize','plan','export','verify','handoff','diff','register','apply','preflight','native-import','research-matrix','code-model','project-model'], planned=[],
                 targetValidation={UNITY_PROFILE:dict(static='implemented',editor='representative-subset-verified',visual='not_run'),cocos.PROFILE:dict(static='implemented',editor='representative-subset-verified',visual='not_run')},
                 compiledFormats=['compiled-v1','pack-v1','texture-pack-v1'],
                 containerFormats=['plain-wxapkg','APK-ZIP','Cocos-resource-directory'],
@@ -111,6 +114,10 @@ def main(argv=None):
                                      nativeObjectRecovery='shared-ir-supported-subset',packageResume='hash-checked',inputSets='explicit-local-roots',editorOrchestration='manifest-bound-native-import-command',remoteAcquisition='explicit-manifest-bounded-fetch'),
                 imageFormats=['PNG','JPEG','ASTC (optional pinned decoder)'],animationSchemaVersion=1,
                 animationSubset=['local-position','local-scale','opacity','linear','constant-step','Normal','Loop'],animationEvents='manual-contract-only', targetEditorValidation='representative-subsets-only'), ensure_ascii=False))
+            return 0
+        if args.command == 'project-model':
+            from .project_model import inspect as project_model
+            print(json.dumps(project_model(args.candidate,args.out),ensure_ascii=False))
             return 0
         if args.command == 'code-model':
             from .code_model import inspect as code_model
