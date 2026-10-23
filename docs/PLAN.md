@@ -8,9 +8,9 @@
 
 发布前main历史路径/blob检查未发现私有原件/产物/凭据特征；9项CLI/编排检查、wheel/sdist内容、sdist重建wheel逐文件一致及隔离安装7合成文件双端CLI烟测通过。无全局安装/新引擎/服务变更。旧0.3.dev/full14证据不改身份；full14资源层零诊断不等于914业务初稿/动态语义/Spine播放/视觉交互完成。
 
-本地已从v0.1建立codex/v0.2，未推该分支。总监event monkey-v02-design-review-20261024-01已通过docs/V0.2-PLAN.md主体（Manager/decisions/20261024-monkey-v01-v02/DESIGN-REVIEW.md），不再等普通ACK。两项具体样例已在V0.2-EXAMPLES.md补齐：真实NumberLabel模块SHA/方法/5处MainUi绑定、C#/实际JS的有据方法和未知接口；同一MainUi的none/grea具体路径、稳定GUID/UUID/引用及v0.1旧自动布局的明确迁移。用户新要求Cocos代码TS优先、JS次选（总监human01a169c9-28a9-7120-96b0-df9511be3764已原生读取），默认TS及--cocos-language ts|js具体合同已同步方案。现在按既定Research发现/阶段结果/CodeModel/ProjectModel→U→C→全Research持续实现，不增加审批。
+本地已从v0.1建立codex/v0.2，未推该分支。用户明确推进到v0.2开发完成（总监human01a169c7-6ea9-7fb3-a08a-bb2fe1819996已原生核验）；不以检查点替代版本出口，也未授权v0.2远端发布。总监event monkey-v02-design-review-20261024-01已通过docs/V0.2-PLAN.md主体（Manager/decisions/20261024-monkey-v01-v02/DESIGN-REVIEW.md），不再等普通ACK。两项具体样例已在V0.2-EXAMPLES.md补齐：真实NumberLabel模块SHA/方法/5处MainUi绑定、C#/实际JS的有据方法和未知接口；同一MainUi的none/grea具体路径、稳定GUID/UUID/引用及v0.1旧自动布局的明确迁移。用户新要求Cocos代码TS优先、JS次选（总监human01a169c9-28a9-7120-96b0-df9511be3764已原生读取），默认TS及--cocos-code-language ts|js具体合同已同步方案。现在按既定Research发现/阶段结果/CodeModel/ProjectModel→U→C→全Research持续实现，不增加审批。
 
-Research发现CLI已实际实现并扫出11案例（9可检查证据目录/2外部指针），缺源/未知仍在分母且export全部not_run；输出outputs/research-matrix-v02-01，2项动态新增/未知/坏metadata/symlink反例通过。发现不冒充兼容或导出，下一包结果/typed合同。
+Research发现CLI已实际实现并扫出11案例（9可检查证据目录/2外部指针），缺源/未知仍在分母且export全部not_run；输出outputs/research-matrix-v02-01，2项动态新增/未知/坏metadata/symlink反例通过。发现不冒充兼容或导出，具名CodeModel CLI已读取真实NumberLabel六方法（2字段读写语义候选/4明确unsupported），逐方法字节范围/SHA与未执行声明，仍未编译或恢复完整业务。2项Unicode范围/源不可执行/重复方法歧义反例通过；下一包ProjectModel/格式typed路径与U provider输出。
 
 Unity typed reader草稿保留在stash，不混v0.1，恢复前先按新合同核对。来源全矩阵11真实游戏已列，unknown/缺源仍在分母。仅工具开发，不恢复暂停游戏或改GREA/服务器，不新Agent。
 

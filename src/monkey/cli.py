@@ -46,6 +46,10 @@ def main(argv=None):
     p.add_argument('--remote-cache-root', help='Read-only root for paths in the remote manifest')
     p.add_argument('--acquisition-out', help='Fresh acquired-files workspace; default OUTPUT-acquired')
     p.add_argument('--remote-budget-seconds', type=int, default=900, help='Acquisition budget, 30..3600 seconds')
+    p = sub.add_parser('code-model', help='Inspect named methods and evidenced semantic candidates without executing JavaScript')
+    p.add_argument('--source', required=True)
+    p.add_argument('--module-name', required=True)
+    p.add_argument('--out', required=True)
     p = sub.add_parser('research-matrix', help='Discover every Research game without converting or following external sources')
     p.add_argument('--root', required=True)
     p.add_argument('--out', required=True)
@@ -99,7 +103,7 @@ def main(argv=None):
     try:
         if args.command == 'capabilities':
             print(json.dumps(dict(version=__version__, profiles=[PROFILE,PROJECT_PROFILE], targetProfiles=[UNITY_PROFILE,cocos.PROFILE],
-                schemaVersion=1, implemented=['convert','catalog','inspect','normalize','plan','export','verify','handoff','diff','register','apply','preflight','native-import','research-matrix'], planned=[],
+                schemaVersion=1, implemented=['convert','catalog','inspect','normalize','plan','export','verify','handoff','diff','register','apply','preflight','native-import','research-matrix','code-model'], planned=[],
                 targetValidation={UNITY_PROFILE:dict(static='implemented',editor='representative-subset-verified',visual='not_run'),cocos.PROFILE:dict(static='implemented',editor='representative-subset-verified',visual='not_run')},
                 compiledFormats=['compiled-v1','pack-v1','texture-pack-v1'],
                 containerFormats=['plain-wxapkg','APK-ZIP','Cocos-resource-directory'],
@@ -108,6 +112,10 @@ def main(argv=None):
                 imageFormats=['PNG','JPEG','ASTC (optional pinned decoder)'],animationSchemaVersion=1,
                 animationSubset=['local-position','local-scale','opacity','linear','constant-step','Normal','Loop'],animationEvents='manual-contract-only', targetEditorValidation='representative-subsets-only'), ensure_ascii=False))
             return 0
+        if args.command == 'code-model':
+            from .code_model import inspect as code_model
+            print(json.dumps(code_model(args.source,args.out,args.module_name),ensure_ascii=False))
+            return 1
         if args.command == 'research-matrix':
             from .research_cases import discover
             print(json.dumps(discover(args.root,args.out),ensure_ascii=False))

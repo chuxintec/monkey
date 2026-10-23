@@ -1,0 +1,43 @@
+'use strict';
+// Static AST facts and a deliberately narrow semantic subset; no input execution.
+const fs=require('node:fs'),crypto=require('node:crypto'),acorn=require('./sources/acorn.cjs');
+const raw=fs.readFileSync(0);if(raw.length>32*1024*1024)throw Error('Source budget');
+const source=new TextDecoder('utf-8',{fatal:true}).decode(raw);
+const ast=acorn.parse(source,{ecmaVersion:2020,sourceType:'script',allowReturnOutsideFunction:true});
+const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
+const range=n=>({start:Buffer.byteLength(source.slice(0,n.start)),end:Buffer.byteLength(source.slice(0,n.end))});
+const property=n=>n?.type==='MemberExpression'&&!n.computed&&n.property.type==='Identifier'?n.property.name:null;
+const field=n=>n?.type==='MemberExpression'&&n.object.type==='ThisExpression'?property(n):null;
+const methods=[],calls=[],members=[],stack=[[ast,[],0]];let count=0;
+while(stack.length){
+ const [n,parents,depth]=stack.pop();if(++count>1000000||depth>256)throw Error('AST budget');
+ if(n.type==='CallExpression'){
+  const method=property(n.callee);if(method)calls.push({method,sourceBytes:range(n)});
+ }
+ if(n.type==='AssignmentExpression'&&n.operator==='='&&property(n.left)&&['FunctionExpression','ArrowFunctionExpression'].includes(n.right.type)){
+  const fn=n.right,pname=property(n.left),owner=n.left.object;
+  const prototype=property(owner)==='prototype'&&owner.object.type==='Identifier';
+  const alias=prototype?owner.object.name:owner.type==='Identifier'?owner.name:null;
+  if(alias){
+   const scope=[...parents].reverse().find(p=>['FunctionExpression','FunctionDeclaration','Program'].includes(p.type));
+   const body=fn.body.type==='BlockStatement'?fn.body.body:[];
+   let semantic={kind:'unsupported',reason:'Statement/type/evaluation semantics require recovery'};
+   if(prototype&&fn.params.length===0&&body.length===1&&body[0].type==='ReturnStatement'&&field(body[0].argument))semantic={kind:'read-instance-field',field:field(body[0].argument)};
+   if(prototype&&fn.params.length===1&&fn.params[0].type==='Identifier'&&body.length===1){
+    const e=body[0].type==='ExpressionStatement'?body[0].expression:null;
+    if(e?.type==='AssignmentExpression'&&e.operator==='='&&field(e.left)&&e.right.type==='Identifier'&&e.right.name===fn.params[0].name)semantic={kind:'write-instance-field',field:field(e.left),parameter:fn.params[0].name};
+   }
+   const r=range(n),bytes=raw.subarray(r.start,r.end);
+   methods.push({name:pname,static:!prototype,ownerAlias:alias,scopeBytes:range(scope),sourceBytes:r,sourceSha256:hash(bytes),
+      parameters:fn.params.map(p=>p.type==='Identifier'?{name:p.name,sourceType:'unknown'}:{name:null,sourceType:'unsupported-binding',sourceBytes:range(p)}),semantic});
+  }
+ }
+ for(const [k,v] of Object.entries(n)){
+  if(k==='start'||k==='end')continue;
+  if(Array.isArray(v)){for(let i=v.length-1;i>=0;i--)if(v[i]&&typeof v[i].type==='string')stack.push([v[i],[...parents,n],depth+1]);}
+  else if(v&&typeof v.type==='string')stack.push([v,[...parents,n],depth+1]);
+ }
+}
+methods.sort((a,b)=>a.sourceBytes.start-b.sourceBytes.start);
+process.stdout.write(JSON.stringify({schemaVersion:1,source:{sha256:hash(raw),bytes:raw.length},methods,calls,sourceExecuted:false,
+  scope:'AST facts; field-copy semantics only; types and enclosing aliases require explicit contract'}));

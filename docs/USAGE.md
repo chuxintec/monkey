@@ -10,6 +10,12 @@ monkey research-matrix --root /path/to/Research/games --out /path/to/new-matrix
 
 Cocos代码按用户最新要求默认TS优先，JS次选；具体CLI/实现状态见V0.2-PLAN/V0.2-EXAMPLES，尚未宣称代码生成与格式化已完成。
 
+```sh
+monkey code-model --source /path/to/source-module.js --module-name NumberLabel --out /path/to/new-code-model
+```
+
+静态具名方法和源字节范围/hash；当前只把实例字段读/写标为语义候选，其余方法明确unsupported。该命令不执行源JS、不生成可用业务代码，partial/exit1；实际代码生成仍在后续实现。
+
 # v0.1 命令说明
 
 正式工具版本v0.1，Python包0.1.0；`monkey --version`和`monkey capabilities --json`可核对。旧0.3.0.dev1为内部开发候选编号，旧证据不改写；跨toolVersion的resume/reuse按原身份合同拒绝，需明确新输出，不静默改旧候选。
