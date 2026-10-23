@@ -258,7 +258,10 @@ def export(plan_path, output):
     ownership=[]
     for c in p['copies']:
         target=inside(out,c['target']);target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(read(inside(plan_path.parent,c['source'])))
-        Path(str(target)+'.meta').write_text('fileFormatVersion: 2\nguid: '+c['guid']+'\n',encoding='utf-8')
+        metadata='fileFormatVersion: 2\nguid: '+c['guid']+'\n'
+        if c['role'] in ('sprite','bitmap-atlas'):
+            metadata+='TextureImporter:\n  serializedVersion: 13\n  externalObjects: {}\n  textureType: 0\n  textureShape: 1\n  alphaSource: 0\n  alphaIsTransparency: 1\n'
+        Path(str(target)+'.meta').write_text(metadata,encoding='utf-8')
         ownership.append(dict(path=c['target'],sourceId=c['sourceId'],guid=c['guid']))
     view_path=out/'Assets/Generated/Views/MonkeyCandidateView.cs'
     view_path.write_bytes(files('monkey.targets').joinpath('MonkeyCandidateView.cs').read_bytes())

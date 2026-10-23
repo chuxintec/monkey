@@ -301,3 +301,9 @@ Creator新独立outputs/acceptance/full07-creator-window-01，接管09:40:41Z，
 full08 own520已在10:15:39Z正常TERM exit-15/reap释放；5份font imported=true且有library UUID.json，缺页图根因已由原生证明解决。CUA只绑定旧42007，不调用错工程菜单；未生成Prefab/Scene。
 
 新增CreatorExecution显式执行器与native_creator host：仅CLI --execute设置专属环境，严格绑定新副本路径/manifest，等待本机Creator3.8.8公开asset-db.query-ready与scene.query-is-ready；deadline/方法预算、结构化进度与首错回执、normal TERM own child、原生后离线验证。普通打开/手工工程不自动执行。API依据为本机app.asar的builtin/scene/package.json及asset-db/package.json公开消息，官方扩展load生命周期；未改引擎。定向测试涵盖默认不执行、错误工程拒绝、成功/失败/超时、源漂移拒绝、只结束自己child与journal失败回收；真实自动调用尚待full09。
+
+## 2026-10-23 full09自动入口与小探针
+
+full09已完成双目标生成，static/name/routing通过。Creator manifest6cfdf3b778d06872bf08d986bb456cf7fb8b294cf943ab89264c450e0c4ed27f首次通过公共CLI启动own8150，绑定正确副本；就绪查询返回类型触发NATIVE_READINESS_SCHEMA_INVALID，实际方法未执行。正常TERM后30秒仍pending，原回执保留；10:38:43Z ps查无8150、后续全引擎查询为空，release-followup.json另记退出已观察但exitCode未知，不伪称launcher回收。当前补缺省/未初始化响应等待与实际值记录，双true才执行，其他类型拒绝；Cocos正常退出等待使用现有窗口清理余量，最多120秒不强杀。
+
+Unity代表探针outputs/acceptance/native-font-geometry-probe-01含3真实源图/76节点、11 TTF/5位图字体，own5893已10:30:40Z exit1/reap，字体阶段首份atlas检查拒绝。原始atlas meta textureShape=2（Cube），默认Texture2D加载为空；新增明确Texture2D及合法初始meta版本，GUID保持。全量Unity09不启动，先用同一小探针验证，避免为此再导1.5GB纹理。探针02描述字符串误写four但组列表实际3，未实跑；探针03描述/组列表一致，后续以03为准。

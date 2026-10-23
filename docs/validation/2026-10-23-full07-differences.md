@@ -18,3 +18,9 @@ Unity实跑副本outputs/acceptance/full07-window-01/UnityProject，原生方法
 ## 实际截图补充
 
 full07预览可见白色字块；5个保存的BitmapFont中m_AtlasTextures[0]及材质_MainTex引用为0。因此字形geometry与图片绑定必须独立核验。full08 Unity冻结为未运行中间候选；新增atlasGuid typed计划、强同步导入/非空和原GUID检查、同时初始化material/version/atlas引用、保存后回读与最终FontResult atlas/material GUID核对。该修复已C# API compile pass，负面atlas绑定测试通过，未原生验证。旧回读不会因此自动通过。
+
+## atlas对象类型与Creator就绪补核
+
+3图/76节点探针01已20秒内在首Bitmap atlas硬校验失败，未重跑全量。保存的PNG TextureImporter.textureShape=2，Texture2D读取为空；原生薄层和初始meta现明确2D并保持GUID。需探针03原生验证，不能因编译通过报修复完成。
+
+Creator full09公共CLI确实在新副本启用了执行入口；就绪返回类型未匹配而拒绝，未进入导入。新适配将null/undefined限定为等待初始化，两个真实boolean true才开始；其余值仍失败且记录具体值。退出清理最长使用窗口内120秒，原pending回执和后续只读无进程观察分开保存。

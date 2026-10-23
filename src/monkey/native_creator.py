@@ -46,8 +46,10 @@ def native_import(candidate,output,editor,expected_manifest,budget_seconds,deadl
     def terminate_owned():
         if process is not None and process.poll() is None:
             process.terminate()
-            try:process.wait(timeout=min(30,max(.01,(end-now()).total_seconds())))
-            except subprocess.TimeoutExpired:pass
+            cleanup=min(end,now()+timedelta(seconds=120))
+            while process.poll() is None and now()<cleanup:
+                try:process.wait(timeout=min(5,max(.01,(cleanup-now()).total_seconds())))
+                except subprocess.TimeoutExpired:pass
     console=out/'console.log'
     try:
         if now()>=deadline:raise ValueError('NATIVE_DEADLINE_ELAPSED_BEFORE_LAUNCH')

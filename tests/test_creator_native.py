@@ -73,7 +73,7 @@ class CreatorNativeTests(unittest.TestCase):
             script=root/'check.cjs';script.write_text('''
 const fs=require('fs'),path=require('path');
 const [root,mode]=process.argv.slice(2);let count=0;
-global.Editor={Project:{path:root},App:{version:'3.8.8'},Message:{request:async()=>true}};
+let queries=0;global.Editor={Project:{path:root},App:{version:'3.8.8'},Message:{request:async()=>{queries++;if(mode==='unready'&&queries<=2)return undefined;if(mode==='bad-schema')return {unexpected:true};return true;}}};
 const execution=require(path.join(root,'extensions/monkey-import/execution.js'));
 (async()=>{
  try {await execution.start(async()=>{count++;if(mode==='failure')throw Error('real method failure');if(mode==='timeout')return new Promise(()=>{});});}
@@ -97,6 +97,8 @@ const execution=require(path.join(root,'extensions/monkey-import/execution.js'))
             result=run('default',False);self.assertEqual(result['count'],0);self.assertIsNone(result['progress'])
             result=run('wrong-project');self.assertEqual(result['count'],0);self.assertEqual(result['error'],'NATIVE_PROJECT_BINDING_MISMATCH')
             result=run('success');self.assertEqual(result['count'],1);self.assertEqual(result['progress']['status'],'completed')
+            result=run('unready');self.assertEqual(result['count'],1);self.assertEqual(result['progress']['status'],'completed')
+            result=run('bad-schema');self.assertEqual(result['count'],0);self.assertEqual(result['progress']['status'],'failed')
             result=run('failure');self.assertEqual(result['count'],1);self.assertEqual(result['progress']['status'],'failed')
             failure=json.loads((candidate/'Analysis/native-error.json').read_text());self.assertEqual(failure['message'],'real method failure')
             self.assertEqual(failure['sourceManifestSha256'],options['expected_manifest'])

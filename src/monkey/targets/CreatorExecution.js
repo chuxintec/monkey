@@ -15,7 +15,7 @@ function checkpoint(phase,processed=0,total=1,status='running') {
     write('native-progress.json',{schemaVersion:1,phase,status,processed,total,planSha256:state.planHash,
         sourceManifestSha256:state.manifestHash,nativeResumeSupported:false,
         elapsedSeconds:state.methodStarted?(Date.now()-state.methodStarted)/1000:0,
-        methodStartedUtc:state.methodStarted?new Date(state.methodStarted).toISOString():null});
+        methodStartedUtc:state.methodStarted?new Date(state.methodStarted).toISOString():null,readiness:state.readiness||null});
 }
 async function start(run) {
     if(process.env.MONKEY_NATIVE_EXECUTE!=='1')return;
@@ -34,8 +34,9 @@ async function start(run) {
         while(true) {
             const assetReady=await Editor.Message.request('asset-db','query-ready');
             const sceneReady=await Editor.Message.request('scene','query-is-ready');
-            if(typeof assetReady!=='boolean'||typeof sceneReady!=='boolean')throw Error('NATIVE_READINESS_SCHEMA_INVALID');
-            if(assetReady&&sceneReady)break;
+            state.readiness={assetType:typeof assetReady,assetReady:assetReady==null?null:assetReady,sceneType:typeof sceneReady,sceneReady:sceneReady==null?null:sceneReady};
+            if(![true,false,undefined,null].includes(assetReady)||![true,false,undefined,null].includes(sceneReady))throw Error('NATIVE_READINESS_SCHEMA_INVALID: '+JSON.stringify(state.readiness).slice(0,512));
+            if(assetReady===true&&sceneReady===true)break;
             checkpoint('preflight');await delay(500);
         }
         state.methodStarted=Date.now();checkpoint('preflight',1,1);

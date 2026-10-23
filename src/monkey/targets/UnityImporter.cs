@@ -399,13 +399,14 @@ public static class MonkeyImporter
             var atlasImporter = AssetImporter.GetAtPath(spec.path) as TextureImporter;
             if (atlasImporter == null) throw new InvalidOperationException("Bitmap atlas missing: " + spec.id);
             atlasImporter.textureType = TextureImporterType.Default;
+            atlasImporter.textureShape = TextureImporterShape.Texture2D;
             atlasImporter.mipmapEnabled = false; atlasImporter.npotScale = TextureImporterNPOTScale.None;
             atlasImporter.textureCompression = TextureImporterCompression.Uncompressed; atlasImporter.maxTextureSize = 16384;
             atlasImporter.SaveAndReimport();
             AssetDatabase.ImportAsset(spec.path,ImportAssetOptions.ForceSynchronousImport);
             var atlas = AssetDatabase.LoadAssetAtPath<Texture2D>(spec.path);
             if(atlas==null || AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(atlas))!=spec.atlasGuid)
-                throw new InvalidOperationException("Original bitmap atlas did not import: "+spec.id);
+                throw new InvalidOperationException("Original bitmap atlas did not import: "+spec.id+" expected="+spec.atlasGuid+" file="+AssetDatabase.AssetPathToGUID(spec.path)+" type="+AssetDatabase.GetMainAssetTypeAtPath(spec.path));
             var shader = tmpBitmapShader;
             if (shader == null) throw new InvalidOperationException("Native TMP bitmap shader unavailable after resource import");
             var font = ScriptableObject.CreateInstance<TMPro.TMP_FontAsset>();
