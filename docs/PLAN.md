@@ -194,3 +194,11 @@ Candidate.scene/editor-readback/真实PNG不存在，5Label绑定、原生Scene�
 离线证据确认Essential archive存在且原名shader正确，失败工程未生成对应文件；现有辅助方法的物理Packages目录/后备位置均缺。改注册包resolvedPath+实际内置uGUI2.6.0合同，显式Essential导入、同步刷新、原名shader/settings加载/GUID回执与具体未完成诊断，不换字体/Shader；时序未证实已闭合，待新窗口。structured3/包级6/边界4通过，当前SDK C#编译02通过。详情`docs/validation/2026-10-23-window05-tmp-resources.md`。本组只准备新的Unity修复候选，不重复Creator旧矩阵或其他产品。
 TMP修复06的Unity单目标已生成，固定实现4deb5ea，manifest a14f9648201fac01534a8037b3aeca29dd8772d6cd5998eacd2824e573cf14b1，实际依赖合同/emit身份一致，原05SHA不变。准备按事件monkey-tmp-fix-20261023-01-complete上报；没有新实际窗口不启动Editor。
 06有变化的Unity静态verify已零诊断；本组离线修复与候选准备完成，资源导入/字体/原生保存重开仍未验，提交总监协调有依据的下一gate。
+
+## 2026-10-23 窗口06与异步接续
+
+06实跑验证注册包/Essential archive身份正确，但资源发起导入后仍未生成，方法44.53秒在tmp-resources首个错误退出；13:43:56确认自身PID25790退出、提前释放（原13:43:44误填已更正），原06SHA不变。Prefab/Scene/readback not_run。
+
+已离线改为importPackageCompleted/failed/cancelled事件驱动，等待时返回Editor循环，不同步判断发起Import等于完成；新ImportBatchAsync拒绝-quit。增加native-import CLI默认规划、显式执行时校验冻结副本并直接持有无-quit Editor PID、预算/总截止/自身普通退出/未退出attention、结束editor verify。菜单入口异步但不退出用户Editor，batch完成自行退出。补正常Scene关闭重开后回读；原地native resume不支持。
+
+launcher3/structured3/边界4及SDK C#离线编译05通过，新执行路径没有启动引擎。新候选准备后报告总监，不复用窗口06；证据docs/validation/2026-10-23-window06-async-import.md。此为实际时序失败后的必要执行层变化，不是扩大平台/安装/部署范围。

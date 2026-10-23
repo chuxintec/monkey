@@ -35,6 +35,11 @@ def main(argv=None):
     p.add_argument('--evidence-source', action='append', default=[])
     p.add_argument('--bindings')
     p.add_argument('--animation', action='append')
+    p = sub.add_parser('native-import',help='Plan or explicitly execute a bounded async Unity import in a fresh copy')
+    p.add_argument('--candidate',required=True);p.add_argument('--out',required=True)
+    p.add_argument('--editor-path',required=True);p.add_argument('--expected-manifest',required=True)
+    p.add_argument('--budget-seconds',type=int,default=600);p.add_argument('--deadline-utc',required=True)
+    p.add_argument('--window-end-utc',required=True);p.add_argument('--execute',action='store_true')
     p = sub.add_parser('preflight',help='Check frozen candidate and classify startup logs without launching an Editor')
     p.add_argument('--candidate',required=True);p.add_argument('--out',required=True);p.add_argument('--log');p.add_argument('--progress')
     p = sub.add_parser('inspect')
@@ -80,7 +85,7 @@ def main(argv=None):
     try:
         if args.command == 'capabilities':
             print(json.dumps(dict(version=__version__, profiles=[PROFILE,PROJECT_PROFILE], targetProfiles=[UNITY_PROFILE,cocos.PROFILE],
-                schemaVersion=1, implemented=['convert','catalog','inspect','normalize','plan','export','verify','handoff','diff','register','apply','preflight'], planned=[],
+                schemaVersion=1, implemented=['convert','catalog','inspect','normalize','plan','export','verify','handoff','diff','register','apply','preflight','native-import'], planned=[],
                 targetValidation={UNITY_PROFILE:dict(static='implemented',editor='not_run',visual='not_run'),cocos.PROFILE:dict(static='implemented',editor='not_run',visual='not_run')},
                 compiledFormats=['compiled-v1','pack-v1','texture-pack-v1'],
                 containerFormats=['plain-wxapkg','APK-ZIP','Cocos-resource-directory'],
@@ -162,6 +167,11 @@ def main(argv=None):
             output_path=Path(args.out).resolve()
             if output_path.is_relative_to(Path.cwd()/'outputs'):
                 incremental.register(output_path,Path.cwd())
+        elif args.command == 'native-import':
+            from .native import native_import
+            result=native_import(args.candidate,args.out,args.editor_path,args.expected_manifest,args.budget_seconds,args.deadline_utc,args.window_end_utc,args.execute)
+            print(json.dumps({k:result.get(k) for k in ('status','processStarted','processExited','pid','reason','report')},ensure_ascii=False))
+            return 0 if result['status'] in ('planned','candidate') else 1
         elif args.command == 'preflight':
             from .preflight import preflight
             result=preflight(args.candidate,args.out,args.log,args.progress)

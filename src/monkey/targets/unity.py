@@ -255,7 +255,8 @@ def export(plan_path, output):
     Path(str(adapter_path)+'.meta').write_text('fileFormatVersion: 2\nguid: '+guid(p['namespace'],'editor-adapter')+'\n')
     # Only the typed, finite import instruction subset is sent to the Editor.
     instruction={key:p.get(key,[]) for key in ('designSize','pixelsPerUnit','textures','assets','bitmapFonts','nodes','components','galleryOnly','animations','sourcePrefabs')}
-    instruction['tmpResources']=dict(packageName='com.unity.ugui',packageVersion='2.6.0',resource='Package Resources/TMP Essential Resources.unitypackage')
+    instruction['tmpResources']=dict(packageName='com.unity.ugui',packageVersion='2.6.0',resource='Package Resources/TMP Essential Resources.unitypackage',importMode='package-completion-callback')
+    instruction['sceneRoundtrip']=True
     instruction['sourceDiagnosticCount']=len(p['diagnostics'])
     instruction['prefabGuid']=guid(p['namespace'],'native-prefab')
     instruction['sceneGuid']=guid(p['namespace'],'native-scene')
@@ -347,8 +348,10 @@ def verify(candidate, output, level='static'):
             if instruction.get('bitmapFonts') or any(a['path'].lower().endswith('.ttf') for a in instruction['assets']):
                 resources=rb.get('tmpResources') or {}
                 expected_resources=instruction.get('tmpResources',{})
-                if resources.get('status')!='ready' or any(resources.get(k)!=expected_resources.get(k) for k in ('packageName','packageVersion','resource')) or not all(resources.get(k) for k in ('archiveSha256','bitmapGuid','distanceGuid','mobileGuid','settingsGuid')):
+                if resources.get('status')!='ready' or resources.get('completionProof') not in ('package-completed-event','preexisting-files') or any(resources.get(k)!=expected_resources.get(k) for k in ('packageName','packageVersion','resource')) or not all(resources.get(k) for k in ('archiveSha256','bitmapGuid','distanceGuid','mobileGuid','settingsGuid')):
                     diagnostics.append(diagnostic('TMP_RESOURCES_NOT_VERIFIED','Analysis/tmp-resources.json','Exact installed package, essential resource import and native shader/settings identities are unverified'))
+            if instruction.get('sceneRoundtrip') and rb.get('sceneReopened') is not True:
+                diagnostics.append(diagnostic('SCENE_ROUNDTRIP_NOT_VERIFIED','Candidate.unity','Saved scene was not normally closed/reopened before native readback'))
             json_assets={a['id']:a for a in rb.get('jsonAssets',[])}
             actual_prefabs={a['sourceId']:a for a in rb.get('sourcePrefabs',[])}
             for spec in instruction.get('sourcePrefabs',[]):

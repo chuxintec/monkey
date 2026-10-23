@@ -31,7 +31,7 @@ bin/monkey convert --resume outputs/my-unity --input-set inputs.json
 
 已实现两条明确的 2.4.15 输入路径：编辑器工程 JSON/meta，以及发布 bundle 的 compiled-v1/pack-v1/texture-pack-v1。工具不执行源脚本，代码初稿不代表业务语义已恢复，不伪造服务器、不模拟源引擎运行时。
 
-当前可运行 `convert / catalog / inspect / normalize / plan / export / verify / handoff / diff / register / apply`。可生成 Unity 6000.6.2f1、uGUI 2.6.0 的图像、原BitmapFont/源TTF文字、有限布局/按钮/遮罩、Editor 导入指令和原生 View 引用脚本；Unity 纹理阶段已实际推进，TMP资源入口失败待修复复验；原生Prefab/Scene保存重开和画面对照未验。Creator 3.8.8 实导已进入资产阶段并发现 package 版本与 Mask 默认赋值问题，修复尚待原生复验；Scene/字体/页面验收未完成。已实现登记生成区的差异预览和 expected-manifest 受控 apply，人工区保持独立，移除项保留而不自动删除。
+当前可运行 `convert / catalog / inspect / normalize / plan / export / verify / handoff / diff / register / apply / preflight / native-import`。可生成 Unity 6000.6.2f1、uGUI 2.6.0 的图像、原BitmapFont/源TTF文字、有限布局/按钮/遮罩、Editor 导入指令和原生 View 引用脚本；Unity 纹理阶段已实际推进，TMP资源入口失败待修复复验；原生Prefab/Scene保存重开和画面对照未验。Creator 3.8.8 实导已进入资产阶段并发现 package 版本与 Mask 默认赋值问题，修复尚待原生复验；Scene/字体/页面验收未完成。已实现登记生成区的差异预览和 expected-manifest 受控 apply，人工区保持独立，移除项保留而不自动删除。
 
 ## 本地使用
 

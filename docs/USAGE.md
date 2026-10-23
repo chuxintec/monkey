@@ -259,3 +259,21 @@ bin/monkey preflight --candidate outputs/game/UnityProject \
 ```
 
 进度必须匹配该候选import-plan SHA；`completed`也不代表编辑器验收通过，仍须`verify --level editor`真实回读。nativeResumeSupported=false不能当作自动重跑授权。
+
+## 受控异步原生导入
+
+`native-import`默认仅生成计划。实际执行必须显式加`--execute`，并由操作者保证本轮独立Editor/资源已获准。不会从历史窗口推导新许可。
+
+```sh
+bin/monkey native-import --candidate outputs/game/UnityProject \
+  --out outputs/acceptance/my-new-run \
+  --editor-path /Applications/Unity/Hub/Editor/6000.6.2f1/Unity.app/Contents/MacOS/Unity \
+  --expected-manifest "候选manifest的SHA256" --budget-seconds 600 \
+  --deadline-utc "YYYY-MM-DDTHH:MM:SSZ" --window-end-utc "YYYY-MM-DDTHH:MM:SSZ"
+```
+
+替换SHA和本轮UTC时间。内部截止至少比外层截止早30秒，当前外层窗口上限1小时；共享验证按实际批准的更短窗口。确认计划后同参数添加`--execute`可执行规划目录；参数/代码或输入变化需新目录，已有部分工程不覆盖。
+
+宿主新建副本后直接启动已指定Editor的batchmode，固定`ImportBatchAsync`且不带`-quit`，等待包完成事件继续。`unity run`固定带`-quit`，不能用于这一异步入口。成功/失败/预算结束由薄层退出，宿主保存真实PID与退出状态，外层必要时仅普通terminate自己的child，无hard kill；未退出明确报attention。`execution-result.json`和`Verification/`分开记录启动、资源、原生回读和来源缺口。
+
+这是生成工程的可选原生验收阶段；没有--execute时不会启动引擎。新执行路径尚待实际窗口验证，进度或模拟测试不构成引擎通过。

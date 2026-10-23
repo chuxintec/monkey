@@ -15,10 +15,10 @@ public static class MonkeyImporter
         public TextureSpec[] textures; public AssetSpec[] assets; public BitmapSpec[] bitmapFonts; public int sourceDiagnosticCount;
         public NodeSpec[] nodes; public ComponentSpec[] components; public MotionSpec[] animations; public bool galleryOnly; public SourcePrefabSpec[] sourcePrefabs; public TmpResourceSpec tmpResources;
     }
-    [Serializable] public class TmpResourceSpec { public string packageName,packageVersion,resource; }
+    [Serializable] public class TmpResourceSpec { public string packageName,packageVersion,resource,importMode; }
     [Serializable] public class TmpResourceResult {
         public int schemaVersion=1;public string status,packageName,packageVersion,source,resource,archiveSha256;
-        public string bitmapGuid,distanceGuid,mobileGuid,settingsGuid;
+        public string bitmapGuid,distanceGuid,mobileGuid,settingsGuid,completionProof;
     }
     static Shader tmpBitmapShader,tmpDistanceShader;
     static TmpResourceResult tmpResourceResult;
@@ -59,7 +59,7 @@ public static class MonkeyImporter
     [Serializable] public class GlyphBounds { public uint unicode; public float left,top,width,height; }
     [Serializable] public class Readback {
         public string status, unityVersion, prefabGuid, sceneGuid;
-        public int spriteCount, nodeCount, missingScripts; public bool editableRoundtrip; public string previewPath,previewSha256,previewError,colorSpace;
+        public int spriteCount, nodeCount, missingScripts; public bool editableRoundtrip,sceneReopened; public string previewPath,previewSha256,previewError,colorSpace;
         public MotionResult[] animations; public string[] diagnostics; public NodeResult[] nodes; public SpriteResult[] sprites; public FileResult[] nativeFiles; public FontResult[] fonts; public LabelResult[] labels; public ViewReference[] viewReferences; public JsonResult[] jsonAssets; public SourcePrefabResult[] sourcePrefabs; public TmpResourceResult tmpResources;
     }
     [Serializable] public class JsonResult { public string id,guid,textSha256; }
@@ -78,8 +78,9 @@ public static class MonkeyImporter
     const string BootstrapPath = "Assets/Generated/Scenes/ImportBootstrap.unity";
 
     [MenuItem("Tools/Monkey/Import Candidate")]
-    public static void ImportCandidate() { ExecuteImport(); }
+    public static void ImportCandidate() { BeginAsync(Application.isBatchMode); }
     public static void ImportBatch() { ExecuteImport(); }
+    public static void ImportBatchAsync() { BeginAsync(true); }
 
     [Serializable] public class NativeProgress {
         public int schemaVersion=1,processed,total;
@@ -93,24 +94,100 @@ public static class MonkeyImporter
     static Scene ownedScene;
     static Scene priorScene;
 
-    static void ExecuteImport() {
+    static bool asyncRunning,asyncBatch,packagePending,tmpImportCompleted;
+    static double nextAsyncTick;
+    static void InitializeImport() {
+        ownedScene=default(Scene);priorScene=default(Scene);nativeProgress=null;
         nativeClock=System.Diagnostics.Stopwatch.StartNew();
         nativeProgress=new NativeProgress {status="running",phase="preflight",planSha256=Hash("Assets/Monkey/Editor/import-plan.json")};
         nativeDeadline=DateTime.MaxValue;nativeBudget=0;ownedScene=default(Scene);priorScene=default(Scene);tmpBitmapShader=null;tmpDistanceShader=null;tmpResourceResult=null;
-        try {
             var budget=Environment.GetEnvironmentVariable("MONKEY_NATIVE_BUDGET_SECONDS");
             if(!string.IsNullOrEmpty(budget) && (!double.TryParse(budget,System.Globalization.NumberStyles.Float,System.Globalization.CultureInfo.InvariantCulture,out nativeBudget) || double.IsNaN(nativeBudget) || double.IsInfinity(nativeBudget) || nativeBudget<1 || nativeBudget>3600))
                 throw new InvalidOperationException("Native budget must be 1..3600 seconds");
             var deadline=Environment.GetEnvironmentVariable("MONKEY_NATIVE_DEADLINE_UTC");
             if(!string.IsNullOrEmpty(deadline) && !DateTime.TryParse(deadline,System.Globalization.CultureInfo.InvariantCulture,System.Globalization.DateTimeStyles.AssumeUniversal|System.Globalization.DateTimeStyles.AdjustToUniversal,out nativeDeadline))
                 throw new InvalidOperationException("Invalid native deadline");
-            NativeCheckpoint("preflight",0,1);Run();
-        } catch(OperationCanceledException) {
-            WriteNativeProgress("budget_exhausted");CloseOwnedScene();
-            Debug.LogWarning("Monkey native import stopped at its explicit budget; inspect Analysis/native-progress.json. Native resume is not supported.");
-        } catch {
-            WriteNativeProgress("failed");CloseOwnedScene();throw;
+
+    }
+    static void ExecuteImport() {
+        if(asyncRunning)throw new InvalidOperationException("An import is already pending in this Editor");
+        tmpImportCompleted=false;
+        try {InitializeImport();NativeCheckpoint("preflight",0,1);Run();}
+        catch(OperationCanceledException) {WriteNativeProgress("budget_exhausted");CloseOwnedScene();}
+        catch {if(nativeProgress!=null)WriteNativeProgress("failed");CloseOwnedScene();throw;}
+    }
+    static void BeginAsync(bool batch) {
+        if(asyncRunning)throw new InvalidOperationException("An import is already pending in this Editor");
+        asyncRunning=true;asyncBatch=batch;packagePending=false;tmpImportCompleted=false;nextAsyncTick=0;
+        try {
+            InitializeImport();ValidateEditorContext();
+            if(batch && (!Application.isBatchMode || Environment.GetCommandLineArgs().Any(a=>a.StartsWith("-",StringComparison.Ordinal) && a.TrimStart('-').Split('=')[0].Equals("quit",StringComparison.OrdinalIgnoreCase))))
+                throw new InvalidOperationException("ASYNC_ENTRYPOINT_REQUIRES_BATCH_WITHOUT_QUIT: use monkey native-import");
+            NativeCheckpoint("preflight",0,1);
+            EditorApplication.update+=CheckAsyncBudget;
+            var plan=JsonUtility.FromJson<Plan>(File.ReadAllText("Assets/Monkey/Editor/import-plan.json"));
+            if(NeedsTmp(plan) && !TmpFilesPresent()) {
+                NativeCheckpoint("tmp-resources",0,1);
+                var archive=ResolveTmpArchive(plan.tmpResources);
+                tmpResourceResult.status="import_pending";WriteTmpResourceResult();packagePending=true;
+                AssetDatabase.importPackageCompleted+=TmpPackageCompleted;
+                AssetDatabase.importPackageFailed+=TmpPackageFailed;
+                AssetDatabase.importPackageCancelled+=TmpPackageCancelled;
+                UnityEditor.AssetPackage.Package.Import(archive,false);
+                return; // Return to the Editor event loop; no -quit, busy wait or sleeping on the main thread.
+            }
+            EditorApplication.delayCall+=ContinueAsync;
+        } catch(Exception error) {FailAsync(error);}
+    }
+    static void DetachPackageCallbacks() {
+        AssetDatabase.importPackageCompleted-=TmpPackageCompleted;
+        AssetDatabase.importPackageFailed-=TmpPackageFailed;
+        AssetDatabase.importPackageCancelled-=TmpPackageCancelled;
+    }
+    static void TmpPackageCompleted(string name) {
+        if(!asyncRunning || !packagePending || name!="TMP Essential Resources")return;
+        try {
+            packagePending=false;tmpImportCompleted=true;DetachPackageCallbacks();
+            tmpResourceResult.status="import_completed";WriteTmpResourceResult();
+            EditorApplication.delayCall+=ContinueAsync;
+        } catch(Exception error) {FailAsync(error);}
+    }
+    static void TmpPackageFailed(string name,string message) {
+        if(asyncRunning && packagePending && name=="TMP Essential Resources") {
+            try {tmpResourceResult.status="import_failed";WriteTmpResourceResult();}
+            finally {FailAsync(new InvalidOperationException("TMP_ESSENTIAL_IMPORT_FAILED: package completion failed"));}
         }
+    }
+    static void TmpPackageCancelled(string name) {
+        if(asyncRunning && packagePending && name=="TMP Essential Resources") {
+            try {tmpResourceResult.status="import_cancelled";WriteTmpResourceResult();}
+            finally {FailAsync(new InvalidOperationException("TMP_ESSENTIAL_IMPORT_CANCELLED: package import cancelled"));}
+        }
+    }
+    static void CheckAsyncBudget() {
+        if(!asyncRunning || nativeClock.Elapsed.TotalSeconds<nextAsyncTick)return;
+        nextAsyncTick=nativeClock.Elapsed.TotalSeconds+1;
+        try {NativeCheckpoint(nativeProgress.phase,nativeProgress.processed,nativeProgress.total);}
+        catch(Exception error) {FailAsync(error);}
+    }
+    static void ContinueAsync() {
+        if(!asyncRunning || packagePending)return;
+        try {
+            NativeCheckpoint("tmp-resources",tmpImportCompleted?1:0,1);
+            if(Hash("Assets/Monkey/Editor/import-plan.json")!=nativeProgress.planSha256)
+                throw new InvalidOperationException("IMPORT_PLAN_CHANGED_WHILE_PENDING");
+            Run();FinishAsync(0);
+        } catch(Exception error) {FailAsync(error);}
+    }
+    static void FailAsync(Exception error) {
+        if(!asyncRunning)return;
+        try {if(nativeProgress!=null)WriteNativeProgress(error is OperationCanceledException?"budget_exhausted":"failed");}
+        finally {try {CloseOwnedScene();} finally {Debug.LogException(error);FinishAsync(error is OperationCanceledException?3:1);}}
+    }
+    static void FinishAsync(int exitCode) {
+        bool ownsBatch=asyncBatch;asyncRunning=false;packagePending=false;
+        DetachPackageCallbacks();EditorApplication.update-=CheckAsyncBudget;EditorApplication.delayCall-=ContinueAsync;
+        if(ownsBatch && Application.isBatchMode)EditorApplication.Exit(exitCode);
     }
     static void CloseOwnedScene() {
         if(priorScene.IsValid() && priorScene.isLoaded)SceneManager.SetActiveScene(priorScene);
@@ -184,9 +261,14 @@ public static class MonkeyImporter
         return sprites;
     }
 
-    static void EnsureTmpResources(TmpResourceSpec spec) {
-        NativeCheckpoint("tmp-resources",0,1);
-        if(spec==null || spec.packageName!="com.unity.ugui" || spec.packageVersion!="2.6.0" || spec.resource!="Package Resources/TMP Essential Resources.unitypackage")
+    const string bitmap="Assets/TextMesh Pro/Shaders/TMP_Bitmap-Custom-Atlas.shader";
+    const string distance="Assets/TextMesh Pro/Shaders/TMP_SDF.shader";
+    const string mobile="Assets/TextMesh Pro/Shaders/TMP_SDF-Mobile.shader";
+    const string settings="Assets/TextMesh Pro/Resources/TMP Settings.asset";
+    static bool NeedsTmp(Plan plan) {return plan.bitmapFonts.Length>0 || plan.assets.Any(a=>a.path.EndsWith(".ttf",StringComparison.OrdinalIgnoreCase));}
+    static bool TmpFilesPresent() {return File.Exists(bitmap) && File.Exists(distance) && File.Exists(mobile) && File.Exists(settings);}
+    static string ResolveTmpArchive(TmpResourceSpec spec) {
+        if(spec==null || spec.importMode!="package-completion-callback" || spec.packageName!="com.unity.ugui" || spec.packageVersion!="2.6.0" || spec.resource!="Package Resources/TMP Essential Resources.unitypackage")
             throw new InvalidOperationException("TMP_RESOURCE_CONTRACT_MISMATCH: regenerate the supported candidate");
         var package=UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/com.unity.ugui/package.json");
         if(package==null || string.IsNullOrEmpty(package.resolvedPath))
@@ -196,21 +278,18 @@ public static class MonkeyImporter
         var archive=Path.Combine(package.resolvedPath,spec.resource);
         if(!File.Exists(archive))throw new InvalidOperationException("TMP_ESSENTIAL_ARCHIVE_MISSING: "+spec.resource);
         tmpResourceResult=new TmpResourceResult {status="resolved",packageName=package.name,packageVersion=package.version,
-            source=package.source.ToString(),resource=spec.resource,archiveSha256=Hash(archive)};
+            source=package.source.ToString(),resource=spec.resource,archiveSha256=Hash(archive),completionProof=tmpImportCompleted?"package-completed-event":"preexisting-files"};
         WriteTmpResourceResult();
-        const string bitmap="Assets/TextMesh Pro/Shaders/TMP_Bitmap-Custom-Atlas.shader";
-        const string distance="Assets/TextMesh Pro/Shaders/TMP_SDF.shader";
-        const string mobile="Assets/TextMesh Pro/Shaders/TMP_SDF-Mobile.shader";
-        const string settings="Assets/TextMesh Pro/Resources/TMP Settings.asset";
-        if(!File.Exists(bitmap) || !File.Exists(distance) || !File.Exists(mobile) || !File.Exists(settings)) {
-            // Use the registered package's real location; the TMP convenience helper assumes a physical Packages directory.
-            UnityEditor.AssetPackage.Package.Import(archive,false);
-            AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+
+        return archive;
+    }
+    static void EnsureTmpResources(TmpResourceSpec spec) {
+        NativeCheckpoint("tmp-resources",0,1);ResolveTmpArchive(spec);
+        if(!TmpFilesPresent()) {
+            tmpResourceResult.status=asyncRunning?"import_incomplete":"async_entrypoint_required";WriteTmpResourceResult();
+            throw new InvalidOperationException(asyncRunning?"TMP_ESSENTIAL_IMPORT_INCOMPLETE: completion event received but required files are absent":"TMP_RESOURCES_REQUIRE_ASYNC_ENTRYPOINT: use monkey native-import; unity run always adds -quit");
         }
-        if(!File.Exists(bitmap) || !File.Exists(distance) || !File.Exists(mobile) || !File.Exists(settings)) {
-            tmpResourceResult.status="import_incomplete";WriteTmpResourceResult();
-            throw new InvalidOperationException("TMP_ESSENTIAL_IMPORT_INCOMPLETE: resolved archive exists, required files absent after import");
-        }
+        AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
         tmpBitmapShader=AssetDatabase.LoadAssetAtPath<Shader>(bitmap);
         tmpDistanceShader=AssetDatabase.LoadAssetAtPath<Shader>(distance);
         var mobileShader=AssetDatabase.LoadAssetAtPath<Shader>(mobile);
@@ -231,8 +310,7 @@ public static class MonkeyImporter
         Directory.CreateDirectory("Analysis");File.WriteAllText("Analysis/tmp-resources.json",JsonUtility.ToJson(tmpResourceResult,true));
     }
 
-    static void Run()
-    {
+    static void ValidateEditorContext() {
         if (Application.unityVersion != "6000.6.2f1")
             throw new InvalidOperationException("Candidate requires Unity 6000.6.2f1; no automatic version migration");
         if (EditorApplication.isPlayingOrWillChangePlaymode || EditorApplication.isCompiling)
@@ -241,15 +319,19 @@ public static class MonkeyImporter
             throw new InvalidOperationException("Create-only import: Prefab/Scene already exists. Use a new candidate.");
         if (SceneManager.GetActiveScene().isDirty)
             throw new InvalidOperationException("Active scene has unsaved work; import refused");
+    }
+
+    static void Run()
+    {
+        ValidateEditorContext();
         var plan = JsonUtility.FromJson<Plan>(File.ReadAllText("Assets/Monkey/Editor/import-plan.json"));
         var diagnostics = new List<string>();
         foreach(var directory in new[]{Path.GetDirectoryName(PrefabPath),Path.GetDirectoryName(ScenePath),"Assets/Generated/Art","Assets/Generated/Controllers","Analysis"})
             Directory.CreateDirectory(directory);
         AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
         if (plan.sourceDiagnosticCount > 0) diagnostics.Add("SOURCE_GAPS: " + plan.sourceDiagnosticCount);
+        if(NeedsTmp(plan))EnsureTmpResources(plan.tmpResources);
         var spriteMap = ImportTextures(plan);
-        if (plan.bitmapFonts.Length > 0 || plan.assets.Any(a=>a.path.EndsWith(".ttf",StringComparison.OrdinalIgnoreCase)))
-            EnsureTmpResources(plan.tmpResources);
         NativeCheckpoint("fonts",0,plan.bitmapFonts.Length+plan.assets.Count(a=>a.path.EndsWith(".ttf",StringComparison.OrdinalIgnoreCase)));
         var fonts = new Dictionary<string, TMPro.TMP_FontAsset>();
         int fontProgress=0;int fontTotal=plan.bitmapFonts.Length+plan.assets.Count(a=>a.path.EndsWith(".ttf",StringComparison.OrdinalIgnoreCase));
@@ -545,9 +627,16 @@ public static class MonkeyImporter
         UnityEngine.Object.DestroyImmediate(canvas);
         var instance=(GameObject)PrefabUtility.InstantiatePrefab(prefab,scene);
         if (!EditorSceneManager.SaveScene(scene,ScenePath)) throw new InvalidOperationException("Native scene save failed");
+        NativeCheckpoint("scene-reopen",0,1);
+        if(!EditorSceneManager.CloseScene(scene,true))throw new InvalidOperationException("Owned scene close failed");
+        scene=EditorSceneManager.OpenScene(ScenePath,OpenSceneMode.Additive);ownedScene=scene;
+        if(!scene.IsValid() || !scene.isLoaded)throw new InvalidOperationException("Saved scene reopen failed");
+        instance=scene.GetRootGameObjects().FirstOrDefault(go=>go.GetComponent<MonkeyCandidateView>()!=null);
+        if(instance==null)throw new InvalidOperationException("Reopened scene has no serialized candidate view");
+        NativeCheckpoint("scene-reopen",1,1);
         NativeCheckpoint("native-readback",0,1);
         var readback = new Readback {
-            sourcePrefabs=sourcePrefabResults.ToArray(),tmpResources=tmpResourceResult,
+            sourcePrefabs=sourcePrefabResults.ToArray(),tmpResources=tmpResourceResult,sceneReopened=true,
             jsonAssets=plan.assets.Where(a=>a.kind=="cc.JsonAsset").Select(a=> {
                 var text=AssetDatabase.LoadAssetAtPath<TextAsset>(a.path);
                 if(text==null)throw new InvalidOperationException("JsonAsset TextAsset import failed: "+a.id);

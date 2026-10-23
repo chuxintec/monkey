@@ -24,6 +24,10 @@ def classify_log(text):
     if import_events and not completed:
         findings.append(dict(code='NATIVE_IMPORT_COMPLETION_NOT_RECORDED',confidence='observed',message='Import activity is recorded without the converter completion marker; verify the native readback, do not assume completion'))
     resource_errors={
+        'ASYNC_ENTRYPOINT_REQUIRES_BATCH_WITHOUT_QUIT':'Async import requires the owned batch launcher without the quit flag',
+        'TMP_RESOURCES_REQUIRE_ASYNC_ENTRYPOINT':'Resource completion must be prepared through the async entrypoint',
+        'TMP_ESSENTIAL_IMPORT_FAILED':'Resource package completion failed',
+        'TMP_ESSENTIAL_IMPORT_CANCELLED':'Resource package import was cancelled',
         'TMP_PACKAGE_UNRESOLVED':'Installed TMP package location could not be resolved',
         'TMP_PACKAGE_VERSION_MISMATCH':'Installed package differs from the explicit supported dependency',
         'TMP_ESSENTIAL_ARCHIVE_MISSING':'Resolved package is missing its essential-resource archive',
@@ -40,7 +44,7 @@ def classify_log(text):
 
 
 def validate_progress(progress,expected_plan_hash):
-    phases={'preflight','texture-settings','textures','tmp-resources','fonts','hierarchy','animations','source-prefabs','candidate-save','native-readback','complete'}
+    phases={'preflight','texture-settings','textures','tmp-resources','fonts','hierarchy','animations','source-prefabs','candidate-save','scene-reopen','native-readback','complete'}
     statuses={'running','budget_exhausted','failed','completed','completed_partial'}
     if type(progress.get('schemaVersion')) is not int or progress.get('schemaVersion')!=1 or progress.get('phase') not in phases or progress.get('status') not in statuses:
         raise ValueError('Unsupported native progress schema/phase/status')
