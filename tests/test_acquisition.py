@@ -111,3 +111,22 @@ class AcquisitionTests(unittest.TestCase):
             self.assertEqual(result['nativeExecution']['status'],'completed_native_stages')
             self.assertEqual(unity.verify(root/'candidate/UnityProject',root/'unity-check')['staticValidation'],'pass')
             self.assertEqual(cocos.verify(root/'candidate/CocosProject',root/'cocos-check')['staticValidation'],'pass')
+
+    def test_attachment_accepts_large_generated_manifest_but_still_checks_owned_bytes(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp).resolve();project=root/'candidate/UnityProject';(project/'Analysis').mkdir(parents=True)
+            asset=project/'asset.bin';asset.write_bytes(b'owned content')
+            manifest=project/'manifest.json'
+            write_json(manifest,dict(files=[dict(path='asset.bin',sha256=fingerprint(asset),bytes=asset.stat().st_size,owner='generated')],
+                                     diagnostics=[dict(message='x'*(33*1024*1024))]))
+            receipt=root/'acquisition.json';write_json(receipt,dict(summary=dict(availableFiles=1)))
+            conversion=dict(completed=True,projects=[dict(path='UnityProject',manifestSha256=fingerprint(manifest))])
+            write_json(root/'candidate/conversion-result.json',conversion)
+            acquired=dict(receipt=receipt,summary=dict(availableFiles=1))
+            asset.write_bytes(b'tampered')
+            with self.assertRaises(ParseError):acquisition.attach(conversion,root/'candidate',acquired)
+            self.assertFalse((project/'Analysis/acquisition.json').exists())
+            asset.write_bytes(b'owned content')
+            acquisition.attach(conversion,root/'candidate',acquired)
+            self.assertEqual(conversion['projects'][0]['manifestSha256'],fingerprint(manifest))
+            self.assertEqual(json.loads((project/'Analysis/acquisition.json').read_text())['summary']['availableFiles'],1)

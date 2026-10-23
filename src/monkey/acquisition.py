@@ -11,7 +11,7 @@ import os
 import re
 import time
 
-from .io import safe, inside, read, load, write_json, new_output, sha
+from .io import safe, inside, read, load, write_json, new_output, sha, stage_manifest
 from .inputs import input_set
 from .sources.containers import relative, fingerprint, MAX_FILE
 from .sources.compiled import fail
@@ -152,7 +152,7 @@ def attach(conversion,output,acquired):
     for row in conversion['projects']:
         project=root/row['path'];manifest=project/'manifest.json'
         if fingerprint(manifest)!=row['manifestSha256']:fail('REMOTE_CONVERSION_CHANGED',str(project),'Candidate identity differs')
-        data=load(read(manifest));expected={f['path'] for f in data['files']}
+        data=stage_manifest(project);expected={f['path'] for f in data['files']}
         actual={p.relative_to(project).as_posix() for p in project.rglob('*') if p.is_file() and p!=manifest}
         if actual!=expected:fail('REMOTE_CONVERSION_CHANGED',str(project),'Unknown generated files')
         for item in data['files']:

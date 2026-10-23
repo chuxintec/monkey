@@ -12,7 +12,7 @@ Unity代码已成组修复实际LayoutGroup有界稳定、直接原生保存子�
 
 两端全量显式输入始终17201文件/884709704字节，1776 Spine闭包/原图复用、原reader/像素/AST不重跑，原件/肥鹅/GREA/服务/存档不变。候选、acceptance实际工程、历史结果分别保留。
 
-单命令 `convert --native` 已实现生成→Unity/Creator顺序独立原生段，每段固定期限、失败/未退出/回读差异不派下一端，生成/原生回执分开；5编排+4convert检查通过，底层native-import已有实际引擎证据，包装层未另跑全双端整链。通用CDN获取CLI、U/C及更多来源reader、完整业务仍未交付；肥鹅明确URL获取与回执已补原项目。用户矩阵仍为所有Cocos原包→Unity6/Creator3.8.8/both；所有Unity、Laya/LayaAir、Egret、自研/其他引擎→Unity6，逐profile实现，不以范围代替已支持能力。
+单命令 `convert --native` 已实现生成→Unity/Creator顺序独立原生段，每段固定期限、失败/未退出/回读差异不派下一端，生成/原生回执分开；5编排+4convert检查通过，底层native-import已有实际引擎证据，包装层未另跑全双端整链。通用CDN明确清单获取CLI已实现且完成1次真实GET及16627全缓存核验；自动发现未知URL、U/C及更多来源reader、完整业务仍未交付；肥鹅明确URL获取与回执已补原项目。用户矩阵仍为所有Cocos原包→Unity6/Creator3.8.8/both；所有Unity、Laya/LayaAir、Egret、自研/其他引擎→Unity6，逐profile实现，不以范围代替已支持能力。
 
 ## 历史依据与全量候选记录
 
@@ -395,3 +395,19 @@ Unity最后12节点Grid成组：childAlignment须随startCorner方向，Grid fit
 Creator11原生已保存1694 Prefab逐文件只读对账：1694/1694根名均严格等于原资产文件basename，其中257与源Root.name不同，未见其他命名值。新增creator-asset-basename-v1在plan冻结时给出sourceRootName/nativeRootName，序列化显式采用原生名；Scene源根名与全部子级仍保持源值，回读只在根应用精确规则，层级/几何/引用仍严检。新增单个成组handoff审查依赖Root.name的业务代码；不改文件原路径/UUID，也不隐去源原名。8 geometry/5 Cocos/3 Jobs/4 native-host/6 preflight与获取定向检查通过；native/foreign-child-name反例不会被根名规则掩盖。
 
 通用获取层真实网络探针已执行：从已有明确Femsj配置URL实际GET 347021字节，SHA与原下载清单一致，downloaded1/missing0/无本地缓存复用；只写monkey/.private/remote-network-probe-01及回执，未改肥鹅原件。该结果独立于先前肥鹅19 GET/16627本地SHA，不借用旧事实；通用自动发现未知CDN地址仍未实现。
+
+Unity Grid探针07新登记：锚点15:08:54Z，内部15:36:54Z/外层15:38:54Z，方法1200秒；ps无主引擎冲突，固定manifest14ccc41556f06060db9f828ff889f7ca483da854bfc0fcc578121b29eddc931b，新acceptance/native-font-geometry-probe-07，9原图397节点，首错保留/正常回收自有child，不顺延。其后顺序Creator根名4图85节点小探针，未盲跑全库。
+
+Unity GridProbe07实际own29881已exit0/reap，9原图397节点、全部16字体、Scene及独立Prefab的几何/scale/quaternion/引用严格回读零诊断，整体partial保留未转换业务/源组件；最后Grid组修复由真实Editor证明，但全量12仍待集中验证，不追认full11原12已消失。随后顺序Creator RootName四图85节点小探针，不并发Editor。
+
+Creator根名Probe01新登记：锚点15:11:56Z，内部15:39:56Z/外层15:41:56Z，方法1200秒；ps无主引擎冲突，固定manifest7b054a5efe2635bdd7f4750f0c8ccfe9a56f05f10f4049a3537753d631d482cd，新acceptance/creator-prefab-name-probe-01。4原图85节点、16字体、含原生规范根名反例，严格子级/几何/引用不变；首错停/正常回收自有child，不顺延。
+
+## 2026-10-23 full12单命令端到端验证登记
+
+Unity GridProbe07实际397节点/9独立Prefab、16字体、Scene保存重开、完整位置/大小/pivot/active/scale/quaternion/引用回读零诊断，own29881 exit0/reap；Creator根名Probe01实际85节点/4 Prefab/16字体/Scene、sourceRootName→nativeRootName规则及子级/几何/引用回读editor/static pass零诊断，own30462 normal TERM exit-15/reap。两端均释放。
+
+新获取层另核肥鹅16627声明文件/799052150字节，SHA全部匹配、networkAttempts0、不重复复制，input-set原路径/SHA保持。加上真实347021字节的已声明配置GET/SHA证明，获取实现与模拟编排、真实底层两端样本分别记录，不宣称未知URL自动发现。
+
+现在用公开单条convert --remote-manifest --native生成全新outputs/full-foodstreet-12，然后在full-foodstreet-12-native的顺序新副本执行Unity→Creator；获取在full-foodstreet-12-acquired，均不覆盖旧候选或原件。起步ps未见引擎主进程。每个原生段由orchestration在真正开始时固定UTC锚点、内部+28分钟/外部+30分钟、方法1200秒，写native-orchestration.json；不复用旧grant时钟、不顺延当前段，首错/未退出/非零回读差异停止下一端。生成期间持续只读资源状态，原生前复制阶段再次确认冲突。冻结候选/实际原生副本/获取证据分开；全量12当前未生成/未验，不将小样推成全量通过。
+
+full12单命令生成在acquisition.attach读取已生成Unity manifest（63668683字节）时误用原始输入32MiB预算而安全停止，两个原生段均未启动；保留full12候选及获取回执，不追认端到端通过。修复只在acquisition采用既有stage_manifest的128MiB/8m节点上限，原始输入预算及source算法不改；新增33MiB生成manifest且owned文件篡改仍拒绝的反例，7项获取定向检查通过。下一次全新full13重跑公开单命令，不修改失败候选。
