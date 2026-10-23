@@ -387,3 +387,7 @@ Unity11 actual own24527已exit0/reap，方法445.702秒，1694独立Prefab/24784
 Creator11全量job段新登记：锚点14:50:29Z，内部15:18:29Z/外层15:20:29Z，方法1200秒；ps未见引擎冲突，新acceptance/full11-creator-window-01，固定manifest6ec3ea8804cc10415b22b021b990756dcbf94ba307a033a570b4a427d8f34f65。短调用job已小样实证、全量仍未验；首新错误停/正常回收自有child，不顺延。
 
 CDN通用CLI增量已接入：convert --input-set --remote-manifest（可带cache-root/native），原输入匹配SHA只读复用且不重复复制，新文件在独立acquisition根有界获取并派生输入集；失败/404/身份冲突单列、原件不动；签名URL只留哈希及origin。4路、128MiB单文件/1GiB总量、明确origin跳转及30..3600秒预算；--offline只核缓存。每个新候选原生manifest最终封存前追加Analysis/acquisition证据并回写最终身份，不修改已有冻结候选、不改package/reader算法或绕过源阶段校验。6获取+5顺序编排定向检查通过，含模拟下载→实际合成转换→模拟native的完整单命令；真实通用网络传输待单独核验，原先肥鹅手工实际GET事实不借作该实现实证。
+
+Creator11全量own28471于14:51:30Z启动、14:57:44Z normal TERM exit-15/reap，方法333.375秒；已完成1694独立Prefab和1 Scene实际保存，新的job架构已越过30秒RPC限制。readSaved首个层级差异为SourceRoot ProgressBoardHomeEntrance、原资产HomeEntrance.prefab被原生Importer规范为HomeEntrance（257份源根名与原文件名不同）；原生文件节点数/子级与UITransform存在，非丢节点。当前先核对全部原生文件的asset-basename规范，再显式定义根名policy/sourceRootName映射，不宽松跳过子级或几何。冻结失败副本不改。
+
+Unity最后12节点Grid成组：childAlignment须随startCorner方向，Grid fitter使用MinSize防止图片preferred尺寸干扰；scaled child、缓存height与实际cell extent不符、sliced/tiled graphic minHeight大于网格extent分别handoff保留源几何。布局helper移回unity.py使现有target-plan算法指纹完整覆盖，不改source/signatures、不设绕过白名单。12项定向检查与C# compile .private/grid-direction-minfit-compile-01通过；9原图397节点的GridProbe07 manifest14ccc41556f06060db9f828ff889f7ca483da854bfc0fcc578121b29eddc931b，未重读源/解码像素/AST，待实际原生验证。

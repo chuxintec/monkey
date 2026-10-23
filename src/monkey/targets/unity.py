@@ -13,6 +13,63 @@ def guid(namespace, identity):
     return uuid.uuid5(uuid.NAMESPACE_URL, 'monkey/'+namespace+'/'+identity).hex
 
 
+def widget_geometry_matches(widget, node, parent):
+    if parent is None:
+        return False
+    left,bottom,right,top=widget['margins']
+    size=[parent['size'][0]-left-right,parent['size'][1]-bottom-top]
+    position=[left+node['anchor'][0]*size[0]-parent['anchor'][0]*parent['size'][0],
+              bottom+node['anchor'][1]*size[1]-parent['anchor'][1]*parent['size'][1]]
+    return (all(abs(a-b)<.001 for a,b in zip(size,node['size'])) and
+            all(abs(a-b)<.001 for a,b in zip(position,node['position'])))
+
+
+def grid_native_extent(layout,parent,children):
+    import math
+    children=[n for n in children if n['active']]
+    if not children:return None,'EMPTY_LAYOUT_HANDOFF'
+    if any(n['scale'][:2]!=[1,1] for n in children):return None,'GRID_SCALED_CHILD_HANDOFF'
+    width,height=children[0]['size'];spacing_x,spacing_y=layout['spacingXY']
+    if width<=0 or height<=0 or width+spacing_x<=0:return None,'GRID_CELL_GEOMETRY_HANDOFF'
+    left,bottom,right,top=layout['padding']
+    columns=max(1,math.floor((parent['size'][0]-left-right+spacing_x+.001)/(width+spacing_x)))
+    rows=math.ceil(len(children)/columns)
+    extent=bottom+top+height*rows+spacing_y*(rows-1)
+    if abs(extent-parent['size'][1])>.001:return None,'GRID_CACHED_CONTAINER_HANDOFF'
+    return extent,None
+
+
+def linear_container_matches(layout, parent, children):
+    axis=0 if layout['layoutType']==1 else 1
+    children=[child for child in children if child['active']]
+    before,after=((layout['padding'][0],layout['padding'][2]) if axis==0 else (layout['padding'][1],layout['padding'][3]))
+    extent=before+after+sum(child['size'][axis] for child in children)+max(0,len(children)-1)*layout['spacingXY'][axis]
+    return abs(extent-parent['size'][axis])<.001
+
+
+def cross_axis_mapping(layout, parent, children):
+    # Creator linear layouts leave the other axis untouched. uGUI drives both axes;
+    # only a shared, representable alignment is safe to emit as a standard group.
+    axis = 1 if layout['layoutType'] == 1 else 0
+    children = [child for child in children if child['active']]
+    before, after = ((layout['padding'][1], layout['padding'][3]) if axis == 1
+                     else (layout['padding'][0], layout['padding'][2]))
+    extent = parent['size'][axis]
+    for scaled in (False, True):
+        if scaled and any(child['scale'][axis] <= 0 for child in children):
+            continue
+        for alignment in (.5, 0., 1.):
+            def matches(child):
+                size = child['size'][axis] * (child['scale'][axis] if scaled else 1.)
+                position = (-parent['anchor'][axis] * extent + before
+                            + (extent - before - after - size) * alignment
+                            + child['anchor'][axis] * size)
+                return abs(position - child['position'][axis]) < .001
+            if all(matches(child) for child in children):
+                return dict(crossAxisScale=scaled, crossAxisAlignment=alignment)
+    return None
+
+
 def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None):
     ir_path = safe(ir_path)
     ir = stage_document(ir_path)
@@ -172,7 +229,6 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
                 entry['convertible']=False
                 diagnostics.append(diagnostic('WIDGET_SUBSET_UNSUPPORTED',c['sourceId'],'Only parent-relative absolute full-stretch or disabled flags supported',c['sourceId']))
             elif c['enabled'] and c['flags']==45:
-                from .unity_layout import widget_geometry_matches
                 parent=by_node.get(node.get('parent'))
                 if not widget_geometry_matches(c,node,parent):
                     entry['convertible']=False
@@ -198,8 +254,13 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
                     entry['convertible']=False
                     diagnostics.append(diagnostic('GRID_SUBSET_UNSUPPORTED',c['sourceId'],'Only horizontal-first uniform child sizes supported',c['sourceId']))
                 entry['effectiveCellSize']=list(next(iter(sizes),tuple(c['cellSize'])))
+                if entry['convertible'] and c['enabled']:
+                    _,reason=grid_native_extent(c,by_node[c['node']],children)
+                    if reason:
+                        entry['convertible']=False
+                        diagnostics.append(diagnostic(reason,c['sourceId'],
+                            'Source child scale/cached extent requires a separate native grid adapter; preserve baked geometry',c['sourceId']))
             elif c['layoutType'] in (1,2) and entry['convertible'] and c['enabled']:
-                from .unity_layout import cross_axis_mapping
                 parent=by_node[c['node']]
                 mapping=cross_axis_mapping(c,parent,[by_node[k] for k in parent['children']])
                 if mapping is None:
@@ -212,7 +273,6 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
                 diagnostics.append(diagnostic('EMPTY_LAYOUT_HANDOFF',c['sourceId'],
                     'Empty source container size/negative spacing differs from uGUI empty fitter; preserve source geometry pending dynamic-content adapter',c['sourceId']))
             elif entry['convertible'] and c['enabled'] and c['layoutType'] in (1,2):
-                from .unity_layout import linear_container_matches
                 parent=by_node[c['node']]
                 if not linear_container_matches(c,parent,[by_node[k] for k in parent['children']]):
                     entry['convertible']=False
@@ -237,6 +297,17 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
             diagnostics.append(diagnostic('MISSING_OUTLINE_LABEL',c['sourceId'],'Label dependency could not be converted',c['sourceId']))
     from .common import reject_layout_conflicts
     diagnostics.extend(reject_layout_conflicts(components))
+    texture_by_id={t['id']:t for t in textures}
+    for layout in components:
+        if layout['type']!='cc.Layout' or not layout['convertible'] or not layout['enabled'] or layout['layoutType']!=3:continue
+        for graphic in components:
+            if graphic['node']!=layout['node'] or graphic['type']!='cc.Sprite' or not graphic['convertible'] or not graphic['enabled'] or graphic['mode'] not in (1,2):continue
+            frame=texture_by_id.get(str(graphic.get('spriteFrame'))+('' if graphic.get('trim',True) else '@original'))
+            if frame and frame['border'][1]+frame['border'][3]>by_node[layout['node']]['size'][1]+.001:
+                layout['convertible']=False
+                diagnostics.append(diagnostic('GRID_GRAPHIC_METRICS_HANDOFF',layout['sourceId'],
+                    'Native sliced/tiled Graphic minimum height overrides this grid extent; retain geometry until Graphic/layout separation adapter',layout['sourceId']))
+                break
     from ..assets.animation import plan_clips
     animations,animation_gaps=plan_clips(ir,namespace,PROFILE,animation_selection)
     naming.records.extend(a['nameEvidence'] for a in animations)

@@ -581,8 +581,10 @@ public static class MonkeyImporter
                     group.startAxis=UnityEngine.UI.GridLayoutGroup.Axis.Horizontal;
                     group.startCorner=spec.verticalDirection==1?(spec.horizontalDirection==0?UnityEngine.UI.GridLayoutGroup.Corner.UpperLeft:UnityEngine.UI.GridLayoutGroup.Corner.UpperRight):
                         (spec.horizontalDirection==0?UnityEngine.UI.GridLayoutGroup.Corner.LowerLeft:UnityEngine.UI.GridLayoutGroup.Corner.LowerRight);
+                    group.childAlignment=spec.verticalDirection==1?(spec.horizontalDirection==0?TextAnchor.UpperLeft:TextAnchor.UpperRight):
+                        (spec.horizontalDirection==0?TextAnchor.LowerLeft:TextAnchor.LowerRight);
                     group.constraint=UnityEngine.UI.GridLayoutGroup.Constraint.Flexible;
-                    fitter.verticalFit=UnityEngine.UI.ContentSizeFitter.FitMode.PreferredSize;
+                    fitter.verticalFit=UnityEngine.UI.ContentSizeFitter.FitMode.MinSize;
                 }
                 else {
                     UnityEngine.UI.HorizontalOrVerticalLayoutGroup group=spec.layoutType==1?

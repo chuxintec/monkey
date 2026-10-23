@@ -5,7 +5,7 @@ import unittest
 import tempfile
 from pathlib import Path
 
-from monkey.targets.unity_layout import cross_axis_mapping
+from monkey.targets.unity import cross_axis_mapping
 
 
 class NativeGeometryTests(unittest.TestCase):
@@ -72,7 +72,7 @@ assert.strictEqual(rejected,true);assert.deepStrictEqual(started,[0,1]);
         self.assertIsNotNone(cross_axis_mapping(layout,parent,children))
 
     def test_stretch_requires_source_parent_and_matching_initial_geometry(self):
-        from monkey.targets.unity_layout import widget_geometry_matches
+        from monkey.targets.unity import widget_geometry_matches
         widget=dict(margins=[0,0,0,0]);node=dict(size=[750,1334],position=[0,0,0],anchor=[.5,.5])
         self.assertFalse(widget_geometry_matches(widget,node,None))
         self.assertTrue(widget_geometry_matches(widget,node,dict(size=[750,1334],anchor=[.5,.5])))
@@ -81,12 +81,20 @@ assert.strictEqual(rejected,true);assert.deepStrictEqual(started,[0,1]);
         self.assertFalse(widget_geometry_matches(widget,node,dict(size=[750,1440],anchor=[.5,.5])))
 
     def test_dynamic_placeholder_is_not_a_zero_height_native_container(self):
-        from monkey.targets.unity_layout import linear_container_matches
+        from monkey.targets.unity import linear_container_matches
         layout=dict(layoutType=2,padding=[0,0,0,0],spacingXY=[0,0])
         children=[dict(size=[0,0],active=True)]
         self.assertFalse(linear_container_matches(layout,dict(size=[612,319]),children))
         children[0]['size']=[612,319]
         self.assertTrue(linear_container_matches(layout,dict(size=[612,319]),children))
+
+    def test_grid_extent_rejects_scaled_and_stale_source_cells(self):
+        from monkey.targets.unity import grid_native_extent
+        grid=dict(padding=[0,0,0,0],spacingXY=[0,-10])
+        child=dict(size=[60,36],scale=[1,1,0],active=True)
+        self.assertEqual(grid_native_extent(grid,dict(size=[240,36]),[child]),(36,None))
+        self.assertEqual(grid_native_extent(grid,dict(size=[240,40]),[child])[1],'GRID_CACHED_CONTAINER_HANDOFF')
+        self.assertEqual(grid_native_extent(grid,dict(size=[240,36]),[dict(child,scale=[.5,.5,1])])[1],'GRID_SCALED_CHILD_HANDOFF')
 
     @unittest.skipUnless(shutil.which('node'),'Node unavailable')
     def test_prefab_collects_all_geometry_differences_without_claiming_verified(self):
