@@ -12,7 +12,7 @@ CLI继续convert --source/--input-set --target unity6|cocos38|both。加入真�
 
 ## U：指定Unity来源样本
 
-用户指定最新打开《向僵尸开炮》。旧Research身份wx31a9c726536cdacc/本地修订273/Unity2021.3.30f1 IL2CPP-Wasm仅作线索。2026-10-23本轮只读检查已知对应账号的当前可见包目录，仅发现修订273，内有__WITHOUT_MULTI_PLUGINCODE__.wxapkg、_wasmcode_.wxapkg、_wasmcode1_.wxapkg；这还不是当前Unity版本/后端正文核验，不能只凭旧记录或mtime宣称已验证最新运行内容。下一步比对实际包SHA/头、当前资源正文及版本/后端证据，原件/玩家档不写。
+用户指定最新打开《向僵尸开炮》。旧Research身份wx31a9c726536cdacc/本地修订273/Unity2021.3.30f1 IL2CPP-Wasm仅作线索。2026-10-23本轮只读检查已知对应账号的当前可见包目录，仅发现修订273，内有__WITHOUT_MULTI_PLUGINCODE__.wxapkg、_wasmcode_.wxapkg、_wasmcode1_.wxapkg；这还不是当前Unity版本/后端正文核验，不能只凭旧记录或mtime宣称已验证最新运行内容。本轮已通过固定本机grea:wxapkg-decrypt在monkey私有目录重新解密这3个当前包，明文SHA全部与冻结证据一致；分别3/2/48条目，game.js实际出现2021.3.30f1版本字符串，Wasm条目可枚举。这里只是当前包体静态证据，serializedFile/TypeTree正文仍待解析，不把版本字符串当完整原生恢复。原件/玩家档不写。
 
 先发现本机可用且版本固定的AssetRipper/UnityPy/提取provider和GREA既有合同，只读复用、固定参数/输出schema，不重写Unity二进制生态。缺工具/TypeTree/元数据列条件，不自动安装。未知DLL/JS/Wasm从不执行。枚举Unity数据目录/AssetBundle/serializedFile及显式容器解包关系，保留GUID/fileID/PPtr、原名/路径、Prefab/Scene、Transform/材质/Shader/字体/模型/音频/配置。
 
@@ -31,3 +31,7 @@ reader按3.x真实序列化、UUID子资源、redirect/bundle/pack、System/JS�
 ## 后续来源家族
 
 用户本聊天补充范围：Cocos所有版本原包输出Unity6/Cocos3.8.8或both；Unity所有版本、Laya/LayaAir、Egret（用户写作Eraget）、自研及其他引擎原包统一输出Unity6。后续扩展不改变当前肥鹅、U、C顺序；按取得样本逐来源识别和独立reader适配，未知不套用Cocos图或假称已支持。非Cocos来源请求cocos38/both一律拒绝。
+
+## 原包与远程资源闭包
+
+沿本聊天CDN/远程包补充授权，一键入口需覆盖原包明确声明的远程资源：已有本地缓存先核SHA复用，有据URL有界获取并记实际HTTP/哈希/缺失收据，未知miniGame地址不猜。肥鹅19次GET/16627本地文件核对已经完成；通用CLI自动获取编排尚未接入，不以本次人工收据冒充已实现。

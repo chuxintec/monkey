@@ -26,7 +26,7 @@
 
 当前顺序：P1统一CLI与原生导入问题收口 → P2安全包级入口、全资源台账和标准化导出 → P3源模块/导出/依赖索引、双目标代码初稿 → P4真实打开编辑与AI接续核对。既有v0.1–v0.3作为历史切片验证，不替代该总目标。原生自动编排与失败阶段续跑仍待实现。
 
-所有输入文件有去向：原生转换、可复制、重复映射、原格式待转、缺失引用、明确过滤。未知/无法编译部分进入工程SourceRecovery编译排除区，不能整个原包换名当标准化。仅对已明确支持格式恢复；不自动下载CDN、执行原JS/动态库、破解未知加密或安装APK。
+所有输入文件有去向：原生转换、可复制、重复映射、原格式待转、缺失引用、明确过滤。未知/无法编译部分进入工程SourceRecovery编译排除区，不能整个原包换名当标准化。仅对已明确支持格式恢复；用户已追加CDN/远程包获取，肥鹅已完成明确URL的实际GET/本地SHA核对；通用CLI还需接入有界获取与缓存复用，未知地址不得臆造。禁止执行原JS/动态库、破解未知加密或安装APK。
 
 有限静态模块恢复、支持语义转写与TS/C#初稿属于范围；不承诺无损全业务转换，不生成默认成功/假奖励/真实原服连接。正式数值JSON保持唯一制作源，Prefab/SO只管理引用；两目标可分别搬走，原件/GREA/肥鹅仍只读，不新增Agent/引擎/付费模型/推送。
 
@@ -261,3 +261,7 @@ monkey-full05-native-grant-20261023-01按绝对截止执行，隔离outputs/acce
 11ccef4已通过公开CLI生成Creator-only outputs/full-foodstreet-06-creator，manifest7c47d0b55c1c2d4acf108281214f76956365d3c216f866977661a4d21e7b238a，1694独立Prefab原名保存计划。17201/884709704全入账，静态verify/name audit零问题，IR非命名数据完全同05，GUID/UUID不变；原生保存与重开not_run。
 
 Unity真实窗口发现10源节点各两份Layout。当前补双目标逐组件MULTIPLE_LAYOUT_HANDOFF保留几何而不选方向；Unity原生防御检查与ownedScene唯一场景清理修复。15项定向检查、C#显式程序集compile pass（.private/full05-layout-compile-01）；不代替Editor。下一步以完整输入复用06已验源阶段生成full07双目标：Unity新候选只为本次实际根因修复，Creator同步相同来源冲突保护，不重新解图/解析源代码。再核对差额与申请必要新窗口。
+
+## 2026-10-23 full07生成与待验
+
+修复emitter53a7256，outputs/full-foodstreet-07双目标完整生成。Unity manifest dcd023012d2cc6e6a9b276c2391ceae7af738e169e725ac53a535deac530df67；Creator manifest61e7d81006580f6039572b2d9197d68bb65a91dffcbcbb5949553ec3e2c5aca6。两端各1694独立Prefab计划，20份冲突Layout明确handoff，转换组件Unity13530/Creator12568；1776Spine闭包全复用、零解码，原reader/像素/AST未重跑。最终双端static/name/routing核对全部通过，零问题，非名称IR同05、GUID/UUID不变；原生/视觉/业务未验。已申请下一独立Unity/Creator顺序窗口；没有新grant不启动引擎。Unity05失败副本与Creator06冻结保留。
