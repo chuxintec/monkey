@@ -3,6 +3,7 @@
 const cc = require('cc');
 const motion=require('./animation.js');
 const prefabs=require('./prefab.js');
+const batch=require('./batch.js');
 const color = a => new cc.Color(...a);
 const checkTime=plan=>{if(plan.nativeDeadlineMs&&Date.now()>=plan.nativeDeadlineMs)throw Error('NATIVE_BUDGET_EXHAUSTED');};
 const loadAsset = (uuid, type) => new Promise((resolve,reject) => cc.assetManager.loadAny({uuid}, (e,a) => {
@@ -29,9 +30,9 @@ module.exports = {
                 const design = new cc.Node('DesignRoot');design.parent=canvasNode;design.layer=cc.Layers.Enum.UI_2D;
                 design.addComponent(cc.UITransform).setContentSize(...plan.designSize);design.getComponent(cc.UITransform).setAnchorPoint(0,0);
                 design.setPosition(-plan.designSize[0]/2,-plan.designSize[1]/2,0);
-                const nodes=new Map();const assets=new Map(plan.assets.map(a=>[a.sourceId,a]));
+                const nodes=new Map();const sourceNodes=new Map(plan.nodes.map(n=>[n.sourceId,n]));const assets=new Map(plan.assets.map(a=>[a.sourceId,a]));
                 const native=new Map();
-                for(const a of plan.assets) native.set(a.sourceId,await loadAsset(a.kind==='sprite'?a.spriteFrameUuid:a.uuid,a.kind==='sprite'?cc.SpriteFrame:a.kind==='json'?cc.JsonAsset:cc.Font));
+                await batch.map(plan.assets,16,async a=>{checkTime(plan);native.set(a.sourceId,await loadAsset(a.kind==='sprite'?a.spriteFrameUuid:a.uuid,a.kind==='sprite'?cc.SpriteFrame:a.kind==='json'?cc.JsonAsset:cc.Font));});
                 for(const n of plan.nodes) {
                     checkTime(plan);
                     const node=new cc.Node(n.name);node.layer=cc.Layers.Enum.UI_2D;nodes.set(n.sourceId,node);
@@ -48,7 +49,7 @@ module.exports = {
                 for(const c of plan.components) {
                     checkTime(plan);
                     if(!c.convertible || c.type==='cc.LabelOutline')continue;
-                    const node=nodes.get(c.node);const source=plan.nodes.find(n=>n.sourceId===c.node);let comp;
+                    const node=nodes.get(c.node);const source=sourceNodes.get(c.node);let comp;
                     if(c.type==='cc.Sprite') {
                         comp=node.addComponent(cc.Sprite);comp.type=c.mode;comp.sizeMode=c.sizeMode;comp.trim=c.trim;
                         comp.spriteFrame=c.spriteFrame?native.get(c.spriteFrame):null;comp.color=color(source.color);
@@ -108,9 +109,9 @@ module.exports = {
             const saved=[];const walk=n=>{saved.push(n);for(const child of n.children)walk(child);};for(const n of design.children)walk(n);
             if(saved.length!==plan.nodes.length)throw Error('Saved source node count mismatch');
             // Match hierarchy by child indices; duplicate source names do not lose identity.
-            const mapped=new Map();
+            const mapped=new Map(),sourceNodes=new Map(plan.nodes.map(n=>[n.sourceId,n]));
             function match(sid,n) {
-                const src=plan.nodes.find(x=>x.sourceId===sid);if(!src||src.name!==n.name||src.children.length!==n.children.length)throw Error('Saved hierarchy differs');
+                const src=sourceNodes.get(sid);if(!src||src.name!==n.name||src.children.length!==n.children.length)throw Error('Saved hierarchy differs');
                 mapped.set(sid,n);src.children.forEach((id,i)=>match(id,n.children[i]));
             }
             plan.nodes.filter(n=>n.parent===null).forEach((n,i)=>match(n.sourceId,design.children[i]));
@@ -122,10 +123,10 @@ module.exports = {
                 if(c.type==='cc.Label')labels.push({sourceId:c.sourceId,text:comp.string,fontUuid:comp.font&&comp.font._uuid});
             }
             const frames=[];
+            const savedFrames=new Map(saved.flatMap(n=>n.getComponents(cc.Sprite)).map(s=>s.spriteFrame).filter(Boolean).map(sf=>[sf._uuid,sf]));
             for(const a of plan.assets.filter(a=>a.kind==='sprite')) {
                 // Resolve from saved Sprite where available or load the importer-owned subresource.
-                const candidates=saved.flatMap(n=>n.getComponents(cc.Sprite)).map(s=>s.spriteFrame).filter(Boolean);
-                let sf=candidates.find(f=>f._uuid&&f._uuid.split('@')[0]===a.uuid);
+                let sf=savedFrames.get(a.spriteFrameUuid);
                 if(!sf) {
                     // Native importer identities are sent by the main process for unused source assets.
                     if(!a.spriteFrameUuid)throw Error('Native SpriteFrame identity required for readback');

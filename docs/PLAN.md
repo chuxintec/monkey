@@ -6,9 +6,11 @@
 
 全量实际依据仍为 `outputs/acceptance/full07-window-01/UnityProject`：1694独立Prefab、Scene及editable roundtrip完成、Missing Script0；原始回读2005差异（613几何/834字形/557引用/1版本），不是还原通过。full08 Creator已证明5份fnt页图闭包。冻结候选与acceptance实际工程、历史失败目录分开保留。
 
-最新Unity探针03实际16原字体/3 Prefab/76节点/Scene重开/编辑重开完成，8个Label字形及5份atlas/material绑定通过，仅1个带缩放布局节点位置不同。Creator探针01已通过显式CLI就绪等待和自动方法调用，3 Prefab及Scene实际保存；保存重载的Label尺寸错误，因首个差异停止，不能报告Editor通过。own10498于13:19:49Z正常TERM exit-15、已reap；当前无本轮原生child。
+最新Unity探针04实际16原字体/3 Prefab/76节点、Scene重开/编辑重开完成，8 Label字形、5 atlas/material绑定及节点几何回读全部通过，零诊断；整体partial仍保留业务和源组件缺口。Creator探针02已通过显式CLI自动方法、16原字体/3 Prefab/76节点/Scene保存重载的几何及引用核对，editor/static pass、零诊断；没有原版画面对照或业务通过。所有本轮自有child已退出并回收。
 
-下一组成组修复：Unity按所有活动子节点的原始位置选择可精确表达的uGUI cross-axis对齐/缩放；不能由同一标准对齐表达的原布局明确handoff，保留烘焙几何，不放宽容差。Creator隔离Scene在所有Label属性/outline完成后调用公开updateRenderData(true)，避免默认Label尺寸进入保存；Prefab回读收集所有几何差异并保持验证失败。17项定向检查与C#程序集编译通过，尚未原生证明。新小探针Unity04、Creator02已生成/static pass，顺序有界实测后再集中全量10。源reader/像素/AST未重跑，肥鹅/GREA/服务/存档不变。
+全量新Unity10已生成：`outputs/full-foodstreet-10-unity/UnityProject`，manifest05c028933feb5329b41a6964f76b73d58edae1b6ffceb073706932e28418754a，static/name/routing零问题，17201文件/884709704字节全入账、17329种子身份稳定、1694 Prefab计划、1776 Spine闭包全复用，源reader/像素/AST不重跑。121份无法由单一标准uGUI横向对齐保留的源Layout明示handoff，20多Layout冲突继续保留，不能把保留几何称布局行为已恢复。
+
+Creator02方法62.123秒处理67资产，逐图刷新/顺序保存不能直接假设满足全量窗口。当前批处理修复：去除就绪后逐图重复refresh、仅变更meta、8路有界提交/16路身份查询与原生load、Prefab父目录统一刷新及8路独立保存；仍使用原生分配subresource UUID、实际保存后严格回读，失败停止新调度并等待已开始项。新增API计数/耗时证据。12项定向检查及JS语法通过，小探针03已static pass，原生性能/语义待验。下一步Unity10全量→Creator03小探针顺序验证，再Creator全量候选；不放宽任何回读标准。
 
 CLI通用CDN获取、更多来源profile及完整游戏业务仍未交付；肥鹅明确URL获取回执已补入原项目。用户目标矩阵为所有Cocos原包→Unity6/Creator3.8.8/both；所有Unity、Laya/LayaAir、Egret、自研/其他引擎→Unity6，按实际profile逐个实现，不以范围代替已支持能力。
 
@@ -321,3 +323,13 @@ Unity探针03于13:15:36Z启动own9923，13:15:55Z exit0/reap，方法2.10秒。
 own10498于13:18:29Z启动、13:19:49Z exit-15/reap。方法63.168秒，显式CLI实际完成67资产/76节点/3 Prefab与Scene保存，在Prefab几何回读首个descLabel尺寸错误停止。离线读取保存的Prefab发现8个Label均为默认85.63x40，源44.17x32等，字体/string/fontSize字段真实正确；隔离Scene未刷新渲染测量是当前待验共因。不是字体丢失或就绪失败。新实现最终统一updateRenderData(true)，逐Prefab完整收集差异、逐项仍拒绝通过，不让首个差异遮住后续证据。
 
 Unity探针03唯一List节点#18位置-297→-270，直接父VerticalLayout驱动横向时未考虑scale1.1。原生标准uGUI可通过childScaleWidth恢复；新增按全部活动子节点检验的精确cross-axis映射，非共同对齐明确handoff，不伪造已转换。当前全量793份启用无scale expansion线性Layout中661中心不缩放/7边缘/4中心带cross-scale可表达、121需要handoff（含其他冲突/子集限制，最终分母以新计划为准）。C# compile .private/cross-axis-compile-01 pass；17项相关检查通过。小探针04 Unity manifest fdc0a10f0ab064d0640d7c4d80c6b72fe399bd8be1eb7f614bf7006965c9a1d4；Creator02 manifest8c954ab6f36e2fd9c7ae07e06a2dacc9affb6848e812e92551f5b94e03c6e5c5，两个static pass，原生待验。
+
+Unity探针04新登记：13:29:00Z锚点，内部13:57:00Z/外层13:59:00Z，预算1200秒；只读ps未见Unity/Creator主进程，正常审批启动新acceptance副本。不得顺延截止或操作其他进程。
+
+Unity04 own11411于13:29:12Z启动、13:29:31Z exit0/reap；回读零诊断，76节点几何/8 Label字形和资源引用核对通过，整体partial保留业务/源组件缺口。Creator02新登记锚点13:29:42Z，内部13:57:42Z/外层13:59:42Z，方法1200秒；ps未见冲突主进程，只启动新隔离副本。
+
+## 2026-10-23 代表探针均零差异与全量10就绪
+
+Unity04 own11411已13:29:31Z exit0/reap，76节点几何/8 Label字形及原字体引用零诊断，Scene及editable roundtrip完成。Creator02 own12108于13:30:01Z启动、13:31:19Z normal TERM exit-15/reap，方法62.123秒，16原字体/3独立Prefab/76节点/8 Label/Scene保存重载、几何及内部引用验证通过，editor/static pass。不能由此称全量/视觉/业务通过。
+
+Unity10全量生成emitter a0fd18b，完整输入与源阶段/Spine页图复用；static/name/routing均pass，无身份或原名漂移。Creator新增有界批处理只改编辑期流程，已有小探针02冻结；新Creator03 manifesta4908311bc31d68dfa414189d6c7c40cce93dd38894c337c8a57e1759864bf26，static pass，待有界实证，不无依据直接启动全量。

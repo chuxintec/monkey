@@ -8,6 +8,23 @@ from monkey.targets.unity_layout import cross_axis_mapping
 
 
 class NativeGeometryTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which('node'),'Node unavailable')
+    def test_asset_batches_bound_concurrency_preserve_order_and_drain_on_first_error(self):
+        adapter=Path(__file__).resolve().parents[1]/'src/monkey/targets/CreatorBatch.js'
+        script=r'''
+const batch=require(process.argv[1]),assert=require('assert');
+(async()=>{
+let active=0,max=0;
+const values=await batch.map([0,1,2,3,4],2,async n=>{active++;max=Math.max(max,active);await new Promise(r=>setTimeout(r,n%2?1:8));active--;return n*3;});
+assert.deepStrictEqual(values,[0,3,6,9,12]);assert.strictEqual(max,2);assert.strictEqual(active,0);
+const started=[];let drained=false,rejected=false;
+try {await batch.map([0,1,2,3],2,async n=>{started.push(n);if(n===0)throw undefined;await new Promise(r=>setImmediate(r));drained=true;});}
+catch(e){rejected=true;assert.strictEqual(e,undefined);assert.strictEqual(drained,true);}
+assert.strictEqual(rejected,true);assert.deepStrictEqual(started,[0,1]);
+})().catch(e=>{console.error(e);process.exitCode=1;});
+'''
+        subprocess.run(['node','-e',script,str(adapter)],capture_output=True,text=True,check=True)
+
     def test_native_alignment_preserves_scaled_pivot_and_rejects_individual_offsets(self):
         layout=dict(layoutType=2,padding=[0,0,0,0])
         parent=dict(size=[300,233.96],anchor=[.5,.5])
