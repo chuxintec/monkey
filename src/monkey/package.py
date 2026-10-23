@@ -65,7 +65,7 @@ def _base(root, profile, namespace):
     if profile==unity.PROFILE:
         _write(root,'ProjectSettings/ProjectVersion.txt',b'm_EditorVersion: 6000.6.2f1\n')
         (root/'Packages').mkdir(parents=True)
-        write_json(root/'Packages/manifest.json',dict(dependencies={'com.unity.ugui':'2.0.0'}))
+        write_json(root/'Packages/manifest.json',dict(dependencies={'com.unity.ugui':'2.6.0'}))
         (root/'Assets/Game').mkdir(parents=True)
     else:
         (root/'assets').mkdir(parents=True)
@@ -323,7 +323,10 @@ Native Editor execution and readback remain separate acceptance steps; see the g
             _write(project,'Docs/DEPENDENCIES.md',(f'''# Dependencies
 
 Target engine: {profile}; not bundled, installed, activated or validated by this export.
-Unity package seed: com.unity.ugui 2.0.0. Creator uses its declared built-in importers.
+Unity package seed: com.unity.ugui 2.6.0, matching the supported installed Editor builtin.
+TMP Essential resources must resolve from this exact registered package and pass native shader/settings readback;
+Analysis/tmp-resources.json records the archive and asset identities. No alternate fonts or shaders are substituted.
+Creator uses its declared built-in importers.
 No original source runtime, backend, native library, model service or external network connection is enabled.
 Spine and other third-party runtimes have not been imported: determine data/runtime license and exact version first.
 Host conversion used monkey {__version__}, Python, Pillow 12.2.0 and static Acorn 8.15.0 via Node.

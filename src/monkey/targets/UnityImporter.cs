@@ -13,8 +13,15 @@ public static class MonkeyImporter
     [Serializable] public class Plan {
         public float[] designSize; public float pixelsPerUnit;
         public TextureSpec[] textures; public AssetSpec[] assets; public BitmapSpec[] bitmapFonts; public int sourceDiagnosticCount;
-        public NodeSpec[] nodes; public ComponentSpec[] components; public MotionSpec[] animations; public bool galleryOnly; public SourcePrefabSpec[] sourcePrefabs;
+        public NodeSpec[] nodes; public ComponentSpec[] components; public MotionSpec[] animations; public bool galleryOnly; public SourcePrefabSpec[] sourcePrefabs; public TmpResourceSpec tmpResources;
     }
+    [Serializable] public class TmpResourceSpec { public string packageName,packageVersion,resource; }
+    [Serializable] public class TmpResourceResult {
+        public int schemaVersion=1;public string status,packageName,packageVersion,source,resource,archiveSha256;
+        public string bitmapGuid,distanceGuid,mobileGuid,settingsGuid;
+    }
+    static Shader tmpBitmapShader,tmpDistanceShader;
+    static TmpResourceResult tmpResourceResult;
     [Serializable] public class SourcePrefabSpec { public string sourceId,root,path; public string[] nodes; public int nodeCount; }
     [Serializable] public class SourcePrefabResult { public string sourceId,path,guid; public int nodeCount,missingScripts; }
     [Serializable] public class MotionKey { public float time,value; public string interpolation; }
@@ -53,7 +60,7 @@ public static class MonkeyImporter
     [Serializable] public class Readback {
         public string status, unityVersion, prefabGuid, sceneGuid;
         public int spriteCount, nodeCount, missingScripts; public bool editableRoundtrip; public string previewPath,previewSha256,previewError,colorSpace;
-        public MotionResult[] animations; public string[] diagnostics; public NodeResult[] nodes; public SpriteResult[] sprites; public FileResult[] nativeFiles; public FontResult[] fonts; public LabelResult[] labels; public ViewReference[] viewReferences; public JsonResult[] jsonAssets; public SourcePrefabResult[] sourcePrefabs;
+        public MotionResult[] animations; public string[] diagnostics; public NodeResult[] nodes; public SpriteResult[] sprites; public FileResult[] nativeFiles; public FontResult[] fonts; public LabelResult[] labels; public ViewReference[] viewReferences; public JsonResult[] jsonAssets; public SourcePrefabResult[] sourcePrefabs; public TmpResourceResult tmpResources;
     }
     [Serializable] public class JsonResult { public string id,guid,textSha256; }
     [Serializable] public class ViewReference { public string sourceId,field; public int index; public long prefabFileId; public bool bound; }
@@ -89,7 +96,7 @@ public static class MonkeyImporter
     static void ExecuteImport() {
         nativeClock=System.Diagnostics.Stopwatch.StartNew();
         nativeProgress=new NativeProgress {status="running",phase="preflight",planSha256=Hash("Assets/Monkey/Editor/import-plan.json")};
-        nativeDeadline=DateTime.MaxValue;nativeBudget=0;ownedScene=default(Scene);priorScene=default(Scene);
+        nativeDeadline=DateTime.MaxValue;nativeBudget=0;ownedScene=default(Scene);priorScene=default(Scene);tmpBitmapShader=null;tmpDistanceShader=null;tmpResourceResult=null;
         try {
             var budget=Environment.GetEnvironmentVariable("MONKEY_NATIVE_BUDGET_SECONDS");
             if(!string.IsNullOrEmpty(budget) && (!double.TryParse(budget,System.Globalization.NumberStyles.Float,System.Globalization.CultureInfo.InvariantCulture,out nativeBudget) || double.IsNaN(nativeBudget) || double.IsInfinity(nativeBudget) || nativeBudget<1 || nativeBudget>3600))
@@ -177,6 +184,53 @@ public static class MonkeyImporter
         return sprites;
     }
 
+    static void EnsureTmpResources(TmpResourceSpec spec) {
+        NativeCheckpoint("tmp-resources",0,1);
+        if(spec==null || spec.packageName!="com.unity.ugui" || spec.packageVersion!="2.6.0" || spec.resource!="Package Resources/TMP Essential Resources.unitypackage")
+            throw new InvalidOperationException("TMP_RESOURCE_CONTRACT_MISMATCH: regenerate the supported candidate");
+        var package=UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/com.unity.ugui/package.json");
+        if(package==null || string.IsNullOrEmpty(package.resolvedPath))
+            throw new InvalidOperationException("TMP_PACKAGE_UNRESOLVED: com.unity.ugui");
+        if(package.name!=spec.packageName || package.version!=spec.packageVersion)
+            throw new InvalidOperationException("TMP_PACKAGE_VERSION_MISMATCH: "+package.name+" "+package.version);
+        var archive=Path.Combine(package.resolvedPath,spec.resource);
+        if(!File.Exists(archive))throw new InvalidOperationException("TMP_ESSENTIAL_ARCHIVE_MISSING: "+spec.resource);
+        tmpResourceResult=new TmpResourceResult {status="resolved",packageName=package.name,packageVersion=package.version,
+            source=package.source.ToString(),resource=spec.resource,archiveSha256=Hash(archive)};
+        WriteTmpResourceResult();
+        const string bitmap="Assets/TextMesh Pro/Shaders/TMP_Bitmap-Custom-Atlas.shader";
+        const string distance="Assets/TextMesh Pro/Shaders/TMP_SDF.shader";
+        const string mobile="Assets/TextMesh Pro/Shaders/TMP_SDF-Mobile.shader";
+        const string settings="Assets/TextMesh Pro/Resources/TMP Settings.asset";
+        if(!File.Exists(bitmap) || !File.Exists(distance) || !File.Exists(mobile) || !File.Exists(settings)) {
+            // Use the registered package's real location; the TMP convenience helper assumes a physical Packages directory.
+            UnityEditor.AssetPackage.Package.Import(archive,false);
+            AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+        }
+        if(!File.Exists(bitmap) || !File.Exists(distance) || !File.Exists(mobile) || !File.Exists(settings)) {
+            tmpResourceResult.status="import_incomplete";WriteTmpResourceResult();
+            throw new InvalidOperationException("TMP_ESSENTIAL_IMPORT_INCOMPLETE: resolved archive exists, required files absent after import");
+        }
+        tmpBitmapShader=AssetDatabase.LoadAssetAtPath<Shader>(bitmap);
+        tmpDistanceShader=AssetDatabase.LoadAssetAtPath<Shader>(distance);
+        var mobileShader=AssetDatabase.LoadAssetAtPath<Shader>(mobile);
+        var settingsAsset=AssetDatabase.LoadAssetAtPath<TMPro.TMP_Settings>(settings);
+        if(tmpBitmapShader==null || tmpDistanceShader==null || mobileShader==null || settingsAsset==null) {
+            tmpResourceResult.status="assets_not_ready";WriteTmpResourceResult();
+            throw new InvalidOperationException("TMP_ESSENTIAL_ASSETS_NOT_READY: required files exist but native assets did not load");
+        }
+        if(tmpBitmapShader.name!="TextMeshPro/Bitmap Custom Atlas" || tmpDistanceShader.name!="TextMeshPro/Distance Field" || mobileShader.name!="TextMeshPro/Mobile/Distance Field") {
+            tmpResourceResult.status="shader_name_mismatch";WriteTmpResourceResult();
+            throw new InvalidOperationException("TMP_SHADER_NAME_MISMATCH: no shader substitution permitted");
+        }
+        tmpResourceResult.bitmapGuid=AssetDatabase.AssetPathToGUID(bitmap);tmpResourceResult.distanceGuid=AssetDatabase.AssetPathToGUID(distance);
+        tmpResourceResult.mobileGuid=AssetDatabase.AssetPathToGUID(mobile);tmpResourceResult.settingsGuid=AssetDatabase.AssetPathToGUID(settings);
+        tmpResourceResult.status="ready";WriteTmpResourceResult();NativeCheckpoint("tmp-resources",1,1);
+    }
+    static void WriteTmpResourceResult() {
+        Directory.CreateDirectory("Analysis");File.WriteAllText("Analysis/tmp-resources.json",JsonUtility.ToJson(tmpResourceResult,true));
+    }
+
     static void Run()
     {
         if (Application.unityVersion != "6000.6.2f1")
@@ -194,10 +248,8 @@ public static class MonkeyImporter
         AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
         if (plan.sourceDiagnosticCount > 0) diagnostics.Add("SOURCE_GAPS: " + plan.sourceDiagnosticCount);
         var spriteMap = ImportTextures(plan);
-        if (plan.bitmapFonts.Length > 0 || plan.assets.Any(a=>a.path.EndsWith(".ttf",StringComparison.OrdinalIgnoreCase))) {
-            if (Shader.Find("TextMeshPro/Bitmap Custom Atlas") == null || Shader.Find("TextMeshPro/Distance Field") == null)
-                TMPro.TMP_PackageResourceImporter.ImportResources(true,false,false);
-        }
+        if (plan.bitmapFonts.Length > 0 || plan.assets.Any(a=>a.path.EndsWith(".ttf",StringComparison.OrdinalIgnoreCase)))
+            EnsureTmpResources(plan.tmpResources);
         NativeCheckpoint("fonts",0,plan.bitmapFonts.Length+plan.assets.Count(a=>a.path.EndsWith(".ttf",StringComparison.OrdinalIgnoreCase)));
         var fonts = new Dictionary<string, TMPro.TMP_FontAsset>();
         int fontProgress=0;int fontTotal=plan.bitmapFonts.Length+plan.assets.Count(a=>a.path.EndsWith(".ttf",StringComparison.OrdinalIgnoreCase));
@@ -206,7 +258,7 @@ public static class MonkeyImporter
             NativeCheckpoint("fonts",fontProgress++,fontTotal);
             var source = AssetDatabase.LoadAssetAtPath<Font>(item.path);
             if (source == null) { diagnostics.Add("FONT_IMPORT_FAILED: " + item.id); continue; }
-            if (Shader.Find("TextMeshPro/Distance Field") == null) {
+            if (tmpDistanceShader == null) {
                 diagnostics.Add("TMP_SHADER_RESOURCES_MISSING: " + item.id); continue;
             }
             var font = TMPro.TMP_FontAsset.CreateFontAsset(source,90,16,UnityEngine.TextCore.LowLevel.GlyphRenderMode.SDFAA,1024,1024,TMPro.AtlasPopulationMode.Dynamic,false);
@@ -234,7 +286,7 @@ public static class MonkeyImporter
             atlasImporter.textureCompression = TextureImporterCompression.Uncompressed; atlasImporter.maxTextureSize = 16384;
             atlasImporter.SaveAndReimport();
             var atlas = AssetDatabase.LoadAssetAtPath<Texture2D>(spec.path);
-            var shader = Shader.Find("TextMeshPro/Bitmap Custom Atlas");
+            var shader = tmpBitmapShader;
             if (shader == null) throw new InvalidOperationException("Native TMP bitmap shader unavailable after resource import");
             var font = ScriptableObject.CreateInstance<TMPro.TMP_FontAsset>();
             font.name = "SourceBitmapFont";
@@ -495,7 +547,7 @@ public static class MonkeyImporter
         if (!EditorSceneManager.SaveScene(scene,ScenePath)) throw new InvalidOperationException("Native scene save failed");
         NativeCheckpoint("native-readback",0,1);
         var readback = new Readback {
-            sourcePrefabs=sourcePrefabResults.ToArray(),
+            sourcePrefabs=sourcePrefabResults.ToArray(),tmpResources=tmpResourceResult,
             jsonAssets=plan.assets.Where(a=>a.kind=="cc.JsonAsset").Select(a=> {
                 var text=AssetDatabase.LoadAssetAtPath<TextAsset>(a.path);
                 if(text==null)throw new InvalidOperationException("JsonAsset TextAsset import failed: "+a.id);

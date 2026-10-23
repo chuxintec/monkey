@@ -47,6 +47,8 @@ class StructuredTests(unittest.TestCase):
                 self.assertEqual(m['validation']['editor'],'not_run')
                 if name=='UnityProject':
                     plan=load(read(project/'Assets/Game/Editor/Conversion/import-plan.json'))
+                    self.assertEqual(plan['tmpResources'],dict(packageName='com.unity.ugui',packageVersion='2.6.0',resource='Package Resources/TMP Essential Resources.unitypackage'))
+                    self.assertEqual(load(read(project/'Packages/manifest.json'))['dependencies']['com.unity.ugui'],'2.6.0')
                     self.assertEqual(len(plan['sourcePrefabs']),1)
                     self.assertIn('Assets/Game/Content/Prefabs/Recovery/Sources/',plan['sourcePrefabs'][0]['path'])
                     asset=next(a for a in plan['assets'] if a['kind']=='cc.JsonAsset')

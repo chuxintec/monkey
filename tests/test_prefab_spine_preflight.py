@@ -48,6 +48,8 @@ class BoundaryTests(unittest.TestCase):
         self.assertNotIn('LICENSE_ENTITLEMENT_NOT_CONFIRMED',[r['code'] for r in result['findings']])
         good=classify_log('Initialize engine version: 6000.6.2f1\nSuccessfully resolved entitlement details')
         self.assertEqual(good['findings'],[])
+        error=classify_log('TMP_ESSENTIAL_IMPORT_INCOMPLETE: required files absent')
+        self.assertEqual(error['findings'][0]['code'],'TMP_ESSENTIAL_IMPORT_INCOMPLETE')
 
     def test_progress_is_bound_to_exact_plan_and_never_authorizes_resume(self):
         progress=dict(schemaVersion=1,phase='textures',status='budget_exhausted',planSha256='a'*64,

@@ -120,7 +120,7 @@ Editor导入、编译、保存重开、画面和业务验收分开记录，目�
 
 CONTINUE-01只给原奖励页zh场景的3个系统Label绑定了已取得的zh-bold文件，另2个数量文本使用原BitmapFont。没有绑定时仍报缺口，不换系统字体。Bitmap图集包含原彩色描边，采用TMP Bitmap Custom Atlas材质；TTF描边和垂直度量仍等待真正画面对照。
 
-隔离Unity第一次导入需要TMP资源时，adapter只在该候选工程使用官方`TMP_PackageResourceImporter.ImportResources(true,false,false)`，不弹交互窗口、不导入Examples、不修改引擎或肥鹅。新Scene包含固定750×1334设计坐标框、原生Canvas/EventSystem，Editor导入后会尝试离屏捕获`Analysis/native-page.png`；只有文件和真实回读存在才是Unity画面。`scripts/probe_bitmap.py`产物明确标OFFLINE，不是Unity预览。
+隔离Unity第一次导入需要TMP资源时，adapter只在该候选工程通过已注册包的`resolvedPath`定位UGUI 2.6.0必需资源，导入Essential archive后同步刷新并核验原名shader/settings；不弹交互窗口、不导入Examples、不修改引擎或肥鹅。未生成或未就绪会明确失败，不用其他shader替代。新Scene包含固定750×1334设计坐标框、原生Canvas/EventSystem，Editor导入后会尝试离屏捕获`Analysis/native-page.png`；只有文件和真实回读存在才是Unity画面。`scripts/probe_bitmap.py`产物明确标OFFLINE，不是Unity预览。
 
 机器交接包按模块/根因聚合并保留全部明细。真实View数组索引和Prefab component fileID必须读Editor回执；在此之前只提供字段/目标路径，不猜fileID。
 

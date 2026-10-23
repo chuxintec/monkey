@@ -23,13 +23,24 @@ def classify_log(text):
     completed='Monkey native import:' in text
     if import_events and not completed:
         findings.append(dict(code='NATIVE_IMPORT_COMPLETION_NOT_RECORDED',confidence='observed',message='Import activity is recorded without the converter completion marker; verify the native readback, do not assume completion'))
+    resource_errors={
+        'TMP_PACKAGE_UNRESOLVED':'Installed TMP package location could not be resolved',
+        'TMP_PACKAGE_VERSION_MISMATCH':'Installed package differs from the explicit supported dependency',
+        'TMP_ESSENTIAL_ARCHIVE_MISSING':'Resolved package is missing its essential-resource archive',
+        'TMP_ESSENTIAL_IMPORT_INCOMPLETE':'Resource archive exists but required files are absent after import',
+        'TMP_ESSENTIAL_ASSETS_NOT_READY':'Resource files exist but native assets did not load',
+        'TMP_SHADER_NAME_MISMATCH':'Imported shader identity differs from the required shader; no substitution',
+        'Native TMP bitmap shader unavailable after resource import':'Required bitmap shader was unavailable; inspect resource location and import receipt'
+    }
+    for marker,message in resource_errors.items():
+        if marker in text:findings.append(dict(code=marker if marker.startswith('TMP_') else 'TMP_BITMAP_SHADER_UNAVAILABLE',confidence='observed',message=message))
     if any(s in text for s in ('error CS','Scripts have compiler errors')):findings.append(dict(code='NATIVE_SCRIPT_COMPILE_FAILED',confidence='observed',message='Editor recorded script compiler errors'))
     return dict(engineInitialized=initialized,readonlyDatabaseWarning=readonly,ipcWarning=ipc,
                 entitlementResolved=entitlement,tokenUpdateWarning=token,importLogEntries=import_events,converterCompletionRecorded=completed,findings=findings)
 
 
 def validate_progress(progress,expected_plan_hash):
-    phases={'preflight','texture-settings','textures','fonts','hierarchy','animations','source-prefabs','candidate-save','native-readback','complete'}
+    phases={'preflight','texture-settings','textures','tmp-resources','fonts','hierarchy','animations','source-prefabs','candidate-save','native-readback','complete'}
     statuses={'running','budget_exhausted','failed','completed','completed_partial'}
     if type(progress.get('schemaVersion')) is not int or progress.get('schemaVersion')!=1 or progress.get('phase') not in phases or progress.get('status') not in statuses:
         raise ValueError('Unsupported native progress schema/phase/status')
