@@ -4,7 +4,7 @@
 
 ## 当前：全量原生差异收口，代表探针后集中复验
 
-全量实际依据仍为 `outputs/acceptance/full07-window-01/UnityProject`：1694独立Prefab、Scene及editable roundtrip完成、Missing Script0；原始回读2005差异（613几何/834字形/557引用/1版本），不是还原通过。full08 Creator已证明5份fnt页图闭包。冻结候选与acceptance实际工程、历史失败目录分开保留。
+最新全量实际依据为 `outputs/acceptance/full10-unity-window-01/UnityProject`：1694独立Prefab/24784节点/16934 Sprite/16原字体保存、Scene及editable roundtrip完成、Missing Script0。严格回读剩243项NODE几何差异，字形/字体atlas与material/10508 View引用/版本差异零；旧full07的2005项保留历史（613几何/834字形/557引用/1版本）。尚未几何/视觉/业务通过。冻结候选与acceptance实际工程、历史失败目录分开保留。
 
 最新Unity探针04实际16原字体/3 Prefab/76节点、Scene重开/编辑重开完成，8 Label字形、5 atlas/material绑定及节点几何回读全部通过，零诊断；整体partial仍保留业务和源组件缺口。Creator探针02已通过显式CLI自动方法、16原字体/3 Prefab/76节点/Scene保存重载的几何及引用核对，editor/static pass、零诊断；没有原版画面对照或业务通过。所有本轮自有child已退出并回收。
 
@@ -337,3 +337,9 @@ Unity10全量生成emitter a0fd18b，完整输入与源阶段/Spine页图复用�
 Unity10全量原生新登记：锚点13:37:42Z，内部14:05:42Z/外层14:07:42Z，方法1200秒。只读ps未见Unity/Creator主进程，normal exec审批后只启动outputs/acceptance/full10-unity-window-01新副本；首新错误保存后停止，只正常回收自有child，不顺延截止。
 
 单命令编排增量：convert --native已接续全新包级生成→Unity/Creator串行原生段；每段独立28/30分钟绝对截止、1200秒方法上限，默认不启动，支持独立--native-out。所有Editor参数/输出重叠/已有原生目录在转换前拒绝；manifest与生成回执绑定，未退出/原生错误/回读差异停止后续段。生成回执不改，native-orchestration.json另记实际阶段；源业务/视觉缺口不晋升。5项编排语义检查与4项既有convert检查通过；真实单命令双端整链尚未另跑，底层同一native-import已由代表样本实证，不为包装层无新语义重冷启动。README/USAGE/capabilities改为当前子集实证状态，不再保留TMP/Creator自动入口旧not_run作为当前事实。
+
+Unity10实际own14717于13:38:24Z启动、13:48:28Z exit0/reap，方法437.966秒completed_partial；原生回读39,246,800字节、46038文件。1694独立Prefab/24784节点/16934 Sprite/16原字体、Scene与editable roundtrip完成；1006 Label中855直接测量/151隐藏active-clone测量，bitmap glyph/atlas/material回读零错，10508 View字段回读零错，版本正规化零错。严格剩NODE243（旧613），无其他诊断；不能把显式handoff布局算已恢复行为。实际native-page.png已查看，彩色BitmapFont文字可见；全独立页聚合重叠，不作为原版页面或游戏视觉验收。资源已释放，下一步Creator03批处理探针及243几何归类，不盲重导Unity全库。
+
+Creator03批处理探针新登记：锚点13:49:23Z，内部14:17:23Z/外层14:19:23Z，方法1200秒；ps未见引擎冲突，只启动新outputs/acceptance/creator-font-geometry-probe-03，manifesta4908311bc31d68dfa414189d6c7c40cce93dd38894c337c8a57e1759864bf26。验证同源67资产/76节点/3 Prefab，严格geometry/reference不变；首错保存后停止，不顺延截止。
+
+Creator03 own16625于13:49:50Z启动、13:50:08Z normal TERM exit-15/reap；实际texture-metadata 59/67在0.114秒，但宿主validate_progress阶段白名单未同步新texture-metadata，NATIVE_HOST_FAILED。新错已保留，未到Scene/Prefab。补显式phase及未知phase仍拒绝的定向测试，6项通过；只需修宿主，不重导同字节候选，下一新acceptance04验证同冻结Creator03。

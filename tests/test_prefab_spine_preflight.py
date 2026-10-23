@@ -89,6 +89,8 @@ class BoundaryTests(unittest.TestCase):
         progress=dict(schemaVersion=1,phase='textures',status='budget_exhausted',planSha256='a'*64,
                       processed=128,total=5179,elapsedSeconds=5.2,nativeResumeSupported=False)
         self.assertEqual(validate_progress(progress,'a'*64)['status'],'budget_exhausted')
+        self.assertEqual(validate_progress(dict(progress,phase='texture-metadata',status='running'),'a'*64)['phase'],'texture-metadata')
+        with self.assertRaises(ValueError):validate_progress(dict(progress,phase='invented-phase'),'a'*64)
         for change in [dict(planSha256='b'*64),dict(processed=5180),dict(elapsedSeconds=float('inf')),
                        dict(schemaVersion=True),dict(nativeResumeSupported=True),dict(phase='unknown')]:
             with self.assertRaises(ValueError):validate_progress(dict(progress,**change),'a'*64)

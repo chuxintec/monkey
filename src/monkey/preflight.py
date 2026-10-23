@@ -44,7 +44,7 @@ def classify_log(text):
 
 
 def validate_progress(progress,expected_plan_hash):
-    phases={'preflight','texture-settings','textures','tmp-resources','fonts','hierarchy','animations','source-prefabs','candidate-save','scene-reopen','native-readback','complete'}
+    phases={'preflight','texture-settings','texture-metadata','textures','tmp-resources','fonts','hierarchy','animations','source-prefabs','candidate-save','scene-reopen','native-readback','complete'}
     statuses={'running','budget_exhausted','failed','completed','completed_partial'}
     if type(progress.get('schemaVersion')) is not int or progress.get('schemaVersion')!=1 or progress.get('phase') not in phases or progress.get('status') not in statuses:
         raise ValueError('Unsupported native progress schema/phase/status')
