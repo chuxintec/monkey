@@ -16,3 +16,7 @@ Creator 3.8.8新增目标按本机已安装3.8.8的`cc.d.ts`、引擎公开组�
 开发wheel构建使用固定`setuptools==84.2.1`（与上一候选构建器一致）在临时隔离构建环境执行，不修改全局Python。运行时仍为既有固定Pillow及可选ASTC provider。
 
 有限动画子集只读核对官方2.4.15 [AnimationClip](https://github.com/cocos/cocos-engine/blob/v2.4.15/cocos2d/animation/animation-clip.js)、[曲线](https://github.com/cocos/cocos-engine/blob/v2.4.15/cocos2d/animation/animation-curves.js)、[easing](https://github.com/cocos/cocos-engine/blob/v2.4.15/cocos2d/animation/easing.js)、[WrapMode](https://github.com/cocos/cocos-engine/blob/v2.4.15/cocos2d/animation/types.js)的公开格式/语义：省略curve为linear，constant持有左键，默认Normal=1、Loop=2；未复制引擎实现。Creator当前TrackPath/VectorTrack/RealTrack/RealCurve/序列化接口核对本机3.8.8 cc.d.ts，Unity AnimationUtility对现有6000.6.2f1程序集编译核验；这不等于原生执行。私有真实Prefab/Clip与来源hash仅保存在.private/outputs，测试使用自造无美术fixture，无原游戏内容纳入Git。
+
+包级增量：明文wxapkg头/索引算法参考GREA `src/grea/tools/unpack_wxapkg.py`（MIT），monkey独立实现额外连续区间、字节/数量预算与路径别名检查；APK用Python标准库zipfile，不执行原程序。不在运行时import GREA。
+
+AST模块框架改编自GREA `tools/cocos/index-modules.cjs`，来源SHA256 `462ef1dcac57831c6f430bb86e46b5034405d1b5bedb2a6ddcf0eeafa5feea97`；monkey新增语法事实、显式多表候选和词法RF区域候选，非原运行时注册证明。固定vendored Acorn8.15.0 `dist/acorn.js` 原文件SHA256 `fdb08546776ec6228b03e8d02b40d4ab3255bae5f401adba7ff5dad927ac5c9c`；MIT许可随`licenses/ACORN-MIT.txt`和既有GREA-MIT保留。仅宿主Node解析，无在线依赖安装，目标工程不携带解析器。

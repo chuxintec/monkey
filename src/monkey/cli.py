@@ -19,7 +19,8 @@ def main(argv=None):
     cap.add_argument('--json', action='store_true')
     p = sub.add_parser('convert', help='Convert a source project into an isolated native project candidate')
     p.add_argument('--source', help='Creator 2.4.15 project directory/project.json or bundle config.json')
-    p.add_argument('--target', choices=['unity','cocos',UNITY_PROFILE,cocos.PROFILE])
+    p.add_argument('--target', choices=['unity','cocos','unity6','cocos38','both',UNITY_PROFILE,cocos.PROFILE])
+    p.add_argument('--package', action='store_true', help='Inventory all input files and generate self-contained recovery workspaces')
     p.add_argument('--out', '--output', help='Fresh output directory; native project is created under project/')
     p.add_argument('--resume', help='Recheck a previous conversion after native import, with identity checks')
     p.add_argument('--recipe', help='Reusable JSON input/selection options; combine with --out')
@@ -79,11 +80,28 @@ def main(argv=None):
                 schemaVersion=1, implemented=['convert','catalog','inspect','normalize','plan','export','verify','handoff','diff','register','apply'], planned=[],
                 targetValidation={UNITY_PROFILE:dict(static='implemented',editor='not_run',visual='not_run'),cocos.PROFILE:dict(static='implemented',editor='not_run',visual='not_run')},
                 compiledFormats=['compiled-v1','pack-v1','texture-pack-v1'],
+                containerFormats=['plain-wxapkg','APK-ZIP','Cocos-resource-directory'],
+                packageWorkflow=dict(fileAccounting='implemented',staticModuleRecovery='partial',codeDrafts='source-linked-contracts',
+                                     nativeObjectRecovery='partial-slice-only',editorOrchestration='not_implemented'),
                 imageFormats=['PNG','JPEG','ASTC (optional pinned decoder)'],animationSchemaVersion=1,
                 animationSubset=['local-position','local-scale','opacity','linear','constant-step','Normal','Loop'],animationEvents='manual-contract-only', targetEditorValidation='not_run'), ensure_ascii=False))
             return 0
         if args.command == 'convert':
             from .convert import convert, resume, recipe
+            source_path=Path(args.source) if args.source else None
+            package_mode=args.package or args.target in ('both','unity6','cocos38') or (source_path is not None and
+                (source_path.suffix.lower() in ('.apk','.wxapkg') or source_path.is_dir() and not args.asset_index and not args.recipe))
+            if package_mode:
+                if not all((args.source,args.target,args.out)) or any((args.resume,args.recipe,args.asset_index,
+                        args.dependency_source,args.evidence_source,args.bindings,args.animation,args.source_profile)):
+                    parser.error('package conversion requires --source/--target/--out; slice options are unsupported')
+                from .package import convert_package
+                result=convert_package(args.source,args.target,args.out,args.namespace or 'monkey-project',args.offline)
+                print(json.dumps(dict(status=result['workflowStatus'],resultKind=result['resultKind'],
+                     completed=result['completed'],projects=result['projects'],inputFiles=result['inputFiles'],
+                     inputBytes=result['inputBytes'],diagnostics=len(result['diagnostics']),nextAction=result['nextAction'],
+                     report=str(Path(args.out).resolve()/'conversion-result.json')),ensure_ascii=False))
+                return 1
             if args.resume:
                 if any((args.source,args.target,args.out,args.source_profile,args.asset_index,args.all_assets,
                         args.dependency_source,args.evidence_source,args.bindings,args.animation,args.offline,args.recipe,args.namespace)):

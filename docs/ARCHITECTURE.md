@@ -1,5 +1,11 @@
 # monkey 架构与数据合同
 
+## 当前产品范围
+
+包级wxapkg/APK/明确Cocos资源集合 → 安全解包与身份 → 全文件台账 → 资源/静态代码模块恢复 → Unity6/Creator3.8标准工程＋代码初稿 → AI接续。每项输入有处置、来源hash与目标路径；未支持原件/代码在SourceRecovery编译排除区，不当原生资产。目标运行时不解释IR或源引擎对象图。完整源码初稿允许未实现业务，不假成功；源证据、draft、compiled、behavior_verified分列。
+
+Unity资源遵循Assets/Game/Content类型、五层模块与Game/Editor；Creator遵循assets/scripts五层、art/audio/fonts/scenes/prefabs。已有切片生成目录暂作为历史适配例外，新包级产物采用规范布局。每个工程有AGENTS、Docs/START-HERE、资源覆盖和模块工作包，可独立搬走；不依赖本机原源路径。
+
 ## 设计原则
 
 1. 一次解析、按目标输出；源引擎语义与目标实现分离。
@@ -92,7 +98,7 @@ monkey/
 | Button/事件 | Button＋序列化View引用，业务方法待AI | Button＋原生组件引用，业务方法待AI |
 | Mask/Scroll/List | 原生Mask/RectMask2D/ScrollRect，动态复用另处理 | 对应原生组件，版本参数明确 |
 | Spine | 与数据版本匹配的spine-unity引用 | 与Creator/runtime匹配的SkeletonData |
-| 自定义脚本 | 源索引＋AI待实现合同，不生成假业务成功 | TS组件声明/引用候选，行为仍需恢复 |
+| 自定义脚本 | 源模块恢复＋C#结构/有限语义初稿，不生成假业务成功 | 源模块恢复＋TS声明/引用初稿，未知行为明确待恢复 |
 
 物理、复杂材质/Shader、富文本、动态Layout、滤镜、粒子、skew及未知序列化编码不在首版默认自动转换范围。按具体切片缺口增加支持，不能强行“近似成功”。
 

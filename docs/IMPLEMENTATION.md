@@ -1,5 +1,9 @@
 # monkey 实施、验证与AI接续
 
+## 当前交付目标
+
+默认用户入口为monkey convert，从wxapkg/APK/Cocos资源集合开始，自动盘点全部已取得文件，恢复支持资产和源码模块，输出Unity6/Creator3.8工程与TS/C#初稿，并提供自包含AI接手文档。asset-index保留为调试选项；单奖励页不是最终产品。安全容器适配、全资源处置/字节覆盖、模块映射、规范路径与实际打开分别验收。未知资源和不可编译初稿存SourceRecovery，禁止假成功业务或源运行时解释器。原生自动导入/失败续接的未实现状态继续准确记录。
+
 ## Python落地方案
 
 - Python最低3.11，`pyproject.toml`＋src布局，入口`monkey = monkey.cli:main`；标准库argparse/json/dataclasses/pathlib/hashlib/logging优先，避免先引入Web服务或任务队列。
@@ -55,7 +59,7 @@ monkey apply --candidate CANDIDATE --target REGISTERED_OUTPUT --expected-manifes
 
 每次只跑修改对应的层；成组阶段验收集中一次，不为一个parser字段启动完整双引擎构建。官方Editor没有可用授权/资源窗口时准确标待验，先交可验证离线增量。不要把not_run删掉换成pass。
 
-## 第一个实际工作包
+## 历史首个切片工作包（保留依据，不限制当前总目标）
 
 1. 核对本目录、原源只读边界、现有工具和私有样本可得性；不全文重复读历史。
 2. 列出首批input profile和最低格式证据，挑一个包含图集SpriteFrame＋文本＋九宫格的界面闭包；路径/UUID从现有冻结清单读取，不凭截图猜文件。

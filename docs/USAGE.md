@@ -1,6 +1,6 @@
 # 当前使用与支持矩阵
 
-当前实现只声明两种 Cocos **2.4.15 子集**，不是所有 Cocos 格式的通用导入器。
+结构化对象reader当前声明两种 Cocos **2.4.15 子集**；新增包级全文件盘点与静态代码恢复见下文。不是所有 Cocos 格式的通用原生导入器。
 
 ## 发布资源
 
@@ -171,3 +171,21 @@ recipe 为 UTF-8 JSON，可复用范围与依赖，路径相对 recipe 文件解
 `completed=true` 仅表示六个离线阶段执行完毕，不表示原生/视觉/业务完成。退出码沿用：0 无缺口，1 部分/需行动，2 输入/冲突/执行失败；当前 convert 因原生或后续验收未闭合返回 1。未支持的组件和业务在 handoff 内保留。
 
 `--resume` 校验工具版本、原始 conversion 收据、来源/证据 SHA、候选 manifest SHA 后复用工程，仅做原生回读验证；新检查写入独立 `checks/<id>/`。没有回读仍为 needs_action；实际原生引用与文件通过才为 resultKind=native，视觉/业务仍单列待验。引擎生成的 meta 通过原生回读合同校验，人工内容改动仍由 hash 检出。当前仅续验已完成候选；失败的中间生成阶段保留证据但尚不能自动续跑。登记增量仍使用既有 register/apply 合同。
+
+## 包级默认入口与双目标（2026-10-23）
+
+```sh
+bin/monkey convert --source GAME.wxapkg --target both --out outputs/new-game
+bin/monkey convert --source GAME.apk --target unity6 --out outputs/new-game-unity
+bin/monkey convert --source /path/to/obtained-resources --target cocos38 --out outputs/new-game-cocos
+```
+
+支持明文wxapkg的BE/ED头、索引和连续不重叠payload，APK ZIP及明确Cocos资源目录。资源目录默认全文件，保留`--package`强制全文件入口；旧asset-index/recipe只用于切片诊断。全量指当前单个明确输入；多输入根的身份协调/合并还未实现。存在同名不同配置bundle时拒绝混拼。源Cocos版本无法确定时记录unknown，不伪称对象reader支持。非Cocos或未知加密容器明确报错。
+
+边界：最多50,000文件/目录、每文件32MiB、展开512MiB、容器1GiB、目录深64。拒绝穿越、绝对路径、反斜线、symlink/特殊项、大小/哈希变化、同名及Unicode/casefold路径别名、wxapkg重叠或漏计payload。仅一层枚举，不递归解包内部容器；嵌套包原样待转。APK内动态库/dex及平台文件保留证据并排除目标运行时，不执行、不安装。
+
+输出分别为UnityProject/CocosProject；移走其中一个工程不依赖另一个或InputCache。每个工程包含resource-ledger、cocos-assets、code-index、dynamic-keys、agent-work、生成文件hash/所有权，以及AGENTS、START-HERE、PROJECT-STRUCTURE和DEPENDENCIES。已识别PNG/JPEG、TTF/OTF、Ogg/MP3/WAV复制到规范内容目录（仍需引擎导入）；所有未知原件/序列化对象/配置/Spine等留SourceRecovery。数值未判明前不假造正式配置；JSON不是一律当数值表。
+
+AST解析只读源代码，固定Acorn8.15.0；Node堆上限512MiB、单次30秒、AST3百万节点/深512。literal loader/System.register能恢复相应factory；动态/拼表模块仍为候选。RF fallback仅配对同一词法块的静态push/pop，保存精确UTF-8字节范围、hash、类/身份、可读片段；外围import/模块边界未知，未匹配位置另列缺口，不能当完整模块语义证明。每模块生成SourceRecovery内TS/C#初稿、实际依赖/导出/事件/资源键证据；调用抛明确未实现，不接原服、不假奖励。编译/行为均false，未启用业务。
+
+当前返回needs_action/candidate，`completed`只表示留存/工作区生成已执行完毕；nativeObjects=pending_adapter、editor/visual/business=not_run。`--offline`返回partial。包级原生对象恢复、原生导入编排、失败阶段续跑、包级resume/register/apply待接入；目录生成不能代表产品目标已完成。资源覆盖以输入文件/字节为分母，缺失引用另计，去重保留每个来源ID。
