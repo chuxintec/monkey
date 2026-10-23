@@ -70,3 +70,20 @@ def tasks(components, diagnostics, target, manual):
                  sourceRefs=sorted({str(d.get('sourceId') or d['location']) for d in gaps}),gaps=gaps,
                  generatedTargets=[target],allowedPaths=[manual],verificationScope=['native import/readback','source comparison'])
             for (m,c),gaps in sorted(groups.items())]
+
+
+def reject_layout_conflicts(components):
+    """Never select an arbitrary axis when one source node has multiple layouts."""
+    from collections import defaultdict
+    from ..io import diagnostic
+    groups=defaultdict(list)
+    for c in components:
+        if c['type']=='cc.Layout':groups[c['node']].append(c)
+    gaps=[]
+    for rows in groups.values():
+        if len(rows)<2:continue
+        for c in rows:
+            c['convertible']=False;c['nativeType']=None
+            gaps.append(diagnostic('MULTIPLE_LAYOUT_HANDOFF',c['sourceId'],
+                'Multiple source layouts share a node; preserve geometry and resolve explicitly: '+','.join(r['sourceId'] for r in rows),c['sourceId']))
+    return gaps

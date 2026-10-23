@@ -115,6 +115,8 @@ def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None):
     diagnostics.extend(prefab_gaps)
     for prefab in prefabs:
         prefab['path']=naming.path(prefab['sourceId'],'.prefab','assets/generated/prefabs')
+    from .common import reject_layout_conflicts
+    diagnostics.extend(reject_layout_conflicts(components))
     from ..assets.animation import plan_clips
     animations,animation_gaps=plan_clips(ir,namespace,PROFILE,animation_selection)
     naming.records.extend(a['nameEvidence'] for a in animations)

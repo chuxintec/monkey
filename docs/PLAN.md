@@ -251,3 +251,13 @@ launcher3/structured3/边界4及SDK C#离线编译05通过，新执行路径没�
 已原生核验后续来源扩展授权（总监turn01a167c9-388f-7920-80b6-961ab237c0d7两条human）：当前肥鹅全量05原名包优先，之后U（指定最新打开向僵尸开炮的Unity来源）再C（下方了3.8.7＋旧格式），无需重问立项。SUPPORT-MATRIX.md/ENGINE-ROADMAP.md与ARCHITECTURE已落地；只读当前已知账号的指定Unity AppID包目录仅见修订273，尚未用正文核Unity版本/后端；Cocos3插件3.8.7字段已真实读取，正文待核。后续实现已批准，未标现有支持，不建游戏开发项目。
 
 命名成组与后续路线文档已就绪，准备报告monkey-original-names-complete-20261023-01；申请05新Unity有界窗口（外层30分钟/方法20分钟/内部留2分钟，首错退出）及顺序Creator窗口。后台按已批准U路线继续当前指定Unity样本身份/正文/provider只读核查，不等ACK；实际资源grant优先。
+
+## 2026-10-23 full05真实Unity窗口结果
+
+monkey-full05-native-grant-20261023-01按绝对截止执行，隔离outputs/acceptance/full05-window-01；controller606dde0、冻结emitter c3e97a3。实际自有PID74906，08:48:02Z起、08:54:46Z exit1已reap，窗口立即释放。16934纹理设置后进入hierarchy，方法192.56秒在MonkeyImporter.cs:562 NullReferenceException停止；实际独立Prefab0、Scene重开未执行。字体目录有10个.asset不等于16字体全部验证通过。首新异常不盲重试；下一步定位组件构建空引用并定向修复，原05冻结。Creator-only06正在以11ccef4通过公开CLI、复用05源阶段生成独立Prefab适配候选。
+
+## 2026-10-23 Creator独立Prefab与全量06
+
+11ccef4已通过公开CLI生成Creator-only outputs/full-foodstreet-06-creator，manifest7c47d0b55c1c2d4acf108281214f76956365d3c216f866977661a4d21e7b238a，1694独立Prefab原名保存计划。17201/884709704全入账，静态verify/name audit零问题，IR非命名数据完全同05，GUID/UUID不变；原生保存与重开not_run。
+
+Unity真实窗口发现10源节点各两份Layout。当前补双目标逐组件MULTIPLE_LAYOUT_HANDOFF保留几何而不选方向；Unity原生防御检查与ownedScene唯一场景清理修复。15项定向检查、C#显式程序集compile pass（.private/full05-layout-compile-01）；不代替Editor。下一步以完整输入复用06已验源阶段生成full07双目标：Unity新候选只为本次实际根因修复，Creator同步相同来源冲突保护，不重新解图/解析源代码。再核对差额与申请必要新窗口。

@@ -21,6 +21,17 @@ class BoundaryTests(unittest.TestCase):
         nodes.append(dict(sourceId='b#4',parent=None));plans,gaps=plan_prefabs(dict(nodes=nodes),[])
         self.assertEqual(gaps[0]['code'],'PREFAB_ROOT_BOUNDARY')
 
+    def test_multiple_source_layouts_are_both_handoff_without_axis_guess(self):
+        from monkey.targets.common import reject_layout_conflicts
+        rows=[dict(sourceId='a#1',node='a#0',type='cc.Layout',layoutType=2,convertible=True,nativeType='cc.Layout'),
+              dict(sourceId='a#2',node='a#0',type='cc.Layout',layoutType=1,convertible=True,nativeType='cc.Layout'),
+              dict(sourceId='b#1',node='b#0',type='cc.Layout',layoutType=3,convertible=True,nativeType='cc.Layout')]
+        gaps=reject_layout_conflicts(rows)
+        self.assertEqual({g['sourceId'] for g in gaps},{'a#1','a#2'})
+        self.assertFalse(rows[0]['convertible']);self.assertFalse(rows[1]['convertible'])
+        self.assertTrue(rows[2]['convertible'])
+        self.assertEqual([r['layoutType'] for r in rows],[2,1,3])
+
     def test_spine_explicit_page_closure_and_missing_texture(self):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp).resolve();source=root/'source';source.mkdir()

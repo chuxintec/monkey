@@ -213,7 +213,10 @@ public static class MonkeyImporter
     }
     static void CloseOwnedScene() {
         if(priorScene.IsValid() && priorScene.isLoaded)SceneManager.SetActiveScene(priorScene);
-        if(ownedScene.IsValid() && ownedScene.isLoaded)EditorSceneManager.CloseScene(ownedScene,true);
+        if(ownedScene.IsValid() && ownedScene.isLoaded) {
+            if(SceneManager.sceneCount>1)EditorSceneManager.CloseScene(ownedScene,true);
+            else EditorSceneManager.NewScene(NewSceneSetup.EmptyScene,NewSceneMode.Single);
+        }
     }
     static void WriteNativeProgress(string status) {
         nativeProgress.status=status;nativeProgress.elapsedSeconds=nativeClock.Elapsed.TotalSeconds;
@@ -544,6 +547,8 @@ public static class MonkeyImporter
                 var mask=go.AddComponent<UnityEngine.UI.RectMask2D>();mask.enabled=spec.enabled;
             }
             else if(spec.type=="cc.Layout") {
+                if(go.GetComponent<UnityEngine.UI.LayoutGroup>()!=null || go.GetComponent<UnityEngine.UI.ContentSizeFitter>()!=null)
+                    throw new InvalidOperationException("Native layout conflict: "+spec.sourceId);
                 var padding=new RectOffset((int)spec.padding[0],(int)spec.padding[2],(int)spec.padding[3],(int)spec.padding[1]);
                 var fitter=go.AddComponent<UnityEngine.UI.ContentSizeFitter>();
                 if(spec.layoutType==3) {

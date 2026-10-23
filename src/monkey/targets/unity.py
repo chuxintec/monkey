@@ -202,6 +202,8 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
         if not entry['convertible']:
             diagnostics.append(diagnostic('COMPONENT_HANDOFF',c['sourceId'],'Native mapping unavailable for '+str(c['type']),c['sourceId']))
         components.append(entry)
+    from .common import reject_layout_conflicts
+    diagnostics.extend(reject_layout_conflicts(components))
     from ..assets.animation import plan_clips
     animations,animation_gaps=plan_clips(ir,namespace,PROFILE,animation_selection)
     naming.records.extend(a['nameEvidence'] for a in animations)

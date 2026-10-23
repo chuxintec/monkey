@@ -12,6 +12,7 @@
 |Cocos Creator3.8.7发布资源|Unity6 / Cocos3.8 / both|planned，《下方了》真实app-config插件声明3.8.7已读，资源正文待核|C，U后|
 |Cocos Creator3.x其他格式|Unity6 / Cocos3.8 / both|planned，不能套2.4 reader|C|
 |Cocos Creator2.4.x以下/1.x旧格式|Unity6 / Cocos3.8 / both|planned，逐格式/版本反例，不能笼统已支持|C|
+|Cocos2d-x及其他Cocos分支原包|Unity6 / Cocos3.8.8 / both|planned，独立识别和适配，不能套Creator序列化|逐来源样本|
 |Unity任意来源|Cocos / both|unsupported，不在本次批准矩阵|明确拒绝，不产假工程|
 
 |Laya / LayaAir 所有版本原包|Unity6|planned，需真实样本和独立来源profile|当前肥鹅及U/C收拢后|
