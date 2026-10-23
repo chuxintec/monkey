@@ -31,6 +31,14 @@ class BitmapAndUiTests(unittest.TestCase):
             '65':dict(rect=dict(x=15,y=2,width=5,height=7),xOffset=0,yOffset=0,xAdvance=4)}))
         with self.assertRaises(ParseError):normalize_font(bad,'bad','atlas',[16,16])
 
+    def test_native_padded_quad_retains_exact_ink_and_rejects_invalid_proof(self):
+        from monkey.targets.common import native_ink_box
+        # A half-size 5x7 source glyph with one atlas pixel of TMP padding.
+        ink=native_ink_box(dict(unicode=65,left=-1,top=9,width=3.5,height=4.5,quadPadding=.5))
+        self.assertEqual(ink,dict(unicode=65,left=-.5,top=8.5,width=2.5,height=3.5))
+        with self.assertRaises(ParseError):native_ink_box(dict(unicode=65,left=0,top=0,width=1,height=1,quadPadding=2))
+        with self.assertRaises(ParseError):native_ink_box(dict(unicode=65,left=0,top=0,width=1,height=1,quadPadding=float('nan')))
+
     def test_observed_ui_fields_and_default_identity(self):
         namespace='b:prefab'
         label,gaps=component_ir(namespace,2,dict(__type__='cc.Label',node={'__id__':1},_N='{ignored}',

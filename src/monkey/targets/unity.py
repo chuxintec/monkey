@@ -202,6 +202,10 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
         if not entry['convertible']:
             diagnostics.append(diagnostic('COMPONENT_HANDOFF',c['sourceId'],'Native mapping unavailable for '+str(c['type']),c['sourceId']))
         components.append(entry)
+    for c in components:
+        if c['type']=='cc.LabelOutline' and c['convertible'] and not any(x['type']=='cc.Label' and x['node']==c['node'] and x['convertible'] for x in components):
+            c['convertible']=False
+            diagnostics.append(diagnostic('MISSING_OUTLINE_LABEL',c['sourceId'],'Label dependency could not be converted',c['sourceId']))
     from .common import reject_layout_conflicts
     diagnostics.extend(reject_layout_conflicts(components))
     from ..assets.animation import plan_clips
@@ -264,6 +268,7 @@ def export(plan_path, output):
     # Only the typed, finite import instruction subset is sent to the Editor.
     instruction={key:p.get(key,[]) for key in ('designSize','pixelsPerUnit','textures','assets','bitmapFonts','nodes','components','galleryOnly','animations','sourcePrefabs')}
     instruction['tmpResources']=dict(packageName='com.unity.ugui',packageVersion='2.6.0',resource='Package Resources/TMP Essential Resources.unitypackage',importMode='package-completion-callback')
+    instruction['glyphReadback']='native-quad-padding-v1'
     instruction['sceneRoundtrip']=True
     instruction['sourceDiagnosticCount']=len(p['diagnostics'])
     instruction['prefabGuid']=guid(p['namespace'],'native-prefab')
@@ -345,13 +350,13 @@ def verify(candidate, output, level='static'):
         if not readback_path.is_file():
             diagnostics.append(diagnostic('EDITOR_NOT_RUN','Analysis/editor-readback.json','Run native import in the declared Editor first'))
         else:
-            rb=load(read(readback_path))
+            rb=load(read(readback_path,max_bytes=128*1024*1024),max_nodes=8_000_000)
             native={f['path']:f['sha256'] for f in rb.get('nativeFiles',[])}
             if rb.get('unityVersion')!='6000.6.2f1' or rb.get('missingScripts')!=0:
                 diagnostics.append(diagnostic('EDITOR_READBACK_FAILED',str(readback_path),'Version/missing-script check failed'))
             for relative,expected in native.items():
                 file=inside(root,relative)
-                if not file.is_file() or sha(read(file))!=expected:
+                if not file.is_file() or fingerprint(file)!=expected:
                     diagnostics.append(diagnostic('NATIVE_FILE_CHANGED',relative,'Native file differs from saved readback'))
             instruction=load(read(root/path_for('Assets/Monkey/Editor/import-plan.json'),max_bytes=128*1024*1024),max_nodes=8_000_000)
             if instruction.get('bitmapFonts') or any(a['path'].lower().endswith('.ttf') for a in instruction['assets']):
@@ -403,6 +408,14 @@ def verify(candidate, output, level='static'):
                     geometry=by_node.get(spec['node'],{});node=node_specs[spec['node']]
                     size=geometry.get('size',node['size']);pivot=geometry.get('pivot',node['anchor'])
                     probe=spec['bitmapProbe'];glyphs=actual.get('glyphBounds',[])
+                    if instruction.get('glyphReadback')=='native-quad-padding-v1':
+                        from .common import native_ink_box
+                        try:
+                            if actual.get('geometryProbe') not in ('saved-node','isolated-active-clone'):raise ValueError('No native geometry probe')
+                            glyphs=[native_ink_box(g) for g in glyphs]
+                        except (ValueError,KeyError):
+                            diagnostics.append(diagnostic('BITMAP_INK_PROOF_MISSING',spec['sourceId'],'Native quad padding/geometry proof absent or invalid'))
+                            continue
                     expected=[b for b in probe['boxes'] if b['width']>0 and b['height']>0]
                     if len(glyphs)!=len(expected):
                         diagnostics.append(diagnostic('BITMAP_QUAD_READBACK_MISMATCH',spec['sourceId'],'Visible glyph count differs'))
@@ -432,7 +445,11 @@ def verify(candidate, output, level='static'):
         path=inside(root,item['path'])
         expected=native.get(item['path']) if level=='editor' and item['path'].endswith('.meta') else item['sha256']
         if expected is None: expected=item['sha256']
-        if not path.is_file() or fingerprint(path)!=expected:
+        changed=not path.is_file() or fingerprint(path)!=expected
+        if changed and level=='editor' and item['path']=='ProjectSettings/ProjectVersion.txt' and path.is_file():
+            from .common import normalized_unity_version
+            changed=not normalized_unity_version(read(path),'6000.6.2f1')
+        if changed:
             diagnostics.append(diagnostic('GENERATED_FILE_CHANGED',item['path'],'Missing or modified generated file'))
     guids={}
     for path in (root/'Assets').rglob('*.meta'):

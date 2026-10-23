@@ -21,6 +21,14 @@ class BoundaryTests(unittest.TestCase):
         nodes.append(dict(sourceId='b#4',parent=None));plans,gaps=plan_prefabs(dict(nodes=nodes),[])
         self.assertEqual(gaps[0]['code'],'PREFAB_ROOT_BOUNDARY')
 
+    def test_unity_project_revision_normalization_is_exact(self):
+        from monkey.targets.common import normalized_unity_version
+        raw=b'm_EditorVersion: 6000.6.2f1\nm_EditorVersionWithRevision: 6000.6.2f1 (770e33f6875c)\n'
+        self.assertTrue(normalized_unity_version(raw,'6000.6.2f1'))
+        self.assertFalse(normalized_unity_version(raw.replace(b'6000.6.2f1',b'6000.5.0f1'),'6000.6.2f1'))
+        self.assertFalse(normalized_unity_version(raw+b'unknown: edit\n','6000.6.2f1'))
+        self.assertFalse(normalized_unity_version(raw+b'm_EditorVersion: 6000.6.2f1\n','6000.6.2f1'))
+
     def test_multiple_source_layouts_are_both_handoff_without_axis_guess(self):
         from monkey.targets.common import reject_layout_conflicts
         rows=[dict(sourceId='a#1',node='a#0',type='cc.Layout',layoutType=2,convertible=True,nativeType='cc.Layout'),

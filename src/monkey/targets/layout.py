@@ -36,8 +36,10 @@ def mappings(profile, plan):
         pairs={'assets/generated/prefabs/':'assets/prefabs/','assets/generated/art/':'assets/art/images/','assets/generated/animations':'assets/art/animations',
                'assets/generated/views/':'assets/scenes/','assets/generated':'assets',
                'assets/manual':'assets/scripts/gameplay/recovery'}
+        bitmap_pages={a['atlas'] for a in plan['assets'] if a['kind']=='bitmap'}
         for a in plan['assets']:
             folder={'ttf':'assets/fonts','bitmap':'assets/fonts','json':'assets/config/recovered'}.get(a['kind'],'assets/art/images')
+            if a['sourceId'] in bitmap_pages:folder='assets/fonts'
             pairs[a['path']]=folder+'/'+a['path'].removeprefix('assets/generated/art/')
     return pairs
 

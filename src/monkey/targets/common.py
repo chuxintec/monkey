@@ -87,3 +87,27 @@ def reject_layout_conflicts(components):
             gaps.append(diagnostic('MULTIPLE_LAYOUT_HANDOFF',c['sourceId'],
                 'Multiple source layouts share a node; preserve geometry and resolve explicitly: '+','.join(r['sourceId'] for r in rows),c['sourceId']))
     return gaps
+
+
+def normalized_unity_version(raw,version):
+    """Allow only the Editor's exact-version revision annotation, no other project edits."""
+    import re
+    try:
+        rows=[line.split(': ',1) for line in raw.decode('utf-8').splitlines() if line]
+        if any(len(row)!=2 for row in rows) or len({row[0] for row in rows})!=len(rows):return False
+        fields=dict(rows)
+        if fields.get('m_EditorVersion')!=version or set(fields)-{'m_EditorVersion','m_EditorVersionWithRevision'}:return False
+        revision=fields.get('m_EditorVersionWithRevision')
+        return revision is None or re.fullmatch(re.escape(version)+r' \([0-9a-f]{12,40}\)',revision) is not None
+    except (UnicodeError,ValueError):return False
+
+
+def native_ink_box(quad):
+    """Remove padding measured by TMP from its mesh quad, retaining source ink geometry."""
+    from ..assets.bitmap import finite
+    padding=finite(quad.get('quadPadding'),'native glyph padding')
+    fields={k:finite(quad.get(k),'native glyph '+k) for k in ('left','top','width','height')}
+    if padding<0 or fields['width']<2*padding or fields['height']<2*padding:
+        fail('INVALID_NATIVE_GLYPH_PADDING','$','Padding exceeds the measured quad')
+    return dict(unicode=quad['unicode'],left=fields['left']+padding,top=fields['top']-padding,
+                width=fields['width']-2*padding,height=fields['height']-2*padding)

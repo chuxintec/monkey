@@ -58,6 +58,28 @@ class CreatorTests(unittest.TestCase):
             self.assertTrue(instruction['sourcePrefabs'][0]['path'].startswith('assets/prefabs/'))
             self.assertEqual(cocos.verify(r/'candidate',r/'verify','editor')['editorValidation'],'not_run')
 
+    def test_bitmap_font_page_is_adjacent_and_owned_after_standard_layout(self):
+        import re
+        from fixtures import FONT,FRAME,normal
+        from monkey.targets.layout import standardize
+        with tempfile.TemporaryDirectory() as temp:
+            r=Path(temp).resolve();config=fixture(r/'source')
+            font=dict(name='OriginalFont',fontSize=20,spriteFrame={'__uuid__':FRAME},_fntConfig=dict(fontSize=20,commonHeight=20,
+                fontDefDictionary={'65':dict(rect=dict(x=0,y=0,width=2,height=1),xOffset=0,yOffset=0,xAdvance=2)},kerningDict={}))
+            write_json(r/('source/import/00/'+FONT+'.a.json'),normal([dict(__type__='cc.BitmapFont',**font)]))
+            inspect(config,[2],r/'inspect');normalize(r/'inspect/source-manifest.json',r/'ir')
+            plan=cocos.plan(r/'ir/ir.json','bitmap-adjacency',r/'plan')
+            self.assertEqual(len([a for a in plan['assets'] if a['kind']=='bitmap']),1)
+            cocos.export(r/'plan/plan.json',r/'candidate');standardize(r/'candidate',cocos.PROFILE,plan,{})
+            native=load(read(r/'candidate/extensions/monkey-import/import-plan.json'));font=next(a for a in native['assets'] if a['kind']=='bitmap')
+            atlas=next(a for a in native['assets'] if a['sourceId']==font['atlas'])
+            fnt=r/'candidate'/font['path'];page=re.search(r'page id=0 file="([^"]+)"',fnt.read_text())[1]
+            self.assertEqual(fnt.parent,(r/'candidate'/atlas['path']).parent)
+            self.assertEqual(page,Path(page).name)
+            self.assertTrue((fnt.parent/page).is_file())
+            self.assertEqual(sha((fnt.parent/page).read_bytes()),atlas['sha256'])
+            self.assertEqual(cocos.verify(r/'candidate',r/'checked')['staticValidation'],'pass')
+
     def test_ir_and_plan_tampering_rejected(self):
         with tempfile.TemporaryDirectory() as temp:
             r=Path(temp).resolve();self.build(r)

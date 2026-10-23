@@ -2,7 +2,15 @@
 
 完工/阻塞/交付与续推按[DIRECTOR-CONTINUATION](/Users/wangmeng/Documents/Manager/standards/DIRECTOR-CONTINUATION.md)执行；本聊天已原生核验人类授权`01a166b4-5c18-78f3-8cc2-c0d07dd46a20`，总监路由`01a14c8c-6402-7d03-bab8-ec7ea8051abf`。更新本PLAN后以稳定事件ID报告，已批准就绪下一包连续推进，不因报告或普通ACK停下。
 
-## 当前：肥鹅全量候选的原名整改与原生核对
+## 当前：full07原生差异收口
+
+Unity实际原生工程为`outputs/acceptance/full07-window-01/UnityProject`：1694独立Prefab、Scene重开和editable roundtrip已完成，Missing Script0；离线回读仍有613几何、834字形、557引用及1项ProjectVersion正规化差异，尚未还原通过。Creator实际失败副本为`outputs/acceptance/full07-creator-window-01/CocosProject`：资产阶段5份fnt页图邻接路径缺失，未执行Prefab/Scene生成。两个自有child均退出释放。
+
+当前成组修复：Creator字体页图同目录并保持UUID；Unity空Sprite字段兼容、源父pivot不依赖配置顺序、未使用TTF保留原生资源、隐藏文字独立原生测量及TMP实测padding对应墨迹范围、全量回执有界读取和原生文件流式SHA。20重复Layout仍待适配；不放宽容差，不以保存成功替代几何/文字/引用。修复验证后生成全新full08，两端顺序自登记≤30分钟原生复验。肥鹅已由用户暂停，无需再等其窗口回执。
+
+`outputs/full-foodstreet-07/{UnityProject,CocosProject}`是冻结导出候选；上述acceptance目录才是实际引擎处理过的工程；full01–06及先前窗口是历史结果，均保留。后续来源profile在当前差额收拢后继续。
+
+## 历史依据与全量候选记录
 
 用户原生授权已核验：总监turn01a16781-e3f9-78d1-9fcd-001f73f41486 / human message01a16781-e596-7581-9fd9-76378aef0afb，要求使用monkey完整转换肥鹅全部资料并核对排查。合同为Manager/decisions/20261022-monkey/FOODSTREET-FULL-CONVERSION-AUDIT.md。
 
@@ -265,3 +273,19 @@ Unity真实窗口发现10源节点各两份Layout。当前补双目标逐组件M
 ## 2026-10-23 full07生成与待验
 
 修复emitter53a7256，outputs/full-foodstreet-07双目标完整生成。Unity manifest dcd023012d2cc6e6a9b276c2391ceae7af738e169e725ac53a535deac530df67；Creator manifest61e7d81006580f6039572b2d9197d68bb65a91dffcbcbb5949553ec3e2c5aca6。两端各1694独立Prefab计划，20份冲突Layout明确handoff，转换组件Unity13530/Creator12568；1776Spine闭包全复用、零解码，原reader/像素/AST未重跑。最终双端static/name/routing核对全部通过，零问题，非名称IR同05、GUID/UUID不变；原生/视觉/业务未验。已申请下一独立Unity/Creator顺序窗口；没有新grant不启动引擎。Unity05失败副本与Creator06冻结保留。
+
+## 2026-10-23 用户暂停肥鹅后的实际续推
+
+总监turn01a1680e-4f9f-7ea0-bebe-fd7c7bb513b3、人类message01a16811-5561-7060-b381-bb89e4ee4e8f已原生回读核验，明确批准full07独立Unity/必要修复/后续顺序Creator，每次≤30分钟、仅monkey自有工程。肥鹅暂停，不再等其窗口。read-only ps/lsof显示已有肥鹅Unity57758、Creator42007低活动，不关闭或操作；前台osascript探测不可用，本次只batchmode。
+
+full07新隔离outputs/acceptance/full07-window-01已经正常require_escalated审批启动；接管09:24:03Z，内部09:52:03Z、外部09:54:03Z，方法1200秒。controller8c1ad0384efa971e92f1cf1617fe67384c32628d、emitter53a7256，固定manifest dcd023012d2cc6e6a9b276c2391ceae7af738e169e725ac53a535deac530df67，当前执行中。字体/1694Prefab保存/Scene重开及引用按实际读回，20多Layout保持handoff；退出后顺序Creator，不并发抢前台、不改肥鹅/GREA/服务/存档。
+
+## 2026-10-23 full07 Unity实际退出
+
+own PID86974已09:38:17Z正常exit0且launcher回收；原生方法613.60秒completed_partial。实际1694独立Prefab保存、Scene重开、原生预览/回读文件已生成。launcher后续Python验证遇editor-readback.json BYTE_BUDGET，不能报原生全通过；先离线扩到与全量计划一致的有界128MiB/8m节点并重核，不重启引擎。资源已释放，随后顺序Creator。另已据TMP源码确认未使用TTF空字符集误判，后续代码已修并C#编译通过，未改变当前冻结07。
+
+## 2026-10-23 full07离线复核与Creator释放
+
+Unity回读38,845,894字节，原生Candidate.prefab42,815,767字节；已将生成回读读取上限单独设128MiB/8m节点、原生文件改流式SHA，不放宽原始输入解析上限。离线复核得到2005诊断：NODE613、BITMAP_QUAD834、VIEW_REFERENCE557、ProjectVersion正规化1。真实1694独立Prefab、24784节点、16934Sprites、Missing Script0、Scene重开和editable roundtrip通过，但几何/文字/引用未通过，不能当还原完成。
+
+Creator新独立outputs/acceptance/full07-creator-window-01，接管09:40:41Z，内部10:08:41Z/外层10:10:41Z。own PID91737于09:41:58Z启动并实际绑定新路径，资产导入首次发现5份fnt页图缺失：原生按字体同目录basename查找，当前布局跨fonts/images。未调用importCandidate、独立Prefab/Scene实际0。按首失败停止，09:43:08Z正常TERM own child exit-15已reap，资源释放，未动旧Creator42007/肥鹅。下一必要修复字体页图同目录、Unity原始Sprite变体引用与几何/字体诊断；新候选后按已批准同规则验证，不借旧窗口无依据重启。

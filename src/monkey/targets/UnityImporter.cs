@@ -55,8 +55,8 @@ public static class MonkeyImporter
     [Serializable] public class GlyphSpec { public uint unicode, index; public int[] rect; public float[] metrics; }
     [Serializable] public class KerningSpec { public uint first, second; public float advance; }
     [Serializable] public class FontResult { public string id, guid; public int glyphCount, characterCount; public float pointSize, lineHeight; }
-    [Serializable] public class LabelResult { public string sourceId, text, fontGuid; public float fontSize; public int characterCount; public bool allCharactersPresent; public GlyphBounds[] glyphBounds; }
-    [Serializable] public class GlyphBounds { public uint unicode; public float left,top,width,height; }
+    [Serializable] public class LabelResult { public string sourceId, text, fontGuid, geometryProbe; public float fontSize; public int characterCount; public bool allCharactersPresent; public GlyphBounds[] glyphBounds; }
+    [Serializable] public class GlyphBounds { public uint unicode; public float left,top,width,height,quadPadding; }
     [Serializable] public class Readback {
         public string status, unityVersion, prefabGuid, sceneGuid;
         public int spriteCount, nodeCount, missingScripts; public bool editableRoundtrip,sceneReopened; public string previewPath,previewSha256,previewError,colorSpace;
@@ -379,8 +379,10 @@ public static class MonkeyImporter
             CheckEngineErrors();
             if (font == null) { diagnostics.Add("TMP_FONT_CREATION_FAILED: " + item.id); continue; }
             var needed = string.Concat(plan.components.Where(c=>c.type=="cc.Label" && c.convertible && c.font==item.id).Select(c=>c.text));
-            if (!font.TryAddCharacters(needed,out string missing)) {diagnostics.Add("TTF_GLYPHS_MISSING: " + missing);UnityEngine.Object.DestroyImmediate(font);continue;}
-            font.atlasPopulationMode=TMPro.AtlasPopulationMode.Static;
+            // An unused original font has no requested glyphs. TMP returns false for
+            // an empty request; retain a native dynamic asset backed by that source.
+            if (!string.IsNullOrEmpty(needed) && !font.TryAddCharacters(needed,out string missing)) {diagnostics.Add("TTF_GLYPHS_MISSING: " + missing);UnityEngine.Object.DestroyImmediate(font);continue;}
+            font.atlasPopulationMode=string.IsNullOrEmpty(needed)?TMPro.AtlasPopulationMode.Dynamic:TMPro.AtlasPopulationMode.Static;
             font.fallbackFontAssetTable=new List<TMPro.TMP_FontAsset>();
             var path = !string.IsNullOrEmpty(item.fontAssetPath)?item.fontAssetPath:item.path.Substring(0,item.path.Length-4) + ".asset";
             if (File.Exists(path)) throw new InvalidOperationException("Font target exists: " + path);
@@ -470,6 +472,7 @@ public static class MonkeyImporter
         var nodeMap = new Dictionary<string, GameObject>();
         foreach (var node in plan.nodes)
             nodeMap.Add(node.sourceId,new GameObject(node.name,typeof(RectTransform)) {layer=5});
+        var nodeSpecs = plan.nodes.ToDictionary(n=>n.sourceId);
         foreach (var node in plan.nodes)
         {
             var go = nodeMap[node.sourceId];
@@ -477,7 +480,9 @@ public static class MonkeyImporter
             var rect = (RectTransform)go.transform;
             rect.SetParent(parent,false);
             var pr = parent as RectTransform;
-            rect.anchorMin = rect.anchorMax = pr != null ? pr.pivot : Vector2.zero;
+            // Parent source data is authoritative even when that node is configured later.
+            rect.anchorMin = rect.anchorMax = !string.IsNullOrEmpty(node.parent) && nodeSpecs.ContainsKey(node.parent)?
+                new Vector2(nodeSpecs[node.parent].anchor[0],nodeSpecs[node.parent].anchor[1]):pr != null ? pr.pivot : Vector2.zero;
             rect.pivot = new Vector2(node.anchor[0],node.anchor[1]);
             rect.sizeDelta = new Vector2(node.size[0],node.size[1]);
             rect.anchoredPosition3D = new Vector3(node.position[0],node.position[1],node.position[2]);
@@ -492,9 +497,10 @@ public static class MonkeyImporter
         foreach (var node in plan.nodes)
             for (var i=0;i<node.children.Length;i++)
                 if (nodeMap.ContainsKey(node.children[i])) nodeMap[node.children[i]].transform.SetSiblingIndex(i);
-        var nodeSpecs = plan.nodes.ToDictionary(n=>n.sourceId);
+        int componentProgress=0;
         foreach (var spec in plan.components)
         {
+            if(componentProgress++%128==0)NativeCheckpoint("components",componentProgress-1,plan.components.Length);
             if (!spec.convertible || !nodeMap.ContainsKey(spec.node)) {
                 diagnostics.Add("COMPONENT_NOT_IMPORTED: " + spec.sourceId + " " + spec.type); continue;
             }
@@ -503,14 +509,14 @@ public static class MonkeyImporter
             if (spec.type == "cc.Sprite")
             {
                 var key = spec.spriteFrame + (spec.trim ? "" : "@original");
-                if (spec.spriteFrame!=null && !spriteMap.ContainsKey(key)) { diagnostics.Add("SPRITE_MISSING: " + spec.sourceId); continue; }
+                if (!string.IsNullOrEmpty(spec.spriteFrame) && !spriteMap.ContainsKey(key)) { diagnostics.Add("SPRITE_MISSING: " + spec.sourceId); continue; }
                 if (go.GetComponent<UnityEngine.UI.Graphic>() != null) {
                     diagnostics.Add("MULTIPLE_GRAPHICS_ON_NODE: " + spec.sourceId); continue;
                 }
                 var image = go.AddComponent<UnityEngine.UI.Image>();
-                image.sprite = spec.spriteFrame==null?null:spriteMap[key]; image.color = color; image.raycastTarget = false;
+                image.sprite = string.IsNullOrEmpty(spec.spriteFrame)?null:spriteMap[key]; image.color = color; image.raycastTarget = false;
                 image.type = spec.mode == 1 ? UnityEngine.UI.Image.Type.Sliced : spec.mode==2 ? UnityEngine.UI.Image.Type.Tiled : UnityEngine.UI.Image.Type.Simple;
-                image.enabled = spec.enabled && spec.spriteFrame!=null;
+                image.enabled = spec.enabled && !string.IsNullOrEmpty(spec.spriteFrame);
             }
             else if (spec.type == "cc.Label")
             {
@@ -538,7 +544,7 @@ public static class MonkeyImporter
         }
         foreach(var spec in plan.components.Where(c=>c.convertible)) {
             var go=nodeMap[spec.node];var rect=(RectTransform)go.transform;
-            if(spec.type=="cc.Widget" && spec.flags==45) {
+            if(spec.type=="cc.Widget" && spec.enabled && spec.flags==45) {
                 rect.anchorMin=Vector2.zero;rect.anchorMax=Vector2.one;
                 rect.offsetMin=new Vector2(spec.margins[0],spec.margins[1]);
                 rect.offsetMax=new Vector2(-spec.margins[2],-spec.margins[3]);
@@ -679,6 +685,7 @@ public static class MonkeyImporter
         if(instance==null)throw new InvalidOperationException("Reopened scene has no serialized candidate view");
         NativeCheckpoint("scene-reopen",1,1);
         NativeCheckpoint("native-readback",0,1);
+        var savedNodeMap=SavedNodeMap(plan.nodes,instance);
         var readback = new Readback {
             sourcePrefabs=sourcePrefabResults.ToArray(),tmpResources=tmpResourceResult,sceneReopened=true,
             jsonAssets=plan.assets.Where(a=>a.kind=="cc.JsonAsset").Select(a=> {
@@ -693,15 +700,8 @@ public static class MonkeyImporter
             missingScripts=instance.GetComponentsInChildren<Transform>(true).Sum(t=>GameObjectUtility.GetMonoBehavioursWithMissingScriptCount(t.gameObject)),
             diagnostics=diagnostics.ToArray(),
             nodes=plan.nodes.Select(n=>{
-                // Resolve saved Prefab contents; source objects have been destroyed.
-                // Resolve by sibling-index path, not ambiguous display names.
-                var indices=new List<int>(); var current=n;
-                while(current.parent!=null && nodeSpecs.ContainsKey(current.parent)) {
-                    var parent=nodeSpecs[current.parent]; indices.Add(Array.IndexOf(parent.children,current.sourceId));current=parent;
-                }
-                var roots=plan.nodes.Where(v=>v.parent==null || !nodeSpecs.ContainsKey(v.parent)).ToArray();
-                var target=instance.transform.Find("DesignRoot").GetChild(Array.FindIndex(roots,v=>v.sourceId==current.sourceId));
-                indices.Reverse();foreach(var index in indices)target=target.GetChild(index);
+                // Resolve the reloaded scene once by sibling-index paths, independent of names.
+                var target=savedNodeMap[n.sourceId];
                 var rect=(RectTransform)target;
                 return new NodeResult {sourceId=n.sourceId,hierarchy=target.name,size=new[]{rect.rect.width,rect.rect.height},
                     pivot=new[]{rect.pivot.x,rect.pivot.y},position=new[]{rect.localPosition.x,rect.localPosition.y,rect.localPosition.z},
@@ -710,17 +710,8 @@ public static class MonkeyImporter
             fonts=fonts.Select(pair=>new FontResult { id=pair.Key,guid=AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(pair.Value)),
                 glyphCount=pair.Value.glyphTable.Count,characterCount=pair.Value.characterTable.Count,
                 pointSize=pair.Value.faceInfo.pointSize,lineHeight=pair.Value.faceInfo.lineHeight }).ToArray(),
-            labels=plan.components.Where(c=>c.convertible && c.type=="cc.Label").Select(c=>{
-                var label=SavedNode(nodeSpecs[c.node],plan.nodes,instance).GetComponent<TMPro.TextMeshProUGUI>();
-                if(label==null)return new LabelResult {sourceId=c.sourceId,allCharactersPresent=false};
-                label.ForceMeshUpdate(true,true);
-                return new LabelResult {sourceId=c.sourceId,text=label.text,fontGuid=AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(label.font)),
-                    fontSize=label.fontSize,characterCount=label.textInfo.characterCount,
-                    glyphBounds=label.textInfo.characterInfo.Take(label.textInfo.characterCount).Where(info=>info.isVisible).Select(info=>new GlyphBounds {
-                        unicode=info.character,left=info.bottomLeft.x,top=info.topLeft.y,width=info.topRight.x-info.topLeft.x,height=info.topLeft.y-info.bottomLeft.y
-                    }).ToArray(),
-                    allCharactersPresent=label.text.Where(ch=>!char.IsWhiteSpace(ch)).All(ch=>label.font.HasCharacter(ch))};
-            }).ToArray(),
+            labels=plan.components.Where(c=>c.convertible && c.type=="cc.Label").Select(c=>
+                ReadSavedLabel(c,savedNodeMap[c.node],plan.bitmapFonts.Any(f=>f.id==c.font))).ToArray(),
             sprites=plan.textures.Select(t=>{
                 var s=spriteMap[t.id];AssetDatabase.TryGetGUIDAndLocalFileIdentifier(s,out string g,out long id);
                 return new SpriteResult {id=t.id,guid=g,fileId=id,size=new[]{s.rect.width,s.rect.height},
@@ -729,7 +720,7 @@ public static class MonkeyImporter
         };
         var savedView=instance.GetComponent<MonkeyCandidateView>();
         readback.viewReferences=plan.components.Where(c=>c.convertible && new[]{"cc.Sprite","cc.Label","cc.Button"}.Contains(c.type)).Select(c=> {
-            var node=SavedNode(nodeSpecs[c.node],plan.nodes,instance);
+            var node=savedNodeMap[c.node];
             Component component=null;string field;int index;
             if(c.type=="cc.Sprite") {component=node.GetComponent<UnityEngine.UI.Image>();field="Images";index=Array.IndexOf(savedView.Images,component as UnityEngine.UI.Image);}
             else if(c.type=="cc.Label") {component=node.GetComponent<TMPro.TextMeshProUGUI>();field="Labels";index=Array.IndexOf(savedView.Labels,component as TMPro.TextMeshProUGUI);}
@@ -825,15 +816,50 @@ public static class MonkeyImporter
         button.transition=UnityEngine.UI.Selectable.Transition.Animation;
         EditorUtility.SetDirty(controller);AssetDatabase.SaveAssetIfDirty(controller);
     }
-    static RectTransform SavedNode(NodeSpec node,NodeSpec[] nodes,GameObject instance) {
-        var byId=nodes.ToDictionary(n=>n.sourceId); var indices=new List<int>(); var current=node;
-        while(current.parent!=null && byId.ContainsKey(current.parent)) {
-            var parent=byId[current.parent]; indices.Add(Array.IndexOf(parent.children,current.sourceId)); current=parent;
+    static Dictionary<string,RectTransform> SavedNodeMap(NodeSpec[] nodes,GameObject instance) {
+        var byId=nodes.ToDictionary(n=>n.sourceId);
+        var roots=nodes.Where(n=>string.IsNullOrEmpty(n.parent) || !byId.ContainsKey(n.parent)).ToArray();
+        var design=instance.transform.Find("DesignRoot");
+        if(design==null || design.childCount!=roots.Length)throw new InvalidOperationException("Saved source root boundary differs");
+        var mapped=new Dictionary<string,RectTransform>();
+        var pending=new Stack<KeyValuePair<NodeSpec,Transform>>();
+        for(int i=roots.Length-1;i>=0;i--)pending.Push(new KeyValuePair<NodeSpec,Transform>(roots[i],design.GetChild(i)));
+        while(pending.Count>0) {
+            var pair=pending.Pop();var source=pair.Key;var target=pair.Value as RectTransform;
+            if(target==null || target.childCount<source.children.Length)throw new InvalidOperationException("Saved source node boundary differs: "+source.sourceId);
+            mapped.Add(source.sourceId,target);
+            for(int i=source.children.Length-1;i>=0;i--)pending.Push(new KeyValuePair<NodeSpec,Transform>(byId[source.children[i]],target.GetChild(i)));
         }
-        var roots=nodes.Where(n=>n.parent==null || !byId.ContainsKey(n.parent)).ToArray();
-        var target=instance.transform.Find("DesignRoot").GetChild(Array.FindIndex(roots,n=>n.sourceId==current.sourceId));
-        indices.Reverse();foreach(var index in indices)target=target.GetChild(index);
-        return (RectTransform)target;
+        if(mapped.Count!=nodes.Length)throw new InvalidOperationException("Saved source node count differs");
+        return mapped;
+    }
+    static LabelResult ReadSavedLabel(ComponentSpec spec,RectTransform saved,bool bitmap) {
+        var label=saved.GetComponent<TMPro.TextMeshProUGUI>();
+        if(label==null)return new LabelResult {sourceId=spec.sourceId,allCharactersPresent=false};
+        GameObject probeCanvas=null;var measured=label;string geometryProbe="saved-node";
+        try {
+            label.ForceMeshUpdate(true,true);
+            if(!label.gameObject.activeInHierarchy || !label.enabled || (!string.IsNullOrEmpty(label.text) && label.textInfo.characterCount==0)) {
+                // An active clone measures hidden text without activating or changing the saved scene tree.
+                probeCanvas=new GameObject("MonkeyTextGeometryProbe",typeof(RectTransform),typeof(Canvas));
+                SceneManager.MoveGameObjectToScene(probeCanvas,label.gameObject.scene);
+                probeCanvas.GetComponent<Canvas>().renderMode=RenderMode.WorldSpace;
+                var clone=UnityEngine.Object.Instantiate(label.gameObject,probeCanvas.transform,false);
+                measured=clone.GetComponent<TMPro.TextMeshProUGUI>();
+                foreach(var behaviour in clone.GetComponentsInChildren<Behaviour>(true))if(behaviour!=measured)behaviour.enabled=false;
+                var rect=(RectTransform)clone.transform;rect.anchorMin=rect.anchorMax=new Vector2(.5f,.5f);
+                rect.pivot=saved.pivot;rect.sizeDelta=saved.rect.size;rect.anchoredPosition3D=Vector3.zero;
+                clone.SetActive(true);measured.enabled=true;geometryProbe="isolated-active-clone";
+                measured.ForceMeshUpdate(true,true);
+            }
+            float padding=bitmap?TMPro.ShaderUtilities.GetPadding(measured.fontSharedMaterial,measured.extraPadding,(measured.fontStyle&TMPro.FontStyles.Bold)!=0):0;
+            return new LabelResult {sourceId=spec.sourceId,text=measured.text,fontGuid=AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(measured.font)),
+                fontSize=measured.fontSize,characterCount=measured.textInfo.characterCount,geometryProbe=geometryProbe,
+                glyphBounds=measured.textInfo.characterInfo.Take(measured.textInfo.characterCount).Where(info=>info.isVisible).Select(info=>new GlyphBounds {
+                    unicode=info.character,left=info.bottomLeft.x,top=info.topLeft.y,width=info.topRight.x-info.topLeft.x,height=info.topLeft.y-info.bottomLeft.y,
+                    quadPadding=padding*info.scale
+                }).ToArray(),allCharactersPresent=measured.text.Where(ch=>!char.IsWhiteSpace(ch)).All(ch=>measured.font.HasCharacter(ch))};
+        } finally {if(probeCanvas!=null)UnityEngine.Object.DestroyImmediate(probeCanvas);}
     }
     static string Hash(string path) {
         using (var algorithm = System.Security.Cryptography.SHA256.Create())

@@ -199,7 +199,7 @@ def verify(candidate,output,level='static'):
         rb_path=root/'Analysis/editor-readback.json'
         if not rb_path.exists():diagnostics.append(diagnostic('EDITOR_NOT_RUN',str(rb_path),'Run native importer in declared Creator first'))
         else:
-            rb=load(read(rb_path));native={f['path']:f['sha256'] for f in rb.get('nativeFiles',[])}
+            rb=load(read(rb_path,max_bytes=128*1024*1024),max_nodes=8_000_000);native={f['path']:f['sha256'] for f in rb.get('nativeFiles',[])}
             plan=load(read(root/'extensions/monkey-import/import-plan.json',max_bytes=128*1024*1024),max_nodes=8_000_000)
             expected_assets={a['sourceId']:a for a in plan['assets']}
             actual_assets={a['sourceId']:a for a in rb.get('assets',[])}
@@ -256,7 +256,7 @@ def verify(candidate,output,level='static'):
         prefixes=('assets/','Analysis/') if m.get('layout')=='game-standard-v1' else ('assets/generated/','Analysis/')
         if not relative.startswith(prefixes):fail('UNSAFE_NATIVE_FILE',relative,'Unexpected native output')
         p=inside(root,relative)
-        if not p.is_file() or sha(read(p))!=h:diagnostics.append(diagnostic('NATIVE_FILE_CHANGED',relative,'Saved native hash differs'))
+        if not p.is_file() or fingerprint(p)!=h:diagnostics.append(diagnostic('NATIVE_FILE_CHANGED',relative,'Saved native hash differs'))
     # Static asset references are logical, not asserted native subresource UUIDs.
     plan=load(read(root/'extensions/monkey-import/import-plan.json',max_bytes=128*1024*1024),max_nodes=8_000_000);ids={a['sourceId'] for a in plan['assets']}
     for a in plan['assets']:
