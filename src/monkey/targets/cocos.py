@@ -54,7 +54,7 @@ def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None):
     font_by_id={}
     for f in ir.get('bitmapFonts',[]):
         atlas=add(f['sourceId']+'@atlas',f['atlasImage'],'sprite','.png',size=f['atlasSize'],originalSize=f['atlasSize'],
-                  offset=[0,0],border=[0,0,0,0],subresource='spriteFrame')
+                  offset=[0,0],border=[0,0,0,0],subresource='spriteFrame',role='bitmap-atlas-page')
         uid=identity(namespace,f['sourceId']);target=naming.path(f['sourceId'],'.fnt','assets/generated/art')
         raw=bitmap_text(f,Path(atlas['path']).name,Path(target).stem)
         assets.append(dict(sourceId=f['sourceId'],uuid=uid,path=target,kind='bitmap',sha256=sha(raw),
@@ -64,7 +64,7 @@ def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None):
     asset_by_id={a['sourceId']:a for a in assets};components=[]
     supported={'cc.Sprite','cc.Label','cc.Widget','cc.Mask','cc.ScrollView','cc.Layout','cc.Button','cc.LabelOutline'}
     materials={m['sourceId'] for m in ir.get('materials',[]) if m['nativeRole']=='standard-ugui'}
-    node_ids={n['sourceId'] for n in ir['nodes']}
+    node_ids={n['sourceId'] for n in ir['nodes']};source_nodes={n['sourceId']:n for n in ir['nodes']}
     for src in ir['components']:
         c=dict(src);sid=c['sourceId'];c['convertible']=c['type'] in supported and c.get('node') in node_ids
         if sid in bindings:c.update(font=bindings[sid]['font'],bold=bindings[sid].get('syntheticBold',False))
@@ -78,6 +78,13 @@ def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None):
             if c.get('spriteFrame') is not None and c['spriteFrame'] not in asset_by_id:gap('MISSING_SPRITE','SpriteFrame absent')
             if c.get('spriteFrame') is None:
                 c['needsSpriteBinding']=True;diagnostics.append(diagnostic('SOURCE_SPRITE_UNBOUND',sid,'Keep native Sprite disabled pending real binding',sid))
+            frame=asset_by_id.get(c.get('spriteFrame'))
+            if c['convertible'] and frame and c['sizeMode'] in (1,2):
+                intrinsic=frame['size'] if c['sizeMode']==1 else frame['originalSize']
+                if any(abs(a-b)>.001 for a,b in zip(intrinsic,source_nodes[c['node']]['size'])):
+                    c.update(nativeSizeMode=0,sizingPolicy='source-baked-custom-v1')
+                    diagnostics.append(diagnostic('SPRITE_CACHED_SIZE_HANDOFF',sid,
+                        'Native Sprite uses CUSTOM to retain the baked source rect; source automatic resize behavior remains unverified',sid))
         elif c['type']=='cc.Label':
             font=asset_by_id.get(c.get('font'))
             if not font or font['kind'] not in ('ttf','bitmap'):gap('FONT_NOT_CONVERTIBLE','No matching original font; no system fallback')
@@ -89,6 +96,10 @@ def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None):
                 if any(ord(ch) not in available for ch in c['text'] if ch not in '\r\n'):gap('SOURCE_FONT_GLYPHS_MISSING','Bitmap lacks glyphs')
                 c['bold']=False
             if c['overflow']!=0 or c.get('italic') or c.get('underline'):gap('LABEL_SUBSET_UNSUPPORTED','First subset: no overflow/style synthesis')
+            if c['convertible']:
+                c.update(nativeOverflow=1,sizingPolicy='source-baked-clamp-v1')
+                diagnostics.append(diagnostic('LABEL_AUTOSIZE_SEMANTICS_HANDOFF',sid,
+                    'Native Label uses CLAMP with the baked source rect; 2.4 automatic sizing is not equivalent to 3.8 text measurement',sid))
             diagnostics.append(diagnostic('CREATOR_TEXT_METRICS_NOT_VERIFIED',sid,'Original font selected; 2.4 vs 3.8 glyph layout needs real comparison',sid))
         elif c['type']=='cc.Widget':
             if c['flags'] not in (0,45) or c['target'] is not None or not all(c['absolute']):gap('WIDGET_SUBSET_UNSUPPORTED','Only parent absolute disabled/full stretch')
@@ -173,7 +184,7 @@ def export(plan_path,output):
     write_json(ext/'package.json',dict(package_version=2,version='0.2.0',name='monkey-import',main='./main.js',
         contributions=dict(scene=dict(script='./scene.js'),menu=[dict(path='Monkey',label='Import isolated candidate',message='import-candidate')],
                            messages={'import-candidate':dict(methods=['importCandidate'])})))
-    write_json(ext/'import-plan.json',{k:p[k] for k in ['schemaVersion','targetProfile','designSize','assets','nodes','components'] }|dict(projectUuid=project_id,animations=p.get('animations',[]),sourcePrefabs=p.get('sourcePrefabs',[])))
+    write_json(ext/'import-plan.json',{k:p[k] for k in ['schemaVersion','targetProfile','designSize','assets','nodes','components'] }|dict(projectUuid=project_id,animations=p.get('animations',[]),sourcePrefabs=p.get('sourcePrefabs',[]),sceneGeometryReadback='full-local-v1',bitmapPageReadback='sprite-frame-v1'))
     from ..assets.animation import module_report
     write_json(out/'Analysis/animation-module.json',module_report(p.get('animations',[])))
     write_json(out/'Analysis/source-map.json',dict(assets=p['assets'],sourcePrefabs=p.get('sourcePrefabs',[]),nodes=[dict(sourceId=n['sourceId'],target='assets/generated/views/Candidate.scene') for n in p['nodes']],
@@ -227,6 +238,13 @@ def verify(candidate,output,level='static'):
                     actual_json=json_assets.get(sid,{})
                     good=good and actual_json.get('uuid')==a['uuid'] and 'value' in actual_json and actual_json['value']==load(read(root/a['path']))
             labels={v['sourceId']:v for v in rb.get('labels',[])}
+            if plan.get('bitmapPageReadback')=='sprite-frame-v1':
+                font_pages={f['sourceId']:f for f in rb.get('fontPages',[])}
+                for font in (a for a in plan['assets'] if a['kind']=='bitmap'):
+                    page=font_pages.get(font['sourceId'],{});atlas=expected_assets[font['atlas']];native_atlas=actual_assets.get(font['atlas'],{})
+                    if (page.get('fontUuid')!=font['uuid'] or page.get('spriteFrameUuid')!=native_atlas.get('spriteFrameUuid') or
+                            page.get('textureUuid')!=native_atlas.get('textureUuid') or page.get('rect')!=[0,0,*atlas['size']]):
+                        good=False;diagnostics.append(diagnostic('BITMAP_PAGE_READBACK_MISMATCH',font['sourceId'],'Native BitmapFont page identity/texture/rect differs'))
             for c in plan['components']:
                 if c['convertible'] and c['type']=='cc.Label':
                     actual=labels.get(c['sourceId'],{})
@@ -234,6 +252,12 @@ def verify(candidate,output,level='static'):
             expected_components={c['sourceId'] for c in plan['components'] if c['convertible']}
             good=good and {c['sourceId'] for c in rb.get('components',[])}==expected_components
             good=good and {n['sourceId'] for n in rb.get('nodes',[])}=={n['sourceId'] for n in plan['nodes']}
+            if plan.get('sceneGeometryReadback')=='full-local-v1':
+                from .unity import node_geometry_matches
+                saved_nodes={n['sourceId']:n for n in rb.get('nodes',[])}
+                for spec in plan['nodes']:
+                    if not node_geometry_matches(saved_nodes.get(spec['sourceId']),spec,True):
+                        good=False;diagnostics.append(diagnostic('SCENE_GEOMETRY_MISMATCH',spec['sourceId'],'Saved native Scene transform differs from the frozen source plan'))
             def near(actual,expected):
                 return isinstance(actual,list) and len(actual)==len(expected) and all(type(x) in (int,float) and abs(x-y)<.001 for x,y in zip(actual,expected))
             frames={f['sourceId']:f for f in rb.get('frames',[])}

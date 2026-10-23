@@ -92,6 +92,28 @@ class CreatorTests(unittest.TestCase):
             checked=unity.verify(r/'unity',r/'unity-checked','editor')
             self.assertTrue(any(d['code']=='BITMAP_ATLAS_READBACK_MISMATCH' for d in checked['diagnostics']))
 
+    def test_cached_sprite_rect_keeps_original_mode_and_explicit_resize_handoff(self):
+        from monkey.io import finish
+        for size,needs_handoff in [([7,6],False),([100,144],True)]:
+            with self.subTest(size=size),tempfile.TemporaryDirectory() as temp:
+                root=Path(temp).resolve();self.build(root)
+                ir=load(read(root/'ir/ir.json'));sprite=next(c for c in ir['components'] if c['type']=='cc.Sprite')
+                sprite['sizeMode']=2;node=next(n for n in ir['nodes'] if n['sourceId']==sprite['node']);node['size']=size
+                write_json(root/'ir/ir.json',ir);finish(root/'ir',ir)
+                plan=cocos.plan(root/'ir/ir.json','cached-size',root/'cached-plan')
+                actual=next(c for c in plan['components'] if c['sourceId']==sprite['sourceId'])
+                self.assertEqual(actual['sizeMode'],2)
+                self.assertEqual(actual.get('nativeSizeMode')==0,needs_handoff)
+                self.assertEqual(any(d['code']=='SPRITE_CACHED_SIZE_HANDOFF' for d in plan['diagnostics']),needs_handoff)
+
+    def test_native_scene_identity_without_geometry_is_not_accepted(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp).resolve();plan=self.build(root);cocos.export(root/'plan/plan.json',root/'candidate')
+            write_json(root/'candidate/Analysis/editor-readback.json',dict(creatorVersion='3.8.8',projectUuid='wrong',
+                nodeCount=len(plan['nodes']),nodes=[dict(sourceId=n['sourceId'],nodeUuid='id') for n in plan['nodes']],assets=[],nativeFiles=[]))
+            result=cocos.verify(root/'candidate',root/'checked','editor')
+            self.assertIn('SCENE_GEOMETRY_MISMATCH',{d['code'] for d in result['diagnostics']})
+
     def test_ir_and_plan_tampering_rejected(self):
         with tempfile.TemporaryDirectory() as temp:
             r=Path(temp).resolve();self.build(r)

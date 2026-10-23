@@ -46,6 +46,8 @@ function read(prefab,spec,plan,info) {
             if(!comp)throw Error('Prefab component missing: '+c.sourceId);
             if(c.type==='cc.Sprite'&&c.spriteFrame&&(!comp.spriteFrame||comp.spriteFrame._uuid!==assets.get(c.spriteFrame).spriteFrameUuid))throw Error('Prefab sprite reference differs');
             if(c.type==='cc.Label'&&(!comp.font||comp.font._uuid!==assets.get(c.font).uuid||comp.string!==c.text))throw Error('Prefab font/text reference differs');
+            if(c.type==='cc.Label'&&comp.overflow!==(c.nativeOverflow??c.overflow))throw Error('Prefab Label overflow policy differs');
+            if(c.type==='cc.Sprite'&&comp.sizeMode!==(c.nativeSizeMode??c.sizeMode))throw Error('Prefab Sprite sizing policy differs');
             if(c.type==='cc.ScrollView'&&comp.content!==mapped.get(c.content))throw Error('Prefab scroll reference escapes graph');
             if(c.type==='cc.Button'&&comp.target!==node)throw Error('Prefab button reference differs');
             if(c.type==='cc.Widget'&&comp.target!==node.parent)throw Error('Prefab widget reference differs');

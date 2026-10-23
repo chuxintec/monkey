@@ -101,14 +101,16 @@ Editor导入、编译、保存重开、画面和业务验收分开记录，目�
 | pack ordinal、import/native 版本、redirect | 已实现；未提供依赖 bundle 记 REDIRECT_UNRESOLVED |
 | PNG/JPEG、ASTC 2D | 已实现；ASTC 校验 header、block、长度、像素预算，只有固定可选 provider |
 | 旋转/trim/offset/originalSize/capInsets | PNG 语义反例及真实切片已验证；亚像素留白不能无损栅格化则记 SUBPIXEL_TRIM |
-| TTF/MP3/WAV/OGG | 资源拷贝路径；TTF 的 TMP 字体创建未实测，不静默替换字体 |
-| Node/RectTransform、simple/sliced/tiled Sprite | 已实现 typed IR 与原生 adapter，真实 Editor 未验 |
+| TTF/MP3/WAV/OGG | 资源拷贝；16原字体的Unity/Creator原生创建/重载已有实证，不静默替换字体，原版画面对照另验 |
+| Node/RectTransform、simple/sliced/tiled Sprite | 已实现typed IR和原生adapter；Unity 13图646节点、Creator 15图577节点强几何实际回读零差异，全量仍未通过 |
 | Label/BitmapFont | 原RGBA图集、glyph/offset/advance/kerning生成静态TMP字体；目前单行，缩放时存在非零源未缩放kerning则显式拒绝。TTF先做cmap4/12覆盖检查，再为已知文字生成静态TMP；字体度量/描边仍需实际对照 |
 | 有限UI子集 | 父级绝对全拉伸Widget；容器resize H/V及均匀水平Grid；矩形非反转Mask；双轴禁用ScrollView；自目标none/scale Button。使用原生组/Animator，不写源布局运行时。复杂/动态子集仍handoff |
 | 原空Sprite/点击回调 | 空frame生成禁用Image并保留待绑定项，防止Unity默认白框；原handler只记录，Button没有假回调或默认成功 |
 | Animation/Spine、自定义脚本、事件 | 不生成空回调或假业务；交 AI 包 |
-| Cocos 3.8.8 输出 | 离线 candidate；Creator 原生导入/画面对照 not_run |
+| Cocos 3.8.8 输出 | 1694 Prefab+Scene实际保存重载；full13严格回读失败，后续成组修复在验，原版画面/业务not_run |
 | diff/register/apply | 已实现；默认dry-run，expected-manifest与预览收据保护写入 |
+
+Creator新候选保留source overflow/sizeMode，同时显式声明`source-baked-clamp-v1`或`source-baked-custom-v1`：原生Label/Sprite显示与固定源矩形已生成，自动尺寸行为仍为handoff。它不等于动态行为还原。原生SpriteFrame完整图片明确禁用裁切，实际裁片保持来源矩形；字体页另核BitmapFont→SpriteFrame→Texture身份与矩形。新候选Scene和独立Prefab完整geometry/Scale/Quaternion分别核验，旧结果不追认。
 
 `candidate` 表示本命令的离线范围完成，不表示游戏可玩；`partial` 表示已出报告但存在诊断。退出码 0/1/2 分别为声明范围完成、有待处理诊断、参数/IO/协议错误。所有阶段创建新目录，不覆盖输入、旧候选或人工文件。
 

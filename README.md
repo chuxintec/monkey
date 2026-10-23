@@ -47,6 +47,8 @@ bin/monkey convert --resume outputs/my-unity --input-set inputs.json
 
 **当前是全输入留存＋受支持对象的原生工程候选，尚未完成全对象及游戏业务转换**。已接入2.4.15共享IR：支持的节点图、SpriteFrame、字体及JsonAsset生成原生导入计划；未知组件及Spine运行时接入等保留证据和缺口。默认返回needs_action，`--offline`为partial，退出码1；不能当完整转换成功。CDN支持明确清单获取，未声明或获取失败的远程分包仍保留缺口。
 
+Creator的静态显示尺寸策略会保留源节点烘焙尺寸：Label以原生CLAMP呈现，缓存尺寸与SpriteFrame不一致的Sprite使用CUSTOM；原overflow/sizeMode和自动尺寸行为待适配项同时保留。几何回读通过不等于源自动尺寸行为或原版文字画面通过。Unity的网格使用原生GridLayoutGroup的小型优先级扩展，仍由uGUI计算行列，Player不解释源节点图。
+
 已有2.4.15切片转换链继续可用：`--target unity|cocos`、`--asset-index`/recipe，结果在`project/`；其完成候选支持`--resume`身份续验。包级工程支持按哈希校验续跑并归档原候选；人工修改会阻止覆盖。`convert --native`接续原生阶段；已有冻结候选也可单独使用`native-import`，固定manifest/工程/期限，实际保存后回读。人工业务代码增量合并未实现。详见[命令说明](docs/USAGE.md)。
 
 已实现两条明确的 2.4.15 输入路径：编辑器工程 JSON/meta，以及发布 bundle 的 compiled-v1/pack-v1/texture-pack-v1。工具不执行源脚本，代码初稿不代表业务语义已恢复，不伪造服务器、不模拟源引擎运行时。

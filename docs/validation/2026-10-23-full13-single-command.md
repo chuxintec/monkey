@@ -18,3 +18,9 @@ full12在acquisition附证读取60MiB generated manifest误用原始输入32MiB�
 own35982 exit0/reap，方法441.597秒，1694原生Prefab+Scene与editable保存重开、24784节点、MissingScript0；editor fail40，分为同20源节点的Scene20与独立Prefab20。编排stopped，Creator not_run；全量单命令尚未通过。差异.private/full13-geometry-differences.json，集中多行Grid与上层布局，后续修复另新候选，失败副本不改。
 
 实际UGUI2.6 Flexible Grid的minHeight为单行；preferredHeight依实际宽度得行数。同节点Image与Grid priority0导致preferred混用。修复为6行正常uGUI子类IntrinsicGridLayoutGroup，只override layoutPriority1，配原生Flexible+Preferred fitter，无源图/常量高度/自写Grid算法；恢复4个Graphic metrics原生映射。13图646节点/886组件/88frame/16字体探针08 manifest31b49cb02301eb989ee874f683580e3fb2d2d8af7c38fb4c8b212f1de03557bb，static/preflight及C# compile通过，真实尚未执行。
+
+## 后续成组结果（不覆盖full13）
+
+Unity Probe08：13图646节点/13 Prefab/16字体，4.093秒，own42078 exit0/reap，Scene+独立Prefab完整geometry/scale/quaternion/引用零诊断。Creator sizing03：15图577节点/15 Prefab/16字体/5位图页+alpha帧，3.772秒，own49235 normal TERM/reap，强Scene与Prefab geometry/引用/bitmap页零诊断。01剩1页裁切，02子资源reimport未修且新增页回读揭示3页，03移除该调用、完整图明确trimType none而闭合；均保留失败原件。原字体类型仍BitmapFont→SpriteFrame→Texture，未采用纯Texture替代。
+
+Creator Label CLAMP及缓存Sprite CUSTOM为source-baked静态呈现政策，原自动尺寸行为单列handoff（probe61+3，冻结全量13适用1006+18）。不是字体测量/动态业务修复，不放宽.001几何容差。待full14集中完整输入，不追认full13通过。

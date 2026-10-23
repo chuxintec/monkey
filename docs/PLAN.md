@@ -2,19 +2,17 @@
 
 完工/阻塞/交付与续推按[DIRECTOR-CONTINUATION](/Users/wangmeng/Documents/Manager/standards/DIRECTOR-CONTINUATION.md)执行；本聊天已原生核验人类授权`01a166b4-5c18-78f3-8cc2-c0d07dd46a20`，总监路由`01a14c8c-6402-7d03-bab8-ec7ea8051abf`。更新本PLAN后以稳定事件ID报告，已批准就绪下一包连续推进，不因报告或普通ACK停下。
 
-## 当前：full13 Unity严格几何失败；Creator独立验证与Grid共因修复在途
+## 当前：两端成组修复已实际闭合，准备full14一次集中整链
 
-最新实际结果：full13 Unity完成保存重开，但同20源节点Scene/Prefab各20几何差异，编排正确stopped，own35982已退出/reap；Creator改用同一固定候选做独立原生段own38754，不改变单命令失败合同。IntrinsicGrid优先级修复已C#编译，13原图646节点代表探针08离线生成并static/preflight零问题，实际验证须顺序等Creator结束。
+当前实际代表结果：Unity GridProbe08（13原图646节点/13 Prefab/16字体）方法4.093秒、own42078 exit0/reap，Scene+独立Prefab/完整geometry/Scale/Quaternion/引用零诊断；Creator sizingProbe03（15原图577节点/15 Prefab/16字体/5位图页+额外alpha未用帧）方法3.772秒、own49235 normal TERM exit-15/reap，新增完整Scene geometry、独立Prefab/引用/5位图页SpriteFrame→Texture身份和矩形均零诊断、editor pass。SourceNormalize/IR及资源原hash保留，未重读源/像素/AST。
 
-当前公开命令已实现明确CDN清单获取→完整输入双端候选→顺序独立Unity/Creator原生段。full13已完成16627声明文件/799052150B缓存SHA核验和每端17201文件/884709704B生成；Unity manifest80484c192bee73c172673fc3d0dfa87906d242149d061afaad3ed2dd6a8e02bb，Creator a840b6d50dc08ec198bf24dd05e7efbabcd4fe6d9f652eb165e77ce11acec58c。两端名称/身份审计及资源路由零问题，非名称IR保持；static及原生实际结果见本节末尾和单命令回执。full12在追加回执时误用32MiB预算停下，原生未启动；4ecbf6f修复为生成manifest既有128MiB/8m上限，owned哈希仍核，7项定向反例通过，失败副本冻结。
+已冻结失败证据：full13单命令Unity实际1694 Prefab/24784节点/16934Sprites/16字体保存重开，强回读同20源节点Scene+Prefab各20几何差异而stopped，Creator在该命令not_run；独立Creator13实际1694 Prefab+Scene保存重载，841诊断（492帧/270源节点几何/78 Prefab未verified/1聚合），没有把native completed当验收通过。详情docs/validation/2026-10-23-full13-single-command.md及实际回执，旧结果不追认。
 
-Unity实际小探针07已完成9源图397节点/16字体/9独立Prefab/Scene与editable保存重开，严格几何、Scale/Quaternion、字体Sprite及内部引用零诊断；full11历史剩同12个Grid节点的Scene及Prefab各12差异，全量改正须full13证明。Creator根名小探针01已实际4图85节点/16字体/4 Prefab/Scene、精确root basename policy及子级/几何/引用零诊断；full11历史实际保存1694 Prefab+1Scene，后来readSaved遇原生根名规范化，不追认全量通过。两探针自有child均已正常退出/reap。
+共享原因：Unity使用正常uGUI子类仅提高Grid的layoutPriority，保留原生Flexible+Preferred计算，修多行/嵌套/Graphic冲突；4个Graphic handoff恢复原生适配，scaled/cached仍handoff。Creator完整图片明确trimType=none、真实裁片保持custom且清除旧computed vertices，由Importer重算；ScrollView先axes后content；Label显式CLAMP保持source-baked rect，18个预计缓存Sprite用CUSTOM，保留原overflow/sizeMode与auto-size handoff，不能当动态行为修复。冻结Creator13策略适用1006 Label+18 Sprite，probe61+3；完整业务/原版字形及画面/输入/Spine播放仍未交付。
 
-源组件中的不等价Widget、动态/缓存/空Layout、scaled Grid及graphic最小尺寸等明确handoff保留烘焙几何，不能算行为已实现；1776Spine闭包/原图复用不等于runtime播放。914模块初稿/5773绑定/业务、原版画面、真实输入与可玩均未交付。原reader/像素/AST不重跑，不改源数值JSON，不放宽几何容差。
+接下来只集中一次full14公开convert --remote-manifest --native：完整输入每端17201文件/884709704B，16627声明CDN/799052150B缓存SHA，新候选/获取/原生根各自隔离；每端原生实际开始固定+28/+30分钟、方法1200秒，顺序、首错停、不延钟。两端各自出口可独立保留，不为每小字段重生成双端。
 
-用户矩阵为所有Cocos原包→Unity6/Creator3.8.8/both；所有Unity、Laya/LayaAir、Egret、自研/其他引擎→Unity6。当前结构reader仍2.4.15子集，全版本为产品范围；后续按已批顺序U《向僵尸开炮》→C《下方了》逐profile实现。U当前只读包体/正文探查已有，尚非通用reader或Unity6工程。CDN未知URL自动发现未实现，既有7HTTP404/未知miniGame包地址仍缺口；不能用已声明清单零缺失覆盖未知项。
-
-原件/肥鹅产品/服务/存档/GREA只读，所有候选与actual副本仅monkey内，每原生段独立固定30分钟上限、不顺延，首新错停后离线修复；不新Agent/安装/付费模型/推送/发布。唯一进度以本PLAN及对应回执为准。
+产品范围所有Cocos原包→Unity6/Creator3.8.8/both；所有Unity、Laya/LayaAir、Egret、自研/其他原包→Unity6。结构reader当前仍Cocos2.4.15子集，不以范围代替支持；后续U《向僵尸开炮》→C《下方了》逐profile已批。U当前包/1603对象等只读证据不等于通用reader。未知CDN URL/先前7HTTP404仍缺口。原件/肥鹅产品服务存档/GREA只读，不新Agent/全局安装/付费模型/推送/发布。
 
 ## 历史依据与全量候选记录
 
@@ -425,3 +423,20 @@ full13 Unity实际own35982 exit0/reap、方法441.597秒；1694独立Prefab/2478
 总监续派monkey-full13-independent-target-closeout-20261023-01：保留单命令失败即停合同；Unity已reap安全退出，可对冻结Creator13独立native-import关闭既有出口，不反复为Unity改动重生双端。Creator13新登记锚点15:54:00Z，内部16:22:00Z/外层16:24:00Z，方法1200秒；ps无主Editor冲突，新acceptance/full13-creator-window-01，manifest a840b6d50dc08ec198bf24dd05e7efbabcd4fe6d9f652eb165e77ce11acec58c。首新错停、自有child正常TERM/reap，不顺延、不并发Unity。后台仅Unity离线共因修复。
 
 Grid共因已对照实际UGUI2.6源码：Flexible最小尺寸固定单行、preferred才依容器宽度计算行数；原生Image与Grid同priority0时LayoutUtility会混用图片尺寸。改为正常uGUI子类IntrinsicGridLayoutGroup，仅override layoutPriority=1，继续使用原生Flexible行列/方向/动态尺寸算法及ContentSizeFitter PreferredSize；无源图/IR解释器、不固定行数或写常量高度。4个Graphic metrics handoff改由明确原生适配覆盖，scaled/cached差异仍handoff。新增运行脚本跟随生成/标准路径/GUID及emit指纹，C#独立compile和8 geometry+4 structured定向检查通过；13原图成组探针生成，覆盖多行/嵌套/Graphic及此前9图反例，真实运行需Creator退出后顺序新段。
+
+Creator13独立actual own38754 15:55:02Z启动、16:02:37Z normal TERM exit-15/reap；方法379.596秒，真实1694 Prefab+Scene保存/全量重载已完成，根名不再首错，强verify editor fail841：492 Sprite裁切差异、270 Prefab源节点几何（78份Prefab）、78份不verified及1聚合失败；不能把completed进度当验收通过。私有full13-creator-prefab-differences.json保留。Unity13失败20源节点与Creator270节点分别计；此后顺序Unity08成组探针、后台仅Creator离线归类。
+Unity08新登记锚点16:03:00Z，内部16:31:00Z/外层16:33:00Z，方法1200秒；冻结manifest31b49cb02301eb989ee874f683580e3fb2d2d8af7c38fb4c8b212f1de03557bb，新acceptance/native-font-geometry-probe-08，13图646节点多行/嵌套/Graphic，已核Creator退出且无主Editor，首新错停、不顺延。
+
+Unity成组Probe08 own42078 16:03:47Z启动、16:04:10Z exit0/reap，方法4.093秒，13图646节点/13独立Prefab/16字体，Scene+editable与完整几何/scale/quaternion/字体Sprite/internal引用零诊断，editor partial保留源行为缺口。IntrinsicGrid修复经多行/嵌套/Graphic实际证明，不能追认全量通过；后续等Creator共因处理后集中必要全量。
+Creator差异离线归类：248个Label overflow0（既有baked尺寸与3.8自动测量不一致，含显著缓存差异，不能放宽容差）；18个纯Sprite尺寸，4个位置节点都为ScrollView content；492帧meta trim自定义字段正确但computed vertices仍旧自动裁切2px，需区分重导计算缓存与Scene资源缓存。将测实际固件，Label/Sprite无法等价自动尺寸行为需明确待适配，不把保留烘焙geometry称行为修复。
+
+Creator共因修复候选：Sprite meta改custom矩形时移除旧computed vertices，由原生Importer重算，仍严格核rect/原尺寸/offset/border。ScrollView先设置enabled/axes再绑定content，避免默认双轴初始化改变位置（官方3.8.8 content setter会立即calculateBoundary）。Label新增显式source-baked-clamp-v1、原overflow0保留并列LABEL_AUTOSIZE_SEMANTICS_HANDOFF；缓存Sprite原sizeMode与帧尺寸不符时source-baked-custom-v1及SPRITE_CACHED_SIZE_HANDOFF，均是静态显示尺寸保留，自动尺寸行为未修复。新增Scene完整geometry/Scale/Quaternion/active回读marker，仅新候选要求，不追认旧Cocos Scene强验。7 Cocos+8 geometry、3份JS语法检查通过。
+15图577节点/810组件/267资产/16字体/15Prefab sizingProbe01 manifest3875ceb47786522d75383de6d42a9d706e6cdc528297d1bf6c6d6534a23fabc6 static pass；含额外2个未使用alpha裁切Spine frame、原根名、4个ScrollView位置、TTF/bitmap/缓存尺寸。61 Label静态尺寸handoff/3 Sprite缓存handoff明确计，不算行为转换。新登记锚点16:14:15Z，内部16:42:15Z/外层16:44:15Z，方法1200秒，ps无Editor冲突，新的acceptance/creator-native-sizing-probe-01，首错停、自有正常TERM/reap、不顺延。
+
+Creator sizingProbe01 actual own45954 normal TERM exit-15/reap，方法3.679秒，15Prefab/577节点独立+新增Scene完整geometry/scale/quat均零差异；原双alpha帧通过，61 Label/3 Sprite source-baked政策为明确行为handoff。仅剩miniGame bitmap atlas SpriteFrame矩形1项+聚合1项，字体JSON实际依赖SpriteFrame，不采用纯Texture替代。原生meta fullrect且无vertices，但library仍旧裁切；新增仅font-page的实际subresource UUID reimport（UUID来自native meta，不合成），并新增BitmapFont自身页的SpriteFrame/Texture/矩形独立回读。
+新的15图相同分母Probe02 manifest92bec56220b96eff7c159c97f764a12ad6a4dccca2b4c3fb80ec7af4891cd7b4 static pass，7 Cocos定向检查通过；ps无主Editor冲突，登记16:22:45Z锚点/16:50:45Z内部/16:52:45Z外层，方法1200秒，新acceptance/creator-native-sizing-probe-02。首错停，不延长旧段、不变旧证据。
+
+Creator sizingProbe02 own48074已normal TERM exit-15/reap，方法3.753秒；15Prefab/577节点Scene及独立完整geometry仍零差异，bitmap页新增强回读揭示3页与3个Frame裁切不符（+聚合=7），子资源直接reimport无效且已移除。字体本身确需SpriteFrame，未采用错误纯Texture路线、未发起该假设的原生段。新修正对完整图片矩形明确trimType=none（原零origin/零offset/size=originalSize），真实裁片保留custom；native页几何仍强检，不能靠meta字段正确冒称library更新。
+Probe03仍15图577节点/16字体/额外alpha帧，重新冻结、static pass；锚点16:26:15Z/内部16:54:15Z/外部16:56:15Z，方法1200秒，已核无主Editor冲突，新acceptance/creator-native-sizing-probe-03，首错停、不顺延。
+
+Creator sizingProbe03 actual own49235 16:26:47Z启动、16:27:07Z normal TERM exit-15/reap，方法3.772秒，editor/static pass零诊断：15图577节点/15Prefab/Scene强geometry/16原字体/5位图页引用与矩形、额外两个alpha原帧均通过。子资源直接重导路线已移除；完整图片明确none关闭裁切是有据原生策略，真实裁片custom不改。Creator clamp/custom只保留静态显示geometry，61+3 probe或预估全量1006+18 auto-size行为handoff不能记已恢复。两端成组出口就绪，将集中full14一次完整公开单命令验证。

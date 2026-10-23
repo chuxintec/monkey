@@ -78,12 +78,18 @@ module.exports = {
                     if (spriteEntries.length !== 1) throw Error('Expected exactly one native sprite-frame');
                     const sm = spriteEntries[0]; const u = sm.userData;
                     const [left, top, right, bottom] = a.border;
-                    const desired={trimType: 'custom', rotated: false, trimX: (a.trimOrigin || [0,0])[0], trimY: (a.trimOrigin || [0,0])[1],
+                    const origin=a.trimOrigin||[0,0];
+                    const fullRect=origin.every(v=>v===0)&&a.offset.every(v=>v===0)&&a.size.every((v,i)=>v===a.originalSize[i]);
+                    const desired={trimType: fullRect?'none':'custom', rotated: false, trimX: origin[0], trimY: origin[1],
                         width: a.size[0], height: a.size[1], rawWidth: a.originalSize[0], rawHeight: a.originalSize[1],
                         offsetX: a.offset[0], offsetY: a.offset[1], borderLeft: left, borderTop: top, borderRight: right, borderBottom: bottom};
                     // Subresource IDs are assigned by the native importer and retained, never synthesized.
                     if(Object.entries(desired).some(([key,value])=>u[key]!==value)) {
-                        Object.assign(u,desired);await timedReq('save-asset-meta', a.uuid, JSON.stringify(m));
+                        Object.assign(u,desired);
+                        // Auto-trim mesh data belongs to the old rect; let the
+                        // native importer recompute it from custom metadata.
+                        delete u.vertices;
+                        await timedReq('save-asset-meta', a.uuid, JSON.stringify(m));
                         // A folder refresh does not reimport changed subresource
                         // metadata. Await the public per-asset reimport barrier.
                         await timedReq('reimport-asset',a.uuid);

@@ -60,20 +60,20 @@ module.exports = {
                     if(!c.convertible || c.type==='cc.LabelOutline')continue;
                     const node=nodes.get(c.node);const source=sourceNodes.get(c.node);let comp;
                     if(c.type==='cc.Sprite') {
-                        comp=node.addComponent(cc.Sprite);comp.type=c.mode;comp.sizeMode=c.sizeMode;comp.trim=c.trim;
+                        comp=node.addComponent(cc.Sprite);comp.type=c.mode;comp.sizeMode=c.nativeSizeMode??c.sizeMode;comp.trim=c.trim;
                         comp.spriteFrame=c.spriteFrame?native.get(c.spriteFrame):null;comp.color=color(source.color);
                         comp.enabled=c.enabled&&!c.needsSpriteBinding;
                     } else if(c.type==='cc.Label') {
-                        comp=node.addComponent(cc.Label);comp.useSystemFont=false;comp.font=native.get(c.font);
+                        comp=node.addComponent(cc.Label);comp.overflow=c.nativeOverflow??c.overflow;comp.useSystemFont=false;comp.font=native.get(c.font);
                         comp.string=c.text;comp.fontSize=c.fontSize;comp.lineHeight=c.lineHeight;comp.spacingX=c.spacing;
-                        comp.horizontalAlign=c.horizontalAlign;comp.verticalAlign=c.verticalAlign;comp.overflow=c.overflow;
+                        comp.horizontalAlign=c.horizontalAlign;comp.verticalAlign=c.verticalAlign;
                         comp.enableWrapText=c.wrap;comp.isBold=!!c.bold;comp.color=color(source.color);
                     } else if(c.type==='cc.Button') {
                         comp=node.addComponent(cc.Button);comp.target=node;comp.transition=c.transition;comp.duration=c.duration;
                         comp.zoomScale=c.zoomScale;comp.interactable=c.interactable;comp.clickEvents=[];
                     } else if(c.type==='cc.Mask') {comp=node.addComponent(cc.Mask);comp.type=cc.Mask.Type.GRAPHICS_RECT;
                     } else if(c.type==='cc.ScrollView') {
-                        comp=node.addComponent(cc.ScrollView);comp.content=nodes.get(c.content);comp.horizontal=c.horizontal;comp.vertical=c.vertical;
+                        comp=node.addComponent(cc.ScrollView);comp.enabled=c.enabled;comp.horizontal=c.horizontal;comp.vertical=c.vertical;comp.content=nodes.get(c.content);
                     } else if(c.type==='cc.Widget') {
                         comp=node.addComponent(cc.Widget);comp.target=node.parent;comp.alignMode=c.alignMode;
                         comp.isAlignTop=!!(c.flags&1);comp.isAlignBottom=!!(c.flags&4);comp.isAlignLeft=!!(c.flags&8);comp.isAlignRight=!!(c.flags&32);
@@ -130,6 +130,8 @@ module.exports = {
             for(const c of plan.components.filter(c=>c.convertible)) {
                 const n=mapped.get(c.node);const type=c.type==='cc.LabelOutline'?'Label':c.type.slice(3);const comp=n.getComponent(cc[type]);
                 if(!comp)throw Error('Saved component missing: '+c.type);
+                if(c.type==='cc.Label'&&comp.overflow!==(c.nativeOverflow??c.overflow))throw Error('Saved Label overflow policy differs: '+c.sourceId);
+                if(c.type==='cc.Sprite'&&comp.sizeMode!==(c.nativeSizeMode??c.sizeMode))throw Error('Saved Sprite sizing policy differs: '+c.sourceId);
                 refs.push({sourceId:c.sourceId,nodeUuid:n.uuid,componentUuid:comp.uuid,type:c.type});
                 if(c.type==='cc.Label')labels.push({sourceId:c.sourceId,text:comp.string,fontUuid:comp.font&&comp.font._uuid});
             }
@@ -156,6 +158,13 @@ module.exports = {
             for(const a of plan.assets.filter(a=>a.kind==='json')) {
                 const json=await loadAsset(a.uuid,cc.JsonAsset);jsonAssets.push({sourceId:a.sourceId,uuid:json._uuid,value:json.json});
             }
+            const fontPages=[];
+            for(const a of plan.assets.filter(a=>a.kind==='bitmap')) {
+                const font=await loadAsset(a.uuid,cc.BitmapFont),sf=font.spriteFrame;
+                if(!(sf instanceof cc.SpriteFrame)||!sf.texture)throw Error('Native BitmapFont page absent');
+                fontPages.push({sourceId:a.sourceId,fontUuid:font._uuid,spriteFrameUuid:sf._uuid,textureUuid:sf.texture._uuid,
+                    rect:[sf.rect.x,sf.rect.y,sf.rect.width,sf.rect.height]});
+            }
             const sourcePrefabs=[];
             for(const spec of plan.sourcePrefabs||[]) {
                 jobs.progress('native-readback',sourcePrefabs.length,(plan.sourcePrefabs||[]).length);
@@ -165,8 +174,10 @@ module.exports = {
                 if(!info)throw Error('Saved prefab identity absent');
                 sourcePrefabs.push(prefabs.read(await loadAsset(info.uuid,cc.Prefab),spec,plan,info));
             }
-            return {sourcePrefabs,jsonAssets,animations,nodeCount:saved.length,nodes:[...mapped].map(([sourceId,n])=>({sourceId,nodeUuid:n.uuid,name:n.name,
-                position:[n.position.x,n.position.y,n.position.z],size:[n.getComponent(cc.UITransform).width,n.getComponent(cc.UITransform).height]})),components:refs,labels,frames};
+            return {sourcePrefabs,jsonAssets,fontPages,animations,nodeCount:saved.length,nodes:[...mapped].map(([sourceId,n])=>({sourceId,nodeUuid:n.uuid,name:n.name,
+                position:[n.position.x,n.position.y,n.position.z],size:[n.getComponent(cc.UITransform).width,n.getComponent(cc.UITransform).height],
+                pivot:[n.getComponent(cc.UITransform).anchorX,n.getComponent(cc.UITransform).anchorY],scale:[n.scale.x,n.scale.y,n.scale.z],
+                rotation:[n.rotation.x,n.rotation.y,n.rotation.z,n.rotation.w],active:n.active})),components:refs,labels,frames};
         }
     }
 };
