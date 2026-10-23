@@ -35,6 +35,7 @@ def main(argv=None):
     p.add_argument('--ir',required=True)
     p.add_argument('--namespace',required=True)
     p.add_argument('--bindings')
+    p.add_argument('--animation',action='append',help='Select a source AnimationClip ID; default all normalized clips')
     p.add_argument('--target-profile',choices=[UNITY_PROFILE,cocos.PROFILE],required=True)
     p.add_argument('--out',required=True)
     p = sub.add_parser('export')
@@ -62,7 +63,8 @@ def main(argv=None):
                 schemaVersion=1, implemented=['catalog','inspect','normalize','plan','export','verify','handoff','diff','register','apply'], planned=[],
                 targetValidation={UNITY_PROFILE:dict(static='implemented',editor='not_run',visual='not_run'),cocos.PROFILE:dict(static='implemented',editor='not_run',visual='not_run')},
                 compiledFormats=['compiled-v1','pack-v1','texture-pack-v1'],
-                imageFormats=['PNG','JPEG','ASTC (optional pinned decoder)'], targetEditorValidation='not_run'), ensure_ascii=False))
+                imageFormats=['PNG','JPEG','ASTC (optional pinned decoder)'],animationSchemaVersion=1,
+                animationSubset=['local-position','local-scale','opacity','linear','constant-step','Normal','Loop'],animationEvents='manual-contract-only', targetEditorValidation='not_run'), ensure_ascii=False))
             return 0
         if args.command == 'inspect':
             if args.source_profile == PROJECT_PROFILE:
@@ -75,7 +77,7 @@ def main(argv=None):
         elif args.command == 'normalize':
             result = normalize(args.manifest, args.out)
         elif args.command == 'plan':
-            result = (cocos.plan if args.target_profile==cocos.PROFILE else plan)(args.ir,args.namespace,args.out,args.bindings)
+            result = (cocos.plan if args.target_profile==cocos.PROFILE else plan)(args.ir,args.namespace,args.out,args.bindings,args.animation)
         elif args.command == 'diff':
             result=incremental.diff(args.before,args.after,args.out)
         elif args.command == 'apply':

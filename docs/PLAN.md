@@ -117,3 +117,13 @@ v0.2已以同一`reward-ir-11`及字体证据输出`outputs/creator-reward-02`�
 8组增量反例与受影响Creator/目标输出检查共15例通过。真实奖励页仅在`creator-incremental-base`隔离副本先执行版本元数据更新，再执行Creator薄扩展更新，两次登记基线→diff→dry-run→apply→静态验证通过；不是业务变化或引擎实测。原`unity-reward-10`、`creator-reward-02`冻结manifest不变；增量验证后的最新可实导候选为`outputs/creator-reward-04`，Unity新导出兼容候选为`outputs/unity-reward-v03-02`。详见[增量验收](validation/2026-10-22-incremental.md)。
 
 本次可离线推进的两个续包均已落地；v0.1/v0.2的真实导入、可编辑重开、画面对照与v0.3正式交付尚未通过，不能标为工具发布。引擎资源窗口仍未释放。没有新增引擎、服务、项目、Agent、外发肥鹅协调、全局安装或远程推送。下一步按明确资源窗口实导冻结Unity/Creator候选，处理实际失败路径；未支持的原生对象和业务仍按8组AI包推进，不自行扩新产品范围。
+
+## 2026-10-23 CONTINUE-03：有限动画模块
+
+按用户继续推动指令，等待引擎资源期间接续既有v0.3动画项；Unity/Creator实导仍优先，尚未获资源释放。原页面候选不改；未启动Editor，不代转此前被拒的肥鹅协调。
+
+新增可选animationSchemaVersion=1及源cc.Animation clip/root绑定；同一IR可选一份Clip，生成双目标原生曲线计划。真实奖励页Rewards_Show的sineOut保持unsupported；从已有冻结bundle选CellBoxReward（1504）原Animation #16实际引用的CellBoxClicked（3225），0.5秒，根x+item的y/scale三轴/opacity共6标量轨道；两条active明确未支持。原件只读，新闭包和候选均在monkey。事件只给source定位/参数/待接线合同，真样本事件0、合成合同1，不产原生回调、不自动播放。
+
+`outputs/animation-unity-02`与`outputs/animation-creator-02`静态pass、部分动画候选；每目标一个动画AI模块。6组本增量定向检查pass，Unity薄层窄编译pass、Creator JS语法pass；没有重跑无变化15项基线、重复全库hash或制作新wheel。详情见[动画验收](validation/2026-10-23-animation.md)。原生曲线文件/实际采样/播放/可编辑重开/画面对照仍not_run。
+
+下一步仍为获得明确资源窗口后，优先实导已有unity-reward-v03-02/creator-reward-04，修实际失败点；该动画离线包不替代页面和原生工程门槛，不扩Spine/服务/其他引擎或新版本线。

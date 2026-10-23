@@ -1,6 +1,7 @@
 'use strict';
 // Editor scene script. It creates an isolated native tree, never touches the open scene.
 const cc = require('cc');
+const motion=require('./animation.js');
 const color = a => new cc.Color(...a);
 const loadAsset = (uuid, type) => new Promise((resolve,reject) => cc.assetManager.loadAny({uuid}, (e,a) => {
     if (e) reject(e); else if (!(a instanceof type)) reject(Error('Unexpected native asset type: '+uuid)); else resolve(a);
@@ -78,9 +79,14 @@ module.exports = {
                     if(!(label.font instanceof cc.BitmapFont)) {label.enableOutline=true;label.outlineColor=color(c.outlineColor);label.outlineWidth=c.width;}
                     nativeRefs.push({sourceId:c.sourceId,nodeUuid:label.node.uuid,componentUuid:label.uuid,type:c.type});
                 }
+                const animationAssets=[];
+                for(const spec of plan.animations||[])if(spec.convertible) {
+                    const clip=motion.create(spec,nodes);const raw=EditorExtends.serialize(clip);
+                    animationAssets.push({id:spec.id,path:spec.path,serialized:typeof raw==='string'?raw:JSON.stringify(raw)});
+                }
                 const asset=new cc.SceneAsset();asset.scene=scene;
                 const serialized=EditorExtends.serialize(asset);
-                return {serialized:typeof serialized==='string'?serialized:JSON.stringify(serialized),nativeRefs,
+                return {serialized:typeof serialized==='string'?serialized:JSON.stringify(serialized),nativeRefs,animationAssets,
                     nodes:plan.nodes.map(n=>({sourceId:n.sourceId,nodeUuid:nodes.get(n.sourceId).uuid})),...describe(scene,plan)};
             } finally {scene.destroy();}
         },
@@ -118,7 +124,12 @@ module.exports = {
                     rect:[sf.rect.x,sf.rect.y,sf.rect.width,sf.rect.height],originalSize:[sf.originalSize.width,sf.originalSize.height],
                     offset:[sf.offset.x,sf.offset.y],border:[sf.insetLeft,sf.insetTop,sf.insetRight,sf.insetBottom]});
             }
-            return {nodeCount:saved.length,nodes:[...mapped].map(([sourceId,n])=>({sourceId,nodeUuid:n.uuid,name:n.name,
+            const animations=[];
+            for(const info of plan.animationAssets||[]) {
+                const spec=(plan.animations||[]).find(s=>s.id===info.id);
+                animations.push(motion.read(await loadAsset(info.uuid,cc.AnimationClip),spec));
+            }
+            return {animations,nodeCount:saved.length,nodes:[...mapped].map(([sourceId,n])=>({sourceId,nodeUuid:n.uuid,name:n.name,
                 position:[n.position.x,n.position.y,n.position.z],size:[n.getComponent(cc.UITransform).width,n.getComponent(cc.UITransform).height]})),components:refs,labels,frames};
         }
     }

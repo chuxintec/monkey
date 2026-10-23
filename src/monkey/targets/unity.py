@@ -13,7 +13,7 @@ def guid(namespace, identity):
     return uuid.uuid5(uuid.NAMESPACE_URL, 'monkey/'+namespace+'/'+identity).hex
 
 
-def plan(ir_path, namespace, output, bindings_path=None):
+def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None):
     ir_path = safe(ir_path)
     ir = stage_document(ir_path)
     if ir.get('schemaVersion') != 1 or ir.get('sourceProfile') not in ('cocos-2.4.15-bundle','cocos-2.4.15-project'):
@@ -198,6 +198,12 @@ def plan(ir_path, namespace, output, bindings_path=None):
         if not entry['convertible']:
             diagnostics.append(diagnostic('COMPONENT_HANDOFF',c['sourceId'],'Native mapping unavailable for '+str(c['type']),c['sourceId']))
         components.append(entry)
+    from ..assets.animation import plan_clips
+    animations,animation_gaps=plan_clips(ir,namespace,PROFILE,animation_selection)
+    if animation_selection:
+        unselected={c['sourceId'] for c in ir.get('animationClips',[]) if c['sourceId'] not in animation_selection}
+        diagnostics=[d for d in diagnostics if d.get('sourceId') not in unselected]
+    diagnostics.extend(animation_gaps)
     out = new_output(output,[ir_path.parent])
     (out/'resources').mkdir()
     for copy in copies:
@@ -207,7 +213,7 @@ def plan(ir_path, namespace, output, bindings_path=None):
     result=dict(schemaVersion=1,toolVersion=__version__,targetProfile=PROFILE,namespace=namespace,
                 sourceIrSha256=sha(read(ir_path)),sourceManifestPath=ir.get('sourceManifestPath'),sourceManifestSha256=ir['sourceManifestSha256'],
                 sourceRoots=ir.get('sourceRoots',{}),sourceLocations=ir.get('sourceLocations',{}),designSize=[750,1334],pixelsPerUnit=100,
-                textures=textures,assets=assets,bitmapFonts=bitmap_fonts,bindings=binding_receipt,nodes=nodes,components=components,copies=copies,
+                textures=textures,assets=assets,bitmapFonts=bitmap_fonts,animations=animations,bindings=binding_receipt,nodes=nodes,components=components,copies=copies,
                 diagnostics=diagnostics,galleryOnly=not bool(nodes),editorValidation='not_run')
     write_json(out/'plan.json',result)
     return finish(out,result)
@@ -228,7 +234,7 @@ def export(plan_path, output):
         if not c['target'].startswith('Assets/Generated/Art/'):
             fail('UNSAFE_TARGET',c['target'],'Unexpected target root')
     out=new_output(output,[plan_path.parent])
-    for folder in ['Assets/Generated/Art','Assets/Generated/Controllers','Assets/Generated/Views','Assets/Generated/Scenes',
+    for folder in ['Assets/Generated/Art','Assets/Generated/Animations','Assets/Generated/Controllers','Assets/Generated/Views','Assets/Generated/Scenes',
                    'Assets/Monkey/Editor','Assets/Manual','Packages','ProjectSettings','Analysis']:
         (out/folder).mkdir(parents=True,exist_ok=True)
     ownership=[]
@@ -243,7 +249,7 @@ def export(plan_path, output):
     adapter_path=out/'Assets/Monkey/Editor/MonkeyImporter.cs';adapter_path.write_bytes(adapter)
     Path(str(adapter_path)+'.meta').write_text('fileFormatVersion: 2\nguid: '+guid(p['namespace'],'editor-adapter')+'\n')
     # Only the typed, finite import instruction subset is sent to the Editor.
-    instruction={key:p.get(key,[]) for key in ('designSize','pixelsPerUnit','textures','assets','bitmapFonts','nodes','components','galleryOnly')}
+    instruction={key:p.get(key,[]) for key in ('designSize','pixelsPerUnit','textures','assets','bitmapFonts','nodes','components','galleryOnly','animations')}
     instruction['sourceDiagnosticCount']=len(p['diagnostics'])
     instruction['prefabGuid']=guid(p['namespace'],'native-prefab')
     instruction['sceneGuid']=guid(p['namespace'],'native-scene')
@@ -257,6 +263,8 @@ def export(plan_path, output):
         '或用独立 batchmode -projectPath 此目录 -executeMethod MonkeyImporter.ImportBatch。\n'
         '导入成功后删除 Assets/Monkey 仍保留原生可编辑资产；Player 不读取转换 JSON。\n'
         '真实编辑器/画面对照/业务尚未验证，见 Analysis。\n')
+    from ..assets.animation import module_report
+    write_json(out/'Analysis/animation-module.json',module_report(p.get('animations',[])))
     groups={}
     module_names={n['sourceId'].split('#')[0]:n['name'] for n in p['nodes'] if n['parent'] is None}
     component_types={c['sourceId']:c['type'] for c in p['components']}
@@ -271,6 +279,7 @@ def export(plan_path, output):
         if any(term in message for term in ('cc.sortorder','cc.sortroot')):return 'render-order'
         return 'unknown-components-and-behavior'
     for d in p['diagnostics']:
+        if d['code'].startswith('ANIMATION_'):continue
         sid=d.get('sourceId') or 'source-config';module=sid.split('#',1)[0] if '#' in sid else 'resources'
         key=(module,cause(d));groups.setdefault(key,[]).append(d)
     tasks=[]
@@ -283,6 +292,9 @@ def export(plan_path, output):
             gaps=gaps,generatedTargets=['Assets/Generated/Views/Candidate.prefab'],
             allowedPaths=['Assets/Manual/'],dependencies=['matching original evidence'],
             verificationScope=['affected UI module in real Editor','source reference comparison']))
+    if p.get('animations') or any(d['code'].startswith('ANIMATION_') for d in p['diagnostics']):
+        from ..assets.animation import handoff_task
+        tasks.append(handoff_task(p['animations'],p['diagnostics']))
     write_json(out/'Analysis/handoff.json',dict(schemaVersion=1,tasks=tasks,
                verification=dict(static='pending',editor='not_run',visual='not_run',business='not_run')))
     write_json(out/'Analysis/source-map.json',dict(assets=ownership,sourceRoots=p.get('sourceRoots',{}),sourceLocations=p.get('sourceLocations',{}),
@@ -372,6 +384,8 @@ def verify(candidate, output, level='static'):
             for required in ('Assets/Generated/Views/Candidate.prefab','Assets/Generated/Scenes/Candidate.unity'):
                 if required not in native:
                     diagnostics.append(diagnostic('NATIVE_ARTIFACT_MISSING',required,'No saved native artifact hash'))
+            from ..assets.animation import verify_native
+            diagnostics.extend(verify_native(instruction.get('animations',[]),rb.get('animations',[]),native))
             editor='partial' if rb.get('diagnostics') else 'pass'
             if any(d['code']!='EDITOR_NOT_RUN' for d in diagnostics):editor='fail'
     for item in m['files']:

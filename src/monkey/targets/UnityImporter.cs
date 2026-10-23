@@ -13,8 +13,14 @@ public static class MonkeyImporter
     [Serializable] public class Plan {
         public float[] designSize; public float pixelsPerUnit;
         public TextureSpec[] textures; public AssetSpec[] assets; public BitmapSpec[] bitmapFonts; public int sourceDiagnosticCount;
-        public NodeSpec[] nodes; public ComponentSpec[] components; public bool galleryOnly;
+        public NodeSpec[] nodes; public ComponentSpec[] components; public MotionSpec[] animations; public bool galleryOnly;
     }
+    [Serializable] public class MotionKey { public float time,value; public string interpolation; }
+    [Serializable] public class MotionProbe { public float time,value; }
+    [Serializable] public class MotionTrack { public string node,path,nativeType,nativeProperty; public MotionKey[] keys; public MotionProbe[] probes; }
+    [Serializable] public class MotionSpec { public string id,name,root,path,wrap; public float duration,sample; public bool convertible; public MotionTrack[] tracks; }
+    [Serializable] public class MotionTrackResult { public string path,property,nativeType; public float[] times,values,probeTimes,probeValues; public string[] interpolations; }
+    [Serializable] public class MotionResult { public string id,path,guid,wrap; public float duration; public int eventCount,curveCount; public MotionTrackResult[] tracks; }
     [Serializable] public class TextureSpec {
         public string id, path; public float[] border, size, originalSize, offset;
     }
@@ -45,7 +51,7 @@ public static class MonkeyImporter
     [Serializable] public class Readback {
         public string status, unityVersion, prefabGuid, sceneGuid;
         public int spriteCount, nodeCount, missingScripts; public bool editableRoundtrip; public string previewPath,previewSha256,previewError,colorSpace;
-        public string[] diagnostics; public NodeResult[] nodes; public SpriteResult[] sprites; public FileResult[] nativeFiles; public FontResult[] fonts; public LabelResult[] labels; public ViewReference[] viewReferences;
+        public MotionResult[] animations; public string[] diagnostics; public NodeResult[] nodes; public SpriteResult[] sprites; public FileResult[] nativeFiles; public FontResult[] fonts; public LabelResult[] labels; public ViewReference[] viewReferences;
     }
     [Serializable] public class ViewReference { public string sourceId,field; public int index; public long prefabFileId; public bool bound; }
     [Serializable] public class FileResult { public string path, sha256; }
@@ -349,6 +355,7 @@ public static class MonkeyImporter
                 image.preserveAspect=image.type==UnityEngine.UI.Image.Type.Simple;image.raycastTarget=false;i++;
             }
         }
+        var motionReadback=BuildMotions(plan,nodeMap);
         var view = canvas.AddComponent<MonkeyCandidateView>();
         view.Images = canvas.GetComponentsInChildren<UnityEngine.UI.Image>(true);
         view.Labels = canvas.GetComponentsInChildren<TMPro.TextMeshProUGUI>(true);
@@ -363,7 +370,7 @@ public static class MonkeyImporter
         var readback = new Readback {
             status=diagnostics.Count==0?"imported":"partial",unityVersion=Application.unityVersion,
             prefabGuid=AssetDatabase.AssetPathToGUID(PrefabPath),sceneGuid=AssetDatabase.AssetPathToGUID(ScenePath),
-            spriteCount=spriteMap.Count,nodeCount=nodeMap.Count,
+            animations=motionReadback,spriteCount=spriteMap.Count,nodeCount=nodeMap.Count,
             missingScripts=instance.GetComponentsInChildren<Transform>(true).Sum(t=>GameObjectUtility.GetMonoBehavioursWithMissingScriptCount(t.gameObject)),
             diagnostics=diagnostics.ToArray(),
             nodes=plan.nodes.Select(n=>{
@@ -512,6 +519,48 @@ public static class MonkeyImporter
         using (var algorithm = System.Security.Cryptography.SHA256.Create())
         using (var input = File.OpenRead(path))
             return BitConverter.ToString(algorithm.ComputeHash(input)).Replace("-","").ToLowerInvariant();
+    }
+
+    static MotionResult[] BuildMotions(Plan plan,Dictionary<string,GameObject> nodes) {
+        var results=new List<MotionResult>();
+        foreach(var spec in plan.animations ?? Array.Empty<MotionSpec>()) {
+            if(!spec.convertible)continue;
+            if(!spec.path.StartsWith("Assets/Generated/Animations/") || spec.path.Contains("..") || File.Exists(spec.path))
+                throw new InvalidOperationException("Unsafe/existing animation output: "+spec.path);
+            Directory.CreateDirectory("Assets/Generated/Animations");
+            var clip=new AnimationClip {name=spec.name,frameRate=spec.sample};
+            foreach(var track in spec.tracks) {
+                if(AnimationUtility.CalculateTransformPath(nodes[track.node].transform,nodes[spec.root].transform)!=track.path)
+                    throw new InvalidOperationException("Animation hierarchy mismatch");
+                var type=track.nativeType=="CanvasGroup"?typeof(CanvasGroup):track.nativeType=="RectTransform"?typeof(RectTransform):typeof(Transform);
+                if(type==typeof(CanvasGroup) && nodes[track.node].GetComponent<CanvasGroup>()==null)nodes[track.node].AddComponent<CanvasGroup>();
+                var curve=new AnimationCurve(track.keys.Select(k=>new Keyframe(k.time,k.value)).ToArray());
+                curve.preWrapMode=curve.postWrapMode=WrapMode.ClampForever;
+                for(var i=0;i<track.keys.Length;i++) {
+                    AnimationUtility.SetKeyBroken(curve,i,true);
+                    AnimationUtility.SetKeyLeftTangentMode(curve,i,AnimationUtility.TangentMode.Linear);
+                    AnimationUtility.SetKeyRightTangentMode(curve,i,track.keys[i].interpolation=="step"?AnimationUtility.TangentMode.Constant:AnimationUtility.TangentMode.Linear);
+                }
+                for(var i=1;i<track.keys.Length;i++)AnimationUtility.SetKeyLeftTangentMode(curve,i,track.keys[i-1].interpolation=="step"?AnimationUtility.TangentMode.Constant:AnimationUtility.TangentMode.Linear);
+                AnimationUtility.SetEditorCurve(clip,EditorCurveBinding.FloatCurve(track.path,type,track.nativeProperty),curve);
+            }
+            var settings=AnimationUtility.GetAnimationClipSettings(clip);settings.loopTime=spec.wrap=="loop";
+            AnimationUtility.SetAnimationClipSettings(clip,settings);AnimationUtility.SetAnimationEvents(clip,Array.Empty<AnimationEvent>());
+            AssetDatabase.CreateAsset(clip,spec.path);EditorUtility.SetDirty(clip);AssetDatabase.SaveAssetIfDirty(clip);
+            AssetDatabase.ImportAsset(spec.path,ImportAssetOptions.ForceUpdate);
+            var saved=AssetDatabase.LoadAssetAtPath<AnimationClip>(spec.path);
+            results.Add(new MotionResult {id=spec.id,path=spec.path,guid=AssetDatabase.AssetPathToGUID(spec.path),duration=saved.length,
+                wrap=AnimationUtility.GetAnimationClipSettings(saved).loopTime?"loop":"normal",eventCount=AnimationUtility.GetAnimationEvents(saved).Length,curveCount=AnimationUtility.GetCurveBindings(saved).Length,
+                tracks=spec.tracks.Select(track=>{
+                    var type=track.nativeType=="CanvasGroup"?typeof(CanvasGroup):track.nativeType=="RectTransform"?typeof(RectTransform):typeof(Transform);
+                    var curve=AnimationUtility.GetEditorCurve(saved,EditorCurveBinding.FloatCurve(track.path,type,track.nativeProperty));
+                    return new MotionTrackResult {path=track.path,property=track.nativeProperty,nativeType=track.nativeType,
+                        times=curve.keys.Select(k=>k.time).ToArray(),values=curve.keys.Select(k=>k.value).ToArray(),
+                        interpolations=Enumerable.Range(0,curve.length).Select(i=>AnimationUtility.GetKeyRightTangentMode(curve,i)==AnimationUtility.TangentMode.Constant?"step":AnimationUtility.GetKeyRightTangentMode(curve,i)==AnimationUtility.TangentMode.Linear?"linear":"unsupported").ToArray(),
+                        probeTimes=track.probes.Select(p=>p.time).ToArray(),probeValues=track.probes.Select(p=>curve.Evaluate(p.time)).ToArray()};
+                }).ToArray()});
+        }
+        return results.ToArray();
     }
 
 }

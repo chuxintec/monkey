@@ -33,6 +33,7 @@ module.exports = {
                 if (f.path.startsWith('assets/') && f.path.endsWith('.meta')) continue;
                 if (hash(fs.readFileSync(within(root, f.path))) !== f.sha256) throw Error('Generated content changed: ' + f.path);
             }
+            for(const a of plan.animations||[])if(a.convertible&&fs.existsSync(within(root,a.path)))throw Error('Animation output exists; use fresh candidate');
             if (!(await req('query-ready'))) throw Error('Asset database not ready');
             const assets = [];
             for (const a of plan.assets) {
@@ -62,10 +63,18 @@ module.exports = {
             const options = {name: 'monkey-import', method: 'assemble', args: [{...plan, assets}]};
             const result = await Editor.Message.request('scene', 'execute-scene-script', options);
             if (!result || typeof result.serialized !== 'string') throw Error('No native scene serialization');
+            const animationAssets=[];
+            for(const a of result.animationAssets||[]) {
+                if(!a.path.startsWith('assets/generated/animations/')||!a.path.endsWith('.anim'))throw Error('Unsafe animation path');
+                within(root,a.path);
+                const info=await req('create-asset','db://'+a.path,a.serialized,{overwrite:false,rename:false});
+                if(!info||info.invalid)throw Error('Native animation save failed');
+                animationAssets.push({id:a.id,uuid:info.uuid,path:a.path});
+            }
             const scene = await req('create-asset', 'db://assets/generated/views/Candidate.scene', result.serialized, {overwrite: false, rename: false});
             if (!scene || scene.invalid) throw Error('Native scene save failed');
             // Re-load saved/imported scene through the engine asset manager, not the in-memory tree.
-            const saved = await Editor.Message.request('scene', 'execute-scene-script', {name:'monkey-import',method:'readSaved',args:[scene.uuid,{...plan,assets}]});
+            const saved = await Editor.Message.request('scene', 'execute-scene-script', {name:'monkey-import',method:'readSaved',args:[scene.uuid,{...plan,assets,animationAssets}]});
             const nativeFiles = [];
             function collect(relative) {
                 const folder = within(root, relative);

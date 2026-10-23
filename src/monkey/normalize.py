@@ -117,7 +117,7 @@ def normalize(manifest_path, output):
     result = dict(schemaVersion=1, toolVersion=__version__, sourceProfile=m['sourceProfile'],
                   sourceManifestSha256=sha(read(manifest_path)),sourceManifestPath=str(manifest_path),sourceRoots=m.get('sourceRoots',{m['bundle']:m['sourceRoot']}),
                   sourceLocations={a['sourceId']:dict(bundle=a.get('bundle',m['bundle']),importPath=a.get('importPath'),nativePath=a.get('native')) for a in m['assets']}, evidenceFiles=m.get('evidenceFiles',[]),aliases=aliases, assets=[], spriteFrames=[], bitmapFonts=[],materials=[], nodes=[],
-                  components=[], diagnostics=diagnostics,
+                  components=[], animationSchemaVersion=1,animationClips=[],diagnostics=diagnostics,
                   coordinateConvention=dict(origin='center anchor', x='right', y='up', units='pixels'))
     for asset in m['assets']:
         sid = asset['sourceId']
@@ -178,6 +178,10 @@ def normalize(manifest_path, output):
             if value.get('_name')=='builtin-2d-sprite' and value.get('_techniqueData',{}).get('0',{}).get('defines',{})=={'USE_TEXTURE':True}:
                 result['materials'].append(dict(sourceId=sid,nativeRole='standard-ugui'))
             else:diagnostics.append(diagnostic('UNSUPPORTED_MATERIAL',asset.get('importPath',sid),'Custom effect/defines require material mapping',sid))
+        elif kind == 'cc.AnimationClip':
+            from .assets.animation import normalize_clip
+            clip,gaps=normalize_clip(value,sid,str(asset.get('importPath'))+'#instances/'+str(doc['root']))
+            result['animationClips'].append(clip);diagnostics.extend(gaps)
         elif kind == 'cc.BitmapFont':
             continue
         elif kind == 'redirect':
@@ -328,6 +332,10 @@ def component_ir(namespace, index, obj):
                     zoomScale=obj.get('zoomScale',1.2),duration=obj.get('duration',.1),interactable=obj.get('interactable',True),
                     events=[dict(target=ref(e.get('target'),namespace),component=e.get('_componentId'),handler=e.get('handler'),customData=e.get('customEventData','')) for e in obj.get('clickEvents',[])])
         known={'_N$target','_N$transition','zoomScale','duration','interactable','clickEvents','_N$normalColor','_N$pressedColor','_N$hoverColor','_N$disabledColor','_N$normalSprite','_N$pressedSprite','_N$hoverSprite','_N$disabledSprite','_normalMaterial','_pressedMaterial','_hoverMaterial','_disabledMaterial','_N$autoGrayEffect','_N$enableAutoGrayEffect'}
+    elif typ == 'cc.Animation':
+        base.update(clips=[ref(c,namespace) for c in obj.get('_clips',[]) if c is not None],
+                    defaultClip=ref(obj.get('_defaultClip'),namespace),playOnLoad=obj.get('playOnLoad',False))
+        known={'_clips','_defaultClip','playOnLoad'}
     elif typ == 'cc.LabelOutline':
         base.update(width=obj.get('_width',1),outlineColor=vector(obj.get('_color'),['r','g','b','a'],[255]*4))
         known={'_width','_color'}

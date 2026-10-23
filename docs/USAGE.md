@@ -123,3 +123,19 @@ removed文件保留在原路径，合并后的manifest将其标记retained，记
 | 动态滚动、未知脚本/事件、Spine | unsupported/handoff | unsupported/handoff |
 
 最低Python3.11与Windows运行环境尚未实测；当前验证环境为macOS arm64/Python3.14.7。开发wheel不是正式发行，不含原素材或测试样本。
+
+## 有限 AnimationClip（CONTINUE-03）
+
+新normalize输出可选的`animationSchemaVersion=1`、`animationClips`及cc.Animation的clip/root绑定。原IR schema仍为1，旧IR缺该字段等价于无动画；未知animation schema明确拒绝。计划可用`--animation <source-clip-id>`选一份来源剪辑，不另建reader；未选择时分析IR内的剪辑。
+
+```sh
+monkey plan --ir <normalized>/ir.json --namespace <stable-namespace> \
+  --target-profile unity-6000.6.2f1-ugui --animation <source-clip-id> --out <new-plan>
+# target-profile cocos-3.8.8 使用同一IR/clip选择；export/verify/handoff沿用现有命令。
+```
+
+支持局部x/y/z或position向量、scale向量/scaleX/Y/Z、0..255透明度；严格递增、从0起、在duration内的有限键序列，末键后恒定延至duration。仅linear（含省略/null）和constant阶跃；Normal/Loop、speed=1。其他easing/Bezier/循环、active和组件曲线不默认为线性。路径按源Animation所属节点的子层级唯一解析，缺失/重名、重复通道或Layout/Widget持有位置时明确留缺口。
+
+Python生成六类数据：源位置、目标身份/相对路径、有限键、原生绑定/单位、中点验证探针、事件合同。Unity使用原生AnimationUtility，Creator按同一节点/向量分组为VectorTrack、透明度为RealTrack/UIOpacity；IR和创作脚本仅在Editor，Player不解释源对象图。原生.anim由Editor创建/保存/回读，离线没有实际曲线资产。`Analysis/animation-module.json`和单一AI模块任务聚合部分轨道及事件。
+
+部分映射不会自动播放、附加业务Animator或回调。事件只记录source位置、时间、函数名与JSON参数及manual-only状态，Native事件数组为空；真实采样/播放和可编辑重开未验证。首个真实`CellBoxClicked`为0.5秒/6标量轨道，另两条active未支持，不能标作完整动画还原。详见[动画验收](validation/2026-10-23-animation.md)。

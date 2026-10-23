@@ -14,3 +14,5 @@ CONTINUE-01新增依据：冻结主包game.js的zh字体选择经人工只读核
 Creator 3.8.8新增目标按本机已安装3.8.8的`cc.d.ts`、引擎公开组件属性、app.asar内Editor/asset-db声明及肥鹅Cocos已有meta做只读格式核对；没有复制其游戏脚本或导入器实现。参考的image 1.0.27、ttf-font 1.0.1、bitmap-font 1.0.6仅用于对应profile的根meta，subMeta由原生importer创建并回读。Scene脚本入口遵循[官方扩展文档](https://docs.cocos.com/creator/3.8/manual/en/editor/extension/scene-script)，序列化调用核对本机EditorExtends声明；未启动Editor。
 
 开发wheel构建使用固定`setuptools==84.2.1`（与上一候选构建器一致）在临时隔离构建环境执行，不修改全局Python。运行时仍为既有固定Pillow及可选ASTC provider。
+
+有限动画子集只读核对官方2.4.15 [AnimationClip](https://github.com/cocos/cocos-engine/blob/v2.4.15/cocos2d/animation/animation-clip.js)、[曲线](https://github.com/cocos/cocos-engine/blob/v2.4.15/cocos2d/animation/animation-curves.js)、[easing](https://github.com/cocos/cocos-engine/blob/v2.4.15/cocos2d/animation/easing.js)、[WrapMode](https://github.com/cocos/cocos-engine/blob/v2.4.15/cocos2d/animation/types.js)的公开格式/语义：省略curve为linear，constant持有左键，默认Normal=1、Loop=2；未复制引擎实现。Creator当前TrackPath/VectorTrack/RealTrack/RealCurve/序列化接口核对本机3.8.8 cc.d.ts，Unity AnimationUtility对现有6000.6.2f1程序集编译核验；这不等于原生执行。私有真实Prefab/Clip与来源hash仅保存在.private/outputs，测试使用自造无美术fixture，无原游戏内容纳入Git。

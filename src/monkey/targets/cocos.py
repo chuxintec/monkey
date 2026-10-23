@@ -31,7 +31,7 @@ def bitmap_text(font,atlas_name):
     return ('\n'.join(lines)+'\n').encode()
 
 
-def plan(ir_path,namespace,output,bindings_path=None):
+def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None):
     path,ir,bindings,receipt,resource,resolve=input_ir(ir_path,bindings_path)
     diagnostics=list(ir['diagnostics']);assets=[];copies=[]
     def add(sid,relative,kind,suffix,**fields):
@@ -106,6 +106,12 @@ def plan(ir_path,namespace,output,bindings_path=None):
         if c['type']=='cc.LabelOutline' and c['convertible'] and not any(x['type']=='cc.Label' and x['node']==c['node'] and x['convertible'] for x in components):
             c['convertible']=False;c['nativeType']=None
             diagnostics.append(diagnostic('MISSING_OUTLINE_LABEL',c['sourceId'],'Label dependency could not be converted',c['sourceId']))
+    from ..assets.animation import plan_clips
+    animations,animation_gaps=plan_clips(ir,namespace,PROFILE,animation_selection)
+    if animation_selection:
+        unselected={c['sourceId'] for c in ir.get('animationClips',[]) if c['sourceId'] not in animation_selection}
+        diagnostics=[d for d in diagnostics if d.get('sourceId') not in unselected]
+    diagnostics.extend(animation_gaps)
     out=new_output(output,[path.parent]);(out/'resources').mkdir()
     for i,c in enumerate(copies):
         raw=c.pop('text',None)
@@ -114,7 +120,7 @@ def plan(ir_path,namespace,output,bindings_path=None):
     result=dict(schemaVersion=1,toolVersion=__version__,targetProfile=PROFILE,namespace=namespace,
         sourceIrSha256=sha(read(path)),sourceManifestSha256=ir['sourceManifestSha256'],sourceManifestPath=ir.get('sourceManifestPath'),
         sourceRoots=ir.get('sourceRoots',{}),sourceLocations=ir.get('sourceLocations',{}),bindings=receipt,
-        designSize=[750,1334],assets=assets,copies=copies,nodes=ir['nodes'],components=components,
+        designSize=[750,1334],assets=assets,copies=copies,animations=animations,nodes=ir['nodes'],components=components,
         diagnostics=diagnostics,editorValidation='not_run',subresourceValidation='pending-native-import')
     write_json(out/'plan.json',result);return finish(out,result)
 
@@ -127,7 +133,7 @@ def export(plan_path,output):
         if not c['target'].startswith('assets/generated/art/') or sha(read(inside(path.parent,c['source'])))!=c['sha256']:
             fail('SOURCE_CHANGED',c['target'],'Invalid plan resource')
     out=new_output(output,[path.parent,*p.get('sourceRoots',{}).values()])
-    for folder in ['assets/generated/art','assets/generated/views','assets/manual','extensions/monkey-import','Analysis']:
+    for folder in ['assets/generated/art','assets/generated/animations','assets/generated/views','assets/manual','extensions/monkey-import','Analysis']:
         (out/folder).mkdir(parents=True,exist_ok=True)
     by_path={a['path']:a for a in p['assets']};by_id={a['sourceId']:a for a in p['assets']}
     for c in p['copies']:
@@ -141,14 +147,21 @@ def export(plan_path,output):
     write_json(out/'package.json',dict(name='monkey-native-candidate',version='0.2.0',uuid=project_id,creator=dict(version='3.8.8')))
     ext=out/'extensions/monkey-import'
     for name in ['main.js','scene.js']:(ext/name).write_bytes(files('monkey.targets').joinpath('Creator'+('Main.js' if name=='main.js' else 'Scene.js')).read_bytes())
+    (ext/'animation.js').write_bytes(files('monkey.targets').joinpath('CreatorAnimation.js').read_bytes())
     write_json(ext/'package.json',dict(package_version=2,version='0.2.0',name='monkey-import',main='./main.js',
         contributions=dict(scene=dict(script='./scene.js'),menu=[dict(path='Monkey',label='Import isolated candidate',message='import-candidate')],
                            messages={'import-candidate':dict(methods=['importCandidate'])})))
-    write_json(ext/'import-plan.json',{k:p[k] for k in ['schemaVersion','targetProfile','designSize','assets','nodes','components'] }|dict(projectUuid=project_id))
+    write_json(ext/'import-plan.json',{k:p[k] for k in ['schemaVersion','targetProfile','designSize','assets','nodes','components'] }|dict(projectUuid=project_id,animations=p.get('animations',[])))
+    from ..assets.animation import module_report
+    write_json(out/'Analysis/animation-module.json',module_report(p.get('animations',[])))
     write_json(out/'Analysis/source-map.json',dict(assets=p['assets'],nodes=[dict(sourceId=n['sourceId'],target='assets/generated/views/Candidate.scene') for n in p['nodes']],
         components=[dict(sourceId=c['sourceId'],node=c['node'],nativeType=c['nativeType']) for c in p['components']],
         sourceRoots=p['sourceRoots'],sourceLocations=p['sourceLocations'],subresources='actual UUIDs require native importer readback'))
-    write_json(out/'Analysis/handoff.json',dict(schemaVersion=1,tasks=tasks(p['components'],p['diagnostics'],'assets/generated/views/Candidate.scene','assets/manual/'),
+    handoff_tasks=tasks(p['components'],[d for d in p['diagnostics'] if not d['code'].startswith('ANIMATION_')],'assets/generated/views/Candidate.scene','assets/manual/')
+    if p.get('animations') or any(d['code'].startswith('ANIMATION_') for d in p['diagnostics']):
+        from ..assets.animation import handoff_task
+        handoff_tasks.append(handoff_task(p['animations'],p['diagnostics']))
+    write_json(out/'Analysis/handoff.json',dict(schemaVersion=1,tasks=handoff_tasks,
         verification=dict(static='pending',editor='not_run',visual='not_run',business='not_run')))
     if p['bindings']:write_json(out/'Analysis/font-bindings.json',p['bindings'])
     (out/'README.md').write_text('Creator 3.8.8 isolated candidate. Open only in an authorized resource window.\nRun Monkey/Import isolated candidate once after assets import. Existing outputs are refused.\nNative scene and child UUIDs require Editor; no source engine interpreter ships.\n')
@@ -196,6 +209,8 @@ def verify(candidate,output,level='static'):
             good=good and all(isinstance(n.get('nodeUuid'),str) and n['nodeUuid'] for n in rb.get('nodes',[]))
             good=good and all(isinstance(c.get('componentUuid'),str) and c['componentUuid'] for c in rb.get('components',[]))
             good=good and 'assets/generated/views/Candidate.scene' in native and bool(rb.get('sceneUuid'))
+            from ..assets.animation import verify_native
+            motion_gaps=verify_native(plan.get('animations',[]),rb.get('animations',[]),native);diagnostics.extend(motion_gaps);good=good and not motion_gaps
             if not good:diagnostics.append(diagnostic('EDITOR_READBACK_FAILED',str(rb_path),'Native identities/counts/version differ'))
             editor='pass' if good else 'fail'
     for f in m['files']:
