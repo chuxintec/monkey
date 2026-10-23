@@ -204,6 +204,9 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
         unselected={c['sourceId'] for c in ir.get('animationClips',[]) if c['sourceId'] not in animation_selection}
         diagnostics=[d for d in diagnostics if d.get('sourceId') not in unselected]
     diagnostics.extend(animation_gaps)
+    from .prefabs import plan_prefabs
+    source_prefabs,prefab_gaps=plan_prefabs(ir,components)
+    diagnostics.extend(prefab_gaps)
     out = new_output(output,[ir_path.parent])
     (out/'resources').mkdir()
     for copy in copies:
@@ -211,6 +214,7 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
         target.write_bytes(read(inside(ir_path.parent,copy['source'])))
         copy['source']='resources/'+target.name
     result=dict(schemaVersion=1,toolVersion=__version__,targetProfile=PROFILE,namespace=namespace,
+                sourcePrefabs=source_prefabs,
                 scopeMode=ir.get('scopeMode','asset-selection'),
                 sourceIrSha256=sha(stage_bytes(ir_path)),sourceManifestPath=ir.get('sourceManifestPath'),sourceManifestSha256=ir['sourceManifestSha256'],
                 sourceRoots=ir.get('sourceRoots',{}),sourceLocations=ir.get('sourceLocations',{}),designSize=[750,1334],pixelsPerUnit=100,
@@ -250,7 +254,7 @@ def export(plan_path, output):
     adapter_path=out/'Assets/Monkey/Editor/MonkeyImporter.cs';adapter_path.write_bytes(adapter)
     Path(str(adapter_path)+'.meta').write_text('fileFormatVersion: 2\nguid: '+guid(p['namespace'],'editor-adapter')+'\n')
     # Only the typed, finite import instruction subset is sent to the Editor.
-    instruction={key:p.get(key,[]) for key in ('designSize','pixelsPerUnit','textures','assets','bitmapFonts','nodes','components','galleryOnly','animations')}
+    instruction={key:p.get(key,[]) for key in ('designSize','pixelsPerUnit','textures','assets','bitmapFonts','nodes','components','galleryOnly','animations','sourcePrefabs')}
     instruction['sourceDiagnosticCount']=len(p['diagnostics'])
     instruction['prefabGuid']=guid(p['namespace'],'native-prefab')
     instruction['sceneGuid']=guid(p['namespace'],'native-scene')
@@ -340,6 +344,12 @@ def verify(candidate, output, level='static'):
                     diagnostics.append(diagnostic('NATIVE_FILE_CHANGED',relative,'Native file differs from saved readback'))
             instruction=load(read(root/path_for('Assets/Monkey/Editor/import-plan.json'),max_bytes=128*1024*1024),max_nodes=8_000_000)
             json_assets={a['id']:a for a in rb.get('jsonAssets',[])}
+            actual_prefabs={a['sourceId']:a for a in rb.get('sourcePrefabs',[])}
+            for spec in instruction.get('sourcePrefabs',[]):
+                actual=actual_prefabs.get(spec['sourceId'],{})
+                target=spec['path']
+                if not actual.get('guid') or actual.get('nodeCount')!=spec['nodeCount'] or actual.get('missingScripts')!=0 or actual.get('path')!=target or target not in native:
+                    diagnostics.append(diagnostic('SOURCE_PREFAB_NOT_VERIFIED',spec['sourceId'],'Independent native prefab save/reopen evidence is absent or inconsistent'))
             for spec in instruction['assets']:
                 if spec['kind']=='cc.JsonAsset':
                     actual=json_assets.get(spec['id'],{})

@@ -13,8 +13,10 @@ public static class MonkeyImporter
     [Serializable] public class Plan {
         public float[] designSize; public float pixelsPerUnit;
         public TextureSpec[] textures; public AssetSpec[] assets; public BitmapSpec[] bitmapFonts; public int sourceDiagnosticCount;
-        public NodeSpec[] nodes; public ComponentSpec[] components; public MotionSpec[] animations; public bool galleryOnly;
+        public NodeSpec[] nodes; public ComponentSpec[] components; public MotionSpec[] animations; public bool galleryOnly; public SourcePrefabSpec[] sourcePrefabs;
     }
+    [Serializable] public class SourcePrefabSpec { public string sourceId,root,path; public string[] nodes; public int nodeCount; }
+    [Serializable] public class SourcePrefabResult { public string sourceId,path,guid; public int nodeCount,missingScripts; }
     [Serializable] public class MotionKey { public float time,value; public string interpolation; }
     [Serializable] public class MotionProbe { public float time,value; }
     [Serializable] public class MotionTrack { public string node,path,nativeType,nativeProperty; public MotionKey[] keys; public MotionProbe[] probes; }
@@ -51,7 +53,7 @@ public static class MonkeyImporter
     [Serializable] public class Readback {
         public string status, unityVersion, prefabGuid, sceneGuid;
         public int spriteCount, nodeCount, missingScripts; public bool editableRoundtrip; public string previewPath,previewSha256,previewError,colorSpace;
-        public MotionResult[] animations; public string[] diagnostics; public NodeResult[] nodes; public SpriteResult[] sprites; public FileResult[] nativeFiles; public FontResult[] fonts; public LabelResult[] labels; public ViewReference[] viewReferences; public JsonResult[] jsonAssets;
+        public MotionResult[] animations; public string[] diagnostics; public NodeResult[] nodes; public SpriteResult[] sprites; public FileResult[] nativeFiles; public FontResult[] fonts; public LabelResult[] labels; public ViewReference[] viewReferences; public JsonResult[] jsonAssets; public SourcePrefabResult[] sourcePrefabs;
     }
     [Serializable] public class JsonResult { public string id,guid,textSha256; }
     [Serializable] public class ViewReference { public string sourceId,field; public int index; public long prefabFileId; public bool bound; }
@@ -371,12 +373,34 @@ public static class MonkeyImporter
         view.Buttons = canvas.GetComponentsInChildren<UnityEngine.UI.Button>(true);
         var events=new GameObject("EventSystem",typeof(UnityEngine.EventSystems.EventSystem),typeof(UnityEngine.EventSystems.StandaloneInputModule));
         SceneManager.MoveGameObjectToScene(events,scene);
+        var sourcePrefabResults=new List<SourcePrefabResult>();
+        foreach(var spec in plan.sourcePrefabs ?? new SourcePrefabSpec[0]) {
+            if(!spec.path.StartsWith("Assets/Generated/Views/Sources/",StringComparison.Ordinal) || spec.path.Contains("..") || File.Exists(spec.path))
+                throw new InvalidOperationException("Invalid or existing source prefab path: "+spec.path);
+            Directory.CreateDirectory(Path.GetDirectoryName(spec.path));
+            AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+            var clone=UnityEngine.Object.Instantiate(nodeMap[spec.root].gameObject);
+            clone.name=nodeMap[spec.root].name;
+            try {
+                var sourcePrefab=PrefabUtility.SaveAsPrefabAsset(clone,spec.path,out bool saved);
+                if(!saved || sourcePrefab==null)throw new InvalidOperationException("Source prefab save failed: "+spec.sourceId);
+            } finally { UnityEngine.Object.DestroyImmediate(clone); }
+            var contents=PrefabUtility.LoadPrefabContents(spec.path);
+            try {
+                var transforms=contents.GetComponentsInChildren<Transform>(true);
+                int missing=transforms.Sum(t=>GameObjectUtility.GetMonoBehavioursWithMissingScriptCount(t.gameObject));
+                if(transforms.Length!=spec.nodeCount || missing!=0)throw new InvalidOperationException("Source prefab reopen mismatch: "+spec.sourceId);
+                sourcePrefabResults.Add(new SourcePrefabResult {sourceId=spec.sourceId,path=spec.path,
+                    guid=AssetDatabase.AssetPathToGUID(spec.path),nodeCount=transforms.Length,missingScripts=missing});
+            } finally { PrefabUtility.UnloadPrefabContents(contents); }
+        }
         var prefab = PrefabUtility.SaveAsPrefabAsset(canvas,PrefabPath,out var success);
         if (!success || prefab == null) throw new InvalidOperationException("Native Prefab save failed");
         UnityEngine.Object.DestroyImmediate(canvas);
         var instance=(GameObject)PrefabUtility.InstantiatePrefab(prefab,scene);
         if (!EditorSceneManager.SaveScene(scene,ScenePath)) throw new InvalidOperationException("Native scene save failed");
         var readback = new Readback {
+            sourcePrefabs=sourcePrefabResults.ToArray(),
             jsonAssets=plan.assets.Where(a=>a.kind=="cc.JsonAsset").Select(a=> {
                 var text=AssetDatabase.LoadAssetAtPath<TextAsset>(a.path);
                 if(text==null)throw new InvalidOperationException("JsonAsset TextAsset import failed: "+a.id);

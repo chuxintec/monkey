@@ -47,6 +47,8 @@ class StructuredTests(unittest.TestCase):
                 self.assertEqual(m['validation']['editor'],'not_run')
                 if name=='UnityProject':
                     plan=load(read(project/'Assets/Game/Editor/Conversion/import-plan.json'))
+                    self.assertEqual(len(plan['sourcePrefabs']),1)
+                    self.assertIn('Assets/Game/Content/Prefabs/Recovery/Sources/',plan['sourcePrefabs'][0]['path'])
                     asset=next(a for a in plan['assets'] if a['kind']=='cc.JsonAsset')
                     self.assertIn('Assets/Game/Content/Config/Recovered/',asset['path'])
                     self.assertTrue((project/'Assets/Game/Presentation/Recovery/MonkeyCandidateView.cs').exists())
@@ -84,6 +86,15 @@ class StructuredTests(unittest.TestCase):
             third=resume_package(root/'out',declaration)
             self.assertTrue(third['completed'])
             self.assertTrue((root/'out'/third['resumeBackup']/'Interrupted/UnityProject/manifest.json').exists())
+            signatures=root/'out/Structured/stage-signatures.json'
+            original=signatures.read_bytes();data=load(original);data['inspect']['sha256']='changed-algorithm'
+            write_json(signatures,data)
+            before_projects=list((root/'out/Previous').iterdir())
+            with self.assertRaises(ParseError) as mismatch:resume_package(root/'out',declaration)
+            self.assertEqual(mismatch.exception.code,'RESUME_ALGORITHM_CHANGED')
+            self.assertEqual(list((root/'out/Previous').iterdir()),before_projects)
+            self.assertEqual(load(read(signatures)),data)
+            signatures.write_bytes(original)
 
     def test_input_identity_and_casefold_root_conflicts_prevent_any_output(self):
         with tempfile.TemporaryDirectory() as temporary:

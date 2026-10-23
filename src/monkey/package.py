@@ -95,6 +95,13 @@ def convert_package(source, target, output, namespace='monkey-project',offline=F
                 inputSet=dict(sha256=selection['sha256'],identityStatus=selection['identityStatus'],frozenRelationVerified=selection['frozenRelationVerified']) if selection else None,
                 diagnostics=[],validation=dict(editor='not_run',visual='not_run',business='not_run'),projects=[])
     try:
+        cache_summaries=[]
+        for unit in roots:
+            if unit.get('cacheList'):
+                from .sources.cache import plan as cache_plan
+                mapping=cache_plan(unit['path'],unit['cacheList'],unit['cacheKind'])
+                cache_summaries.append(dict(inputRoot=unit['id'],manifestSha256=mapping['manifestSha256'],declaredEntries=mapping['declaredEntries'],availableMappings=mapping['availableMappings'],missing=mapping['missing']))
+        report['cacheInputs']=cache_summaries
         if resume_state:
             spool=out/'InputCache';tree=out/'InputTree'
             rows=resume_state['rows'];configs=resume_state['configs'];recovered=resume_state['recovered']
@@ -324,6 +331,12 @@ Neither target requires monkey, Python, the source tree, the other target or the
 ''').encode())
             from .handoff_package import enrich
             handoff=enrich(project,out,rows,code_index,tasks)
+            inspected_path=out/'Structured/inspect/source-manifest.json'
+            if inspected_path.exists():
+                from .assets.spine import recover_closures
+                from .io import stage_document
+                spine=recover_closures(stage_document(inspected_path),project)
+                coverage['spineClosures']=dict(closed=spine['closed'],unresolved=spine['unresolved'],nativeValidation='not_run')
             objects=load(read(project/'Analysis/structured-objects.json'))['objects']
             by_input={}
             for obj in objects:
@@ -393,6 +406,16 @@ def resume_package(output,input_set_path,offline=False):
         fail('RESUME_MISMATCH',str(out),'Expected a completed package export of this tool version')
     if prior.get('inputSet',{}).get('sha256')!=declaration['sha256']:
         fail('RESUME_INPUT_CHANGED',str(out),'Explicit input declaration changed')
+    if (out/'Structured/inspect/manifest.json').exists():
+        from .signatures import phase_signatures
+        signature_file=out/'Structured/stage-signatures.json'
+        if not signature_file.exists():fail('RESUME_ALGORITHM_UNKNOWN',str(out),'Checkpoint predates algorithm signatures; keep frozen candidate and create a fresh output')
+        saved_signatures=load(read(signature_file));current=phase_signatures()
+        if saved_signatures.get('package')!=current['package']:
+            fail('RESUME_ALGORITHM_CHANGED','package','Package inventory/source-recovery algorithm changed; use a fresh output')
+        for phase in ('inspect','normalize','UnityProject-plan','CocosProject-plan'):
+            if (out/'Structured'/phase/'manifest.json').exists() and saved_signatures.get(phase)!=current[phase]:
+                fail('RESUME_ALGORITHM_CHANGED',phase,'Checkpoint algorithm changed; candidate retained, use a fresh output')
     checked=[]
     for project in prior['projects']:
         root=candidate_base/project['path']

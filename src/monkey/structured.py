@@ -37,8 +37,22 @@ def recover(tree, roots, configs, source_profile, out, profiles, namespace):
         result.update(status='needs_action',reason='SOURCE_PROFILE_REQUIRED')
         write_json(stage/'recovery.json',result);return result
     try:
+        from .signatures import phase_signatures
+        signatures=phase_signatures();signature_path=stage/'stage-signatures.json'
+        previous_signatures=load(read(signature_path)) if signature_path.exists() else {}
+        def check_signature(name):
+            if previous_signatures.get(name)!=signatures[name]:
+                from .sources.compiled import fail
+                fail('STAGE_ALGORITHM_CHANGED',name,'Checkpoint algorithm signature differs or is absent; use a fresh output, keep existing candidates')
+        if not previous_signatures:
+            if any(stage.glob('*/manifest.json')):
+                from .sources.compiled import fail
+                fail('STAGE_ALGORITHM_UNKNOWN',str(stage),'Existing checkpoints predate algorithm signatures; create a fresh output')
+            write_json(signature_path,signatures)
+        result['stageSignatures']={k:v['sha256'] for k,v in signatures.items()}
         existing=stage/'inspect/source-manifest.json'
         if (stage/'inspect/manifest.json').exists():
+            check_signature('inspect')
             inspected=stage_document(existing)
             if inspected.get('toolVersion')!=__version__ or inspected.get('sourceProfile')!=source_profile:
                 raise ValueError('Source stage tool/profile mismatch')
@@ -57,6 +71,7 @@ def recover(tree, roots, configs, source_profile, out, profiles, namespace):
                     include_all_bundles=True,max_assets=20000,max_bytes=512*1024*1024,resolve_provided=True)
         result['stages'].append(dict(stage='inspect',status=stage_manifest(stage/'inspect')['status'],assets=len(inspected['assets'])))
         if (stage/'normalize/manifest.json').exists():
+            check_signature('normalize')
             ir=stage_document(stage/'normalize/ir.json')
             if ir.get('toolVersion')!=__version__ or ir['sourceManifestSha256']!=sha(stage_bytes(existing)):
                 raise ValueError('Normalized stage source/tool changed')
@@ -76,6 +91,7 @@ def recover(tree, roots, configs, source_profile, out, profiles, namespace):
             adapter=unity if profile==unity.PROFILE else cocos;key='UnityProject' if profile==unity.PROFILE else 'CocosProject'
             plan_path=stage/(key+'-plan')/'plan.json'
             if (plan_path.parent/'manifest.json').exists():
+                check_signature(key+'-plan')
                 plan=stage_document(plan_path)
                 if plan.get('sourceIrSha256')!=sha(stage_bytes(ir_path/'ir.json')) or plan.get('namespace')!=namespace:
                     raise ValueError('Target plan input/namespace changed; retained without overwrite')

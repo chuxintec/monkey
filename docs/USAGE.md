@@ -237,3 +237,16 @@ bin/monkey convert --source /path/to/obtained-resources --target cocos38 --out o
 AST解析只读源代码，固定Acorn8.15.0；Node堆上限512MiB、单次30秒、AST3百万节点/深512。literal loader/System.register能恢复相应factory；动态/拼表模块仍为候选。RF fallback仅配对同一词法块的静态push/pop，保存精确UTF-8字节范围、hash、类/身份、可读片段；外围import/模块边界未知，未匹配位置另列缺口，不能当完整模块语义证明。每模块生成SourceRecovery内TS/C#初稿、实际依赖/导出/事件/资源键证据；调用抛明确未实现，不接原服、不假奖励。编译/行为均false，未启用业务。
 
 当前返回needs_action/candidate，`completed`只表示留存/工作区生成已执行完毕；nativeObjects=pending_adapter、editor/visual/business=not_run。`--offline`返回partial。包级原生对象恢复、原生导入编排、失败阶段续跑、包级resume/register/apply待接入；目录生成不能代表产品目标已完成。资源覆盖以输入文件/字节为分母，缺失引用另计，去重保留每个来源ID。
+
+## 原生启动预检与阶段续跑身份
+
+```sh
+bin/monkey preflight --candidate outputs/game/UnityProject \
+  --log /path/to/previous-import.log --out outputs/startup-check
+```
+
+该命令只检查冻结文件、目标版本、已安装引擎/CLI和已有Editor标记，并对已有日志作分类；不启动Editor、写全局缓存、删除锁、修改安全设置或自动重试。readonly database/系统IPC警告且未初始化引擎时标记`HOST_CACHE_OR_IPC_ACCESS_SUSPECTED`，这是定位推断；许可entitlement已解析时，不仅凭token更新失败就断言许可无效。
+
+新候选记录包级源码恢复、inspect、normalize、目标plan和emit的源码阶段签名。包级续跑在归档/改动候选前拒绝缺失或变化的缓存算法签名。旧开发候选（如932220d）没有这份签名，应保留并用新输出目录重新转换，不能给旧缓存补写当前签名后冒充兼容。
+
+Unity新导入计划另列每个独立源Prefab的根、节点集合和目标路径，跨源节点引用/多根图明确拒绝；Editor薄层保存后加载内容核对，回执缺失时不声称原生Prefab已完成。源Scene不按Prefab冒名输出。Spine闭包输出在`SourceRecovery/Spine/`，保存真实bin、原atlas文本和按显式引用解码的PNG页面；`Analysis/spine-closures.json`区分缺失和未支持。闭包恢复不等于安装兼容且有许可的Spine runtime或动画通过。

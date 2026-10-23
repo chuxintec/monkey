@@ -169,3 +169,9 @@ Candidate.scene/editor-readback/真实PNG不存在，5Label绑定、原生Scene�
 真实四根输入5097文件/243799340字节已完成双目标离线候选，13994对象经同一IR生成标准目录原生计划。20605节点/23373组件/5179帧/8 JsonAsset，坏图1项隔离；914 RF证据与合同按714工作批交接。具体统计/清单SHA和各口径限制见`docs/validation/2026-10-23-structured-cli.md`。13项受影响测试与Unity薄层离线C#编译通过；Editor/Player/视觉/业务not_run。
 
 当前成组工作包完成但工具版本未交付。必要剩余：独立源Prefab原生生成、Spine闭包、编辑器预检和有界导入编排、真实引擎验收及支持矩阵扩展；缓存映射缺失摘要的最终报告汇总、阶段算法签名尚待补强。按已批准范围继续离线开发；原生验收需总监协调独立Unity窗口。本组向总监报告事件`monkey-cli-structured-20261023-01`，不以报告或礼节ACK阻塞已就绪离线任务。
+
+## 2026-10-23 窗口03与离线差额
+
+已按总监实际grant在12:23:13–12:25:12完成独立首轮启动尝试并提前释放。冻结932220d逐项核验、acceptance副本建立；Unity在资源导入前停滞，readonly database/系统IPC与token更新警告，entitlement已解析；根因未证实。仅本次PID97901普通SIGTERM结束、ps无进程，未重试/未操作肥鹅；所有import/save/reopen/readback仍not_run，已向总监释放报告。详见`docs/validation/2026-10-23-native-startup-and-closures.md`。
+
+继续离线完成独立源Prefab规划/原生保存回读适配（冻结IR1630份/20305节点，2源Scene排除）、Spine显式闭包（30/31闭合，1缺bin，未装runtime）、只读CLI preflight、包/阶段算法签名和缓存缺失汇总。新增3项语义边界反例、structured3及package6通过，C#离线编译通过；新整包/native尚未运行。准备成组上报`monkey-prefab-spine-preflight-20261023-01`并给出正常审批下缓存/IPC访问的安全续验方案；后续Editor须新的窗口许可，离线已批准范围持续有效。

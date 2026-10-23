@@ -35,6 +35,8 @@ def main(argv=None):
     p.add_argument('--evidence-source', action='append', default=[])
     p.add_argument('--bindings')
     p.add_argument('--animation', action='append')
+    p = sub.add_parser('preflight',help='Check frozen candidate and classify startup logs without launching an Editor')
+    p.add_argument('--candidate',required=True);p.add_argument('--out',required=True);p.add_argument('--log')
     p = sub.add_parser('inspect')
     p.add_argument('--source', required=True)
     p.add_argument('--source-profile', choices=[PROFILE,PROJECT_PROFILE], required=True)
@@ -78,7 +80,7 @@ def main(argv=None):
     try:
         if args.command == 'capabilities':
             print(json.dumps(dict(version=__version__, profiles=[PROFILE,PROJECT_PROFILE], targetProfiles=[UNITY_PROFILE,cocos.PROFILE],
-                schemaVersion=1, implemented=['convert','catalog','inspect','normalize','plan','export','verify','handoff','diff','register','apply'], planned=[],
+                schemaVersion=1, implemented=['convert','catalog','inspect','normalize','plan','export','verify','handoff','diff','register','apply','preflight'], planned=[],
                 targetValidation={UNITY_PROFILE:dict(static='implemented',editor='not_run',visual='not_run'),cocos.PROFILE:dict(static='implemented',editor='not_run',visual='not_run')},
                 compiledFormats=['compiled-v1','pack-v1','texture-pack-v1'],
                 containerFormats=['plain-wxapkg','APK-ZIP','Cocos-resource-directory'],
@@ -160,6 +162,9 @@ def main(argv=None):
             output_path=Path(args.out).resolve()
             if output_path.is_relative_to(Path.cwd()/'outputs'):
                 incremental.register(output_path,Path.cwd())
+        elif args.command == 'preflight':
+            from .preflight import preflight
+            result=preflight(args.candidate,args.out,args.log)
         elif args.command == 'verify':
             from .io import safe, read, load
             from .io import stage_manifest
