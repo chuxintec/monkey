@@ -1,4 +1,5 @@
 import contextlib,io,tempfile,unittest
+from unittest.mock import patch
 from pathlib import Path
 from monkey.cli import main
 from monkey.providers.assetripper import Form
@@ -12,6 +13,33 @@ class UnityRouteTests(unittest.TestCase):
                 with contextlib.redirect_stderr(io.StringIO()),self.assertRaises(SystemExit)as e:
                     main(['convert','--source',str(source),'--out',str(root/'out'),*args])
                 self.assertEqual(e.exception.code,2);self.assertFalse((root/'out').exists())
+
+    def test_webdata_routes_to_unity_without_executing_container(self):
+        with tempfile.TemporaryDirectory() as t:
+            root=Path(t).resolve();source=root/'game.data';source.write_bytes(b'UnityWebData1.0\0explicit')
+            result=dict(status='partial',completed=False,resultKind='candidate',projects=[],diagnostics=[])
+            with patch('monkey.recover_unity.convert',return_value=result) as convert,contextlib.redirect_stdout(io.StringIO()):
+                main(['convert','--source',str(source),'--target','unity6','--out',str(root/'out'),'--provider-python','provider','--asset-ripper','ripper'])
+            convert.assert_called_once()
+            self.assertFalse((root/'out').exists())
+
+    def test_similar_or_truncated_signatures_do_not_classify(self):
+        from monkey.sources.unity_serialized import container_kind
+        for header in (b'UnityWebData1.0',b'UnityWebData1.1\0',b'UnityWebData',b'prefixUnityFS\0'):
+            self.assertIsNone(container_kind(header))
+
+    def test_invalid_etc1_blocks_before_provider_without_explicit_quarantine(self):
+        from monkey.recover_unity import convert
+        with tempfile.TemporaryDirectory() as t:
+            root=Path(t).resolve();source=root/'source.data';source.write_bytes(b'UnityWebData1.0\0test')
+            providers=root/'providers';providers.mkdir();provider=providers/'provider';provider.write_bytes(b'not executable')
+            inspection=dict(status='partial',sourceUnchanged=True,processExited=True,summary={'unparsed':1,'invalidInlineTextures':2})
+            with patch('monkey.recover_unity.inspect_unity',return_value=inspection),patch('monkey.recover_unity.export_unity') as export:
+                result=convert(source,root/'out',provider,provider)
+            export.assert_not_called();self.assertFalse(result['completed'])
+            self.assertEqual(result['status'],'blocked')
+            self.assertEqual(result['diagnostics'][0]['disposition'],'blocked')
+            self.assertFalse((root/'out/ProviderExport').exists())
 
     def test_public_settings_form_distinguishes_disabled_and_disk_save_flags(self):
         p=Form();p.feed('<input name="TargetVersion" value="6000.6.2f1"><input type="checkbox" name="Premium" checked disabled><input type="checkbox" name="SaveSettingsToDisk"><select name="ScriptContentLevel"><option value="Level2">x</option><option value="Level0" selected>y</option></select>')

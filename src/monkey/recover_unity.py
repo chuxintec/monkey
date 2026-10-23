@@ -5,19 +5,20 @@ from pathlib import Path
 from . import __version__
 from .io import safe,read,load,sha,new_output,write_json
 from .sources.compiled import fail
-from .sources.unity_serialized import inspect as inspect_unity
+from .sources.unity_serialized import inspect as inspect_unity,container_kind
 from .providers.assetripper import export as export_unity,fingerprint,TARGET_VERSION
 from .unity_code_model import model as code_model
 
 CODE_SUFFIXES={'.cs','.dll','.js','.jsc','.wasm','.lua','.so','.dylib'}
 
 
-def convert(source,output,provider_python,asset_ripper,budget_seconds=600,dependencies=None,texture_cache=None,schema_manifest=None):
+def convert(source,output,provider_python,asset_ripper,budget_seconds=600,dependencies=None,texture_cache=None,schema_manifest=None,quarantine_invalid_textures=False):
     if not 30<=budget_seconds<=1200:fail('UNITY_EXPORT_BUDGET','$','Expected 30..1200 seconds')
     source=safe(source);exe=safe(asset_ripper);requested_python=Path(provider_python).absolute();python=safe(requested_python.resolve(strict=True))
     if not source.is_file() or not exe.is_file() or not python.is_file():fail('UNITY_PROVIDER_MISSING','$','Source and existing providers must be files')
-    with source.open('rb') as stream:header=stream.read(9)
-    if not header.startswith((b'UnityFS\0',b'UnityRaw\0',b'UnityWeb\0')):fail('UNITY_CONTAINER_UNSUPPORTED',str(source),'Initial profile requires a Unity bundle signature')
+    with source.open('rb') as stream:header=stream.read(16)
+    kind=container_kind(header)
+    if not kind:fail('UNITY_CONTAINER_UNSUPPORTED',str(source),'Expected an exact Unity bundle or UnityWebData1.0 signature')
     dependencies=[safe(p)for p in (dependencies or [])]
     if len(dependencies)>2000 or len(set([source,*dependencies]))!=len(dependencies)+1:fail('UNITY_DEPENDENCY_SET','$','Duplicate or oversized explicit dependencies')
     schema_pool=None
@@ -25,9 +26,9 @@ def convert(source,output,provider_python,asset_ripper,budget_seconds=600,depend
         from .unity_schemas import frozen_pool
         schema_pool=frozen_pool(schema_manifest)
     out=new_output(output,[source,exe.parent,python.parent,*dependencies,*([safe(texture_cache)]if texture_cache else []),*([safe(schema_manifest),*[Path(r['path'])for r in schema_pool['files']]]if schema_pool else [])])
-    report=dict(schemaVersion=1,toolVersion=__version__,sourceFamily='unity',sourceProfile='unityfs-unitypy-1.25.3-assetripper-2.0.0',
+    report=dict(schemaVersion=1,toolVersion=__version__,sourceFamily='unity',sourceProfile=kind+'-unitypy-1.25.3-assetripper-2.0.0',
                 status='partial',workflowStatus='needs_action',completed=False,resultKind='candidate',
-                format=dict(profile='none',applied=False),completionScope='explicit-unity-bundles-and-consumed-texture-cache',inputFiles=1+len(dependencies),inputBytes=source.stat().st_size+sum(p.stat().st_size for p in dependencies),projects=[],
+                format=dict(profile='none',applied=False),completionScope='explicit-unity-containers-and-consumed-texture-cache',inputFiles=1+len(dependencies),inputBytes=source.stat().st_size+sum(p.stat().st_size for p in dependencies),projects=[],
                 validation=dict(source='not_run',editor='not_run',visual='not_run',business='not_run'),diagnostics=[])
     def save():write_json(out/'conversion-result.json',report)
     save()
@@ -42,13 +43,22 @@ def convert(source,output,provider_python,asset_ripper,budget_seconds=600,depend
         inspections.append((path,extra))
         if extra['status'] not in ('inspected','partial') or not extra.get('sourceUnchanged') or not extra.get('processExited'):
             report['status']='failed';save();return report
-    active=[];hydrations=[];consumed={}
+    active=[];hydrations=[];consumed={};quarantines=[]
     for index,(path,inspection) in enumerate(inspections):
         working=path
+        if inspection['summary'].get('invalidInlineTextures',0):
+            report['diagnostics'].append(dict(code='UNITY_INVALID_INLINE_ETC1',sourceIndex=index,count=inspection['summary']['invalidInlineTextures'],disposition='quarantine-requested' if quarantine_invalid_textures else 'blocked',message='Declared ETC1 base level bytes are absent; original bytes retained, no replacement pixels'))
+            if not quarantine_invalid_textures:
+                report['status']='blocked';save();return report
+            from .unity_quarantine import quarantine
+            stage=quarantine(path,requested_python,out/('InvalidTextureQuarantine-'+str(index)),min(budget_seconds,120))
+            quarantines.append(stage);report['invalidTextureQuarantine']=quarantines;save()
+            if stage['status']!='quarantined':report['status']='failed';save();return report
+            working=out/('DerivedContainer-'+str(index))/path.name;working.parent.mkdir();shutil.copy2(stage['derived'],working)
         if inspection['summary'].get('externalTextureTokens',0):
             if texture_cache:
                 from .unity_textures import hydrate
-                hydrated=hydrate(path,texture_cache,requested_python,out/('TextureHydration-'+str(index)),min(budget_seconds,120))
+                hydrated=hydrate(working,texture_cache,requested_python,out/('TextureHydration-'+str(index)),min(budget_seconds,120))
                 details=load(read(out/('TextureHydration-'+str(index))/'hydration.json')) if Path(hydrated['report']).exists() else {}
                 hydrations.append(hydrated)
                 for entry in details.get('resolved',[]):consumed[entry['logicalPath']]=entry
@@ -72,7 +82,7 @@ def convert(source,output,provider_python,asset_ripper,budget_seconds=600,depend
     exported=export_unity(active[0],exe,out/'ProviderExport',budget_seconds,dependencies=active[1:])
     report['providerExport']={k:exported.get(k) for k in ('status','stage','targetVersion','processExited','outputFiles','outputBytes','sourceUnchanged','error')}
     if exported['status']!='exported_partial' or not exported.get('processExited') or not exported.get('sourceUnchanged'):
-        report['status']='failed';save();return report
+        report['status']='failed';report['diagnostics'].append(dict(code='UNITY_PROVIDER_EXPORT_FAILED',details=report['providerExport']));save();return report
     raw_project=safe(out/'ProviderExport'/exported['project']);project=out/'UnityProject';shutil.copytree(raw_project,project)
     recovery=project/'SourceRecovery';recovery.mkdir();originals=recovery/'Original';originals.mkdir()
     for path,_ in inspections:
@@ -97,6 +107,7 @@ def convert(source,output,provider_python,asset_ripper,budget_seconds=600,depend
     write_json(analysis/'package-migration.json',dict(schemaVersion=1,targetVersion=TARGET_VERSION,removed=removed,vrBehavior='not_recovered'))
     if removed:report['diagnostics'].append(dict(code='UNITY_OBSOLETE_SOURCE_PACKAGE',items=removed))
 
+    for index,stage in enumerate(quarantines):shutil.copy2(stage['report'],analysis/('invalid-texture-quarantine-'+str(index)+'.json'))
     write_json(analysis/'texture-hydration.json',dict(schemaVersion=1,stages=hydrations,consumed=list(consumed.values())))
     for index,(_,extra) in enumerate(inspections[1:]):shutil.copy2(out/('DependencyInspection-'+str(index))/'typed-objects.json',analysis/('dependency-typed-'+str(index)+'.json'))
     if consumed:

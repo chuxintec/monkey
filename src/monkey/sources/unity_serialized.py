@@ -8,6 +8,18 @@ PROFILE = 'unity-serialized-unitypy-1.25.3'
 MAX_BYTES = 128 * 1024 * 1024
 
 
+CONTAINER_SIGNATURES = (b'UnityFS\0', b'UnityRaw\0', b'UnityWeb\0', b'UnityWebData1.0\0')
+
+
+def container_kind(header):
+    """Exact original container signature; serialized contents remain strict provider reads."""
+    if header.startswith(b'UnityWebData1.0\0'):
+        return 'unitywebdata'
+    if header.startswith(CONTAINER_SIGNATURES[:3]):
+        return 'unityfs'
+    return None
+
+
 def inspect(source, provider_python, output, budget_seconds=120, schema_manifest=None):
     if not 1 <= budget_seconds <= 1200:
         fail('UNITY_PROVIDER_BUDGET', '$', 'Expected 1..1200 seconds')

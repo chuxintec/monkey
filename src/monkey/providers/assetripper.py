@@ -12,6 +12,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 from ..io import safe,read,load,sha,new_output,write_json
 from ..sources.compiled import fail
+from ..sources.unity_serialized import container_kind
 
 VERSION='2.0.0+1ac666f47d8e9dedf96afb0b914c70d7656151ea'
 TARGET_VERSION='6000.6.2f1'
@@ -46,15 +47,15 @@ def export(source,executable,output,budget_seconds=600,dependencies=None):
     source=safe(source);exe=safe(executable)
     if not source.is_file() or not exe.is_file():fail('UNITY_EXPORT_INPUT','$','Explicit file and existing provider executable required')
     source_raw=read(source,max_bytes=MAX_INPUT)
-    if not source_raw.startswith((b'UnityFS\0',b'UnityRaw\0',b'UnityWeb\0')):
-        fail('UNITY_CONTAINER_UNSUPPORTED',str(source),'First provider profile requires a verified Unity bundle signature')
+    if not container_kind(source_raw[:16]):
+        fail('UNITY_CONTAINER_UNSUPPORTED',str(source),'Expected an exact Unity bundle or UnityWebData1.0 signature')
     if exe.stat().st_size>256*1024*1024:fail('UNITY_PROVIDER_BUDGET',str(exe),'Provider executable exceeds budget')
     dependency_paths=[safe(p)for p in (dependencies or [])]
     if len(dependency_paths)>2000 or len(set([source,*dependency_paths]))!=len(dependency_paths)+1:fail('UNITY_DEPENDENCY_SET','$','Duplicate or oversized explicit dependency set')
     snapshots=[(source,source_raw)]
     for path in dependency_paths:
         data=read(path,max_bytes=MAX_INPUT)
-        if not data.startswith((b'UnityFS\0',b'UnityRaw\0',b'UnityWeb\0')):fail('UNITY_DEPENDENCY_FORMAT',str(path),'Expected explicit Unity bundle')
+        if not container_kind(data[:16]):fail('UNITY_DEPENDENCY_FORMAT',str(path),'Expected explicit Unity container')
         snapshots.append((path,data))
     if sum(len(data)for _,data in snapshots)>1024*1024*1024:fail('UNITY_DEPENDENCY_BUDGET','$','Bundle inputs exceed1GiB')
     if len({p.name.casefold()for p,_ in snapshots})!=len(snapshots):fail('UNITY_DEPENDENCY_NAME_COLLISION','$','Distinct source basenames collide')

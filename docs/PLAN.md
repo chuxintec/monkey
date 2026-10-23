@@ -543,3 +543,8 @@ NumberLabel包级全量已收口：outputs/number-label-full-package-01新鲜172
 
 
 事件monkey-v02-cocos2411-native-20261024-01：Cocos2.4.11新增逐原件版本证明AST，不执行JS；10容器经Research manifest逐SHA，881展开输入8247168B、451源Frame/360纹理依赖/33载荷/91图，42Spine文件闭包仅资源。native02因1024字体atlas容量丢失167标签而364严格差异，Creator未启动；失败冻结。新导入器按完整请求选择有界1024/2048/4096 atlas，保留实际全部glyph/GUID/引用强门；C#本机SDK编译通过、21相关检查通过。新03 Unity90592于22:02:20.273789Z→22:02:43.754387Z exit0/reaped，Creator91386于22:02:45.141184Z→22:03:15.442065Z正常TERM/reaped，双端严格0，Unitypartial/Creatorpass；Unity1550节点/902Sprite变体/89独立Prefab/177标签/2字体保存重载。manifest c81aac4b36e3b06a17945a20326c721fb4f14bf4f1ac71ac3001cc54fcdcd348 /1465091db38fbe92ede45b2ad4e5bc845d415cbfc0b2fffb3003a3f3c3edd90d。170代码模块仍草稿、20缺引用/Spine播放/视觉/玩法未补。Research当前4/11实际候选、7未导出，不用识别代替通过。继续Unity2022 WebData与其余case。
+
+
+事件monkey-v02-unity2022-webdata-20261024-01：公开convert新增精确UnityWebData1.0识别，固定provider直接读取，各serialized原版本独立保留。勇者乱斗2022.3.16f1实际3799对象3338parsed/461未知，首01因45个ETC1仅1byte导致decoder失败冻结；手机反恐2022.3.34f1c1实际9675对象9598parsed/77未知。新增ETC1最小block字节强分类，默认blocked；显式--unity-quarantine-invalid-textures才移除自有派生中的坏对象，其余对象逐rawSHA保存重读相同，完整原件保留，引用不假补。新勇者02隔离45/保留3754，Provider92149 exit0/reaped、4303文件9229669B，recovery59ad197e2ee5d692fdd161df931acf8b2e4f96cbf3ad35763c5de821fd07ad81；手机01隔离40/保留9635，Provider92301 exit0/reaped、18066文件35824738B，recoveryc3de2369343bd1f5a04751dea21c7933551f0e1df736f231e9c287b94071c031。0字段类，2029/8913原代码隔离，7/4缺引用，原方法/原生/玩法未验；10定向检查通过，Provider失败现进入公开诊断。Research6/11实际候选，其余5继续。
+
+Unity typed值预算新增逐对象250000/全请求4000000强限；超大对象单列unparsed保留rawSHA，后续小对象继续，避免团结大型ComputeShader展开使整份已读结果无法载入。未放宽core上限或源schema；16相关反例检查通过，团结新inspection/导出另行记录。

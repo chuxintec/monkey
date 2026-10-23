@@ -11,7 +11,8 @@ from pathlib import Path
 PROVIDER_VERSION = '1.25.3'
 MAX_BYTES = 128 * 1024 * 1024
 MAX_OBJECTS = 250_000
-MAX_VALUES = 4_000_000
+MAX_VALUES = 250_000
+MAX_TYPED_VALUES = 4_000_000
 
 
 def digest(raw):
@@ -69,6 +70,15 @@ def texture_payload(typed):
             return dict(kind='external-key-token-candidate',key=match[1],wireKey=key,
                         blockSizeHint=int(match[2]) if match[2] else None,bytes=len(payload),sha256=digest(payload),
                         resourceResolution='required',nativePixelsVerified=False)
+    # ETC1 requires at least one 8-byte block, even for a 1x1 texture.
+    # Missing mip levels are not inferred, and streamed/token payloads were
+    # handled above. This identifies invalid bytes without decoding pixels.
+    width,height=typed.get('m_Width'),typed.get('m_Height')
+    stream=typed.get('m_StreamData',{})
+    if typed.get('m_TextureFormat')==34 and type(width)is int and type(height)is int and width>0 and height>0 and isinstance(stream,dict) and not stream.get('size') and not stream.get('path'):
+        minimum=((width+3)//4)*((height+3)//4)*8
+        if len(payload)<minimum:
+            return dict(kind='invalid-inline-etc1',bytes=len(payload),sha256=digest(payload),minimumBaseLevelBytes=minimum,nativePixelsVerified=False,resourceResolution='source-payload-missing')
     return dict(kind='inline-payload',bytes=len(payload),sha256=digest(payload),nativePixelsVerified=False)
 
 
@@ -130,7 +140,7 @@ def inspect_bytes(raw, schema_job=None):
     if sum(len(f.objects) for f in assets) > MAX_OBJECTS:
         raise ValueError('Object budget exceeded')
     borrowed = schema_pool(assets, schema_job) if schema_job else {}
-    files, objects, schemas, borrowed_schemas = [], [], {}, {}
+    files, objects, schemas, borrowed_schemas = [], [], {}, {};typed_values=0
     for index, asset in enumerate(assets):
         file_id = str(index)
         externals = [dict(fileId=str(i+1), path=e.path, guid=e.guid.hex()) for i, e in enumerate(asset.externals)]
@@ -154,7 +164,13 @@ def inspect_bytes(raw, schema_job=None):
                         sourceManifestSha256=schema_job['sourceManifestSha256'], sources=exact['sources']))
             try:
                 typed = obj.read_typetree(nodes=exact['node'], check_read=True) if exact else obj.read_typetree(check_read=True)
-                row['data'] = portable(typed, row['references'])
+                counter=[0]
+                converted=portable(typed,row['references'],counter=counter)
+                typed_values+=counter[0]
+                if typed_values>MAX_TYPED_VALUES:
+                    typed_values-=counter[0]
+                    raise ValueError('Aggregate portable value budget exceeded; original object hash retained')
+                row['data']=converted
                 if obj.type.name=='Texture2D' and isinstance(typed,dict):row['texturePayload']=texture_payload(typed)
                 name = typed.get('m_Name') if isinstance(typed,dict) else None
                 row['name'] = name if isinstance(name,str) and not any(0xd800 <= ord(c) <= 0xdfff for c in name) else None
@@ -169,7 +185,7 @@ def inspect_bytes(raw, schema_job=None):
                 identifierEncoding='signed-int64-decimal-string-v1', files=files, objects=objects, embeddedSchemas=schemas, borrowedSchemas=borrowed_schemas,
                 summary=dict(serializedFiles=len(files), objects=len(objects),
                              parsed=sum(o['status']=='parsed' for o in objects),
-                             unparsed=sum(o['status']=='unparsed' for o in objects), borrowedSchemaParsed=sum(o['status']=='parsed' and o['typeTreeSource']=='exact-frozen-bundle' for o in objects), externalTextureTokens=sum(o.get('texturePayload',{}).get('kind')=='external-key-token-candidate' for o in objects), types=dict(Counter(o['type'] for o in objects))),
+                             unparsed=sum(o['status']=='unparsed' for o in objects), borrowedSchemaParsed=sum(o['status']=='parsed' and o['typeTreeSource']=='exact-frozen-bundle' for o in objects), externalTextureTokens=sum(o.get('texturePayload',{}).get('kind')=='external-key-token-candidate' for o in objects), invalidInlineTextures=sum(o.get('texturePayload',{}).get('kind')=='invalid-inline-etc1' for o in objects), types=dict(Counter(o['type'] for o in objects))),
                 sourceCodeExecuted=False, externalFilesResolved=False, nativeExport='not_run')
 
 
@@ -238,6 +254,38 @@ def hydrate_manifest(job_path,output):
     output.write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n')
 
 
+
+def quarantine_invalid_textures(job_path,output):
+    import UnityPy
+    if UnityPy.__version__!=PROVIDER_VERSION:raise RuntimeError('Expected UnityPy '+PROVIDER_VERSION)
+    job=json.loads(job_path.read_text());source=Path(job['source']);raw=source.read_bytes()
+    if len(raw)>MAX_BYTES or digest(raw)!=job['sourceSha256']:raise ValueError('Source changed')
+    env=UnityPy.load(raw);before={};removed=[]
+    for asset in env.assets:
+        for obj in list(asset.objects.values()):
+            key=(asset.name,identifier(obj.path_id))
+            if key in before:raise ValueError('Ambiguous serialized file identity')
+            before[key]=(obj.type.name,digest(obj.get_raw_data()))
+            if obj.type.name!='Texture2D':continue
+            typed=obj.read_typetree(check_read=True);payload=texture_payload(typed)
+            if payload['kind']!='invalid-inline-etc1':continue
+            removed.append(dict(file=asset.name,pathId=identifier(obj.path_id),name=typed.get('m_Name'),rawSha256=before[key][1],payload=payload))
+            del asset.objects[obj.path_id]
+    if not removed:raise ValueError('No exact invalid ETC1 payload to quarantine')
+    encoded=env.file.save(packer='none' if raw.startswith(b'UnityWebData1.0\0') else 'lz4')
+    if len(encoded)>MAX_BYTES:raise ValueError('Derived container byte budget')
+    check=UnityPy.load(encoded);after={(a.name,identifier(o.path_id)):(o.type.name,digest(o.get_raw_data()))for a in check.assets for o in a.objects.values()}
+    excluded={(r['file'],r['pathId'])for r in removed}
+    expected={k:v for k,v in before.items()if k not in excluded}
+    if after!=expected:raise ValueError('A retained object changed during quarantine')
+    if digest(source.read_bytes())!=job['sourceSha256']:raise ValueError('Original changed')
+    (output.parent/'derived.container').write_bytes(encoded)
+    report=dict(schemaVersion=1,status='quarantined',sourceSha256=digest(raw),removed=removed,
+        derivedSha256=digest(encoded),derivedBytes=len(encoded),retainedObjects=len(after),retainedObjectsUnchanged=True,
+        sourceCodeExecuted=False,pixelsFabricated=False,referencesToRemovedObjects='unresolved-not-replaced',originalRetainedByConversion=True)
+    output.write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n')
+
+
 def index_manifest(manifest_path,output):
     import UnityPy
     if UnityPy.__version__!=PROVIDER_VERSION:raise RuntimeError('Expected UnityPy '+PROVIDER_VERSION)
@@ -295,5 +343,6 @@ def main():
 
 if __name__ == '__main__':
     if len(sys.argv)==4 and sys.argv[1]=='--hydrate':hydrate_manifest(Path(sys.argv[2]),Path(sys.argv[3]))
+    elif len(sys.argv)==4 and sys.argv[1]=='--quarantine-invalid-textures':quarantine_invalid_textures(Path(sys.argv[2]),Path(sys.argv[3]))
     elif len(sys.argv)==4 and sys.argv[1]=='--index':index_manifest(Path(sys.argv[2]),Path(sys.argv[3]))
     else:main()

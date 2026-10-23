@@ -1,6 +1,6 @@
 # Unity来源首个Provider合同（v0.2开发中）
 
-目前仅明确本地UnityFS/UnityRaw/UnityWeb主文件及显式Bundle依赖→Unity6候选，不代表wxapkg整包、APK、serializedFile及全部源版本已支持。`inspect-unity`可单独检查UnityPy能读取的显式文件；转换只接受已验证bundle签名。Unity来源请求Creator/both或尚未实现的native/remote/input-set选项会先拒绝，不能静默忽略。
+目前仅明确本地UnityFS/UnityRaw/UnityWeb及UnityWebData1.0主文件和显式依赖→Unity6候选，不代表wxapkg整包、APK、serializedFile及全部源版本已支持。`inspect-unity`可单独检查UnityPy能读取的显式文件；转换只接受精确bundle或UnityWebData1.0签名。Unity来源请求Creator/both或尚未实现的native/remote/input-set选项会先拒绝，不能静默忽略。
 
 ```sh
 monkey convert --source /path/to/file.ab --target unity6 --out /path/to/new-candidate \
@@ -8,7 +8,7 @@ monkey convert --source /path/to/file.ab --target unity6 --out /path/to/new-cand
   --dependency-source /path/to/exact-dependency.ab --unity-texture-cache /path/to/cache-pool.json
 ```
 
-自动按bundle签名识别Unity，或明确`--source-family unity`。Provider不自动安装：现有Python须UnityPy1.25.3；AssetRipper精确2.0.0+1ac666f47d8e9dedf96afb0b914c70d7656151ea，实际首行产品前缀一起核对。Core不import GREA。独立worker只读源bytes，不跟随源目录的DLL/缓存/外部PPtr；TypeTree严格check_read，不使用宽松长度模式。ID为signed64十进制字符串，未解析对象/原始bytes hash保留；嵌入MonoBehaviour schema可恢复具名C#字段，但不包含原方法体。
+自动按bundle或UnityWebData1.0签名识别Unity，或明确`--source-family unity`。Provider不自动安装：现有Python须UnityPy1.25.3；AssetRipper精确2.0.0+1ac666f47d8e9dedf96afb0b914c70d7656151ea，实际首行产品前缀一起核对。Core不import GREA。独立worker只读源bytes，不跟随源目录的DLL/缓存/外部PPtr；TypeTree严格check_read，不使用宽松长度模式。ID为signed64十进制字符串，未解析对象/原始bytes hash保留；嵌入MonoBehaviour schema可恢复具名C#字段，但不包含原方法体。
 
 AssetRipper只复制精确现有可执行文件和固定capstone伴随库到自有目录，版本/二进制SHA留收据；只绑定127.0.0.1随机端口，代理/跨域redirect关闭，不打开浏览器。使用公开Settings/LoadFile/Export/UnityProject接口，先回读TargetVersion6000.6.2f1、Level0、原Shader YAML、TextAsset bytes。设置文件和日志仅自有runtime；命令成功必须302完成redirect，HTTP200错误页不算成功，实际项目/版本/文件hash还需核对。固定总预算和正常TERM/reap，无SIGKILL。
 
@@ -63,3 +63,17 @@ monkey inspect-unity --source /path/to/startup.bundle --provider-python /path/to
 实际`outputs/unity-startup-schema-convert-03`：5个资源/纹理输入3554576B，另600结构池输入53730632B；70新增严格正文进入消费，生成GradientColor的7字段/4实例与UIButtonScale的4字段/8实例，真实替换对应Provider空壳C#并保持meta。现有引擎包36实例不另造同名类；22已读但尚不支持字段/基类的实例与36未解析对象继续明确缺口。2份生成代码以本机Unity6 SDK编译通过。Provider child81142 exit0/reaped、原件不变，2484原始导出文件/11019493B，最终recovery manifest SHA `802275864fe99b0a743b2c4de9aeca0b60104a25ea704b9b999427cb38e09a02`。
 
 这里的11字段为C#声明恢复；Provider Scene尚未应用借取字段的实例值，显式`UNITY_BORROWED_SCHEMA_FIELD_VALUES_PENDING`，原生未跑、方法0、原自定义继承/效果仍未知。不能把两个字段类称为完整恢复原脚本。旧候选与失败不改。
+
+
+### Unity 2022 WebData 与坏 ETC1 载荷隔离
+
+`convert`现可直接接受原始 `UnityWebData1.0\0` 文件；不是从后缀或版本猜容器，也不把其中builtin文件的版本强改成主版本。固定UnityPy/AssetRipper直接消费；每个serialized file的精确版本保留。近似/缺终止符签名拒绝。
+
+默认发现声明为ETC1但非streamed的inline数据小于 `ceil(width/4)*ceil(height/4)*8` 时blocked，不能称为原生像素。显式 `--unity-quarantine-invalid-textures` 才允许从自有派生容器移除这些精确坏纹理对象并继续部分导出。每个移除项保留file/pathID/原对象和payload SHA，原容器完整留SourceRecovery，所有其余对象类型/原bytes SHA在保存重读后必须逐项相同；指向坏纹理的引用保留未解决，不补色块或假纹理。未知格式/空字体纹理不纳入该例外。Provider失败也进入公开diagnostics。
+
+- 勇者乱斗主2022.3.16f1，builtin资源自身2022.3.15f1保留；14482777B原SHA `f36af51fdca724d325686f4b0b7b10176817c53ded8a9e1d5949756c2920daf5`。3799对象3338严格parsed/461未知，45坏ETC1隔离，其余3754对象保存重读原hash一致。Provider92149 exit0/reaped、4303文件9229669B；2029份代码隔离，0字段类、7缺引用。新候选 `outputs/unity2022-yongzhe-package-02` recovery SHA `59ad197e2ee5d692fdd161df931acf8b2e4f96cbf3ad35763c5de821fd07ad81`。旧01 decoder失败冻结。
+- 手机反恐特别行动主2022.3.34f1c1，builtin2022.3.26f1保留；14890280B原SHA `b3a72a587f228b8cda1d4a5f1e6bf9222e67ea924338d45b395f8b3fd5956347`。9675对象9598严格parsed/77未知，40坏纹理隔离、其余9635对象hash一致。Provider92301 exit0/reaped、18066文件35824738B；8913份代码隔离、0字段类、4缺引用。`outputs/unity2022-counterterror-package-01` recovery SHA `c3de2369343bd1f5a04751dea21c7933551f0e1df736f231e9c287b94071c031`。
+
+两者原始文件不变，原方法/原生/视觉/玩法not_run；这是实际资源候选，不是完整项目通过。不能把上述版本外推全部2022、中国版或WebData来源。
+
+Typed正文另有每对象250000值/全请求4000000值预算。超大ComputeShader等对象保留类型、pathID、rawSHA与明确unparsed，不让一个巨型字段数组阻止其后小对象解析，不放宽整体读取上限；对象级/聚合反例已验证。
