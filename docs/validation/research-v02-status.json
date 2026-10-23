@@ -43,8 +43,17 @@
     {
       "business": "not_run",
       "caseId": "fc16d145f6e4b65b7fbeb94f",
-      "evidence": [],
-      "export": "not_run",
+      "evidence": [
+        {
+          "path": "outputs/cocos2411-chongguan-package-03/conversion-result.json",
+          "sha256": "c4d576c3d772b75dd3ce165b2fe1397a764a574662c5694eb54d8eabcb276afd"
+        },
+        {
+          "path": "outputs/cocos2411-chongguan-package-03-native/native-orchestration.json",
+          "sha256": "f9c3ae48d1dff8544c085c0a797c9bddc6d757c64faf803ac8397e826c7695c0"
+        }
+      ],
+      "export": "partial-resource-candidate",
       "metadataHint": {
         "backend": null,
         "confidence": "metadata_hint_only",
@@ -54,10 +63,13 @@
       },
       "metadataSha256": "7a7b8f90c139e84cfc81ac7850b824abe4ed785d270c1ef33ced029b9c93254b",
       "name": "冲关小队",
-      "native": "not_run",
-      "read": "not_run",
+      "native": "resource-node-reference-subset-both-targets-verified",
+      "profile": "cocos-2.4.11-bundle",
+      "read": "partial-full-declared-input",
       "remaining": [
-        "Locate and freeze exact original inputs; inspect concrete source profile"
+        "20 source references",
+        "170 source modules are drafts",
+        "Spine playback, visual and gameplay"
       ],
       "sourceRevision": "lv1.0.3_1.0.3_A",
       "targets": [
@@ -318,9 +330,9 @@
   "schemaVersion": 1,
   "scope": "actual per-case evidence; metadata hints are not conversion success; native labels name their verified subset",
   "summary": {
-    "casesWithActualExports": 3,
+    "casesWithActualExports": 4,
     "completeGames": 0,
     "denominator": 11,
-    "remainingCasesNotExported": 8
+    "remainingCasesNotExported": 7
   }
 }

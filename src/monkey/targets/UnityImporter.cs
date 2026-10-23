@@ -405,10 +405,17 @@ public static class MonkeyImporter
             if (tmpDistanceShader == null) {
                 diagnostics.Add("TMP_SHADER_RESOURCES_MISSING: " + item.id); continue;
             }
-            var font = TMPro.TMP_FontAsset.CreateFontAsset(source,90,16,UnityEngine.TextCore.LowLevel.GlyphRenderMode.SDFAA,1024,1024,TMPro.AtlasPopulationMode.Dynamic,false);
+            var needed = string.Concat(plan.components.Where(c=>c.type=="cc.Label" && c.convertible && c.font==item.id).Select(c=>c.text));
+            // Reserve bounded atlas space for the complete declared text set. A
+            // 1024 atlas can overflow even when every glyph exists in the TTF.
+            // 128 pixels conservatively covers the fixed 90 point / 16 padding
+            // import cell; TryAddCharacters remains the strict capacity proof.
+            var cellCount = needed.Where(c=>!char.IsControl(c)).Distinct().Count();
+            int atlasSize=1024;
+            while(atlasSize<4096 && (atlasSize/128)*(atlasSize/128)<cellCount)atlasSize*=2;
+            var font = TMPro.TMP_FontAsset.CreateFontAsset(source,90,16,UnityEngine.TextCore.LowLevel.GlyphRenderMode.SDFAA,atlasSize,atlasSize,TMPro.AtlasPopulationMode.Dynamic,false);
             CheckEngineErrors();
             if (font == null) { diagnostics.Add("TMP_FONT_CREATION_FAILED: " + item.id); continue; }
-            var needed = string.Concat(plan.components.Where(c=>c.type=="cc.Label" && c.convertible && c.font==item.id).Select(c=>c.text));
             // An unused original font has no requested glyphs. TMP returns false for
             // an empty request; retain a native dynamic asset backed by that source.
             if (!string.IsNullOrEmpty(needed) && !font.TryAddCharacters(needed,out string missing)) {diagnostics.Add("TTF_GLYPHS_MISSING: " + missing);UnityEngine.Object.DestroyImmediate(font);continue;}

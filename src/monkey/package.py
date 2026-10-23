@@ -150,6 +150,13 @@ def convert_package(source, target, output, namespace='monkey-project',offline=F
                     if Path(name).name in ('libcocos2djs.so','cocos2d-js.js','cocos2d-js-min.js'):
                         cocos_evidence.append(dict(path=name,kind='cocos-engine-name',version='unknown'))
                     if category=='Code': script_paths.append(row)
+                    if category=='Code'and suffix=='.js'and b'ENGINE_VERSION'in raw and any(v in raw for v in (b'2.4.11',b'2.4.15')):
+                        from .sources.engine_facts import inspect as engine_facts
+                        try:
+                            facts=engine_facts(spool/digest)
+                            cocos_evidence.extend(dict(path=name,kind='creator-engine-literal',version=fact['version'],sha256=digest,fact=fact)for fact in facts['facts'])
+                            report['sourceCodeParserExecuted']=True;report['engineVersionParserExecuted']=True
+                        except ValueError as error:report['diagnostics'].append(diagnostic('SOURCE_ENGINE_EVIDENCE_PENDING',name,str(error)))
             if not cocos_evidence: fail('NON_COCOS_INPUT',str(source),'No supported Cocos identity evidence in this input')
             for unit in roots:
                 after={name:sha(raw) for name,raw in _input_entries(unit)}
@@ -163,7 +170,7 @@ def convert_package(source, target, output, namespace='monkey-project',offline=F
                 from .replan import reused_code
                 recovered,code_diagnostics=reused_code(reuse_source_stages,selection,namespace,rows)
                 report['diagnostics'].extend(code_diagnostics)
-                report['sourceCodeParserExecuted']=False
+                report.setdefault('sourceCodeParserExecuted',False)
             else:
                 for row in script_paths:
                     raw=read(spool/row['sha256'],max_bytes=MAX_FILE)
@@ -226,11 +233,16 @@ def convert_package(source, target, output, namespace='monkey-project',offline=F
         stage='structured-recovery'
         source_profile=selection['sourceProfile'] if selection else ('cocos-2.4.15-project' if any(e['kind']=='editable-cocos-project' for e in cocos_evidence) else
                         'cocos-3.8.7-bundle'if any(e.get('version')=='3.8.7'for e in cocos_evidence)else
+                        'cocos-2.4.11-bundle'if any(e.get('version')=='2.4.11'for e in cocos_evidence)else
                         'cocos-2.4.15-bundle' if any(e.get('version')=='2.4.15' for e in cocos_evidence) else None)
+        if source_profile=='cocos-2.4.11-bundle'and not any(e.get('version')=='2.4.11'and e['kind']in ('creator-engine-literal','cocos-bundle-config')for e in cocos_evidence):
+            fail('SOURCE_VERSION_EVIDENCE_REQUIRED','2.4.11','Include original engine version assignment or explicit source bundle engineVersion')
         if source_profile=='cocos-3.8.7-bundle'and not any(e['kind']=='creator-published-settings'and e['version']=='3.8.7'for e in cocos_evidence):
             fail('COCOS3_VERSION_EVIDENCE_REQUIRED','settings','Published settings.CocosEngine=3.8.7 must be included in explicit inputs')
-        if source_profile!='cocos-3.8.7-bundle'and any(e['kind']=='creator-published-settings'and e['version']=='3.8.7'for e in cocos_evidence):
-            fail('SOURCE_ENGINE_PROFILE_CONFLICT','settings','Creator3.8.7 settings cannot use a 2.4 source graph adapter')
+        expected_version={'cocos-3.8.7-bundle':'3.8.7','cocos-2.4.11-bundle':'2.4.11','cocos-2.4.15-bundle':'2.4.15','cocos-2.4.15-project':'2.4.15'}.get(source_profile)
+        versions={e['version']for e in cocos_evidence if e.get('version')in ('3.8.7','2.4.11','2.4.15')}
+        if expected_version and versions-{expected_version}:
+            fail('SOURCE_ENGINE_PROFILE_CONFLICT','engine','Conflicting source engine versions cannot share a profile')
         if reuse_source_stages:
             from .replan import reuse_source_stages as reuse_stages
             report['sourceStageReuse']=reuse_stages(reuse_source_stages,out,selection,namespace)

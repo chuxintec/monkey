@@ -7,7 +7,7 @@ from .sources.compiled import fail
 
 def input_set(path):
     path=safe(path);raw=read(path);data=load(raw)
-    if data.get('schemaVersion')!=1 or data.get('sourceProfile') not in ('cocos-2.4.15-bundle','cocos-2.4.15-project','cocos-3.8.7-bundle'):
+    if data.get('schemaVersion')!=1 or data.get('sourceProfile') not in ('cocos-2.4.15-bundle','cocos-2.4.15-project','cocos-3.8.7-bundle','cocos-2.4.11-bundle'):
         fail('INPUT_SET_SCHEMA',str(path),'Expected input-set schema 1 and explicit supported sourceProfile')
     inputs=data.get('inputs')
     if not isinstance(inputs,list) or not 1<=len(inputs)<=16:

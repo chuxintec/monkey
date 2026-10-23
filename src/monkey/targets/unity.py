@@ -73,7 +73,7 @@ def cross_axis_mapping(layout, parent, children):
 def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None):
     ir_path = safe(ir_path)
     ir = stage_document(ir_path)
-    if ir.get('schemaVersion') != 1 or ir.get('sourceProfile') not in ('cocos-2.4.15-bundle','cocos-2.4.15-project','cocos-3.8.7-bundle'):
+    if ir.get('schemaVersion') != 1 or ir.get('sourceProfile') not in ('cocos-2.4.15-bundle','cocos-2.4.15-project','cocos-3.8.7-bundle','cocos-2.4.11-bundle'):
         fail('UNSUPPORTED_IR', '$', 'Expected normalize schema 1')
     source_files = stage_manifest(ir_path.parent)['files']
     expected = {f['path']: f['sha256'] for f in source_files}

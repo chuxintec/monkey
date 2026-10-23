@@ -33,8 +33,9 @@ class Bundle:
         if not isinstance(c, dict) or not isinstance(c.get('name'), str):
             fail('INVALID_CONFIG', '$', 'Expected named bundle config')
         from .cocos38 import PROFILE as COCOS38
-        if source_profile not in (PROFILE,COCOS38):fail('UNSUPPORTED_PROFILE',source_profile,'Explicit verified bundle profile required')
-        self.source_profile=source_profile;expected='3.8.7'if source_profile==COCOS38 else'2.4.15'
+        versions={PROFILE:'2.4.15',COCOS38:'3.8.7','cocos-2.4.11-bundle':'2.4.11'}
+        if source_profile not in versions:fail('UNSUPPORTED_PROFILE',source_profile,'Explicit verified bundle profile required')
+        self.source_profile=source_profile;expected=versions[source_profile]
         if c.get('engineVersion', expected) != expected:
             fail('UNSUPPORTED_VERSION', '$.engineVersion', 'Profile requires '+expected)
         self.bases={}
@@ -309,7 +310,7 @@ def inspect(config, selection, output, dependency_sources=(), evidence_sources=(
         evidence.append(dict(path=str(path),sha256=sha(raw),bytes=len(raw)))
     out = new_output(output, [*[b.root for b in bundles.values()],*[safe(p) for p in evidence_sources]])
     report = dict(schemaVersion=1, toolVersion=__version__, sourceProfile=source_profile,
-                  sourceVersion='3.8.7'if source_profile=='cocos-3.8.7-bundle'else'2.4.15', versionEvidence='explicit profile declaration; compiled header validated',
+                  sourceVersion={'cocos-3.8.7-bundle':'3.8.7','cocos-2.4.11-bundle':'2.4.11'}.get(source_profile,'2.4.15'), versionEvidence='explicit profile declaration; compiled header validated',
                   sourceRoot=str(primary.root), sourceRoots={name:str(b.root) for name,b in bundles.items()},
                   bundle=primary.config['name'], selection=selection,evidenceFiles=evidence,
                   inputs=sorted(inputs, key=lambda x: (x['bundle'],x['path'])),

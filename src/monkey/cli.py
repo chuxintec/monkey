@@ -153,8 +153,8 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         if args.command == 'capabilities':
-            print(json.dumps(dict(version=__version__, profiles=[PROFILE,PROJECT_PROFILE,'cocos-3.8.7-bundle'], targetProfiles=[UNITY_PROFILE,cocos.PROFILE],
-                additionalPackageProfiles={'cocos-3.8.7-bundle':dict(scope='version-proven-published-resource-subset',native='986-source-frames-both-targets-verified',graphs='pending',operations=['package-convert'])},
+            print(json.dumps(dict(version=__version__, profiles=[PROFILE,PROJECT_PROFILE,'cocos-2.4.11-bundle','cocos-3.8.7-bundle'], targetProfiles=[UNITY_PROFILE,cocos.PROFILE],
+                additionalPackageProfiles={'cocos-2.4.11-bundle':dict(scope='version-proven-published-bundle-subset',native='91-source-graphs-both-targets-verified',operations=['package-convert']), 'cocos-3.8.7-bundle':dict(scope='version-proven-published-resource-subset',native='986-source-frames-both-targets-verified',graphs='pending',operations=['package-convert'])},
                 schemaVersion=1, formatting=dict(implemented=['unity-creator-unimported-owned-grea-v1','fresh-package-convert-none-grea'],pending=['direct-unity-provider-format'],rejected=['materialized-native-assets-require-a-future-native-move-adapter']), unitySourceProfile=dict(name='unityfs-unitypy-1.25.3-assetripper-2.0.0',status='partial',inputs='explicit-bundle-files-and-exact-local-texture-cache',editor='one-prefab-schema-reference-save-reload-verified',publicNative=False,methodsRecovered=0), implemented=['convert','catalog','inspect','normalize','plan','export','verify','handoff','diff','register','apply','preflight','native-import','research-matrix','code-model','code-emit','format-project','project-model','inspect-unity','export-unity','unity-code-model','index-unity','hydrate-unity'], planned=[],
                 targetValidation={UNITY_PROFILE:dict(static='implemented',editor='representative-subset-verified',visual='not_run'),cocos.PROFILE:dict(static='implemented',editor='representative-subset-verified',visual='not_run')},
                 compiledFormats=['compiled-v1','pack-v1','texture-pack-v1'],

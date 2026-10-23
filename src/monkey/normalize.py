@@ -86,7 +86,7 @@ def sprite(atlas, frame):
 def normalize(manifest_path, output):
     manifest_path = safe(manifest_path)
     m = stage_document(manifest_path)
-    if m.get('sourceProfile') not in ('cocos-2.4.15-bundle','cocos-2.4.15-project','cocos-3.8.7-bundle') or m.get('schemaVersion') != 1:
+    if m.get('sourceProfile') not in ('cocos-2.4.15-bundle','cocos-2.4.15-project','cocos-3.8.7-bundle','cocos-2.4.11-bundle') or m.get('schemaVersion') != 1:
         fail('UNSUPPORTED_MANIFEST', '$', 'Expected inspect schema 1')
     roots = {name:safe(path) for name,path in m.get('sourceRoots',{m['bundle']:m['sourceRoot']}).items()}
     expected = {(i.get('bundle',m['bundle']),i['path']):i for i in m['inputs']}
