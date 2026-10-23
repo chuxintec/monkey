@@ -303,6 +303,7 @@ def export(plan_path, output):
     instruction['glyphReadback']='native-quad-padding-v1'
     instruction['sceneRoundtrip']=True
     instruction['sourcePrefabReadback']='native-layout-settled-v1'
+    instruction['transformReadback']='full-local-v1'
     instruction['sourceDiagnosticCount']=len(p['diagnostics'])
     instruction['prefabGuid']=guid(p['namespace'],'native-prefab')
     instruction['sceneGuid']=guid(p['namespace'],'native-scene')
@@ -372,6 +373,19 @@ def close(actual,expected,tolerance=.001):
     return type(actual) in (int,float) and abs(actual-expected)<=tolerance
 
 
+def node_geometry_matches(actual,source,full=False):
+    if not actual or actual.get('active')!=source['active']:
+        return False
+    if any(not close(actual.get(key),source[field]) for key,field in [('size','size'),('pivot','anchor'),('position','position')]):
+        return False
+    if full:
+        rotation=actual.get('rotation');expected=source['rotation']
+        # q and -q describe the same native rotation. No angular tolerance change.
+        if not close(actual.get('scale'),source['scale']) or not (close(rotation,expected) or close(rotation,[-v for v in expected])):
+            return False
+    return True
+
+
 def verify(candidate, output, level='static'):
     root=safe(candidate);m=stage_manifest(root);diagnostics=[]
     from .layout import translate
@@ -413,7 +427,7 @@ def verify(candidate, output, level='static'):
                         diagnostics.append(diagnostic('SOURCE_PREFAB_GEOMETRY_NOT_VERIFIED',spec['sourceId'],'Saved native hierarchy geometry evidence is absent'))
                     for sid in spec['nodes']:
                         source=expected_nodes[sid];saved=saved_nodes.get(sid,{})
-                        if any(not close(saved.get(key),source[field]) for key,field in [('size','size'),('pivot','anchor'),('position','position')]) or saved.get('active')!=source['active']:
+                        if not node_geometry_matches(saved,source,instruction.get('transformReadback')=='full-local-v1'):
                             diagnostics.append(diagnostic('SOURCE_PREFAB_GEOMETRY_MISMATCH',sid,'Independent saved prefab differs: '+target))
                     if actual.get('referencesVerified') is not True or actual.get('referenceFailures'):
                         diagnostics.append(diagnostic('SOURCE_PREFAB_REFERENCE_MISMATCH',spec['sourceId'],'Saved component references differ: '+str(actual.get('referenceFailures'))))
@@ -431,7 +445,7 @@ def verify(candidate, output, level='static'):
             by_node={n['sourceId']:n for n in rb.get('nodes',[])}
             for spec in instruction['nodes']:
                 actual=by_node.get(spec['sourceId'])
-                if not actual or any(not close(actual.get(k),spec[v]) for k,v in [('size','size'),('pivot','anchor'),('position','position')]) or actual.get('active')!=spec['active']:
+                if not node_geometry_matches(actual,spec,instruction.get('transformReadback')=='full-local-v1'):
                     diagnostics.append(diagnostic('NODE_READBACK_MISMATCH',spec['sourceId'],'Saved RectTransform differs from plan'))
             if not rb.get('editableRoundtrip'):
                 diagnostics.append(diagnostic('EDITABLE_ROUNDTRIP_NOT_VERIFIED','Assets/Generated/Views/EditableProbe.prefab','Native edit/save/reopen proof is absent or failed'))

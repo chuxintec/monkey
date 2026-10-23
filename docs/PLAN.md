@@ -365,3 +365,7 @@ Unity探针05 own19228已exit0/reap，方法2.607秒；7 Prefab/413节点严格�
 Unity边界探针06新登记：锚点14:12:09Z，内部14:40:09Z/外层14:42:09Z，方法1200秒；ps无主引擎冲突，仅新acceptance/native-font-geometry-probe-06，固定manifestd203d620ef86980569c239e843a719806ef351da9a00e08535b3b8e4642ff2f3，不顺延。
 
 Unity06 own19932已exit0/reap，7原图413节点的root Widget隔离上下文、空布局和inactive Widget反例按明示handoff闭合；剩仅OrderDrawerWindow一图Scene3/Prefab3。实际Banner的唯一活动孩子bigday.banner尺寸0x0，而父缓存319高（待原生广告内容填充），不是source child缺失。新增LAYOUT_CACHED_CONTAINER_HANDOFF：源线性容器缓存extent不等于明确活动子尺寸/边距/间距时保留源几何，待动态内容/lifecycle适配，不能用0高fitter覆盖。6项相关语义检查通过。下一集中Unity11应用，不为单字段再次冷跑小探针。Creator10三项离线核对通过，准备已批准全量独立窗口。
+
+Creator10全量新登记：锚点14:15:31Z，内部14:43:31Z/外层14:45:31Z，方法1200秒；ps无引擎主进程，固定manifest7fb3a4b7f996da9402ae1ecc9f9b921ab874e49046b63ea86938d143e08c770c，新acceptance/full10-creator-window-01。仅自有新副本，metadata有界+原生reimport屏障，首错保留停止，不顺延截止。
+
+下一Unity11在已有Scene/独立Prefab几何门基础上补原生localScale/Quaternion实际读数；新transformReadback=full-local-v1强制存在并核验，q与-q只作同一旋转精确等价，不改原.001容差；旧冻结候选无新标志保持原对账口径。7项几何/引用/批处理/占位语义检查及4 structured检查通过，.private/full-local-transform-compile-01 C#编译pass。新增只读回执不另冷跑一字段小样，随本次成组全量11验证。

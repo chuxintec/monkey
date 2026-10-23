@@ -9,6 +9,18 @@ from monkey.targets.unity_layout import cross_axis_mapping
 
 
 class NativeGeometryTests(unittest.TestCase):
+    def test_saved_scale_and_rotation_are_required_without_rejecting_quaternion_sign(self):
+        from monkey.targets.unity import node_geometry_matches
+        source=dict(size=[100,40],anchor=[.5,.5],position=[12,20,0],scale=[1.1,1,1],rotation=[0,0,0,1],active=True)
+        actual=dict(size=source['size'],pivot=source['anchor'],position=source['position'],scale=source['scale'],rotation=[0,0,0,-1],active=True)
+        self.assertTrue(node_geometry_matches(actual,source,True))
+        self.assertFalse(node_geometry_matches(dict(actual,scale=[1,1,1]),source,True))
+        self.assertFalse(node_geometry_matches(dict(actual,rotation=[0,0,1,0]),source,True))
+        self.assertFalse(node_geometry_matches(dict(actual,position=[12.002,20,0]),source,True))
+        old={k:v for k,v in actual.items() if k not in ('scale','rotation')}
+        self.assertTrue(node_geometry_matches(old,source,False))
+        self.assertFalse(node_geometry_matches(old,source,True))
+
     def test_unity_prefab_count_only_receipt_does_not_prove_geometry_or_references(self):
         from fixtures import fixture
         from monkey.sources.bundle import inspect

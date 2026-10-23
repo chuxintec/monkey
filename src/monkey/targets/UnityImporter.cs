@@ -70,7 +70,7 @@ public static class MonkeyImporter
     [Serializable] public class ViewReference { public string sourceId,field; public int index; public long prefabFileId; public bool bound; }
     [Serializable] public class FileResult { public string path, sha256; }
     [Serializable] public class NodeResult {
-        public string sourceId, hierarchy; public float[] size, pivot, position;
+        public string sourceId, hierarchy; public float[] size, pivot, position,scale,rotation;
         public bool active; public string[] componentTypes;
     }
     [Serializable] public class SpriteResult {
@@ -857,6 +857,8 @@ public static class MonkeyImporter
     static NodeResult DescribeNode(NodeSpec source,RectTransform rect) {
         return new NodeResult {sourceId=source.sourceId,hierarchy=rect.name,size=new[]{rect.rect.width,rect.rect.height},
             pivot=new[]{rect.pivot.x,rect.pivot.y},position=new[]{rect.localPosition.x,rect.localPosition.y,rect.localPosition.z},
+            scale=new[]{rect.localScale.x,rect.localScale.y,rect.localScale.z},
+            rotation=new[]{rect.localRotation.x,rect.localRotation.y,rect.localRotation.z,rect.localRotation.w},
             active=rect.gameObject.activeSelf,componentTypes=rect.GetComponents<Component>().Select(c=>c.GetType().FullName).ToArray()};
     }
     static int SettleNativeLayout(GameObject root) {
