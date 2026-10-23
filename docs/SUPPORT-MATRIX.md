@@ -4,7 +4,7 @@
 
 |来源|目标|当前实际状态|后续批准顺序|
 |---|---|---|---|
-|Cocos Creator2.4.15发布bundle|Unity6 / Cocos3.8.8 / both|partial：肥鹅全资料静态计划/资源账已验证，原名整改05离线验证通过；原生/业务未通过|先收拢肥鹅当前包|
+|Cocos Creator2.4.15发布bundle|Unity6 / Cocos3.8.8 / both|partial：full14双端各1694 Prefab/24784节点保存重开与完整几何/引用回读零诊断；Unity资源partial/Creator资源pass，业务/视觉/交互未验收|先收拢肥鹅当前包|
 |Cocos Creator2.4.15可编辑工程子集|Unity6 / Cocos3.8.8 / both|supported_static有限子集，非全版本/全组件承诺|按新增真实输入反例扩展|
 |Unity2021.3.30f1 IL2CPP-Wasm|Unity6|planned：当前273包SHA/2021.3.30f1正文已核，1603对象枚举/1326所选typed读数；106 MonoBehaviour类型不足，通用reader/Unity6输出未实现|U，用户最新打开《向僵尸开炮》优先|
 |Unity任意版本其他Mono/IL2CPP来源|Unity6|planned，逐serializedFile/AssetBundle/provider/profile增加|U|

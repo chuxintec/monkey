@@ -2,17 +2,17 @@
 
 完工/阻塞/交付与续推按[DIRECTOR-CONTINUATION](/Users/wangmeng/Documents/Manager/standards/DIRECTOR-CONTINUATION.md)执行；本聊天已原生核验人类授权`01a166b4-5c18-78f3-8cc2-c0d07dd46a20`，总监路由`01a14c8c-6402-7d03-bab8-ec7ea8051abf`。更新本PLAN后以稳定事件ID报告，已批准就绪下一包连续推进，不因报告或普通ACK停下。
 
-## 当前：两端成组修复已实际闭合，准备full14一次集中整链
+## 当前：full14 单命令双端原生强回读零诊断，继续 U 来源适配
 
-当前实际代表结果：Unity GridProbe08（13原图646节点/13 Prefab/16字体）方法4.093秒、own42078 exit0/reap，Scene+独立Prefab/完整geometry/Scale/Quaternion/引用零诊断；Creator sizingProbe03（15原图577节点/15 Prefab/16字体/5位图页+额外alpha未用帧）方法3.772秒、own49235 normal TERM exit-15/reap，新增完整Scene geometry、独立Prefab/引用/5位图页SpriteFrame→Texture身份和矩形均零诊断、editor pass。SourceNormalize/IR及资源原hash保留，未重读源/像素/AST。
+公开 convert --remote-manifest --native 全链实际完成，native-orchestration=completed_native_stages。Unity own53301 16:35:36Z→16:46:23Z exit0/reap，方法475.455秒；Creator own55108 16:47:06Z→16:57:09Z normal TERM exit-15/reap，方法520.029秒。顺序运行且各自≤30分钟、未延钟；两端强 verification diagnostics=0，Unity editor=partial（源行为缺口），Creator editor=pass。每端1694独立Prefab、24784 Scene节点均保存重开并完整几何/Scale/Quaternion/引用回读；Unity16934 Sprite/16字体/1006Label/10508 View引用、MissingScript0，Creator16939帧/16978资产/5位图页/12568组件。实际证据见validation/2026-10-24-full14-single-command.md。
 
-已冻结失败证据：full13单命令Unity实际1694 Prefab/24784节点/16934Sprites/16字体保存重开，强回读同20源节点Scene+Prefab各20几何差异而stopped，Creator在该命令not_run；独立Creator13实际1694 Prefab+Scene保存重载，841诊断（492帧/270源节点几何/78 Prefab未verified/1聚合），没有把native completed当验收通过。详情docs/validation/2026-10-23-full13-single-command.md及实际回执，旧结果不追认。
+全输入17201文件/884709704B逐项入账，16627声明CDN/799052150B缓存SHA全部匹配、无新增GET；静态双端/name/routing核对零问题。未知地址和先前7HTTP404仍缺口。SourceNormalize/IR及资源原hash保留，未重读源/像素/AST。原件/肥鹅产品服务存档/GREA只读。full13及旧失败保持冻结，不追认。
 
-共享原因：Unity使用正常uGUI子类仅提高Grid的layoutPriority，保留原生Flexible+Preferred计算，修多行/嵌套/Graphic冲突；4个Graphic handoff恢复原生适配，scaled/cached仍handoff。Creator完整图片明确trimType=none、真实裁片保持custom且清除旧computed vertices，由Importer重算；ScrollView先axes后content；Label显式CLAMP保持source-baked rect，18个预计缓存Sprite用CUSTOM，保留原overflow/sizeMode与auto-size handoff，不能当动态行为修复。冻结Creator13策略适用1006 Label+18 Sprite，probe61+3；完整业务/原版字形及画面/输入/Spine播放仍未交付。
+原生资源出口完成不等于整游戏交付：1006 Creator Label CLAMP与18 Sprite CUSTOM保留烘焙几何及原始overflow/sizeMode，同时列动态尺寸行为handoff；Unity Grid以uGUI原生Flexible+Preferred及layoutPriority扩展处理。业务源码914初稿、缺失引用1521、Spine播放/原版视觉/真实交互仍未验收。CLI completed=true表示候选流程完成，仍needs_action/exit1。
 
-接下来只集中一次full14公开convert --remote-manifest --native：完整输入每端17201文件/884709704B，16627声明CDN/799052150B缓存SHA，新候选/获取/原生根各自隔离；每端原生实际开始固定+28/+30分钟、方法1200秒，顺序、首错停、不延钟。两端各自出口可独立保留，不为每小字段重生成双端。
+本地CLI wheel 0.3.0.dev1已构建、ZIP检查包含导入器/JS解析器/许可证而无私有样本；隔离target安装后从非源码cwd用已安装模块完成合成wxapkg→双端全文件候选，退出与缺口语义符合合同。dist/full14-local/BUILD.json记录哈希与回执；仅本地开发候选，未发布/全局安装。
 
-产品范围所有Cocos原包→Unity6/Creator3.8.8/both；所有Unity、Laya/LayaAir、Egret、自研/其他原包→Unity6。结构reader当前仍Cocos2.4.15子集，不以范围代替支持；后续U《向僵尸开炮》→C《下方了》逐profile已批。U当前包/1603对象等只读证据不等于通用reader。未知CDN URL/先前7HTTP404仍缺口。原件/肥鹅产品服务存档/GREA只读，不新Agent/全局安装/付费模型/推送/发布。
+产品范围所有Cocos原包→Unity6/Creator3.8.8/both；所有Unity、Laya/LayaAir、Egret、自研/其他原包→Unity6。现有结构reader仍Cocos2.4.15子集，不以范围代替支持。当前正式继续已批准U《向僵尸开炮》Unity来源→Unity6，再C《下方了》3.8.7→双端；复用现有固定provider、建立独立typed/PPtr64身份，不执行未知源代码。不新Agent/全局安装/付费模型/推送/发布。
 
 ## 历史依据与全量候选记录
 
@@ -440,3 +440,9 @@ Creator sizingProbe02 own48074已normal TERM exit-15/reap，方法3.753秒；15P
 Probe03仍15图577节点/16字体/额外alpha帧，重新冻结、static pass；锚点16:26:15Z/内部16:54:15Z/外部16:56:15Z，方法1200秒，已核无主Editor冲突，新acceptance/creator-native-sizing-probe-03，首错停、不顺延。
 
 Creator sizingProbe03 actual own49235 16:26:47Z启动、16:27:07Z normal TERM exit-15/reap，方法3.772秒，editor/static pass零诊断：15图577节点/15Prefab/Scene强geometry/16原字体/5位图页引用与矩形、额外两个alpha原帧均通过。子资源直接重导路线已移除；完整图片明确none关闭裁切是有据原生策略，真实裁片custom不改。Creator clamp/custom只保留静态显示geometry，61+3 probe或预估全量1006+18 auto-size行为handoff不能记已恢复。两端成组出口就绪，将集中full14一次完整公开单命令验证。
+
+full14公开单命令已完成16627声明CDN缓存SHA→双端生成→获取证据封存：每端17201文件/884709704B，Unity manifest65e59177410266aa075b13d58ac4991715e19cefa1d198821ed1b72d70b43a74，Creator eacbf1bfff274f9abb2d7dc64abc4b9537ca9863e32eaa26a060608e2f485cf6。原生前新ps无冲突；Unity段实际锚点16:35:20.404958Z，内部17:03:20.404958Z/外层17:05:20.404958Z、方法1200秒，不顺延。四项static/name/routing集中只读审计在途；完整原生尚未通过，不覆盖full13失败。
+
+full14双端static/name/routing四项集中审计全部pass零问题，非名称IR保持/17329资源身份保持/1776Spine闭包及原图复用，reader/像素/AST未重跑。实际Unity own53301，16:35:36Z启动，固定内部17:03:20Z/外层17:05:20Z，不顺延；原生结果待验。U自然安全点只读600个明确.ab缓存128字节header，全部UnityFS/2021.3.30f1；仅header证据，不是600包对象解析/业务恢复，记录current-bundle-headers.json。
+
+full14 Unity actual own53301 exit0/reap/方法475.455秒/强verify零诊断；之前full13同20源节点以及full11同12源节点差异已在本次新完整输入回读中闭合，旧失败副本仍原样，不追认。Source-prefab逐节点/Scene完整geometry、scale/quaternion、字体/图片/内部引用、字形/bitmap atlas/material、10508 View引用及版本门保留；业务/画面/Spine播放不晋级。当前公开单命令顺序Creator16:46:24Z新段，不改失败即停合同。

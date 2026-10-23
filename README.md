@@ -53,7 +53,7 @@ Creator的静态显示尺寸策略会保留源节点烘焙尺寸：Label以原�
 
 已实现两条明确的 2.4.15 输入路径：编辑器工程 JSON/meta，以及发布 bundle 的 compiled-v1/pack-v1/texture-pack-v1。工具不执行源脚本，代码初稿不代表业务语义已恢复，不伪造服务器、不模拟源引擎运行时。
 
-当前可运行 `convert / catalog / inspect / normalize / plan / export / verify / handoff / diff / register / apply / preflight / native-import`。Unity 6000.6.2f1/uGUI 2.6.0与Creator 3.8.8均已用真实3源图/76节点代表样本完成原字体、3独立Prefab和Scene保存重载、几何与引用核对；Unity另有8个Label字形核对及编辑保存重开。全量Unity先前保存过1694 Prefab，仍有原生差异，新全量复验进行中；Creator全量尚未通过。代表样本不等于所有来源版本、原版画面或游戏业务通过。已实现登记生成区的差异预览和expected-manifest受控apply，人工区保持独立，移除项保留而不自动删除。
+当前可运行 `convert / catalog / inspect / normalize / plan / export / verify / handoff / diff / register / apply / preflight / native-import`。Unity 6000.6.2f1/uGUI 2.6.0与Creator 3.8.8均已用真实3源图/76节点代表样本完成原字体、3独立Prefab和Scene保存重载、几何与引用核对；Unity另有8个Label字形核对及编辑保存重开。full14单命令已完成两端各1694独立Prefab、24784节点的保存重开及完整几何/引用强回读，差异诊断均为0；Unity保留源行为缺口为partial，Creator原生资源层pass。详见[全量实际回执](docs/validation/2026-10-24-full14-single-command.md)。代表样本不等于所有来源版本、原版画面或游戏业务通过。已实现登记生成区的差异预览和expected-manifest受控apply，人工区保持独立，移除项保留而不自动删除。
 
 ## 本地使用
 
