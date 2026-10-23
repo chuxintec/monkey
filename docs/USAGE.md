@@ -1,3 +1,15 @@
+# v0.2 开发增量（尚未发布）
+
+本地开发版本0.2.0.dev1；v0.1发行包/标签保持0.1.0不变。
+
+```sh
+monkey research-matrix --root /path/to/Research/games --out /path/to/new-matrix
+```
+
+只读动态发现所有非点号/下划线游戏目录，缺RESEARCH.json、未知引擎、缺源及符号链接均保留在case分母并列原因。只记录来源元数据/显式清单和已知Analysis目录；不跟随外部来源指针，不执行转换。输出cases.json/discovery.json/coverage.md；metadata_hint_only不等于版本正文已解析或游戏导出成功。
+
+Cocos代码按用户最新要求默认TS优先，JS次选；具体CLI/实现状态见V0.2-PLAN/V0.2-EXAMPLES，尚未宣称代码生成与格式化已完成。
+
 # v0.1 命令说明
 
 正式工具版本v0.1，Python包0.1.0；`monkey --version`和`monkey capabilities --json`可核对。旧0.3.0.dev1为内部开发候选编号，旧证据不改写；跨toolVersion的resume/reuse按原身份合同拒绝，需明确新输出，不静默改旧候选。

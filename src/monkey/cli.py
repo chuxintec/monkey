@@ -46,6 +46,9 @@ def main(argv=None):
     p.add_argument('--remote-cache-root', help='Read-only root for paths in the remote manifest')
     p.add_argument('--acquisition-out', help='Fresh acquired-files workspace; default OUTPUT-acquired')
     p.add_argument('--remote-budget-seconds', type=int, default=900, help='Acquisition budget, 30..3600 seconds')
+    p = sub.add_parser('research-matrix', help='Discover every Research game without converting or following external sources')
+    p.add_argument('--root', required=True)
+    p.add_argument('--out', required=True)
     p = sub.add_parser('native-import',help='Plan or explicitly execute a bounded Unity/Creator import in a fresh copy')
     p.add_argument('--candidate',required=True);p.add_argument('--out',required=True)
     p.add_argument('--editor-path',required=True);p.add_argument('--expected-manifest',required=True)
@@ -96,7 +99,7 @@ def main(argv=None):
     try:
         if args.command == 'capabilities':
             print(json.dumps(dict(version=__version__, profiles=[PROFILE,PROJECT_PROFILE], targetProfiles=[UNITY_PROFILE,cocos.PROFILE],
-                schemaVersion=1, implemented=['convert','catalog','inspect','normalize','plan','export','verify','handoff','diff','register','apply','preflight','native-import'], planned=[],
+                schemaVersion=1, implemented=['convert','catalog','inspect','normalize','plan','export','verify','handoff','diff','register','apply','preflight','native-import','research-matrix'], planned=[],
                 targetValidation={UNITY_PROFILE:dict(static='implemented',editor='representative-subset-verified',visual='not_run'),cocos.PROFILE:dict(static='implemented',editor='representative-subset-verified',visual='not_run')},
                 compiledFormats=['compiled-v1','pack-v1','texture-pack-v1'],
                 containerFormats=['plain-wxapkg','APK-ZIP','Cocos-resource-directory'],
@@ -104,6 +107,10 @@ def main(argv=None):
                                      nativeObjectRecovery='shared-ir-supported-subset',packageResume='hash-checked',inputSets='explicit-local-roots',editorOrchestration='manifest-bound-native-import-command',remoteAcquisition='explicit-manifest-bounded-fetch'),
                 imageFormats=['PNG','JPEG','ASTC (optional pinned decoder)'],animationSchemaVersion=1,
                 animationSubset=['local-position','local-scale','opacity','linear','constant-step','Normal','Loop'],animationEvents='manual-contract-only', targetEditorValidation='representative-subsets-only'), ensure_ascii=False))
+            return 0
+        if args.command == 'research-matrix':
+            from .research_cases import discover
+            print(json.dumps(discover(args.root,args.out),ensure_ascii=False))
             return 0
         if args.command == 'convert':
             from .convert import convert, resume, recipe
