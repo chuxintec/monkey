@@ -297,17 +297,6 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
             diagnostics.append(diagnostic('MISSING_OUTLINE_LABEL',c['sourceId'],'Label dependency could not be converted',c['sourceId']))
     from .common import reject_layout_conflicts
     diagnostics.extend(reject_layout_conflicts(components))
-    texture_by_id={t['id']:t for t in textures}
-    for layout in components:
-        if layout['type']!='cc.Layout' or not layout['convertible'] or not layout['enabled'] or layout['layoutType']!=3:continue
-        for graphic in components:
-            if graphic['node']!=layout['node'] or graphic['type']!='cc.Sprite' or not graphic['convertible'] or not graphic['enabled'] or graphic['mode'] not in (1,2):continue
-            frame=texture_by_id.get(str(graphic.get('spriteFrame'))+('' if graphic.get('trim',True) else '@original'))
-            if frame and frame['border'][1]+frame['border'][3]>by_node[layout['node']]['size'][1]+.001:
-                layout['convertible']=False
-                diagnostics.append(diagnostic('GRID_GRAPHIC_METRICS_HANDOFF',layout['sourceId'],
-                    'Native sliced/tiled Graphic minimum height overrides this grid extent; retain geometry until Graphic/layout separation adapter',layout['sourceId']))
-                break
     from ..assets.animation import plan_clips
     animations,animation_gaps=plan_clips(ir,namespace,PROFILE,animation_selection)
     naming.records.extend(a['nameEvidence'] for a in animations)
@@ -365,6 +354,9 @@ def export(plan_path, output):
     view_path=out/'Assets/Generated/Views/MonkeyCandidateView.cs'
     view_path.write_bytes(files('monkey.targets').joinpath('MonkeyCandidateView.cs').read_bytes())
     Path(str(view_path)+'.meta').write_text('fileFormatVersion: 2\nguid: '+guid(p['namespace'],'native-view-script')+'\n')
+    grid_path=out/'Assets/Generated/Views/IntrinsicGridLayoutGroup.cs'
+    grid_path.write_bytes(files('monkey.targets').joinpath('IntrinsicGridLayoutGroup.cs').read_bytes())
+    Path(str(grid_path)+'.meta').write_text('fileFormatVersion: 2\nguid: '+guid(p['namespace'],'intrinsic-grid-script')+'\n')
     adapter=files('monkey.targets').joinpath('UnityImporter.cs').read_bytes()
     adapter_path=out/'Assets/Monkey/Editor/MonkeyImporter.cs';adapter_path.write_bytes(adapter)
     Path(str(adapter_path)+'.meta').write_text('fileFormatVersion: 2\nguid: '+guid(p['namespace'],'editor-adapter')+'\n')

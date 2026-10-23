@@ -15,6 +15,7 @@ def mappings(profile, plan):
                'Assets/Generated/Animations':'Assets/Game/Content/Animations',
                'Assets/Generated/Controllers':'Assets/Game/Content/Animations/Controllers',
                'Assets/Generated/Views/MonkeyCandidateView.cs':'Assets/Game/Presentation/Recovery/MonkeyCandidateView.cs',
+               'Assets/Generated/Views/IntrinsicGridLayoutGroup.cs':'Assets/Game/Presentation/Recovery/IntrinsicGridLayoutGroup.cs',
                'Assets/Generated/Views/':'Assets/Game/Content/Prefabs/Recovery/',
                'Assets/Generated/Views':'Assets/Game/Content/Prefabs/Recovery',
                'Assets/Generated/Scenes/':'Assets/Game/Scenes/',

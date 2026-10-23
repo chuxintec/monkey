@@ -575,7 +575,7 @@ public static class MonkeyImporter
                 var padding=new RectOffset((int)spec.padding[0],(int)spec.padding[2],(int)spec.padding[3],(int)spec.padding[1]);
                 var fitter=go.AddComponent<UnityEngine.UI.ContentSizeFitter>();
                 if(spec.layoutType==3) {
-                    var group=go.AddComponent<UnityEngine.UI.GridLayoutGroup>();group.enabled=spec.enabled;
+                    var group=go.AddComponent<IntrinsicGridLayoutGroup>();group.enabled=spec.enabled;
                     group.cellSize=new Vector2(spec.effectiveCellSize[0],spec.effectiveCellSize[1]);
                     group.spacing=new Vector2(spec.spacingXY[0],spec.spacingXY[1]);group.padding=padding;
                     group.startAxis=UnityEngine.UI.GridLayoutGroup.Axis.Horizontal;
@@ -584,7 +584,7 @@ public static class MonkeyImporter
                     group.childAlignment=spec.verticalDirection==1?(spec.horizontalDirection==0?TextAnchor.UpperLeft:TextAnchor.UpperRight):
                         (spec.horizontalDirection==0?TextAnchor.LowerLeft:TextAnchor.LowerRight);
                     group.constraint=UnityEngine.UI.GridLayoutGroup.Constraint.Flexible;
-                    fitter.verticalFit=UnityEngine.UI.ContentSizeFitter.FitMode.MinSize;
+                    fitter.verticalFit=UnityEngine.UI.ContentSizeFitter.FitMode.PreferredSize;
                 }
                 else {
                     UnityEngine.UI.HorizontalOrVerticalLayoutGroup group=spec.layoutType==1?

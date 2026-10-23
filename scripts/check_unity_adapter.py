@@ -25,13 +25,14 @@ for name in ['UnityEngine.UI.dll','Unity.TextMeshPro.dll']:
     refs[name]=a.ugui_assemblies/name
 source=Path(__file__).resolve().parents[1]/'src/monkey/targets/UnityImporter.cs'
 args=['-nologo','-nostdlib+','-target:library','-langversion:latest',f'-out:{out}/Monkey.Editor.dll',
-      *[f'-r:{v.resolve()}' for v in refs.values()],str(source),str(source.with_name('MonkeyCandidateView.cs'))]
+      *[f'-r:{v.resolve()}' for v in refs.values()],str(source),str(source.with_name('MonkeyCandidateView.cs')),str(source.with_name('IntrinsicGridLayoutGroup.cs'))]
 (out/'compile.rsp').write_text('\n'.join('"'+v+'"' for v in args))
 result=subprocess.run([str(mono/'bin/mono'),str(mono/'lib/mono/msbuild/Current/bin/Roslyn/csc.exe'), '-noconfig', '@'+str(out/'compile.rsp')],capture_output=True,text=True)
 (out/'compile.log').write_text(result.stdout+result.stderr)
 report=dict(status='pass' if result.returncode==0 else 'fail',level='C# assembly compile only; no Unity Editor',
             sourceSha256=hashlib.sha256(source.read_bytes()).hexdigest(),
             viewSourceSha256=hashlib.sha256(source.with_name('MonkeyCandidateView.cs').read_bytes()).hexdigest(),exitCode=result.returncode,
+            gridSourceSha256=hashlib.sha256(source.with_name('IntrinsicGridLayoutGroup.cs').read_bytes()).hexdigest(),
             assemblies=[dict(path=str(path.resolve()),sha256=hashlib.sha256(path.read_bytes()).hexdigest()) for path in refs.values()])
 (out/'report.json').write_text(json.dumps(report,indent=2)+'\n')
 print(json.dumps({k:report[k] for k in ('status','level','exitCode')}))

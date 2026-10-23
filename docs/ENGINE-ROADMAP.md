@@ -12,7 +12,7 @@ CLI继续convert --source/--input-set --target unity6|cocos38|both。加入真�
 
 ## U：指定Unity来源样本
 
-用户指定最新打开《向僵尸开炮》。旧Research身份wx31a9c726536cdacc/本地修订273/Unity2021.3.30f1 IL2CPP-Wasm仅作线索。2026-10-23本轮只读检查已知对应账号的当前可见包目录，仅发现修订273，内有__WITHOUT_MULTI_PLUGINCODE__.wxapkg、_wasmcode_.wxapkg、_wasmcode1_.wxapkg；这还不是当前Unity版本/后端正文核验，不能只凭旧记录或mtime宣称已验证最新运行内容。本轮已通过固定本机grea:wxapkg-decrypt在monkey私有目录重新解密这3个当前包，明文SHA全部与冻结证据一致；分别3/2/48条目，game.js实际出现2021.3.30f1版本字符串，Wasm条目可枚举。这里只是当前包体静态证据，serializedFile/TypeTree正文仍待解析，不把版本字符串当完整原生恢复。原件/玩家档不写。
+用户指定最新打开《向僵尸开炮》。旧Research身份wx31a9c726536cdacc/本地修订273/Unity2021.3.30f1 IL2CPP-Wasm仅作线索。2026-10-23本轮只读检查已知对应账号的当前可见包目录，仅发现修订273，内有__WITHOUT_MULTI_PLUGINCODE__.wxapkg、_wasmcode_.wxapkg、_wasmcode1_.wxapkg；这还不是当前Unity版本/后端正文核验，不能只凭旧记录或mtime宣称已验证最新运行内容。本轮已通过固定本机grea:wxapkg-decrypt在monkey私有目录重新解密这3个当前包，明文SHA全部与冻结证据一致；分别3/2/48条目，game.js实际出现2021.3.30f1版本字符串，Wasm条目可枚举。初始仅为当前包体静态证据；后续只读调用本机UnityPy1.25.3，已解析Research同源data.unity3d（2637008字节、SHA a434ec9531fba3a81a97195ded092eb8b1c85adb8a417fac6d92a1e6be4f25cc）1603对象，包括76 GameObject/76 Transform与RectTransform/1173 MonoScript。8个serialized file均关闭源TypeTree，UnityPy按版本内置类型模板对1326个所选对象有严格正文读数，全部106 MonoBehaviour因类型正文不足严格报长度不符，不使用check_read=false掩盖；这是样本探查，不是通用reader或原生工程通过。证据monkey/.private/unity-zombie-current-01/typed-inspection-01，未执行源代码。原件/玩家档不写。当前721个已枚举缓存路径均存在，data archive SHA与冻结证据一致；patchFuncIndexList.json从94变111字节单独记漂移，不宣称所有当前缓存与旧版相同。12个TextAsset逐项身份已核：DodGameLib.dll实际为CODEPHPY头、不是普通PE，不能按文件名当可反编译业务DLL；其余5个PE仅观察头部，未执行程序集。
 
 先发现本机可用且版本固定的AssetRipper/UnityPy/提取provider和GREA既有合同，只读复用、固定参数/输出schema，不重写Unity二进制生态。缺工具/TypeTree/元数据列条件，不自动安装。未知DLL/JS/Wasm从不执行。枚举Unity数据目录/AssetBundle/serializedFile及显式容器解包关系，保留GUID/fileID/PPtr、原名/路径、Prefab/Scene、Transform/材质/Shader/字体/模型/音频/配置。
 
@@ -34,4 +34,4 @@ reader按3.x真实序列化、UUID子资源、redirect/bundle/pack、System/JS�
 
 ## 原包与远程资源闭包
 
-沿本聊天CDN/远程包补充授权，一键入口需覆盖原包明确声明的远程资源：已有本地缓存先核SHA复用，有据URL有界获取并记实际HTTP/哈希/缺失收据，未知miniGame地址不猜。肥鹅19次GET/16627本地文件核对已经完成；通用CLI自动获取编排尚未接入，不以本次人工收据冒充已实现。
+沿本聊天CDN/远程包补充授权，一键入口需覆盖原包明确声明的远程资源：已有本地缓存先核SHA复用，有据URL有界获取并记实际HTTP/哈希/缺失收据，未知miniGame地址不猜。肥鹅19次GET/16627本地文件核对已经完成；通用CLI明确清单有界获取及缓存SHA复用已接入convert --remote-manifest，真实单GET和16627全缓存核验分别有据；未知URL自动发现尚未实现，不以人工收据冒充通用地址发现。

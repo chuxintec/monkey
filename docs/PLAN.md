@@ -2,17 +2,19 @@
 
 完工/阻塞/交付与续推按[DIRECTOR-CONTINUATION](/Users/wangmeng/Documents/Manager/standards/DIRECTOR-CONTINUATION.md)执行；本聊天已原生核验人类授权`01a166b4-5c18-78f3-8cc2-c0d07dd46a20`，总监路由`01a14c8c-6402-7d03-bab8-ec7ea8051abf`。更新本PLAN后以稳定事件ID报告，已批准就绪下一包连续推进，不因报告或普通ACK停下。
 
-## 当前：Unity全量原生差异收口，Creator全量实测在途
+## 当前：full13 Unity严格几何失败；Creator独立验证与Grid共因修复在途
 
-最新Unity全量实际副本为 `outputs/acceptance/full11-unity-window-01/UnityProject`：1694独立Prefab/24784节点/16934 Sprite/16原字体保存、Scene及editable roundtrip完成、Missing Script0；严格回读剩12个相同节点的Scene/独立Prefab几何差异（各12项），字形/字体atlas与material/10508 View引用/版本零差异。旧full07原2005项保留历史（613几何/834字形/557引用/1版本）。full11已新增独立Prefab逐节点几何/引用及Scale/Quaternion实测；full10当时只核count/missing，历史不追认；尚无原版画面/业务通过。
+最新实际结果：full13 Unity完成保存重开，但同20源节点Scene/Prefab各20几何差异，编排正确stopped，own35982已退出/reap；Creator改用同一固定候选做独立原生段own38754，不改变单命令失败合同。IntrinsicGrid优先级修复已C#编译，13原图646节点代表探针08离线生成并static/preflight零问题，实际验证须顺序等Creator结束。
 
-Creator实际小探针05（候选04）已editor/static pass零诊断：67资产/76节点/16原字体/3独立Prefab/Scene保存重载，实际字体、Sprite裁切边框、几何及内部引用核对通过，方法1.636秒、own17562已正常退出/reap。中间进度协议与metadata屏障失败各自保留，不把旧失败时间当性能通过。全量Creator10 `outputs/full-foodstreet-10-creator/CocosProject` manifest7fb3a4b7f996da9402ae1ecc9f9b921ab874e49046b63ea86938d143e08c770c，static/name/routing全pass；full10实际own20570已14:18:41Z normal TERM exit-15/reap；16978资产阶段完成，但assemble命中SceneFacade单次RPC的30秒超时，实际Prefab/Scene0。新增Editor-only短调用任务接口已由3图76节点小探针实际editor/static pass零诊断证明，own23510已退出/reap，方法1.811秒；全量仍待新候选验证，旧窗口已释放。
+当前公开命令已实现明确CDN清单获取→完整输入双端候选→顺序独立Unity/Creator原生段。full13已完成16627声明文件/799052150B缓存SHA核验和每端17201文件/884709704B生成；Unity manifest80484c192bee73c172673fc3d0dfa87906d242149d061afaad3ed2dd6a8e02bb，Creator a840b6d50dc08ec198bf24dd05e7efbabcd4fe6d9f652eb165e77ce11acec58c。两端名称/身份审计及资源路由零问题，非名称IR保持；static及原生实际结果见本节末尾和单命令回执。full12在追加回执时误用32MiB预算停下，原生未启动；4ecbf6f修复为生成manifest既有128MiB/8m上限，owned哈希仍核，7项定向反例通过，失败副本冻结。
 
-Unity代码已成组修复实际LayoutGroup有界稳定、直接原生保存子树、独立Prefab保存重载逐节点/字体Sprite及内部引用核对；新增localScale/Quaternion原生读数。7原图413节点探针05/06证明nested布局主偏移、根Widget隔离上下文与inactive Widget/空容器反例；最终剩一个广告占位父319高/活动孩子0x0，已明确LAYOUT_CACHED_CONTAINER_HANDOFF保留几何，等动态内容adapter，不以0高fitter覆盖。根Widget缺父上下文、inactive缓存、空布局、cross-axis不可表达分别handoff，不能算已转换行为。`.private/full-local-transform-compile-01` C#与11项定向检查通过，未改.001容差；新全量Unity11已复用既有源阶段生成（manifesta4e286808cae2d8b758a6fd9968d2542e05f5f6066276a78ff6b45d05ffaa9db），static/name/routing三项离线核对全pass，尚未新原生验证，不追认全量243已解决。
+Unity实际小探针07已完成9源图397节点/16字体/9独立Prefab/Scene与editable保存重开，严格几何、Scale/Quaternion、字体Sprite及内部引用零诊断；full11历史剩同12个Grid节点的Scene及Prefab各12差异，全量改正须full13证明。Creator根名小探针01已实际4图85节点/16字体/4 Prefab/Scene、精确root basename policy及子级/几何/引用零诊断；full11历史实际保存1694 Prefab+1Scene，后来readSaved遇原生根名规范化，不追认全量通过。两探针自有child均已正常退出/reap。
 
-两端全量显式输入始终17201文件/884709704字节，1776 Spine闭包/原图复用、原reader/像素/AST不重跑，原件/肥鹅/GREA/服务/存档不变。候选、acceptance实际工程、历史结果分别保留。
+源组件中的不等价Widget、动态/缓存/空Layout、scaled Grid及graphic最小尺寸等明确handoff保留烘焙几何，不能算行为已实现；1776Spine闭包/原图复用不等于runtime播放。914模块初稿/5773绑定/业务、原版画面、真实输入与可玩均未交付。原reader/像素/AST不重跑，不改源数值JSON，不放宽几何容差。
 
-单命令 `convert --native` 已实现生成→Unity/Creator顺序独立原生段，每段固定期限、失败/未退出/回读差异不派下一端，生成/原生回执分开；5编排+4convert检查通过，底层native-import已有实际引擎证据，包装层未另跑全双端整链。通用CDN明确清单获取CLI已实现且完成1次真实GET及16627全缓存核验；自动发现未知URL、U/C及更多来源reader、完整业务仍未交付；肥鹅明确URL获取与回执已补原项目。用户矩阵仍为所有Cocos原包→Unity6/Creator3.8.8/both；所有Unity、Laya/LayaAir、Egret、自研/其他引擎→Unity6，逐profile实现，不以范围代替已支持能力。
+用户矩阵为所有Cocos原包→Unity6/Creator3.8.8/both；所有Unity、Laya/LayaAir、Egret、自研/其他引擎→Unity6。当前结构reader仍2.4.15子集，全版本为产品范围；后续按已批顺序U《向僵尸开炮》→C《下方了》逐profile实现。U当前只读包体/正文探查已有，尚非通用reader或Unity6工程。CDN未知URL自动发现未实现，既有7HTTP404/未知miniGame包地址仍缺口；不能用已声明清单零缺失覆盖未知项。
+
+原件/肥鹅产品/服务/存档/GREA只读，所有候选与actual副本仅monkey内，每原生段独立固定30分钟上限、不顺延，首新错停后离线修复；不新Agent/安装/付费模型/推送/发布。唯一进度以本PLAN及对应回执为准。
 
 ## 历史依据与全量候选记录
 
@@ -411,3 +413,15 @@ Unity GridProbe07实际397节点/9独立Prefab、16字体、Scene保存重开、
 现在用公开单条convert --remote-manifest --native生成全新outputs/full-foodstreet-12，然后在full-foodstreet-12-native的顺序新副本执行Unity→Creator；获取在full-foodstreet-12-acquired，均不覆盖旧候选或原件。起步ps未见引擎主进程。每个原生段由orchestration在真正开始时固定UTC锚点、内部+28分钟/外部+30分钟、方法1200秒，写native-orchestration.json；不复用旧grant时钟、不顺延当前段，首错/未退出/非零回读差异停止下一端。生成期间持续只读资源状态，原生前复制阶段再次确认冲突。冻结候选/实际原生副本/获取证据分开；全量12当前未生成/未验，不将小样推成全量通过。
 
 full12单命令生成在acquisition.attach读取已生成Unity manifest（63668683字节）时误用原始输入32MiB预算而安全停止，两个原生段均未启动；保留full12候选及获取回执，不追认端到端通过。修复只在acquisition采用既有stage_manifest的128MiB/8m节点上限，原始输入预算及source算法不改；新增33MiB生成manifest且owned文件篡改仍拒绝的反例，7项获取定向检查通过。下一次全新full13重跑公开单命令，不修改失败候选。
+
+full13单命令继续生成中（acquisition 16627/799052150B全缓存SHA匹配）；自然安全点只读U样本：本机UnityPy1.25.3对Research同源data.unity3d的1603对象成功枚举，1326所选对象有严格TypeTree正文，包括76GO/76 Transform类；106 MonoBehaviour均因类型正文不足长度校验失败，未用宽松读取掩盖。私有typed-inspection-01含身份/正文/逐对象错误；现有AssetRipper2.0.0仅核--help，无独立export CLI，尚未启动服务或导出工程。此为后续reader探查，不抢当前全量验收、不冒称Unity来源已支持。
+
+full13公开单命令已完成获取→双端生成→acquisition封存：每端17201文件/884709704B，Unity manifest80484c192bee73c172673fc3d0dfa87906d242149d061afaad3ed2dd6a8e02bb，Creator a840b6d50dc08ec198bf24dd05e7efbabcd4fe6d9f652eb165e77ce11acec58c。开始原生前再核ps无主Editor冲突；Unity段锚点15:40:33.784088Z，内部16:08:33.784088Z/外层16:10:33.784088Z，方法1200秒，不顺延。static/name/routing集中只读核对在途；获取清单零缺失不覆盖此前7个HTTP404/未知URL。
+
+全量覆盖口径另核：节点24784/组件28514保持。Unity可转换组件11995→11988，新增7个明确Grid handoff：graphic最小尺寸4、scaled child2、缓存extent1；其余方向对齐/MinSize等仍由原生Grid实现。不能把这7项写成行为已转换。Creator可转换12568。双端1694独立Prefab计划、16原字体保持；静态verify、name与routing均零问题（full13-unity-static/full13-creator-static/full13-name-audit/full13-routing-audit）。Unity已实际进入texture-settings方法，own35982，后续回读待验。
+
+full13 Unity实际own35982 exit0/reap、方法441.597秒；1694独立Prefab/24784节点/16934Sprites/16字体/Scene+editable保存重开，MissingScript0。强回读新发现同20个源节点Scene与独立Prefab各20几何诊断（合40），其余字体/字形/scale/quaternion/引用/版本零新增错误；旧full11的12节点不可追认已解决。编排按合同stopped，Creator未启动，ps无遗留主Editor。新增差异集中Grid的MinSize对子布局/多行容器的计算；先离线定位共同原因，再一组成对探针，不能盲重全库。完整失败副本及.private/full13-geometry-differences.json保留。
+
+总监续派monkey-full13-independent-target-closeout-20261023-01：保留单命令失败即停合同；Unity已reap安全退出，可对冻结Creator13独立native-import关闭既有出口，不反复为Unity改动重生双端。Creator13新登记锚点15:54:00Z，内部16:22:00Z/外层16:24:00Z，方法1200秒；ps无主Editor冲突，新acceptance/full13-creator-window-01，manifest a840b6d50dc08ec198bf24dd05e7efbabcd4fe6d9f652eb165e77ce11acec58c。首新错停、自有child正常TERM/reap，不顺延、不并发Unity。后台仅Unity离线共因修复。
+
+Grid共因已对照实际UGUI2.6源码：Flexible最小尺寸固定单行、preferred才依容器宽度计算行数；原生Image与Grid同priority0时LayoutUtility会混用图片尺寸。改为正常uGUI子类IntrinsicGridLayoutGroup，仅override layoutPriority=1，继续使用原生Flexible行列/方向/动态尺寸算法及ContentSizeFitter PreferredSize；无源图/IR解释器、不固定行数或写常量高度。4个Graphic metrics handoff改由明确原生适配覆盖，scaled/cached差异仍handoff。新增运行脚本跟随生成/标准路径/GUID及emit指纹，C#独立compile和8 geometry+4 structured定向检查通过；13原图成组探针生成，覆盖多行/嵌套/Graphic及此前9图反例，真实运行需Creator退出后顺序新段。
