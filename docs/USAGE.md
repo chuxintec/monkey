@@ -228,7 +228,7 @@ bin/monkey convert --source GAME.apk --target unity6 --out outputs/new-game-unit
 bin/monkey convert --source /path/to/obtained-resources --target cocos38 --out outputs/new-game-cocos
 ```
 
-支持明文wxapkg的BE/ED头、索引和连续不重叠payload，APK ZIP及明确Cocos资源目录。资源目录默认全文件，保留`--package`强制全文件入口；旧asset-index/recipe只用于切片诊断。全量指当前单个明确输入；多输入根的身份协调/合并还未实现。存在同名不同配置bundle时拒绝混拼。源Cocos版本无法确定时记录unknown，不伪称对象reader支持。非Cocos或未知加密容器明确报错。
+支持明文wxapkg的BE/ED头、索引和连续不重叠payload，APK ZIP及明确Cocos资源目录。资源目录默认全文件，保留`--package`强制全文件入口；旧asset-index/recipe只用于切片诊断。全量指本次明确输入内的全部可枚举文件；多输入根通过schema 1 input-set校验身份并合并。存在同名不同配置bundle时拒绝混拼。源Cocos版本无法确定时记录unknown，不伪称对象reader支持。非Cocos或未知加密容器明确报错。
 
 边界：最多50,000文件/目录、每文件32MiB、展开512MiB、容器1GiB、目录深64。拒绝穿越、绝对路径、反斜线、symlink/特殊项、大小/哈希变化、同名及Unicode/casefold路径别名、wxapkg重叠或漏计payload。仅一层枚举，不递归解包内部容器；嵌套包原样待转。APK内动态库/dex及平台文件保留证据并排除目标运行时，不执行、不安装。
 

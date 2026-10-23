@@ -27,7 +27,7 @@ bin/monkey convert --resume outputs/my-unity --input-set inputs.json
 
 **当前是全输入留存＋有限原生资源复制＋代码恢复候选，尚未完成全对象原生还原和编辑器自动导入**。已接入2.4.15共享IR：支持的节点图、SpriteFrame、字体及JsonAsset生成原生导入计划；未知组件、Spine等保留证据和缺口。默认返回needs_action，`--offline`为partial，退出码1；不能当完整转换成功。未取得的CDN/远程分包不包含，未知加密不破解、不安装APK。
 
-已有2.4.15切片转换链继续可用：`--target unity|cocos`、`--asset-index`/recipe，结果在`project/`；其完成候选支持`--resume`身份续验。包级工程支持按哈希校验续跑并归档原候选；人工修改会阻止覆盖。编辑器自动执行、原生回读和人工代码增量合并尚未完成。详见[命令说明](docs/USAGE.md)。
+已有2.4.15切片转换链继续可用：`--target unity|cocos`、`--asset-index`/recipe，结果在`project/`；其完成候选支持`--resume`身份续验。包级工程支持按哈希校验续跑并归档原候选；人工修改会阻止覆盖。已提供native-import有界独立Unity执行器；原生回读尚未完整通过，人工代码增量合并未实现。详见[命令说明](docs/USAGE.md)。
 
 已实现两条明确的 2.4.15 输入路径：编辑器工程 JSON/meta，以及发布 bundle 的 compiled-v1/pack-v1/texture-pack-v1。工具不执行源脚本，代码初稿不代表业务语义已恢复，不伪造服务器、不模拟源引擎运行时。
 

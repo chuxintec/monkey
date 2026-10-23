@@ -93,10 +93,28 @@ public static class MonkeyImporter
     static double nativeBudget=0;
     static Scene ownedScene;
     static Scene priorScene;
+    static string firstEngineError;
+    static bool handlingFailure;
+    [Serializable] public class EngineErrorResult {public int schemaVersion=1;public string planSha256,phase,logType,errorSha256;}
+    static void CaptureEngineError(string condition,string stack,LogType type) {
+        if(handlingFailure || firstEngineError!=null || (type!=LogType.Error && type!=LogType.Exception && type!=LogType.Assert))return;
+        using(var hash=System.Security.Cryptography.SHA256.Create())
+            firstEngineError=BitConverter.ToString(hash.ComputeHash(System.Text.Encoding.UTF8.GetBytes(condition+"\n"+stack))).Replace("-","").ToLowerInvariant();
+        // Keep messages/stack in the private Editor log, never copy authentication or user text into telemetry.
+        try {
+            Directory.CreateDirectory("Analysis");
+            File.WriteAllText("Analysis/native-engine-error.json",JsonUtility.ToJson(new EngineErrorResult {
+                planSha256=nativeProgress.planSha256,phase=nativeProgress.phase,logType=type.ToString(),errorSha256=firstEngineError},true));
+        } catch { /* The captured flag still stops work if telemetry cannot be written. */ }
+    }
+    static void CheckEngineErrors() {
+        if(firstEngineError!=null)throw new InvalidOperationException("NATIVE_ENGINE_ERROR_RECORDED: inspect the private Editor log and Analysis/native-engine-error.json");
+    }
 
     static bool asyncRunning,asyncBatch,packagePending,tmpImportCompleted;
     static double nextAsyncTick;
     static void InitializeImport() {
+        Application.logMessageReceived-=CaptureEngineError;firstEngineError=null;handlingFailure=false;
         ownedScene=default(Scene);priorScene=default(Scene);nativeProgress=null;
         nativeClock=System.Diagnostics.Stopwatch.StartNew();
         nativeProgress=new NativeProgress {status="running",phase="preflight",planSha256=Hash("Assets/Monkey/Editor/import-plan.json")};
@@ -107,6 +125,7 @@ public static class MonkeyImporter
             var deadline=Environment.GetEnvironmentVariable("MONKEY_NATIVE_DEADLINE_UTC");
             if(!string.IsNullOrEmpty(deadline) && !DateTime.TryParse(deadline,System.Globalization.CultureInfo.InvariantCulture,System.Globalization.DateTimeStyles.AssumeUniversal|System.Globalization.DateTimeStyles.AdjustToUniversal,out nativeDeadline))
                 throw new InvalidOperationException("Invalid native deadline");
+        Application.logMessageReceived+=CaptureEngineError;
 
     }
     static void ExecuteImport() {
@@ -115,6 +134,7 @@ public static class MonkeyImporter
         try {InitializeImport();NativeCheckpoint("preflight",0,1);Run();}
         catch(OperationCanceledException) {WriteNativeProgress("budget_exhausted");CloseOwnedScene();}
         catch {if(nativeProgress!=null)WriteNativeProgress("failed");CloseOwnedScene();throw;}
+        finally {Application.logMessageReceived-=CaptureEngineError;}
     }
     static void BeginAsync(bool batch) {
         if(asyncRunning)throw new InvalidOperationException("An import is already pending in this Editor");
@@ -181,12 +201,14 @@ public static class MonkeyImporter
     }
     static void FailAsync(Exception error) {
         if(!asyncRunning)return;
+        handlingFailure=true;
         try {if(nativeProgress!=null)WriteNativeProgress(error is OperationCanceledException?"budget_exhausted":"failed");}
         finally {try {CloseOwnedScene();} finally {Debug.LogException(error);FinishAsync(error is OperationCanceledException?3:1);}}
     }
     static void FinishAsync(int exitCode) {
         bool ownsBatch=asyncBatch;asyncRunning=false;packagePending=false;
         DetachPackageCallbacks();EditorApplication.update-=CheckAsyncBudget;EditorApplication.delayCall-=ContinueAsync;
+        Application.logMessageReceived-=CaptureEngineError;
         if(ownsBatch && Application.isBatchMode)EditorApplication.Exit(exitCode);
     }
     static void CloseOwnedScene() {
@@ -201,6 +223,7 @@ public static class MonkeyImporter
         if(File.Exists(path))File.Replace(temporary,path,null);else File.Move(temporary,path);
     }
     static void NativeCheckpoint(string phase,int processed,int total) {
+        CheckEngineErrors();
         nativeProgress.phase=phase;nativeProgress.processed=processed;nativeProgress.total=total;
         if((nativeBudget>0 && nativeClock.Elapsed.TotalSeconds>=nativeBudget) || DateTime.UtcNow>=nativeDeadline) {
             WriteNativeProgress("budget_exhausted");throw new OperationCanceledException("Native import time budget exhausted");
@@ -317,8 +340,12 @@ public static class MonkeyImporter
             throw new InvalidOperationException("Editor must be idle");
         if (File.Exists(PrefabPath) || File.Exists(ScenePath) || File.Exists(BootstrapPath))
             throw new InvalidOperationException("Create-only import: Prefab/Scene already exists. Use a new candidate.");
-        if (SceneManager.GetActiveScene().isDirty)
-            throw new InvalidOperationException("Active scene has unsaved work; import refused");
+        for(int i=0;i<SceneManager.sceneCount;i++) {
+            var open=SceneManager.GetSceneAt(i);
+            if(open.isDirty)throw new InvalidOperationException("Open scene has unsaved work; import refused");
+            if(string.IsNullOrEmpty(open.path) && !(Application.isBatchMode && SceneManager.sceneCount==1))
+                throw new InvalidOperationException("UNTITLED_SCENE_CONTEXT: save or close the user's untitled scene before menu import");
+        }
     }
 
     static void Run()
@@ -344,6 +371,7 @@ public static class MonkeyImporter
                 diagnostics.Add("TMP_SHADER_RESOURCES_MISSING: " + item.id); continue;
             }
             var font = TMPro.TMP_FontAsset.CreateFontAsset(source,90,16,UnityEngine.TextCore.LowLevel.GlyphRenderMode.SDFAA,1024,1024,TMPro.AtlasPopulationMode.Dynamic,false);
+            CheckEngineErrors();
             if (font == null) { diagnostics.Add("TMP_FONT_CREATION_FAILED: " + item.id); continue; }
             var needed = string.Concat(plan.components.Where(c=>c.type=="cc.Label" && c.convertible && c.font==item.id).Select(c=>c.text));
             if (!font.TryAddCharacters(needed,out string missing)) {diagnostics.Add("TTF_GLYPHS_MISSING: " + missing);UnityEngine.Object.DestroyImmediate(font);continue;}
@@ -371,6 +399,10 @@ public static class MonkeyImporter
             var shader = tmpBitmapShader;
             if (shader == null) throw new InvalidOperationException("Native TMP bitmap shader unavailable after resource import");
             var font = ScriptableObject.CreateInstance<TMPro.TMP_FontAsset>();
+            // Custom Atlas shader samples RGBA, retaining the source font's colored outline.
+            var material = new Material(shader); material.name="BitmapFontMaterial";
+            material.mainTexture=atlas; material.SetColor("_FaceColor",Color.white);
+            font.material=material;
             font.name = "SourceBitmapFont";
             font.faceInfo = new UnityEngine.TextCore.FaceInfo {
                 familyName="SourceBitmapFont",styleName="Original",pointSize=(int)spec.pointSize,scale=1,
@@ -387,7 +419,7 @@ public static class MonkeyImporter
             serialized.FindProperty("m_AtlasHeight").intValue = spec.atlasSize[1];
             serialized.FindProperty("m_AtlasPadding").intValue = 0;
             serialized.FindProperty("m_AtlasRenderMode").intValue=(int)UnityEngine.TextCore.LowLevel.GlyphRenderMode.RASTER;
-            serialized.ApplyModifiedPropertiesWithoutUndo();
+            serialized.ApplyModifiedPropertiesWithoutUndo();CheckEngineErrors();
             foreach (var g in spec.glyphs) {
                 var glyph = new UnityEngine.TextCore.Glyph(g.index,
                     new UnityEngine.TextCore.GlyphMetrics(g.metrics[0],g.metrics[1],g.metrics[2],g.metrics[3],g.metrics[4]),
@@ -401,10 +433,6 @@ public static class MonkeyImporter
                     secondAdjustmentRecord=new UnityEngine.TextCore.LowLevel.GlyphAdjustmentRecord(k.second,new UnityEngine.TextCore.LowLevel.GlyphValueRecord(0,0,0,0))
                 });
             }
-            // Custom Atlas shader samples RGBA, retaining the source font's colored outline.
-            var material = new Material(shader); material.name="BitmapFontMaterial";
-            material.mainTexture=atlas; material.SetColor("_FaceColor",Color.white);
-            font.material=material;
             AssetDatabase.CreateAsset(font,spec.fontPath);AssetDatabase.AddObjectToAsset(material,font);
             font.ReadFontAssetDefinition();EditorUtility.SetDirty(font);AssetDatabase.SaveAssetIfDirty(font);
             fonts[spec.id]=font;
@@ -412,7 +440,10 @@ public static class MonkeyImporter
         // Additive preview scene preserves any previously open scene.
         NativeCheckpoint("hierarchy",0,plan.nodes.Length);
         var previous = SceneManager.GetActiveScene();priorScene=previous;
-        var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene,NewSceneMode.Additive);ownedScene=scene;
+        bool ownedBatchUntitled=Application.isBatchMode && SceneManager.sceneCount==1 && string.IsNullOrEmpty(previous.path) && !previous.isDirty;
+        // Only replace the clean startup scene of our dedicated batch process. Never save a user's scene.
+        if(ownedBatchUntitled) {previous=default(Scene);priorScene=default(Scene);}
+        var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene,ownedBatchUntitled?NewSceneMode.Single:NewSceneMode.Additive);ownedScene=scene;
         if(!EditorSceneManager.SaveScene(scene,BootstrapPath))throw new InvalidOperationException("Isolated bootstrap scene save failed");
         var canvas = new GameObject("MonkeyCandidate",typeof(RectTransform),typeof(Canvas),
             typeof(UnityEngine.UI.CanvasScaler),typeof(UnityEngine.UI.GraphicRaycaster));
@@ -628,8 +659,14 @@ public static class MonkeyImporter
         var instance=(GameObject)PrefabUtility.InstantiatePrefab(prefab,scene);
         if (!EditorSceneManager.SaveScene(scene,ScenePath)) throw new InvalidOperationException("Native scene save failed");
         NativeCheckpoint("scene-reopen",0,1);
-        if(!EditorSceneManager.CloseScene(scene,true))throw new InvalidOperationException("Owned scene close failed");
-        scene=EditorSceneManager.OpenScene(ScenePath,OpenSceneMode.Additive);ownedScene=scene;
+        if(ownedBatchUntitled) {
+            // Opening the saved scene in Single mode normally closes/reloads the only owned scene.
+            scene=EditorSceneManager.OpenScene(ScenePath,OpenSceneMode.Single);
+        } else {
+            if(!EditorSceneManager.CloseScene(scene,true))throw new InvalidOperationException("Owned scene close failed");
+            scene=EditorSceneManager.OpenScene(ScenePath,OpenSceneMode.Additive);
+        }
+        ownedScene=scene;
         if(!scene.IsValid() || !scene.isLoaded)throw new InvalidOperationException("Saved scene reopen failed");
         instance=scene.GetRootGameObjects().FirstOrDefault(go=>go.GetComponent<MonkeyCandidateView>()!=null);
         if(instance==null)throw new InvalidOperationException("Reopened scene has no serialized candidate view");
