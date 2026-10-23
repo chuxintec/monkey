@@ -27,16 +27,16 @@ def inside(root, relative):
     return path
 
 
-def read(path):
+def read(path, max_bytes=MAX_BYTES):
     path = safe(path)
     with path.open('rb') as stream:
-        raw = stream.read(MAX_BYTES + 1)
-    if len(raw) > MAX_BYTES:
-        fail('BYTE_BUDGET', str(path), 'Input exceeds 32 MiB')
+        raw = stream.read(max_bytes + 1)
+    if len(raw) > max_bytes:
+        fail('BYTE_BUDGET', str(path), 'Input exceeds declared byte budget')
     return raw
 
 
-def load(raw):
+def load(raw, max_nodes=3_000_000):
     def pairs(items):
         out = {}
         for key, value in items:
@@ -46,7 +46,7 @@ def load(raw):
         return out
     result = json.loads(raw.decode('utf-8-sig'), object_pairs_hook=pairs,
                         parse_constant=lambda x: fail('NONFINITE_NUMBER', '$', x))
-    budget(result, max_nodes=3_000_000)
+    budget(result, max_nodes=max_nodes)
     return result
 
 
@@ -59,13 +59,25 @@ def write_json(path, value):
     path.write_bytes(encoded(value))
 
 
+def stage_bytes(path):
+    """Larger generated documents still require an owning manifest and bounded bytes."""
+    path=safe(path)
+    manifest=load(read(path.parent/'manifest.json',max_bytes=128*1024*1024),max_nodes=8_000_000)
+    entry=next((f for f in manifest.get('files',[]) if f['path']==path.name),{})
+    if not entry or entry.get('bytes',0)>128*1024*1024:fail('STAGE_DOCUMENT_BUDGET',str(path),'Missing or oversized generated document')
+    raw=read(path,max_bytes=128*1024*1024)
+    if entry.get('sha256')!=sha(raw) or entry.get('bytes')!=len(raw):
+        fail('STAGE_DOCUMENT_CHANGED',str(path),'Document differs from its owning stage manifest')
+    return raw
+
+
+def stage_manifest(directory):
+    return load(read(safe(directory)/'manifest.json',max_bytes=128*1024*1024),max_nodes=8_000_000)
+
+
 def stage_document(path):
     """Verify the generated document against its owning stage manifest."""
-    path=safe(path);raw=read(path)
-    manifest=load(read(path.parent/'manifest.json'))
-    expected=next((f['sha256'] for f in manifest.get('files',[]) if f['path']==path.name),None)
-    if expected!=sha(raw):fail('STAGE_DOCUMENT_CHANGED',str(path),'Document differs from its owning stage manifest')
-    return load(raw)
+    return load(stage_bytes(path),max_nodes=8_000_000)
 
 
 def new_output(path, inputs=()):
@@ -90,8 +102,10 @@ def finish(out, report):
     report['files'] = [dict(path=p.relative_to(out).as_posix(), sha256=sha(p.read_bytes()),
                             bytes=p.stat().st_size, owner=('manual' if p.relative_to(out).as_posix().startswith(('Assets/Manual/','assets/manual/')) else 'generated'))
                        for p in sorted(out.rglob('*')) if p.is_file() and p != out / 'manifest.json']
-    if sum(f['bytes'] for f in report['files']) > 256*1024*1024:
-        fail('OUTPUT_BUDGET',str(out),'Candidate exceeds 256 MiB output budget')
+    limit=(1024 if report.get('scopeMode')=='whole-input' else 256)*1024*1024
+    if sum(f['bytes'] for f in report['files']) > limit:
+        fail('OUTPUT_BUDGET',str(out),'Candidate exceeds declared stage output budget')
+    if report.get('scopeMode')=='whole-input':report['limits']=dict(maxOwnedOutputBytes=limit)
     report['status'] = 'partial' if report.get('diagnostics') else 'candidate'
     write_json(out / 'manifest.json', report)
     return report

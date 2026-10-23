@@ -51,8 +51,9 @@ public static class MonkeyImporter
     [Serializable] public class Readback {
         public string status, unityVersion, prefabGuid, sceneGuid;
         public int spriteCount, nodeCount, missingScripts; public bool editableRoundtrip; public string previewPath,previewSha256,previewError,colorSpace;
-        public MotionResult[] animations; public string[] diagnostics; public NodeResult[] nodes; public SpriteResult[] sprites; public FileResult[] nativeFiles; public FontResult[] fonts; public LabelResult[] labels; public ViewReference[] viewReferences;
+        public MotionResult[] animations; public string[] diagnostics; public NodeResult[] nodes; public SpriteResult[] sprites; public FileResult[] nativeFiles; public FontResult[] fonts; public LabelResult[] labels; public ViewReference[] viewReferences; public JsonResult[] jsonAssets;
     }
+    [Serializable] public class JsonResult { public string id,guid,textSha256; }
     [Serializable] public class ViewReference { public string sourceId,field; public int index; public long prefabFileId; public bool bound; }
     [Serializable] public class FileResult { public string path, sha256; }
     [Serializable] public class NodeResult {
@@ -65,6 +66,7 @@ public static class MonkeyImporter
     }
     const string PrefabPath = "Assets/Generated/Views/Candidate.prefab";
     const string ScenePath = "Assets/Generated/Scenes/Candidate.unity";
+    const string BootstrapPath = "Assets/Generated/Scenes/ImportBootstrap.unity";
 
     [MenuItem("Tools/Monkey/Import Candidate")]
     public static void ImportCandidate() { Run(); }
@@ -76,19 +78,24 @@ public static class MonkeyImporter
             throw new InvalidOperationException("Candidate requires Unity 6000.6.2f1; no automatic version migration");
         if (EditorApplication.isPlayingOrWillChangePlaymode || EditorApplication.isCompiling)
             throw new InvalidOperationException("Editor must be idle");
-        if (File.Exists(PrefabPath) || File.Exists(ScenePath))
+        if (File.Exists(PrefabPath) || File.Exists(ScenePath) || File.Exists(BootstrapPath))
             throw new InvalidOperationException("Create-only import: Prefab/Scene already exists. Use a new candidate.");
         if (SceneManager.GetActiveScene().isDirty)
             throw new InvalidOperationException("Active scene has unsaved work; import refused");
         var plan = JsonUtility.FromJson<Plan>(File.ReadAllText("Assets/Monkey/Editor/import-plan.json"));
         var diagnostics = new List<string>();
+        foreach(var directory in new[]{Path.GetDirectoryName(PrefabPath),Path.GetDirectoryName(ScenePath),"Assets/Generated/Art","Assets/Generated/Controllers","Analysis"})
+            Directory.CreateDirectory(directory);
+        AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
         if (plan.sourceDiagnosticCount > 0) diagnostics.Add("SOURCE_GAPS: " + plan.sourceDiagnosticCount);
         var spriteMap = new Dictionary<string, Sprite>();
         foreach (var item in plan.textures)
         {
+            AssetDatabase.ImportAsset(item.path,ImportAssetOptions.ForceUpdate|ImportAssetOptions.ForceSynchronousImport);
             var importer = AssetImporter.GetAtPath(item.path) as TextureImporter;
             if (importer == null) throw new InvalidOperationException("Missing texture importer: " + item.path);
             importer.textureType = TextureImporterType.Sprite;
+            importer.textureShape = TextureImporterShape.Texture2D;
             importer.spriteImportMode = SpriteImportMode.Single;
             importer.spritePixelsPerUnit = plan.pixelsPerUnit;
             importer.spritePivot = new Vector2(.5f,.5f);
@@ -104,6 +111,7 @@ public static class MonkeyImporter
             importer.maxTextureSize = 16384;
             // Color space / alpha origin remains unknown in Analysis, never asserted as matched.
             importer.SaveAndReimport();
+            AssetDatabase.ImportAsset(item.path,ImportAssetOptions.ForceUpdate|ImportAssetOptions.ForceSynchronousImport);
             var sprite = AssetDatabase.LoadAssetAtPath<Sprite>(item.path);
             if (sprite == null) throw new InvalidOperationException("Sprite import failed: " + item.path);
             spriteMap.Add(item.id,sprite);
@@ -188,6 +196,7 @@ public static class MonkeyImporter
         // Additive preview scene preserves any previously open scene.
         var previous = SceneManager.GetActiveScene();
         var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene,NewSceneMode.Additive);
+        if(!EditorSceneManager.SaveScene(scene,BootstrapPath))throw new InvalidOperationException("Isolated bootstrap scene save failed");
         var canvas = new GameObject("MonkeyCandidate",typeof(RectTransform),typeof(Canvas),
             typeof(UnityEngine.UI.CanvasScaler),typeof(UnityEngine.UI.GraphicRaycaster));
         SceneManager.MoveGameObjectToScene(canvas,scene);
@@ -368,6 +377,12 @@ public static class MonkeyImporter
         var instance=(GameObject)PrefabUtility.InstantiatePrefab(prefab,scene);
         if (!EditorSceneManager.SaveScene(scene,ScenePath)) throw new InvalidOperationException("Native scene save failed");
         var readback = new Readback {
+            jsonAssets=plan.assets.Where(a=>a.kind=="cc.JsonAsset").Select(a=> {
+                var text=AssetDatabase.LoadAssetAtPath<TextAsset>(a.path);
+                if(text==null)throw new InvalidOperationException("JsonAsset TextAsset import failed: "+a.id);
+                using(var hash=System.Security.Cryptography.SHA256.Create())return new JsonResult {id=a.id,guid=AssetDatabase.AssetPathToGUID(a.path),
+                    textSha256=BitConverter.ToString(hash.ComputeHash(System.Text.Encoding.UTF8.GetBytes(text.text))).Replace("-","").ToLowerInvariant()};
+            }).ToArray(),
             status=diagnostics.Count==0?"imported":"partial",unityVersion=Application.unityVersion,
             prefabGuid=AssetDatabase.AssetPathToGUID(PrefabPath),sceneGuid=AssetDatabase.AssetPathToGUID(ScenePath),
             animations=motionReadback,spriteCount=spriteMap.Count,nodeCount=nodeMap.Count,

@@ -1,0 +1,56 @@
+"""Explicit WeChat cache/temp manifests, independently implemented in Python.
+
+Behavior reference: user's private AssetDeoce ae49cdaa (no Go source copied).
+Only declared wxfile paths are read; remote URLs are identifiers, never requests.
+"""
+import re
+from urllib.parse import urlsplit,unquote
+from ..io import safe,inside,read,load,sha,diagnostic
+from .containers import relative,MAX_FILE
+from .compiled import fail
+
+
+def plan(root,manifest,kind):
+    root=safe(root);manifest=safe(manifest)
+    if kind not in ('cache','temp'):fail('CACHE_SCHEMA',str(kind),'Expected cache or temp')
+    raw=read(manifest);data=load(raw);files=data.get('files')
+    if not isinstance(files,dict) or len(files)>50000:fail('CACHE_SCHEMA',str(manifest),'Expected bounded files object')
+    records=[];missing=[];seen={}
+    for remote,entry in sorted(files.items()):
+        if not isinstance(entry,dict):fail('CACHE_SCHEMA','files','Expected entry object')
+        bundle=entry.get('bundle')
+        if not isinstance(bundle,str) or not re.fullmatch('[A-Za-z0-9_-]{1,128}',bundle):
+            fail('CACHE_BUNDLE','files','Invalid bundle identity')
+        parsed=urlsplit(remote)
+        if parsed.scheme not in ('http','https') or not parsed.netloc or parsed.username or parsed.password:
+            fail('CACHE_REMOTE_IDENTITY','files','Expected HTTP(S) resource identity without credentials')
+        parts=unquote(parsed.path).split('/')
+        if parts.count(bundle)!=1:fail('CACHE_REMOTE_IDENTITY',bundle,'Bundle must occur once as a complete URL path segment')
+        suffix=relative('/'.join(parts[parts.index(bundle)+1:]))
+        logical=relative(bundle+'/'+suffix)
+        location=entry.get('url' if kind=='cache' else 'path')
+        if not isinstance(location,str):fail('CACHE_LOCAL_PATH',bundle,'Missing declared local wxfile path')
+        local=urlsplit(location)
+        if local.scheme!='wxfile' or local.query or local.fragment:
+            fail('CACHE_LOCAL_PATH',bundle,'Only explicit local wxfile identifiers are accepted')
+        disk=inside(root,relative(unquote(local.netloc+local.path)))
+        key=sha(remote.encode())
+        if not disk.is_file():
+            missing.append(dict(sourceKey=key,path=logical,reason='input_not_provided'));continue
+        info=dict(path=logical,disk=disk,sourceKeys=[key])
+        if logical in seen:
+            previous=seen[logical]
+            if sha(read(previous['disk'],max_bytes=MAX_FILE))!=sha(read(disk,max_bytes=MAX_FILE)):
+                fail('CACHE_MAPPING_CONFLICT',logical,'Different local content claims the same bundle path')
+            previous['sourceKeys'].append(key)
+        else:
+            seen[logical]=info;records.append(info)
+    return dict(records=records,missing=missing,version=data.get('version'),manifestSha256=sha(raw),manifest=manifest,
+                declaredEntries=len(files),availableMappings=len(records))
+
+
+def entries(root,manifest,kind):
+    mapping=plan(root,manifest,kind)
+    yield 'CacheEvidence/'+mapping['manifest'].name,read(mapping['manifest'])
+    for record in mapping['records']:
+        yield record['path'],read(record['disk'],max_bytes=MAX_FILE)

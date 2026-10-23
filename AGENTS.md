@@ -3,6 +3,7 @@
 本项目由用户于2026-10-22明确新建，路径Games/tools/monkey，语言Python。用户来源：总监local/01a14c8c-6402-7d03-bab8-ec7ea8051abf，turn01a1635b-cca0-7d72-83c4-8b7324514688 / message01a1635b-ccc9-7101-b901-a84b399ab0e3。
 
 - 当前唯一任务源`docs/PLAN.md`。总监定范围，开发者实现、维护进度并反馈成组交付/阻塞；不恢复项目经理或周期巡检。新会话实际工作目录必须为本目录，不能在Games根写产品代码。
+- 执行[主开发者完工报告与总监续推规范](/Users/wangmeng/Documents/Manager/standards/DIRECTOR-CONTINUATION.md)。人类授权已由本聊天原生read_thread核验：总监`01a14c8c-6402-7d03-bab8-ec7ea8051abf`，turn`01a166b4-5be9-7182-a985-a9331c3901ff`/message`01a166b4-5c18-78f3-8cc2-c0d07dd46a20`。工作包完成、真实阻塞、申请交付或准备结束但版本未完时，先更新PLAN，再以稳定事件ID发5–8行原生send_message_to_thread报告至该总监聊天；已批准且前置满足的工作继续，不等礼节ACK，发送明确拒绝不绕过。不新增巡检、Agent或授权范围。
 - 用户明确建立独立工具，覆盖上级“所有通用工具只能维护于grea”的默认规则。monkey可生成Unity和Cocos候选；这不恢复肥鹅Cocos或其他暂停项目。
 - 核心Python 3.11+；正式范围为wxapkg/APK/已取得Cocos资源集合一键输出Unity6/Creator3.8自包含恢复工程，含全资源台账、规范归类、源码模块恢复与TS/C#初稿、AI接手入口。允许有限静态语义转写，不承诺无损全量业务自动转换；禁止把Cocos运行时/节点解释器塞入目标Player，不凭推断伪造服务端。
 - 原始资源、肥鹅项目和GREA只读。样本在本项目`.private/`引用清单中登记来源哈希/版本，必要最小副本也只留`.private/`；不复制完整私有游戏进公开fixtures或发行包，不依赖肥鹅Tools的运行时import或绝对路径。

@@ -18,11 +18,12 @@ def main(argv=None):
     cap = sub.add_parser('capabilities')
     cap.add_argument('--json', action='store_true')
     p = sub.add_parser('convert', help='Convert a source project into an isolated native project candidate')
-    p.add_argument('--source', help='Creator 2.4.15 project directory/project.json or bundle config.json')
+    p.add_argument('--source', help='Local wxapkg/APK, resource/project directory, project.json or bundle config.json')
+    p.add_argument('--input-set', help='Explicit local roots and identity/provenance manifest (schema 1)')
     p.add_argument('--target', choices=['unity','cocos','unity6','cocos38','both',UNITY_PROFILE,cocos.PROFILE])
     p.add_argument('--package', action='store_true', help='Inventory all input files and generate self-contained recovery workspaces')
-    p.add_argument('--out', '--output', help='Fresh output directory; native project is created under project/')
-    p.add_argument('--resume', help='Recheck a previous conversion after native import, with identity checks')
+    p.add_argument('--out', '--output', help='Fresh output directory; package targets use UnityProject/ and CocosProject/')
+    p.add_argument('--resume', help='Resume a conversion with identity/hash checks; packages also require --input-set')
     p.add_argument('--recipe', help='Reusable JSON input/selection options; combine with --out')
     p.add_argument('--offline', action='store_true', help='Explicitly generate and verify an offline candidate only')
     p.add_argument('--namespace')
@@ -82,21 +83,30 @@ def main(argv=None):
                 compiledFormats=['compiled-v1','pack-v1','texture-pack-v1'],
                 containerFormats=['plain-wxapkg','APK-ZIP','Cocos-resource-directory'],
                 packageWorkflow=dict(fileAccounting='implemented',staticModuleRecovery='partial',codeDrafts='source-linked-contracts',
-                                     nativeObjectRecovery='partial-slice-only',editorOrchestration='not_implemented'),
+                                     nativeObjectRecovery='shared-ir-supported-subset',packageResume='hash-checked',inputSets='explicit-local-roots',editorOrchestration='not_implemented'),
                 imageFormats=['PNG','JPEG','ASTC (optional pinned decoder)'],animationSchemaVersion=1,
                 animationSubset=['local-position','local-scale','opacity','linear','constant-step','Normal','Loop'],animationEvents='manual-contract-only', targetEditorValidation='not_run'), ensure_ascii=False))
             return 0
         if args.command == 'convert':
             from .convert import convert, resume, recipe
+            if args.resume and args.input_set:
+                if any((args.source,args.target,args.out,args.recipe,args.asset_index,args.all_assets,args.bindings,
+                        args.dependency_source,args.evidence_source,args.animation,args.source_profile,args.namespace,args.package)):
+                    parser.error('package resume accepts --resume, --input-set and optional --offline only')
+                from .package import resume_package
+                result=resume_package(args.resume,args.input_set,args.offline)
+                print(json.dumps(dict(status=result['workflowStatus'],resultKind=result['resultKind'],completed=result['completed'],
+                                      projects=result['projects'],report=str(Path(args.resume).resolve()/'conversion-result.json')),ensure_ascii=False))
+                return 1
             source_path=Path(args.source) if args.source else None
-            package_mode=args.package or args.target in ('both','unity6','cocos38') or (source_path is not None and
+            package_mode=args.input_set or args.package or args.target in ('both','unity6','cocos38') or (source_path is not None and
                 (source_path.suffix.lower() in ('.apk','.wxapkg') or source_path.is_dir() and not args.asset_index and not args.recipe))
             if package_mode:
-                if not all((args.source,args.target,args.out)) or any((args.resume,args.recipe,args.asset_index,
+                if not all((args.source or args.input_set,args.target,args.out)) or args.source and args.input_set or any((args.resume,args.recipe,args.asset_index,
                         args.dependency_source,args.evidence_source,args.bindings,args.animation,args.source_profile)):
                     parser.error('package conversion requires --source/--target/--out; slice options are unsupported')
                 from .package import convert_package
-                result=convert_package(args.source,args.target,args.out,args.namespace or 'monkey-project',args.offline)
+                result=convert_package(args.source,args.target,args.out,args.namespace or 'monkey-project',args.offline,args.input_set)
                 print(json.dumps(dict(status=result['workflowStatus'],resultKind=result['resultKind'],
                      completed=result['completed'],projects=result['projects'],inputFiles=result['inputFiles'],
                      inputBytes=result['inputBytes'],diagnostics=len(result['diagnostics']),nextAction=result['nextAction'],
@@ -152,7 +162,8 @@ def main(argv=None):
                 incremental.register(output_path,Path.cwd())
         elif args.command == 'verify':
             from .io import safe, read, load
-            profile=load(read(safe(args.candidate)/'manifest.json')).get('targetProfile')
+            from .io import stage_manifest
+            profile=stage_manifest(safe(args.candidate)).get('targetProfile')
             result = (cocos.verify if profile==cocos.PROFILE else verify)(args.candidate,args.out,args.level)
         else:
             result = handoff(args.candidate,args.out)

@@ -100,8 +100,9 @@ class PackageTests(unittest.TestCase):
                 # All source JS and drafts stay outside engine script compilation roots.
                 compiled_root=project/('Assets' if project.name=='UnityProject' else 'assets')
                 self.assertFalse(list(compiled_root.rglob('*.js')))
-                self.assertFalse(list(compiled_root.rglob('*.cs')))
-                self.assertFalse(list(compiled_root.rglob('*.ts')))
+                for script in [*compiled_root.rglob('*.cs'),*compiled_root.rglob('*.ts')]:
+                    self.assertNotIn('SourceRecovery',script.parts)
+                    self.assertNotIn('Wallet',script.name)
                 moved=root/('standalone-'+project.name)
                 shutil.copytree(project,moved)
                 for row in load(read(moved/'manifest.json'))['files']:

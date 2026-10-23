@@ -12,7 +12,7 @@ from ..io import safe
 from .compiled import fail
 
 MAX_FILES = 50000
-MAX_FILE = 32 * 1024 * 1024
+MAX_FILE = 128 * 1024 * 1024
 MAX_TOTAL = 512 * 1024 * 1024
 MAX_CONTAINER = 1024 * 1024 * 1024
 

@@ -20,3 +20,13 @@ Creator 3.8.8新增目标按本机已安装3.8.8的`cc.d.ts`、引擎公开组�
 包级增量：明文wxapkg头/索引算法参考GREA `src/grea/tools/unpack_wxapkg.py`（MIT），monkey独立实现额外连续区间、字节/数量预算与路径别名检查；APK用Python标准库zipfile，不执行原程序。不在运行时import GREA。
 
 AST模块框架改编自GREA `tools/cocos/index-modules.cjs`，来源SHA256 `462ef1dcac57831c6f430bb86e46b5034405d1b5bedb2a6ddcf0eeafa5feea97`；monkey新增语法事实、显式多表候选和词法RF区域候选，非原运行时注册证明。固定vendored Acorn8.15.0 `dist/acorn.js` 原文件SHA256 `fdb08546776ec6228b03e8d02b40d4ab3255bae5f401adba7ff5dad927ac5c9c`；MIT许可随`licenses/ACORN-MIT.txt`和既有GREA-MIT保留。仅宿主Node解析，无在线依赖安装，目标工程不携带解析器。
+
+
+## 2026-10-23 用户自有旧工具行为迁移
+
+经授权只读核对AssetDeoce `ae49cdaa372f27a79776bace9c07a25478a4c489`中的
+`pkg/bundle/file.go`、`pkg/decoder/config.go`、`pkg/asset/cc_asset.go`、`pkg/asset/cc_spine.go`。
+本次Python独立实现本地cache/temp列表映射、精确版本与显式跨bundle依赖解析、JsonAsset真实payload保留。
+未复制整个私有仓库或对其宣称MIT许可；未引入Go依赖、CDN请求、猜测音频/Spine扩展名或吞掉失败。
+Spine原生闭包适配尚未实现。原始PSD等文件留存上限128MiB，不代表结构解析或图像像素预算放宽。
+生成的受控阶段文档读取上限128MiB/800万值，原始普通JSON保持独立预算。

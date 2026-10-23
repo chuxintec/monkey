@@ -34,6 +34,13 @@ class Bundle:
             fail('INVALID_CONFIG', '$', 'Expected named bundle config')
         if c.get('engineVersion', '2.4.15') != '2.4.15':
             fail('UNSUPPORTED_VERSION', '$.engineVersion', 'Profile requires 2.4.15')
+        self.bases={}
+        for kind in ('import','native'):
+            base=c.get(kind+'Base',kind)
+            if not isinstance(base,str) or not base or '\\' in base or ':' in base:
+                fail('UNSUPPORTED_RESOURCE_BASE',kind,'Expected explicit local relative resource base')
+            inside(self.root,base)
+            self.bases[kind]=base.rstrip('/')
         for field,expected in [('packs',dict),('paths',dict),('types',list),('versions',dict),('deps',list)]:
             if field in c and not isinstance(c[field],expected):
                 fail('INVALID_CONFIG','$. '+field,'Unexpected table shape')
@@ -73,17 +80,17 @@ class Bundle:
             self.redirects[index] = c['deps'][ordinal]
         self.cache = {}
 
-    def record(self, path):
+    def record(self, path, max_bytes=32*1024*1024):
         path = safe(path)
         if not path.is_relative_to(self.root):
             fail('UNSAFE_PATH', str(path), 'Source outside bundle')
-        raw = read(path)
+        raw = read(path,max_bytes=max_bytes)
         key = path.relative_to(self.root).as_posix()
         info = dict(path=key, sha256=sha(raw), bytes=len(raw))
         if key in self.inputs and self.inputs[key] != info:
             fail('SOURCE_CHANGED', key, 'Source changed during inspection')
         self.inputs[key] = info
-        if sum(v['bytes'] for v in self.inputs.values()) > 128 * 1024 * 1024:
+        if sum(v['bytes'] for v in self.inputs.values()) > getattr(self,'max_input_bytes',128*1024*1024):
             fail('BYTE_BUDGET', '$', 'Selected source closure exceeds 128 MiB')
         return raw
 
@@ -99,7 +106,7 @@ class Bundle:
         return next(iter(found), None)
 
     def select(self, kind, identity, version, extension):
-        folder = inside(self.root, f'{kind}/{identity[:2]}')
+        folder = inside(self.root, f'{self.bases[kind]}/{identity[:2]}')
         stem = identity + ('.' + version if version else '')
         if extension:
             candidates = [folder / (stem + extension)]
@@ -168,7 +175,8 @@ class Bundle:
         return entry
 
 
-def inspect(config, selection, output, dependency_sources=(), evidence_sources=()):
+def inspect(config, selection, output, dependency_sources=(), evidence_sources=(), *, include_all_bundles=False,
+            max_assets=2048, max_bytes=128*1024*1024, resolve_provided=False):
     if len(dependency_sources)>15:
         fail('BUNDLE_BUDGET','$','At most 16 explicit bundles')
     primary = Bundle(config)
@@ -182,18 +190,25 @@ def inspect(config, selection, output, dependency_sources=(), evidence_sources=(
     if not selection:
         fail('EMPTY_SELECTION', '$.selection', 'At least one --asset-index is required')
     pending = [(primary.config['name'],i) for i in selection]
+    if include_all_bundles:
+        pending += [(name,i) for name,b in bundles.items() if name!=primary.config['name'] for i in range(len(b.keys))]
+    provided={}
+    for name,b in bundles.items():
+        b.max_input_bytes=max_bytes
+        for key in b.keys: provided.setdefault(key,[]).append(name)
+    aliases_seen=set()
     seen = set()
     assets, diagnostics = [], [diagnostic('INVALID_CONFIG_IDENTITY', name+f':$.uuids[{i}]',message) for name,b in bundles.items() for i,message in b.invalid_keys.items()]
     while pending:
         name,index = pending.pop(0)
         bundle = bundles[name]
-        if sum(v['bytes'] for b in bundles.values() for v in b.inputs.values())>128*1024*1024:
-            fail('BYTE_BUDGET','$','Combined bundle closure exceeds 128 MiB')
+        if sum(v['bytes'] for b in bundles.values() for v in b.inputs.values())>max_bytes:
+            fail('BYTE_BUDGET','$','Combined bundle closure exceeds declared byte budget')
         if (name,index) in seen:
             continue
         seen.add((name,index))
-        if len(seen) > 2048:
-            fail('ASSET_BUDGET', '$', 'Selected dependency closure exceeds 2048 assets')
+        if len(seen) > max_assets:
+            fail('ASSET_BUDGET', '$', 'Selected dependency closure exceeds declared asset budget')
         key = at(bundle.keys, index, '$.selection')
         sid = bundle.config['name'] + ':' + key
         try:
@@ -212,9 +227,10 @@ def inspect(config, selection, output, dependency_sources=(), evidence_sources=(
             assets.append(entry)
             continue
         # Native-only texture keys can legitimately have no import document.
+        folder = inside(bundle.root,bundle.bases['native']+'/'+key[:2])
         try:
             native_version = bundle.version('native', index, key)
-            folder = bundle.root / 'native' / key[:2]
+            folder = inside(bundle.root,bundle.bases['native']+'/'+key[:2])
             if native_version is not None or any(folder.glob(key + '.*')):
                 native_name=None
                 if entry.get('document'):
@@ -223,14 +239,14 @@ def inspect(config, selection, output, dependency_sources=(), evidence_sources=(
                     if Path(native_name).name!=native_name:
                         fail('UNSAFE_NATIVE_NAME',sid,'Native basename must not contain directories')
                     stem=key+('.'+native_version if native_version else '')
-                    directory=inside(bundle.root,f'native/{key[:2]}/{stem}')
+                    directory=inside(bundle.root,f'{bundle.bases["native"]}/{key[:2]}/{stem}')
                     native_path=inside(directory,native_name)
                     if not native_path.is_file():
                         # Some source profiles publish a direct versioned file instead.
                         native_path=bundle.select('native',key,native_version,None)
                 else:
                     native_path = bundle.select('native', key, native_version, None)
-                bundle.record(native_path)
+                bundle.record(native_path,max_bytes=128*1024*1024 if include_all_bundles else 32*1024*1024)
                 entry['native'] = native_path.relative_to(bundle.root).as_posix()
                 if entry['document'] is None:
                     # Preserve missing-import diagnostic: native existence is not proof of metadata.
@@ -240,15 +256,27 @@ def inspect(config, selection, output, dependency_sources=(), evidence_sources=(
         for ref in entry['references']:
             if ref in bundle.lookup:
                 pending.append((name,bundle.lookup[ref]))
+            elif resolve_provided and len(provided.get(ref,[]))==1:
+                target_name=provided[ref][0];alias=name+':'+ref
+                pending.append((target_name,bundles[target_name].lookup[ref]))
+                if alias not in aliases_seen:
+                    aliases_seen.add(alias)
+                    assets.append(dict(sourceId=alias,key=ref,index=None,bundle=name,kind='redirect',document=None,native=None,
+                                       references=[],redirectTarget=target_name+':'+ref,redirectBundle=target_name,
+                                       resolutionEvidence='exact UUID in sole explicitly supplied bundle'))
             else:
                 diagnostics.append(diagnostic('EXTERNAL_REFERENCE', entry.get('importPath', '$'),
                                               'Reference absent from selected bundle: ' + ref, sid))
+                if resolve_provided:
+                    diagnostics[-1]['resolutionReason']='ambiguous_provided_identity' if provided.get(ref) else 'input_not_provided'
+                    diagnostics[-1]['reference']=ref
         assets.append(entry)
     # Detect mutation of any observed source before publishing the manifest.
     inputs = []
     for name,bundle in bundles.items():
         for relative, info in bundle.inputs.items():
-            if sha(read(inside(bundle.root, relative))) != info['sha256']:
+            from .containers import fingerprint
+            if fingerprint(inside(bundle.root, relative)) != info['sha256']:
                 fail('SOURCE_CHANGED', relative, 'Source changed during inspection')
             inputs.append(dict(bundle=name,**info))
     if len(evidence_sources)>8:fail('EVIDENCE_BUDGET','$','At most eight explicit source evidence files')
@@ -263,5 +291,7 @@ def inspect(config, selection, output, dependency_sources=(), evidence_sources=(
                   bundle=primary.config['name'], selection=selection,evidenceFiles=evidence,
                   inputs=sorted(inputs, key=lambda x: (x['bundle'],x['path'])),
                   assets=sorted(assets, key=lambda x: x['sourceId']), diagnostics=diagnostics)
+    if include_all_bundles:
+        report['packageSelection']=dict(allProvidedBundles=True,maxAssets=max_assets,maxBytes=max_bytes)
     write_json(out / 'source-manifest.json', report)
     return finish(out, report)

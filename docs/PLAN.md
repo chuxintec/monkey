@@ -1,5 +1,11 @@
 # monkey 项目计划与执行进度
 
+完工/阻塞/交付与续推按[DIRECTOR-CONTINUATION](/Users/wangmeng/Documents/Manager/standards/DIRECTOR-CONTINUATION.md)执行；本聊天已原生核验人类授权`01a166b4-5c18-78f3-8cc2-c0d07dd46a20`，总监路由`01a14c8c-6402-7d03-bab8-ec7ea8051abf`。更新本PLAN后以稳定事件ID报告，已批准就绪下一包连续推进，不因报告或普通ACK停下。
+
+## 当前在途 CONTINUE-04
+
+正在将包级inventory接现有reader/同一IR/标准目录双目标，新增显式input-set与来源关系核验，并吸收用户自有AssetDeoce（`ae49cda`）的本地缓存清单/资源版本定位/JsonAsset载荷与Spine关联经验，统一Python；旧Go不执行、私有源不假标开源。多根实样扩大后发现一份PSD超过旧32MiB留存上限，首轮安全停止并保留证据；原格式留存与结构化解析预算分开修正，未知PSD不冒充原生可用图片。当前native仍not_run，不启动/申请GUI。
+
 ## 2026-10-23 当前包级增量
 
 P2/P3已接入明文wxapkg/APK/资源目录全文件台账与双目标标准目录、源码AST/RF区域候选、源/目标草稿映射和AI入口。真实冻结主分包73文件/8,166,145字节逐项有去向，914个RF区域候选和每目标914初稿；外围上下文未恢复、12个源引用缺失仍保留；该实样AST配对未报告未匹配项，字符串计数不当作模块分母。不是整游戏输入，也不是914个业务已还原。
@@ -155,3 +161,11 @@ v0.2已以同一`reward-ir-11`及字体证据输出`outputs/creator-reward-02`�
 实际控制阻塞：CUA按bundle ID和已安装版本路径只能绑定无标题的推荐Dashboard启动提示；Window菜单没有工程可选窗口，无法安全绑定/操作已加载的monkey工程菜单。Dashboard显示登录界面，未登录/未输入凭据。按总监收敛指令停止同条件重试和源码排查，Dashboard正常退出；Creator仍报告running，工程startup记录PID41840，无法安全绑定主窗口故未强退，现无人输入；总监已收到释放消息。
 
 Candidate.scene/editor-readback/真实PNG不存在，5Label绑定、原生Scene保存、编辑重开、浏览器及UI命中均not_run；v0.2未通过。详见[首轮验收](validation/2026-10-23-v02-acceptance-round1.md)。后续须先恢复可操作工程窗口/工具绑定，再在明确新窗口中继续；后台不追加离线功能或把资产ready当作页面验收。
+
+## 2026-10-23 一键CLI与整包结构化成组结果
+
+用户再次明确要求命令行一键转换，统一入口`bin/monkey convert`已落地；支持源目录/明文wxapkg/APK、显式多根input-set、unity6/cocos38/both，以及哈希保护的包级续跑（含可信备份的中断恢复）。旧候选归档，拒绝覆盖人工修改。CLI帮助、README、USAGE已同步。
+
+真实四根输入5097文件/243799340字节已完成双目标离线候选，13994对象经同一IR生成标准目录原生计划。20605节点/23373组件/5179帧/8 JsonAsset，坏图1项隔离；914 RF证据与合同按714工作批交接。具体统计/清单SHA和各口径限制见`docs/validation/2026-10-23-structured-cli.md`。13项受影响测试与Unity薄层离线C#编译通过；Editor/Player/视觉/业务not_run。
+
+当前成组工作包完成但工具版本未交付。必要剩余：独立源Prefab原生生成、Spine闭包、编辑器预检和有界导入编排、真实引擎验收及支持矩阵扩展；缓存映射缺失摘要的最终报告汇总、阶段算法签名尚待补强。按已批准范围继续离线开发；原生验收需总监协调独立Unity窗口。本组向总监报告事件`monkey-cli-structured-20261023-01`，不以报告或礼节ACK阻塞已就绪离线任务。

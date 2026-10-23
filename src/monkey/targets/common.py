@@ -1,5 +1,5 @@
 """Target-independent validation of the existing normalize schema and evidence bindings."""
-from ..io import safe, stage_document, read, load, sha, inside
+from ..io import safe, stage_document, stage_manifest, read, load, sha, inside
 from ..sources.compiled import fail
 
 
@@ -7,7 +7,7 @@ def input_ir(path, bindings_path=None):
     path=safe(path);ir=stage_document(path)
     if ir.get('schemaVersion')!=1 or ir.get('sourceProfile') not in ('cocos-2.4.15-bundle','cocos-2.4.15-project'):
         fail('UNSUPPORTED_IR',str(path),'Expected supported normalize schema 1')
-    expected={f['path']:f['sha256'] for f in load(read(path.parent/'manifest.json'))['files']}
+    expected={f['path']:f['sha256'] for f in stage_manifest(path.parent)['files']}
     bindings={};receipt=None
     if bindings_path:
         raw=read(bindings_path);receipt=load(raw)

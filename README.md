@@ -12,11 +12,22 @@ bin/monkey convert --source /path/to/cocos-resources --target cocos38 --out outp
 
 当前已接入明文wxapkg、APK和资源目录的全文件盘点；输出`UnityProject/`、`CocosProject/`（单目标只生成对应项），两工程分别自包含。原包所有文件按原生可复制、去重映射、原格式待转、代码证据、明确运行时排除分类，报告为`conversion-result.json`。未知资源/不可编译初稿在`SourceRecovery/`，源UUID、逻辑键、代码候选和AI模块任务在`Analysis/`；每个工程含`AGENTS.md`与`Docs/START-HERE.md`。
 
+多个已取得的资源目录可在一个本地清单中声明，避免遗漏分包或混入其他版本：
+
+```sh
+bin/monkey convert --input-set inputs.json --target unity6 --out outputs/my-unity
+bin/monkey convert --resume outputs/my-unity --input-set inputs.json
+```
+
+`inputs.json`指定`schemaVersion: 1`、`sourceProfile: "cocos-2.4.15-bundle"`和`inputs`数组，
+每项包含`id`、本地`path`、相对`config`。可声明游戏身份与冻结来源回执；身份冲突在输出前拒绝。
+续跑校验原输入快照、生成文件与阶段清单；旧工程归档在`Previous/`。实际原生Scene/Prefab仍需目标编辑器导入保存。
+
 静态AST支持有限literal loader/System.register和RF区域候选；恢复的源代码＋TS/C#合同初稿不等于业务已转译。Node为静态解析所需宿主，Acorn8.15.0已固定并随包提供，不执行输入JS。没有Node或格式未支持时保留完整源文件并报告缺口。
 
-**当前是全输入留存＋有限原生资源复制＋代码恢复候选，尚未完成全对象原生还原和编辑器自动导入**。Scene/Prefab/SpriteFrame/Spine/配置语义等待适配项准确保留。默认返回needs_action，`--offline`为partial，退出码1；不能当完整转换成功。未取得的CDN/远程分包不包含，未知加密不破解、不安装APK。
+**当前是全输入留存＋有限原生资源复制＋代码恢复候选，尚未完成全对象原生还原和编辑器自动导入**。已接入2.4.15共享IR：支持的节点图、SpriteFrame、字体及JsonAsset生成原生导入计划；未知组件、Spine等保留证据和缺口。默认返回needs_action，`--offline`为partial，退出码1；不能当完整转换成功。未取得的CDN/远程分包不包含，未知加密不破解、不安装APK。
 
-已有2.4.15切片转换链继续可用：`--target unity|cocos`、`--asset-index`/recipe，结果在`project/`；其完成候选支持`--resume`身份续验。包级工程的原生续验/增量合并尚待接入，不能用旧切片菜单导入新包级工作区。详见[命令说明](docs/USAGE.md)。
+已有2.4.15切片转换链继续可用：`--target unity|cocos`、`--asset-index`/recipe，结果在`project/`；其完成候选支持`--resume`身份续验。包级工程支持按哈希校验续跑并归档原候选；人工修改会阻止覆盖。编辑器自动执行、原生回读和人工代码增量合并尚未完成。详见[命令说明](docs/USAGE.md)。
 
 已实现两条明确的 2.4.15 输入路径：编辑器工程 JSON/meta，以及发布 bundle 的 compiled-v1/pack-v1/texture-pack-v1。工具不执行源脚本，代码初稿不代表业务语义已恢复，不伪造服务器、不模拟源引擎运行时。
 

@@ -3,7 +3,7 @@ from importlib.resources import files
 from pathlib import Path
 import uuid
 from .. import __version__
-from ..io import safe, inside, read, load, sha, write_json, new_output, finish, diagnostic, stage_document
+from ..io import safe, inside, read, load, sha, write_json, new_output, finish, diagnostic, stage_document, stage_bytes,stage_manifest
 from ..sources.compiled import fail
 from .common import input_ir, tasks
 
@@ -47,6 +47,7 @@ def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None):
             originalSize=f['originalSize'],offset=[0,0],border=[0,0,0,0],subresource='spriteFrame')
     for a in ir['assets']:
         if a['kind']=='cc.TTFFont':add(a['sourceId'],a['path'],'ttf','.ttf',fontCoverage=a.get('fontCoverage'))
+        elif a['kind']=='cc.JsonAsset':add(a['sourceId'],a['path'],'json','.json')
         else:diagnostics.append(diagnostic('ASSET_HANDOFF',a['sourceId'],'Creator native subset has no mapping for '+a['kind'],a['sourceId']))
     font_by_id={}
     for f in ir.get('bitmapFonts',[]):
@@ -61,8 +62,9 @@ def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None):
     asset_by_id={a['sourceId']:a for a in assets};components=[]
     supported={'cc.Sprite','cc.Label','cc.Widget','cc.Mask','cc.ScrollView','cc.Layout','cc.Button','cc.LabelOutline'}
     materials={m['sourceId'] for m in ir.get('materials',[]) if m['nativeRole']=='standard-ugui'}
+    node_ids={n['sourceId'] for n in ir['nodes']}
     for src in ir['components']:
-        c=dict(src);sid=c['sourceId'];c['convertible']=c['type'] in supported and c.get('node') in {n['sourceId'] for n in ir['nodes']}
+        c=dict(src);sid=c['sourceId'];c['convertible']=c['type'] in supported and c.get('node') in node_ids
         if sid in bindings:c.update(font=bindings[sid]['font'],bold=bindings[sid].get('syntheticBold',False))
         for field in ['font','spriteFrame']:
             if field in c:c[field]=resolve(c[field])
@@ -118,7 +120,8 @@ def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None):
         raw=raw.encode() if raw is not None else resource(c['source'])
         dest=f'resources/{i:04d}'+Path(c['target']).suffix;(out/dest).write_bytes(raw);c['source']=dest
     result=dict(schemaVersion=1,toolVersion=__version__,targetProfile=PROFILE,namespace=namespace,
-        sourceIrSha256=sha(read(path)),sourceManifestSha256=ir['sourceManifestSha256'],sourceManifestPath=ir.get('sourceManifestPath'),
+        scopeMode=ir.get('scopeMode','asset-selection'),
+        sourceIrSha256=sha(stage_bytes(path)),sourceManifestSha256=ir['sourceManifestSha256'],sourceManifestPath=ir.get('sourceManifestPath'),
         sourceRoots=ir.get('sourceRoots',{}),sourceLocations=ir.get('sourceLocations',{}),bindings=receipt,
         designSize=[750,1334],assets=assets,copies=copies,animations=animations,nodes=ir['nodes'],components=components,
         diagnostics=diagnostics,editorValidation='not_run',subresourceValidation='pending-native-import')
@@ -141,6 +144,7 @@ def export(plan_path,output):
         a=by_path[c['target']]
         if a['kind']=='sprite':m=meta(a['uuid'],'image','1.0.27',dict(type='sprite-frame',fixAlphaTransparencyArtifacts=False,hasAlpha=True))
         elif a['kind']=='ttf':m=meta(a['uuid'],'ttf-font','1.0.1')
+        elif a['kind']=='json':m=meta(a['uuid'],'json','2.0.1')
         else:m=meta(a['uuid'],'bitmap-font','1.0.6',dict(fontSize=a['pointSize'],textureUuid=by_id[a['atlas']]['uuid']))
         write_json(Path(str(target)+'.meta'),m)
     project_id=identity(p['namespace'],'project')
@@ -166,13 +170,17 @@ def export(plan_path,output):
     if p['bindings']:write_json(out/'Analysis/font-bindings.json',p['bindings'])
     (out/'README.md').write_text('Creator 3.8.8 isolated candidate. Open only in an authorized resource window.\nRun Monkey/Import isolated candidate once after assets import. Existing outputs are refused.\nNative scene and child UUIDs require Editor; no source engine interpreter ships.\n')
     report=dict(schemaVersion=1,toolVersion=__version__,targetProfile=PROFILE,namespace=p['namespace'],projectUuid=project_id,
-        sourceManifestSha256=p['sourceManifestSha256'],sourceRoots=p['sourceRoots'],planSha256=sha(read(path)),diagnostics=p['diagnostics'],
+        scopeMode=p.get('scopeMode','asset-selection'),
+        sourceManifestSha256=p['sourceManifestSha256'],sourceRoots=p['sourceRoots'],planSha256=sha(stage_bytes(path)),diagnostics=p['diagnostics'],
         editorValidation='not_run',visualValidation='not_run',businessValidation='not_run',subresourceValidation='pending-native-import')
     write_json(out/'Analysis/candidate.json',report);return finish(out,report)
 
 
 def verify(candidate,output,level='static'):
-    root=safe(candidate);m=load(read(root/'manifest.json'));diagnostics=[]
+    root=safe(candidate);m=stage_manifest(root);diagnostics=[]
+    from .layout import translate
+    from ..sources.containers import fingerprint
+    path_for=lambda p:translate(p,m.get('pathMap',{}))
     if m.get('targetProfile')!=PROFILE:fail('UNSUPPORTED_CANDIDATE',str(root),'Expected Creator profile')
     native={};editor='not_run'
     if level=='editor':
@@ -180,14 +188,18 @@ def verify(candidate,output,level='static'):
         if not rb_path.exists():diagnostics.append(diagnostic('EDITOR_NOT_RUN',str(rb_path),'Run native importer in declared Creator first'))
         else:
             rb=load(read(rb_path));native={f['path']:f['sha256'] for f in rb.get('nativeFiles',[])}
-            plan=load(read(root/'extensions/monkey-import/import-plan.json'))
+            plan=load(read(root/'extensions/monkey-import/import-plan.json',max_bytes=128*1024*1024),max_nodes=8_000_000)
             expected_assets={a['sourceId']:a for a in plan['assets']}
             actual_assets={a['sourceId']:a for a in rb.get('assets',[])}
-            good=rb.get('creatorVersion')=='3.8.8' and rb.get('projectUuid')==m['projectUuid'] and rb.get('manifestSha256')==sha(read(root/'manifest.json'))
+            json_assets={a['sourceId']:a for a in rb.get('jsonAssets',[])}
+            good=rb.get('creatorVersion')=='3.8.8' and rb.get('projectUuid')==m['projectUuid'] and rb.get('manifestSha256')==fingerprint(root/'manifest.json')
             good=good and set(expected_assets)==set(actual_assets) and rb.get('nodeCount')==len(plan['nodes'])
             for sid,a in expected_assets.items():
                 actual=actual_assets.get(sid,{})
                 good=good and actual.get('uuid')==a['uuid'] and (a['kind']!='sprite' or bool(actual.get('spriteFrameUuid')))
+                if a['kind']=='json':
+                    actual_json=json_assets.get(sid,{})
+                    good=good and actual_json.get('uuid')==a['uuid'] and 'value' in actual_json and actual_json['value']==load(read(root/a['path']))
             labels={v['sourceId']:v for v in rb.get('labels',[])}
             for c in plan['components']:
                 if c['convertible'] and c['type']=='cc.Label':
@@ -208,7 +220,7 @@ def verify(candidate,output,level='static'):
                     good=good and near(f.get('offset'),a['offset']) and near(f.get('border'),a['border'])
             good=good and all(isinstance(n.get('nodeUuid'),str) and n['nodeUuid'] for n in rb.get('nodes',[]))
             good=good and all(isinstance(c.get('componentUuid'),str) and c['componentUuid'] for c in rb.get('components',[]))
-            good=good and 'assets/generated/views/Candidate.scene' in native and bool(rb.get('sceneUuid'))
+            good=good and path_for('assets/generated/views/Candidate.scene') in native and bool(rb.get('sceneUuid'))
             from ..assets.animation import verify_native
             motion_gaps=verify_native(plan.get('animations',[]),rb.get('animations',[]),native);diagnostics.extend(motion_gaps);good=good and not motion_gaps
             if not good:diagnostics.append(diagnostic('EDITOR_READBACK_FAILED',str(rb_path),'Native identities/counts/version differ'))
@@ -216,13 +228,14 @@ def verify(candidate,output,level='static'):
     for f in m['files']:
         if f.get('owner')=='manual':continue
         target=inside(root,f['path']);expected=native.get(f['path'],f['sha256'])
-        if not target.is_file() or sha(read(target))!=expected:diagnostics.append(diagnostic('GENERATED_FILE_CHANGED',f['path'],'Generated file differs'))
+        if not target.is_file() or fingerprint(target)!=expected:diagnostics.append(diagnostic('GENERATED_FILE_CHANGED',f['path'],'Generated file differs'))
     for relative,h in native.items():
-        if not relative.startswith(('assets/generated/','Analysis/')):fail('UNSAFE_NATIVE_FILE',relative,'Unexpected native output')
+        prefixes=('assets/','Analysis/') if m.get('layout')=='game-standard-v1' else ('assets/generated/','Analysis/')
+        if not relative.startswith(prefixes):fail('UNSAFE_NATIVE_FILE',relative,'Unexpected native output')
         p=inside(root,relative)
         if not p.is_file() or sha(read(p))!=h:diagnostics.append(diagnostic('NATIVE_FILE_CHANGED',relative,'Saved native hash differs'))
     # Static asset references are logical, not asserted native subresource UUIDs.
-    plan=load(read(root/'extensions/monkey-import/import-plan.json'));ids={a['sourceId'] for a in plan['assets']}
+    plan=load(read(root/'extensions/monkey-import/import-plan.json',max_bytes=128*1024*1024),max_nodes=8_000_000);ids={a['sourceId'] for a in plan['assets']}
     for a in plan['assets']:
         if a.get('atlas') and a['atlas'] not in ids:diagnostics.append(diagnostic('MISSING_ATLAS',a['path'],'Bitmap atlas absent'))
     for c in plan['components']:

@@ -3,7 +3,7 @@ from importlib.resources import files
 from pathlib import Path
 import uuid
 from .. import __version__
-from ..io import safe, inside, read, load, sha, encoded, new_output, finish, write_json, diagnostic, stage_document
+from ..io import safe, inside, read, load, sha, encoded, new_output, finish, write_json, diagnostic, stage_document, stage_bytes, stage_manifest
 from ..sources.compiled import fail
 
 PROFILE = 'unity-6000.6.2f1-ugui'
@@ -18,7 +18,7 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
     ir = stage_document(ir_path)
     if ir.get('schemaVersion') != 1 or ir.get('sourceProfile') not in ('cocos-2.4.15-bundle','cocos-2.4.15-project'):
         fail('UNSUPPORTED_IR', '$', 'Expected normalize schema 1')
-    source_files = load(read(ir_path.parent/'manifest.json'))['files']
+    source_files = stage_manifest(ir_path.parent)['files']
     expected = {f['path']: f['sha256'] for f in source_files}
     diagnostics = list(ir['diagnostics'])
     binding_receipt=None;label_bindings={}
@@ -190,7 +190,7 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
                 entry['convertible']=False
                 diagnostics.append(diagnostic('BUTTON_SUBSET_UNSUPPORTED',c['sourceId'],'Only self-targeted none/scale transitions supported',c['sourceId']))
             if c['events']:
-                diagnostics.append(diagnostic('BUTTON_BUSINESS_UNBOUND',c['sourceId'],'Native Button generated; original handlers remain AI work: '+','.join(e['handler'] or '?' for e in c['events']),c['sourceId']))
+                diagnostics.append(diagnostic('BUTTON_BUSINESS_UNBOUND',c['sourceId'],'Native Button generated; original handlers remain AI work: '+','.join(e.get('handler') or '?' for e in c['events']),c['sourceId']))
         elif c['type']=='cc.LabelOutline':
             label=next((x for x in ir['components'] if x['node']==c['node'] and x['type']=='cc.Label'),None)
             if not label:entry['convertible']=False
@@ -211,7 +211,8 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
         target.write_bytes(read(inside(ir_path.parent,copy['source'])))
         copy['source']='resources/'+target.name
     result=dict(schemaVersion=1,toolVersion=__version__,targetProfile=PROFILE,namespace=namespace,
-                sourceIrSha256=sha(read(ir_path)),sourceManifestPath=ir.get('sourceManifestPath'),sourceManifestSha256=ir['sourceManifestSha256'],
+                scopeMode=ir.get('scopeMode','asset-selection'),
+                sourceIrSha256=sha(stage_bytes(ir_path)),sourceManifestPath=ir.get('sourceManifestPath'),sourceManifestSha256=ir['sourceManifestSha256'],
                 sourceRoots=ir.get('sourceRoots',{}),sourceLocations=ir.get('sourceLocations',{}),designSize=[750,1334],pixelsPerUnit=100,
                 textures=textures,assets=assets,bitmapFonts=bitmap_fonts,animations=animations,bindings=binding_receipt,nodes=nodes,components=components,copies=copies,
                 diagnostics=diagnostics,galleryOnly=not bool(nodes),editorValidation='not_run')
@@ -220,13 +221,13 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
 
 
 def export(plan_path, output):
-    plan_path=safe(plan_path);p=load(read(plan_path))
+    plan_path=safe(plan_path);p=stage_document(plan_path)
     if p.get('targetProfile')!=PROFILE or p.get('schemaVersion')!=1:
         fail('UNSUPPORTED_PLAN','$','Expected Unity plan schema 1')
     # Plan JSON itself must match its create-only manifest, not just copied images.
-    pm=load(read(plan_path.parent/'manifest.json'))
+    pm=stage_manifest(plan_path.parent)
     expected={f['path']:f['sha256'] for f in pm['files']}
-    if expected.get(plan_path.name)!=sha(read(plan_path)):
+    if expected.get(plan_path.name)!=sha(stage_bytes(plan_path)):
         fail('PLAN_CHANGED',str(plan_path),'Plan differs from manifest')
     for c in p['copies']:
         if sha(read(inside(plan_path.parent,c['source'])))!=c['sha256']:
@@ -255,7 +256,7 @@ def export(plan_path, output):
     instruction['sceneGuid']=guid(p['namespace'],'native-scene')
     write_json(out/'Assets/Monkey/Editor/import-plan.json',instruction)
     write_json(out/'Packages/manifest.json',dict(dependencies={'com.unity.ugui':'2.0.0',
-               'com.unity.modules.ui':'1.0.0','com.unity.modules.imgui':'1.0.0','com.unity.modules.input':'1.0.0','com.unity.modules.animation':'1.0.0'}))
+               'com.unity.modules.ui':'1.0.0','com.unity.modules.imgui':'1.0.0','com.unity.modules.animation':'1.0.0'}))
     (out/'ProjectSettings/ProjectVersion.txt').write_text('m_EditorVersion: 6000.6.2f1\n')
     (out/'Assets/Manual/README.md').write_text('AI/人工业务代码区。生成区默认不覆盖；缺口见工程根 Analysis/handoff.json。\n')
     (out/'README.md').write_text('Unity 原生资源/UI候选，非可玩游戏。\n\n打开后执行 Tools > Monkey > Import Candidate。\n'
@@ -305,7 +306,8 @@ def export(plan_path, output):
             bindingEvidence='Actual indices and native fileIDs require Analysis/editor-readback.json') for c in p['components']]))
     if p.get('bindings'):write_json(out/'Analysis/font-bindings.json',p['bindings'])
     report=dict(schemaVersion=1,toolVersion=__version__,targetProfile=PROFILE,namespace=p['namespace'],
-                planSha256=sha(read(plan_path)),sourceRoots=p.get('sourceRoots',{}),sourceManifestSha256=p.get('sourceManifestSha256'),diagnostics=p['diagnostics'],editorValidation='not_run',
+                scopeMode=p.get('scopeMode','asset-selection'),
+                planSha256=sha(stage_bytes(plan_path)),sourceRoots=p.get('sourceRoots',{}),sourceManifestSha256=p.get('sourceManifestSha256'),diagnostics=p['diagnostics'],editorValidation='not_run',
                 visualValidation='not_run',businessValidation='not_run',galleryOnly=p['galleryOnly'])
     write_json(out/'Analysis/candidate.json',report)
     return finish(out,report)
@@ -318,7 +320,10 @@ def close(actual,expected,tolerance=.001):
 
 
 def verify(candidate, output, level='static'):
-    root=safe(candidate);m=load(read(root/'manifest.json'));diagnostics=[]
+    root=safe(candidate);m=stage_manifest(root);diagnostics=[]
+    from .layout import translate
+    from ..sources.containers import fingerprint
+    path_for=lambda p:translate(p,m.get('pathMap',{}))
     native={};editor='not_run'
     if level=='editor':
         readback_path=root/'Analysis/editor-readback.json'
@@ -333,7 +338,13 @@ def verify(candidate, output, level='static'):
                 file=inside(root,relative)
                 if not file.is_file() or sha(read(file))!=expected:
                     diagnostics.append(diagnostic('NATIVE_FILE_CHANGED',relative,'Native file differs from saved readback'))
-            instruction=load(read(root/'Assets/Monkey/Editor/import-plan.json'))
+            instruction=load(read(root/path_for('Assets/Monkey/Editor/import-plan.json'),max_bytes=128*1024*1024),max_nodes=8_000_000)
+            json_assets={a['id']:a for a in rb.get('jsonAssets',[])}
+            for spec in instruction['assets']:
+                if spec['kind']=='cc.JsonAsset':
+                    actual=json_assets.get(spec['id'],{})
+                    if actual.get('textSha256')!=fingerprint(root/spec['path']) or not actual.get('guid'):
+                        diagnostics.append(diagnostic('JSON_READBACK_MISMATCH',spec['path'],'Native TextAsset text/identity differs or is absent'))
             by_id={s['id']:s for s in rb.get('sprites',[])}
             for spec in instruction['textures']:
                 actual=by_id.get(spec['id'])
@@ -382,6 +393,7 @@ def verify(candidate, output, level='static'):
                     if not binding or not binding.get('bound') or binding.get('index',-1)<0 or not binding.get('prefabFileId'):
                         diagnostics.append(diagnostic('VIEW_REFERENCE_READBACK_MISMATCH',spec['sourceId'],'Serialized native View reference or fileID is missing'))
             for required in ('Assets/Generated/Views/Candidate.prefab','Assets/Generated/Scenes/Candidate.unity'):
+                required=path_for(required)
                 if required not in native:
                     diagnostics.append(diagnostic('NATIVE_ARTIFACT_MISSING',required,'No saved native artifact hash'))
             from ..assets.animation import verify_native
@@ -392,7 +404,7 @@ def verify(candidate, output, level='static'):
         path=inside(root,item['path'])
         expected=native.get(item['path']) if level=='editor' and item['path'].endswith('.meta') else item['sha256']
         if expected is None: expected=item['sha256']
-        if not path.is_file() or sha(read(path))!=expected:
+        if not path.is_file() or fingerprint(path)!=expected:
             diagnostics.append(diagnostic('GENERATED_FILE_CHANGED',item['path'],'Missing or modified generated file'))
     guids={}
     for path in (root/'Assets').rglob('*.meta'):
@@ -402,15 +414,15 @@ def verify(candidate, output, level='static'):
                 if value in guids:
                     diagnostics.append(diagnostic('DUPLICATE_TARGET_GUID',str(path.relative_to(root)),'GUID duplicates '+guids[value]))
                 guids[value]=str(path.relative_to(root))
-    instruction=load(read(root/'Assets/Monkey/Editor/import-plan.json'))
+    instruction=load(read(root/path_for('Assets/Monkey/Editor/import-plan.json'),max_bytes=128*1024*1024),max_nodes=8_000_000)
     for item in instruction['textures']+instruction['assets']:
         if not inside(root,item['path']).is_file():
             diagnostics.append(diagnostic('TARGET_REFERENCE_MISSING',item['path'],'Import resource does not exist'))
-    adapter=root/'Assets/Monkey/Editor/MonkeyImporter.cs'
+    adapter=root/path_for('Assets/Monkey/Editor/MonkeyImporter.cs')
     if not adapter.is_file() or list((root/'Assets').rglob('ir.json')):
         diagnostics.append(diagnostic('TARGET_LAYOUT_INVALID','Assets','Missing Editor adapter or runtime IR found'))
     out=new_output(output,[root])
-    result=dict(schemaVersion=1,toolVersion=__version__,candidateManifestSha256=sha(read(root/'manifest.json')),
+    result=dict(schemaVersion=1,toolVersion=__version__,candidateManifestSha256=fingerprint(root/'manifest.json'),
                 diagnostics=diagnostics,staticValidation='conflict' if any(d['code'] in ('GENERATED_FILE_CHANGED','DUPLICATE_TARGET_GUID','TARGET_REFERENCE_MISSING','TARGET_LAYOUT_INVALID','NATIVE_FILE_CHANGED') for d in diagnostics) else 'pass',
                 editorValidation=editor,visualValidation='not_run',businessValidation='not_run')
     write_json(out/'verification.json',result)
@@ -418,10 +430,11 @@ def verify(candidate, output, level='static'):
 
 
 def handoff(candidate, output):
+    from ..sources.containers import fingerprint
     root=safe(candidate)
     package=load(read(root/'Analysis/handoff.json'))
     out=new_output(output,[root])
-    package['candidateManifestSha256']=sha(read(root/'manifest.json'))
+    package['candidateManifestSha256']=fingerprint(root/'manifest.json')
     write_json(out/'handoff.json',package)
     lines=['# AI接续工作包','', '这是候选工程，Editor/原版画面对照/业务分别按验证记录处理。',
            '仅修改目标的 Manual/manual 区；生成区需要明确解除所有权后才可手改。','']

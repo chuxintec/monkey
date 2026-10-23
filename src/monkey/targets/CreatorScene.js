@@ -29,7 +29,7 @@ module.exports = {
                 design.setPosition(-plan.designSize[0]/2,-plan.designSize[1]/2,0);
                 const nodes=new Map();const assets=new Map(plan.assets.map(a=>[a.sourceId,a]));
                 const native=new Map();
-                for(const a of plan.assets) native.set(a.sourceId,await loadAsset(a.kind==='sprite'?a.spriteFrameUuid:a.uuid,a.kind==='sprite'?cc.SpriteFrame:cc.Font));
+                for(const a of plan.assets) native.set(a.sourceId,await loadAsset(a.kind==='sprite'?a.spriteFrameUuid:a.uuid,a.kind==='sprite'?cc.SpriteFrame:a.kind==='json'?cc.JsonAsset:cc.Font));
                 for(const n of plan.nodes) {
                     const node=new cc.Node(n.name);node.layer=cc.Layers.Enum.UI_2D;nodes.set(n.sourceId,node);
                     node.setPosition(...n.position);node.setRotation(new cc.Quat(...n.rotation));node.setScale(...n.scale);
@@ -129,7 +129,11 @@ module.exports = {
                 const spec=(plan.animations||[]).find(s=>s.id===info.id);
                 animations.push(motion.read(await loadAsset(info.uuid,cc.AnimationClip),spec));
             }
-            return {animations,nodeCount:saved.length,nodes:[...mapped].map(([sourceId,n])=>({sourceId,nodeUuid:n.uuid,name:n.name,
+            const jsonAssets=[];
+            for(const a of plan.assets.filter(a=>a.kind==='json')) {
+                const json=await loadAsset(a.uuid,cc.JsonAsset);jsonAssets.push({sourceId:a.sourceId,uuid:json._uuid,value:json.json});
+            }
+            return {jsonAssets,animations,nodeCount:saved.length,nodes:[...mapped].map(([sourceId,n])=>({sourceId,nodeUuid:n.uuid,name:n.name,
                 position:[n.position.x,n.position.y,n.position.z],size:[n.getComponent(cc.UITransform).width,n.getComponent(cc.UITransform).height]})),components:refs,labels,frames};
         }
     }

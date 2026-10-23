@@ -97,13 +97,13 @@ def catalog(root,output):
     write_json(out/'catalog.json',result);return finish(out,result)
 
 
-def inspect(root,selection,output):
+def inspect(root,selection,output,*,max_assets=2048,whole_input=False):
     p=Project(root);pending=[at(p.keys,i,'$.selection') for i in selection];seen=set();assets=[];diagnostics=[]
     while pending:
         key=pending.pop(0)
         if key in seen:continue
         seen.add(key)
-        if len(seen)>2048:fail('ASSET_BUDGET','$','Dependency closure exceeds 2048 assets')
+        if len(seen)>max_assets:fail('ASSET_BUDGET','$','Dependency closure exceeds declared asset budget')
         if key not in p.records:
             diagnostics.append(diagnostic('MISSING_REFERENCE',key,'UUID absent from project metadata',p.name+':'+key));continue
         try:
@@ -117,4 +117,5 @@ def inspect(root,selection,output):
     report=dict(schemaVersion=1,toolVersion=__version__,sourceProfile=PROFILE,sourceVersion='2.4.15',
                 versionEvidence='project.json/version exact match',sourceRoot=str(p.root),sourceRoots={p.name:str(p.root)},
                 bundle=p.name,selection=selection,inputs=sorted(p.inputs.values(),key=lambda x:x['path']),assets=sorted(assets,key=lambda x:x['sourceId']),diagnostics=diagnostics)
+    if whole_input:report['packageSelection']=dict(allProvidedAssets=True,maxAssets=max_assets)
     write_json(out/'source-manifest.json',report);return finish(out,report)

@@ -1,3 +1,51 @@
+# 一键工程转换
+
+在monkey根目录运行，无须逐阶段调用reader或export：
+
+```sh
+bin/monkey convert --source /path/to/game.wxapkg --target unity6 --out outputs/game-unity
+bin/monkey convert --source /path/to/game.apk --target both --out outputs/game-both
+bin/monkey convert --source /path/to/cocos-project --target cocos38 --out outputs/game-creator
+```
+
+`UnityProject/`、`CocosProject/`为独立目标工程，`conversion-result.json`说明候选状态和缺口。
+结构化支持范围为声明的2.4.15格式；其他格式保留文件证据，不能视为原生还原成功。
+输入原件不修改，输出目录必须新建。生成代码合同放在编译排除区，不生成假业务。
+
+多目录使用明确清单，路径相对于该JSON所在目录：
+
+```json
+{
+  "schemaVersion": 1,
+  "sourceProfile": "cocos-2.4.15-bundle",
+  "game": {"gameId": "my-game", "engineVersion": "2.4.15"},
+  "inputs": [
+    {"id": "main", "path": "source/main", "config": "config.json"},
+    {"id": "remote", "path": "source/remote", "config": "config.hash.json"}
+  ]
+}
+```
+
+```sh
+bin/monkey convert --input-set inputs.json --target both --out outputs/game
+bin/monkey convert --resume outputs/game --input-set inputs.json
+```
+
+仅扫描列出的本地根。未知appId/version保持未知；已知冲突拒绝。可选`cacheList`与`cacheKind: cache|temp`
+读取本地缓存映射，URL仅作身份键，不请求网络。原列表保留，wxfile与物理文件必须在声明根内。
+续跑验证清单身份、输入快照和已有工程哈希，拒绝未知/缺失/人工修改文件；原候选归档到`Previous/`。
+可校验恢复已有备份的中断运行；没有可信清单的半成品不自动覆盖。结构阶段复用不等于编辑器验收。
+
+静态检查不会启动引擎：
+
+```sh
+bin/monkey verify --candidate outputs/game/UnityProject --out outputs/game-unity-check
+bin/monkey verify --candidate outputs/game/CocosProject --out outputs/game-creator-check
+```
+
+默认`needs_action`与退出码1表示候选生成后仍有待验项；`--offline`显式限定离线候选。
+Editor导入、编译、保存重开、画面和业务验收分开记录，目前整包真实Editor验收未完成。
+
 # 当前使用与支持矩阵
 
 结构化对象reader当前声明两种 Cocos **2.4.15 子集**；新增包级全文件盘点与静态代码恢复见下文。不是所有 Cocos 格式的通用原生导入器。
