@@ -14,3 +14,13 @@
 - 新输出保存包级源码恢复、reader、normalize、两目标plan、emit阶段算法签名；续跑拒绝算法未知/变化，且在归档前结束，避免把当前签名补到历史缓存。缓存列表缺失项/原清单hash已汇总到包级report.cacheInputs。
 
 定向验证：新增3项图边界/Spine缺依赖/启动日志误判反例通过；structured3项（含标准目录独立Prefab指令和算法变化拒绝）及package6项通过。新增Unity薄层离线C#编译通过`.private/source-prefab-compile-01`，无引擎启动。新功能没有覆盖写入932220d冻结候选或acceptance副本；完整新整包生成和新原生Prefab/Spine导入仍not_run。
+
+## 新整包和公开续跑回归
+
+随后在`outputs/structured-foodstreet-04`全新执行双端CLI，输入仍是同四根5097文件/243799340字节；新算法签名随输出记录。两目标均实际包含30份Spine闭包/1缺失报告，Unity import-plan实际含1630份独立Prefab计划。
+
+复查补充克隆根节点的局部RectTransform保留，避免从预览父级脱离时继承世界变换。第一次局部修正离线编译在`.private/source-prefab-compile-02`因将GameObject直接当RectTransform失败，改为明确GetComponent后03编译通过；未启动引擎。公开`convert --resume ... --input-set ...`完成二次生成，journal=completed，缓存阶段复用、旧项目归档，最新emit算法身份与实际源码一致。
+
+当前Unity manifest `5c343c68af1b358b3b012fde20fcb611b5a658f769f8915f081b9109daa3dc89`，Creator manifest `528bd1a0f83498f0eeec238bf0bb87d81a342701640ac281df6b5bfef81a8e71`。实际生成的根克隆适配器已包含正确RectTransform类型与局部值复制；仍需真实原生回读才能验证几何结果。缓存缺失汇总另补1项包级集成反例通过：本地映射缺文件进入report，未请求URL。冻结03不修改。
+
+最新04两端静态verify均0诊断，证据`outputs/structured-foodstreet-04-unity-check`和`outputs/structured-foodstreet-04-cocos-check`。再次回读03冻结manifest与原SHA相同。上述静态检查和离线编译不将本轮启动not_run改写为原生pass。

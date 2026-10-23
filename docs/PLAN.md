@@ -175,3 +175,6 @@ Candidate.scene/editor-readback/真实PNG不存在，5Label绑定、原生Scene�
 已按总监实际grant在12:23:13–12:25:12完成独立首轮启动尝试并提前释放。冻结932220d逐项核验、acceptance副本建立；Unity在资源导入前停滞，readonly database/系统IPC与token更新警告，entitlement已解析；根因未证实。仅本次PID97901普通SIGTERM结束、ps无进程，未重试/未操作肥鹅；所有import/save/reopen/readback仍not_run，已向总监释放报告。详见`docs/validation/2026-10-23-native-startup-and-closures.md`。
 
 继续离线完成独立源Prefab规划/原生保存回读适配（冻结IR1630份/20305节点，2源Scene排除）、Spine显式闭包（30/31闭合，1缺bin，未装runtime）、只读CLI preflight、包/阶段算法签名和缓存缺失汇总。新增3项语义边界反例、structured3及package6通过，C#离线编译通过；新整包/native尚未运行。准备成组上报`monkey-prefab-spine-preflight-20261023-01`并给出正常审批下缓存/IPC访问的安全续验方案；后续Editor须新的窗口许可，离线已批准范围持续有效。
+
+新整包04与公开续跑已实际完成：5097文件留存、双端30/31 Spine闭包、Unity1630独立源Prefab指令进入真实输出，emit身份核对当前源码一致；克隆根局部变换补正并离线C#编译通过03。缓存缺失包级集成反例通过。新的原生验收仍需下一次许可窗口；原03/窗口03副本保持不变。
+最新04双端静态verify均0诊断，03冻结manifest再次核对不变；成组证据可审查，工具整体仍candidate/native未验。

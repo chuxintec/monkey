@@ -21,6 +21,23 @@ class CacheTests(unittest.TestCase):
                 self.assertNotIn('token',str(m['records']))
                 self.assertEqual(dict(entries(root,p,kind))['gameAsset/import/00/a.json'],b'local')
 
+    def test_package_reports_missing_cache_mapping_without_fetching(self):
+        from monkey.package import convert_package
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary).resolve();source=root/'cache';(source/'usr').mkdir(parents=True)
+            write_json(source/'usr/config',dict(name='main',engineVersion='2.4.15',uuids=[],paths={},types=[],packs={}))
+            write_json(source/'cacheList.json',dict(files={
+                'https://example.invalid/main/config.json':dict(bundle='main',url='wxfile://usr/config'),
+                'https://example.invalid/main/native/00/missing.png':dict(bundle='main',url='wxfile://usr/missing')}))
+            declaration=root/'inputs.json'
+            write_json(declaration,dict(schemaVersion=1,sourceProfile='cocos-2.4.15-bundle',inputs=[
+                dict(id='cache',path='cache',cacheList='cacheList.json',cacheKind='cache')]))
+            result=convert_package(None,'unity6',root/'out',input_set_path=declaration)
+            self.assertTrue(result['completed'])
+            self.assertEqual(result['cacheInputs'][0]['availableMappings'],1)
+            self.assertEqual(result['cacheInputs'][0]['missing'][0]['reason'],'input_not_provided')
+            self.assertEqual(result['inputFiles'],2)
+
     def test_cache_traversal_duplicate_content_conflict_and_bad_url(self):
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary).resolve();(root/'a').write_bytes(b'a');(root/'b').write_bytes(b'b');p=root/'cacheList.json'
