@@ -61,14 +61,14 @@ def recover(tree, roots, configs, source_profile, out, profiles, namespace):
             result.setdefault('reused',[]).append(dict(stage='inspect',sha256=sha(stage_bytes(existing))))
         elif source_profile==project.PROFILE:
             root=tree/roots[0]['id'];parsed=project.Project(root)
-            inspected=project.inspect(root,list(range(len(parsed.keys))),stage/'inspect',max_assets=20000,whole_input=True)
+            inspected=project.inspect(root,list(range(len(parsed.keys))),stage/'inspect',max_assets=50000,whole_input=True)
         else:
             paths=[tree/c['path'] for c in configs]
             if not paths:
                 result.update(status='needs_action',reason='BUNDLE_CONFIG_NOT_PROVIDED');write_json(stage/'recovery.json',result);return result
             primary=bundle.Bundle(paths[0])
             inspected=bundle.inspect(paths[0],list(range(len(primary.keys))),stage/'inspect',paths[1:],
-                    include_all_bundles=True,max_assets=20000,max_bytes=512*1024*1024,resolve_provided=True)
+                    include_all_bundles=True,max_assets=50000,max_bytes=1024*1024*1024,resolve_provided=True)
         result['stages'].append(dict(stage='inspect',status=stage_manifest(stage/'inspect')['status'],assets=len(inspected['assets'])))
         if (stage/'normalize/manifest.json').exists():
             check_signature('normalize')
