@@ -26,6 +26,7 @@ def main(argv=None):
     p.add_argument('--asset-ripper', help='Existing exact AssetRipper 2.0.0 provider executable')
     p.add_argument('--provider-budget-seconds', type=int, default=600)
     p.add_argument('--unity-texture-cache',help='Explicit local ASTC cache pool for supported Unity texture-key hydration')
+    p.add_argument('--unity-schema-manifest',help='Frozen bundle pool for exact missing TypeTree lookup during Unity conversion')
     p.add_argument('--numeric-code-contract',help='Explicit source module identity and numeric-call field contract; fresh package conversion only')
     p.add_argument('--cocos-code-language',choices=['ts','js'],default='ts',help='Cocos code output; TypeScript first (package JS binding pending verification)')
     p.add_argument('--reuse-source-stages',help='Fresh package output using verified source stages; supports names-v1 metadata migration')
@@ -224,10 +225,10 @@ def main(argv=None):
                 if any((args.input_set,args.native,args.resume,args.recipe,args.reuse_source_stages,args.remote_manifest,args.remote_cache_root,args.acquisition_out,args.asset_index,args.all_assets,args.bindings,args.animation,args.evidence_source,args.source_profile,args.namespace,args.native_out,args.unity_editor,args.creator_editor,args.native_budget_seconds!=1200,args.remote_budget_seconds!=900)):
                     parser.error('Initial Unity bundle profile supports one explicit local source and offline provider export; input sets/native/remote/slice options are not implemented')
                 from .recover_unity import convert as convert_unity
-                result=convert_unity(args.source,args.out,args.provider_python,args.asset_ripper,args.provider_budget_seconds,dependencies=args.dependency_source,texture_cache=args.unity_texture_cache)
+                result=convert_unity(args.source,args.out,args.provider_python,args.asset_ripper,args.provider_budget_seconds,dependencies=args.dependency_source,texture_cache=args.unity_texture_cache,schema_manifest=args.unity_schema_manifest)
                 print(json.dumps(dict(status=result['status'],completed=result['completed'],resultKind=result['resultKind'],sourceFamily='unity',projects=result['projects'],diagnostics=result['diagnostics'],report=str(Path(args.out).resolve()/'conversion-result.json')),ensure_ascii=False))
                 return 1
-            if args.provider_python or args.asset_ripper or args.unity_texture_cache or args.provider_budget_seconds!=600:parser.error('Unity provider options require a Unity source')
+            if args.provider_python or args.asset_ripper or args.unity_texture_cache or args.unity_schema_manifest or args.provider_budget_seconds!=600:parser.error('Unity provider options require a Unity source')
             from .convert import convert, resume, recipe
             if not args.remote_manifest and any((args.remote_cache_root,args.acquisition_out,args.remote_budget_seconds!=900)):
                 parser.error('remote options require --remote-manifest')

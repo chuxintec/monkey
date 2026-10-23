@@ -12,7 +12,7 @@ from .unity_code_model import model as code_model
 CODE_SUFFIXES={'.cs','.dll','.js','.jsc','.wasm','.lua','.so','.dylib'}
 
 
-def convert(source,output,provider_python,asset_ripper,budget_seconds=600,dependencies=None,texture_cache=None):
+def convert(source,output,provider_python,asset_ripper,budget_seconds=600,dependencies=None,texture_cache=None,schema_manifest=None):
     if not 30<=budget_seconds<=1200:fail('UNITY_EXPORT_BUDGET','$','Expected 30..1200 seconds')
     source=safe(source);exe=safe(asset_ripper);requested_python=Path(provider_python).absolute();python=safe(requested_python.resolve(strict=True))
     if not source.is_file() or not exe.is_file() or not python.is_file():fail('UNITY_PROVIDER_MISSING','$','Source and existing providers must be files')
@@ -20,21 +20,25 @@ def convert(source,output,provider_python,asset_ripper,budget_seconds=600,depend
     if not header.startswith((b'UnityFS\0',b'UnityRaw\0',b'UnityWeb\0')):fail('UNITY_CONTAINER_UNSUPPORTED',str(source),'Initial profile requires a Unity bundle signature')
     dependencies=[safe(p)for p in (dependencies or [])]
     if len(dependencies)>2000 or len(set([source,*dependencies]))!=len(dependencies)+1:fail('UNITY_DEPENDENCY_SET','$','Duplicate or oversized explicit dependencies')
-    out=new_output(output,[source,exe.parent,python.parent,*dependencies,*([safe(texture_cache)]if texture_cache else [])])
+    schema_pool=None
+    if schema_manifest:
+        from .unity_schemas import frozen_pool
+        schema_pool=frozen_pool(schema_manifest)
+    out=new_output(output,[source,exe.parent,python.parent,*dependencies,*([safe(texture_cache)]if texture_cache else []),*([safe(schema_manifest),*[Path(r['path'])for r in schema_pool['files']]]if schema_pool else [])])
     report=dict(schemaVersion=1,toolVersion=__version__,sourceFamily='unity',sourceProfile='unityfs-unitypy-1.25.3-assetripper-2.0.0',
                 status='partial',workflowStatus='needs_action',completed=False,resultKind='candidate',
                 format=dict(profile='none',applied=False),completionScope='explicit-unity-bundles-and-consumed-texture-cache',inputFiles=1+len(dependencies),inputBytes=source.stat().st_size+sum(p.stat().st_size for p in dependencies),projects=[],
                 validation=dict(source='not_run',editor='not_run',visual='not_run',business='not_run'),diagnostics=[])
     def save():write_json(out/'conversion-result.json',report)
     save()
-    inspected=inspect_unity(source,requested_python,out/'SourceInspection',min(budget_seconds,120))
+    inspected=inspect_unity(source,requested_python,out/'SourceInspection',min(budget_seconds,120),schema_manifest=schema_manifest)
     report['sourceInspection']={k:inspected.get(k) for k in ('status','source','summary','provider','typedObjectsSha256','sourceUnchanged','processExited')}
     if not inspected.get('sourceUnchanged') or not inspected.get('processExited') or inspected['status'] not in ('inspected','partial'):
         report['status']='failed';save();return report
     report['validation']['source']='partial' if inspected['summary']['unparsed'] else 'pass';save()
     inspections=[(source,inspected)]
     for index,path in enumerate(dependencies):
-        extra=inspect_unity(path,requested_python,out/('DependencyInspection-'+str(index)),min(budget_seconds,120))
+        extra=inspect_unity(path,requested_python,out/('DependencyInspection-'+str(index)),min(budget_seconds,120),schema_manifest=schema_manifest)
         inspections.append((path,extra))
         if extra['status'] not in ('inspected','partial') or not extra.get('sourceUnchanged') or not extra.get('processExited'):
             report['status']='failed';save();return report
@@ -74,6 +78,16 @@ def convert(source,output,provider_python,asset_ripper,budget_seconds=600,depend
     for path,_ in inspections:
         shutil.copy2(path,originals/(fingerprint(path)[:16]+'-'+path.name))
     analysis=project/'Analysis';analysis.mkdir();shutil.copy2(out/'SourceInspection/typed-objects.json',analysis/'unity-typed-objects.json')
+    if schema_pool:
+        frozen=recovery/'SchemaSources';frozen.mkdir();entries=[]
+        for row in schema_pool['files']:
+            payload=read(safe(row['path']),max_bytes=128*1024*1024)
+            if len(payload)!=row['bytes']or sha(payload)!=row['sha256']:fail('UNITY_SCHEMA_SOURCE_CHANGED',row['path'],'Schema source changed before evidence copy')
+            name=row['sha256']+'.bundle';dest=frozen/name
+            if not dest.exists():dest.write_bytes(payload)
+            entries.append(dict(path=name,bytes=len(payload),sha256=row['sha256'],disposition='schema-only-frozen-source-not-exported-as-resource'))
+        write_json(frozen/'manifest.json',dict(schemaVersion=1,sourceManifestSha256=schema_pool['sourceManifestSha256'],files=entries))
+        report['schemaPool']=dict(manifestSha256=schema_pool['sourceManifestSha256'],files=len(entries),bytes=sum(r['bytes']for r in entries),resourcesExported=False,originalsRetained=True)
     package_path=project/'Packages/manifest.json'
     package=load(read(package_path));shutil.copy2(package_path,analysis/'provider-packages.json')
     removed=[]
@@ -110,7 +124,7 @@ def convert(source,output,provider_python,asset_ripper,budget_seconds=600,depend
                 c=known[rel];path.write_bytes(read(out/'CodeModel'/c['target']))
                 if meta_copy.exists():shutil.copy2(meta_copy,meta)
                 schema_applied.append(dict(sourceScript=c['sourceScript'],path=rel.as_posix(),sha256=fingerprint(path),fields=len(c['fields']),
-                                           behavior='unavailable',metaPreserved=meta_copy.exists()))
+                                           behavior='unavailable',metaPreserved=meta_copy.exists(),sourceInstances=c['instances']))
     # Keep only non-executing assembly definitions required by the schema-derived classes.
     # No source/provider DLL, JS, native library or unverified C# is imported.
     declared_assemblies={c['assembly'].removesuffix('.dll') for c in models['classes']}
@@ -144,6 +158,8 @@ and verify native references before claiming a complete resource or gameplay rec
             count=text.count(b'0000000deadbeef15deadf00d0000000')
             if count:placeholders.append(dict(path=path.relative_to(project).as_posix(),references=count))
     report['diagnostics'].append(dict(code='UNITY_ORIGINAL_METHODS_UNAVAILABLE',message='Embedded field schemas do not contain method bodies'))
+    if schema_pool:
+        report['diagnostics'].append(dict(code='UNITY_BORROWED_SCHEMA_FIELD_VALUES_PENDING',message='Proven borrowed schemas generate named C# fields and preserve source instance data. Provider Scene field values and native binding have not been restored or verified; existing engine package types are not shadowed.'))
     if placeholders:report['diagnostics'].append(dict(code='UNITY_PROVIDER_UNRESOLVED_REFERENCES',items=placeholders,references=sum(x['references'] for x in placeholders)))
     report['projects']=[dict(path='UnityProject',targetVersion=TARGET_VERSION,resourceStatus='candidate_not_native_verified',
                              schemaClassesApplied=len(schema_applied),schemaFieldsApplied=sum(x['fields'] for x in schema_applied),

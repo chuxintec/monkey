@@ -54,4 +54,12 @@ monkey inspect-unity --source /path/to/startup.bundle --provider-python /path/to
 
 池格式与`index-unity`一致：schemaVersion=1，files中明确path/bytes/sha256，最多2000项、合计1GiB。只借用源Unity完整版本、targetPlatform、非零script_id和old_type_hash全部相同的嵌入MonoBehaviour TypeTree；字段名称相同不足以匹配。完整结构含alignment/version等布局标志参与哈希，同身份不同结构拒绝，不静默选择。正文仍check_read=True，不补零、不忽略剩余字节。报告分列borrowedSchemas/schemaProvenance与源embeddedSchemas，记录池/包/布局SHA和原始对象hash；未知方法不执行或生成空类。
 
-向僵尸开炮新公开CLI实测`outputs/unity-startup-schema-inspection-01`：600个已冻结Bundle、27种启动脚本类型中18种匹配，70个MonoBehaviour严格完整读出；总计1567/1603对象，仍36未解析。自有worker77699 exit0/reaped，原包SHA不变，typed snapshot SHA `fb211bf98dca828f21bfd230e344424901f956a7197addca095e72efee9a9de3`。这项尚未接入AssetRipper导出链，不能追认startup02的schema0已修复，更不能等同原生/玩法通过。13项定向检查包含版本/平台/两种哈希错配、布局冲突、严格尾字节失败与显式清单拒绝；原生未启动。
+向僵尸开炮新公开CLI实测`outputs/unity-startup-schema-inspection-01`：600个已冻结Bundle、27种启动脚本类型中18种匹配，70个MonoBehaviour严格完整读出；总计1567/1603对象，仍36未解析。自有worker77699 exit0/reaped，原包SHA不变，typed snapshot SHA `fb211bf98dca828f21bfd230e344424901f956a7197addca095e72efee9a9de3`。当时仅inspection，不追认startup02的schema0或原生。13项定向检查包含版本/平台/两种哈希错配、布局冲突、严格尾字节失败与显式清单拒绝。
+
+### 公开转换消费借取结构
+
+`convert`可加`--unity-schema-manifest frozen-bundles.json`，在同一链中做精确读取、MonoScript外部表解析、字段C#生成和Provider候选导出。脚本引用仅按同容器serialized文件外部表的唯一完整文件名解析，不把相同pathID跨文件合并。现有Unity程序集类型单列nativePackageTypes，不生成同名替代；空GameObject引用或未知非组件基类不伪装成MonoBehaviour。字段实例保留embedded/borrowed来源及池/布局hash。冻结池全部原件在SourceRecovery/SchemaSources中按SHA去重留存；这些是结构查找输入，未当作要求导出的全部资源依赖。
+
+实际`outputs/unity-startup-schema-convert-03`：5个资源/纹理输入3554576B，另600结构池输入53730632B；70新增严格正文进入消费，生成GradientColor的7字段/4实例与UIButtonScale的4字段/8实例，真实替换对应Provider空壳C#并保持meta。现有引擎包36实例不另造同名类；22已读但尚不支持字段/基类的实例与36未解析对象继续明确缺口。2份生成代码以本机Unity6 SDK编译通过。Provider child81142 exit0/reaped、原件不变，2484原始导出文件/11019493B，最终recovery manifest SHA `802275864fe99b0a743b2c4de9aeca0b60104a25ea704b9b999427cb38e09a02`。
+
+这里的11字段为C#声明恢复；Provider Scene尚未应用借取字段的实例值，显式`UNITY_BORROWED_SCHEMA_FIELD_VALUES_PENDING`，原生未跑、方法0、原自定义继承/效果仍未知。不能把两个字段类称为完整恢复原脚本。旧候选与失败不改。
