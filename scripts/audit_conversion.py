@@ -24,12 +24,23 @@ def audit(candidate, source_audit, output):
                 issues.append(dict(code='INPUT_IDENTITY_MISMATCH',project=base.name,path=path))
             if not target or target['sha256']!=src['sha256'] or target['bytes']!=src['bytes']:
                 issues.append(dict(code='RETAINED_CONTENT_MISMATCH',project=base.name,path=path))
+        redirects=set()
+        for row in ledger['files']:
+            if row['category']=='Bundle':
+                config=load(read(base/row['target']))
+                redirects.update((config['name'],i) for i in config.get('redirect',[])[::2])
+        indexed=load(read(base/'Analysis/cocos-assets.json',max_bytes=128*1024*1024),max_nodes=8_000_000)['assets']
+        missing=[a for a in indexed if a['status']=='missing_reference']
+        reference_accounting=dict(logicalEntries=len(indexed),unlocatedByFilename=len(missing),
+            redirectsWithoutOwnFile=sum((a['bundle'],a['index']) in redirects for a in missing),
+            unlocatedNonRedirect=[a['sourceId'] for a in missing if (a['bundle'],a['index']) not in redirects])
         spine=load(read(base/'Analysis/spine-closures.json',max_bytes=128*1024*1024))
         code=load(read(base/'Analysis/code-index.json',max_bytes=128*1024*1024),max_nodes=8_000_000)
         item=dict(path=str(base),manifestSha256=sha(read(base/'manifest.json',max_bytes=128*1024*1024)),
                   accountedFiles=len(actual),accountedBytes=sum(f['bytes'] for f in actual.values()),
                   dispositions=dict(Counter(f['disposition'] for f in actual.values())),
                   categories=dict(Counter(f['category'] for f in actual.values())),
+                  referenceAccounting=reference_accounting,
                   spine=dict(closed=spine['closed'],unresolved=spine['unresolved'],
                       reasons=dict(Counter(a.get('reason') for a in spine['skeletons'] if a['status']!='closure_recovered'))),
                   code=dict(moduleCandidates=sum(m.get('entryType')=='module_candidate' for m in code['modules']),
@@ -40,7 +51,7 @@ def audit(candidate, source_audit, output):
             plan=stage_document(planpath)
             item['targetPlan']=dict(nodes=len(plan['nodes']),components=len(plan['components']),
                 convertibleComponents=sum(c['convertible'] for c in plan['components']),
-                sourcePrefabs=len(plan.get('sourcePrefabs',[])),assets=dict(Counter(a['kind'] for a in plan['assets'])))
+                sourcePrefabs=len(plan.get('sourcePrefabs',[])),bitmapFonts=len(plan.get('bitmapFonts',[])),assets=dict(Counter(a['kind'] for a in plan['assets'])))
         projects.append(item)
     result=dict(schemaVersion=1,status='pass' if not issues else 'failed',
         scope='source routing and retained bytes bound to generated manifests; disk verification and native execution are separate',
