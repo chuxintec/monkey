@@ -178,3 +178,9 @@ Candidate.scene/editor-readback/真实PNG不存在，5Label绑定、原生Scene�
 
 新整包04与公开续跑已实际完成：5097文件留存、双端30/31 Spine闭包、Unity1630独立源Prefab指令进入真实输出，emit身份核对当前源码一致；克隆根局部变换补正并离线C#编译通过03。缓存缺失包级集成反例通过。新的原生验收仍需下一次许可窗口；原03/窗口03副本保持不变。
 最新04双端静态verify均0诊断，03冻结manifest再次核对不变；成组证据可审查，工具整体仍candidate/native未验。
+
+## 2026-10-23 窗口04与批量导入
+
+已按新grant于12:42:12接管04独立副本，正常exec审批后Unity初始化/资产导入实跑，不再停于readonly DB/IPC。12:54:08截止前发送普通SIGTERM，12:54:24确认自身PID8690退出，期间未继续试验/强退他人，已报告总监释放。import partial，sourcePrefab0，save/reopen/readback not_run，04冻结SHA不变。
+
+离线定位11552次刷新/报告Total累计673.36秒、同GUID重复导入，改128纹理批处理+同步加载验证，finally配对StopAssetEditing；源Prefab目录不逐项刷新。补schema1阶段进度、显式预算/截止安全点和preflight精确planSHA检查，明确未实现原生原地续跑。边界测试4项、新C#离线编译03通过；实际加速与原生通过未验。证据`docs/validation/2026-10-23-window04-batched-import.md`，按冻结新候选准备后上报下一必要原生gate，不复用窗口04。

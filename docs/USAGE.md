@@ -250,3 +250,12 @@ bin/monkey preflight --candidate outputs/game/UnityProject \
 新候选记录包级源码恢复、inspect、normalize、目标plan和emit的源码阶段签名。包级续跑在归档/改动候选前拒绝缺失或变化的缓存算法签名。旧开发候选（如932220d）没有这份签名，应保留并用新输出目录重新转换，不能给旧缓存补写当前签名后冒充兼容。
 
 Unity新导入计划另列每个独立源Prefab的根、节点集合和目标路径，跨源节点引用/多根图明确拒绝；Editor薄层保存后加载内容核对，回执缺失时不声称原生Prefab已完成。源Scene不按Prefab冒名输出。Spine闭包输出在`SourceRecovery/Spine/`，保存真实bin、原atlas文本和按显式引用解码的PNG页面；`Analysis/spine-closures.json`区分缺失和未支持。闭包恢复不等于安装兼容且有许可的Spine runtime或动画通过。
+
+原生薄层按128张纹理分批设置与同步加载，避免每张重复刷新。执行层可显式设置`MONKEY_NATIVE_BUDGET_SECONDS=600`或`MONKEY_NATIVE_DEADLINE_UTC`为本次授权窗口的UTC截止；预算在批次/阶段安全点生效，不能硬抢占阻塞的引擎调用，外层仍需核对进程真实退出。停止会写`Analysis/native-progress.json`，已有原生Scene/Prefab保持create-only，暂不支持凭进度原地续跑。
+
+```sh
+bin/monkey preflight --candidate outputs/game/UnityProject \
+  --progress /path/to/Analysis/native-progress.json --out outputs/progress-check
+```
+
+进度必须匹配该候选import-plan SHA；`completed`也不代表编辑器验收通过，仍须`verify --level editor`真实回读。nativeResumeSupported=false不能当作自动重跑授权。

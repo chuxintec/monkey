@@ -5,7 +5,7 @@ from io import BytesIO
 from PIL import Image
 from monkey.assets.spine import binary_version,atlas_pages,recover_closures
 from monkey.targets.prefabs import plan_prefabs
-from monkey.preflight import classify_log
+from monkey.preflight import classify_log,validate_progress
 from monkey.io import sha
 from monkey.sources.compiled import ParseError
 
@@ -48,6 +48,17 @@ class BoundaryTests(unittest.TestCase):
         self.assertNotIn('LICENSE_ENTITLEMENT_NOT_CONFIRMED',[r['code'] for r in result['findings']])
         good=classify_log('Initialize engine version: 6000.6.2f1\nSuccessfully resolved entitlement details')
         self.assertEqual(good['findings'],[])
+
+    def test_progress_is_bound_to_exact_plan_and_never_authorizes_resume(self):
+        progress=dict(schemaVersion=1,phase='textures',status='budget_exhausted',planSha256='a'*64,
+                      processed=128,total=5179,elapsedSeconds=5.2,nativeResumeSupported=False)
+        self.assertEqual(validate_progress(progress,'a'*64)['status'],'budget_exhausted')
+        for change in [dict(planSha256='b'*64),dict(processed=5180),dict(elapsedSeconds=float('inf')),
+                       dict(schemaVersion=True),dict(nativeResumeSupported=True),dict(phase='unknown')]:
+            with self.assertRaises(ValueError):validate_progress(dict(progress,**change),'a'*64)
+        observed=classify_log("Initialize engine version: 6000.6.2f1\nImported 'GUID: a'\n")
+        self.assertEqual(observed['findings'][0]['code'],'NATIVE_IMPORT_COMPLETION_NOT_RECORDED')
+        self.assertFalse(observed['converterCompletionRecorded'])
 
 
 if __name__=='__main__':unittest.main()

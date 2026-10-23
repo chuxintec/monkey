@@ -36,7 +36,7 @@ def main(argv=None):
     p.add_argument('--bindings')
     p.add_argument('--animation', action='append')
     p = sub.add_parser('preflight',help='Check frozen candidate and classify startup logs without launching an Editor')
-    p.add_argument('--candidate',required=True);p.add_argument('--out',required=True);p.add_argument('--log')
+    p.add_argument('--candidate',required=True);p.add_argument('--out',required=True);p.add_argument('--log');p.add_argument('--progress')
     p = sub.add_parser('inspect')
     p.add_argument('--source', required=True)
     p.add_argument('--source-profile', choices=[PROFILE,PROJECT_PROFILE], required=True)
@@ -164,7 +164,7 @@ def main(argv=None):
                 incremental.register(output_path,Path.cwd())
         elif args.command == 'preflight':
             from .preflight import preflight
-            result=preflight(args.candidate,args.out,args.log)
+            result=preflight(args.candidate,args.out,args.log,args.progress)
         elif args.command == 'verify':
             from .io import safe, read, load
             from .io import stage_manifest

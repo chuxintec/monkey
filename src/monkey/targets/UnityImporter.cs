@@ -71,8 +71,111 @@ public static class MonkeyImporter
     const string BootstrapPath = "Assets/Generated/Scenes/ImportBootstrap.unity";
 
     [MenuItem("Tools/Monkey/Import Candidate")]
-    public static void ImportCandidate() { Run(); }
-    public static void ImportBatch() { Run(); }
+    public static void ImportCandidate() { ExecuteImport(); }
+    public static void ImportBatch() { ExecuteImport(); }
+
+    [Serializable] public class NativeProgress {
+        public int schemaVersion=1,processed,total;
+        public string status,phase,planSha256; public double elapsedSeconds;
+        public bool nativeResumeSupported=false;
+    }
+    static System.Diagnostics.Stopwatch nativeClock;
+    static NativeProgress nativeProgress;
+    static DateTime nativeDeadline=DateTime.MaxValue;
+    static double nativeBudget=0;
+    static Scene ownedScene;
+    static Scene priorScene;
+
+    static void ExecuteImport() {
+        nativeClock=System.Diagnostics.Stopwatch.StartNew();
+        nativeProgress=new NativeProgress {status="running",phase="preflight",planSha256=Hash("Assets/Monkey/Editor/import-plan.json")};
+        nativeDeadline=DateTime.MaxValue;nativeBudget=0;ownedScene=default(Scene);priorScene=default(Scene);
+        try {
+            var budget=Environment.GetEnvironmentVariable("MONKEY_NATIVE_BUDGET_SECONDS");
+            if(!string.IsNullOrEmpty(budget) && (!double.TryParse(budget,System.Globalization.NumberStyles.Float,System.Globalization.CultureInfo.InvariantCulture,out nativeBudget) || double.IsNaN(nativeBudget) || double.IsInfinity(nativeBudget) || nativeBudget<1 || nativeBudget>3600))
+                throw new InvalidOperationException("Native budget must be 1..3600 seconds");
+            var deadline=Environment.GetEnvironmentVariable("MONKEY_NATIVE_DEADLINE_UTC");
+            if(!string.IsNullOrEmpty(deadline) && !DateTime.TryParse(deadline,System.Globalization.CultureInfo.InvariantCulture,System.Globalization.DateTimeStyles.AssumeUniversal|System.Globalization.DateTimeStyles.AdjustToUniversal,out nativeDeadline))
+                throw new InvalidOperationException("Invalid native deadline");
+            NativeCheckpoint("preflight",0,1);Run();
+        } catch(OperationCanceledException) {
+            WriteNativeProgress("budget_exhausted");CloseOwnedScene();
+            Debug.LogWarning("Monkey native import stopped at its explicit budget; inspect Analysis/native-progress.json. Native resume is not supported.");
+        } catch {
+            WriteNativeProgress("failed");CloseOwnedScene();throw;
+        }
+    }
+    static void CloseOwnedScene() {
+        if(priorScene.IsValid() && priorScene.isLoaded)SceneManager.SetActiveScene(priorScene);
+        if(ownedScene.IsValid() && ownedScene.isLoaded)EditorSceneManager.CloseScene(ownedScene,true);
+    }
+    static void WriteNativeProgress(string status) {
+        nativeProgress.status=status;nativeProgress.elapsedSeconds=nativeClock.Elapsed.TotalSeconds;
+        Directory.CreateDirectory("Analysis");
+        const string path="Analysis/native-progress.json";const string temporary=path+".tmp";
+        File.WriteAllText(temporary,JsonUtility.ToJson(nativeProgress,true));
+        if(File.Exists(path))File.Replace(temporary,path,null);else File.Move(temporary,path);
+    }
+    static void NativeCheckpoint(string phase,int processed,int total) {
+        nativeProgress.phase=phase;nativeProgress.processed=processed;nativeProgress.total=total;
+        if((nativeBudget>0 && nativeClock.Elapsed.TotalSeconds>=nativeBudget) || DateTime.UtcNow>=nativeDeadline) {
+            WriteNativeProgress("budget_exhausted");throw new OperationCanceledException("Native import time budget exhausted");
+        }
+        WriteNativeProgress("running");
+    }
+    static Dictionary<string,Sprite> ImportTextures(Plan plan) {
+        var sprites=new Dictionary<string,Sprite>();
+        const int batchSize=128;
+        NativeCheckpoint("textures",0,plan.textures.Length);
+        for(int start=0;start<plan.textures.Length;start+=batchSize) {
+            NativeCheckpoint("texture-settings",start,plan.textures.Length);
+            var batch=plan.textures.Skip(start).Take(batchSize).ToArray();
+            // Resolve existing importers before pausing imports; never load unfinished assets inside a batch.
+            var importers=new Dictionary<string,TextureImporter>();
+            foreach(var item in batch) {
+                var importer=AssetImporter.GetAtPath(item.path) as TextureImporter;
+                if(importer==null) {
+                    AssetDatabase.ImportAsset(item.path,ImportAssetOptions.ForceUpdate|ImportAssetOptions.ForceSynchronousImport);
+                    importer=AssetImporter.GetAtPath(item.path) as TextureImporter;
+                }
+                if(importer==null)throw new InvalidOperationException("Missing texture importer: "+item.path);
+                importers.Add(item.id,importer);
+            }
+            AssetDatabase.StartAssetEditing();
+            try {
+                foreach(var item in batch) {
+                    var importer=importers[item.id];
+            importer.textureType = TextureImporterType.Sprite;
+            importer.textureShape = TextureImporterShape.Texture2D;
+            importer.spriteImportMode = SpriteImportMode.Single;
+            importer.spritePixelsPerUnit = plan.pixelsPerUnit;
+            importer.spritePivot = new Vector2(.5f,.5f);
+            importer.spriteBorder = new Vector4(item.border[0],item.border[1],item.border[2],item.border[3]);
+            var settings = new TextureImporterSettings();
+            importer.ReadTextureSettings(settings);
+            settings.spriteMeshType = SpriteMeshType.FullRect;
+            importer.SetTextureSettings(settings);
+            importer.mipmapEnabled = false;
+            importer.alphaIsTransparency = true;
+            importer.npotScale = TextureImporterNPOTScale.None;
+            importer.textureCompression = TextureImporterCompression.Uncompressed;
+            importer.maxTextureSize = 16384;
+            // Color space / alpha origin remains unknown in Analysis, never asserted as matched.
+
+                    AssetDatabase.WriteImportSettingsIfDirty(item.path);
+                    AssetDatabase.ImportAsset(item.path,ImportAssetOptions.ForceUpdate);
+                }
+            } finally {AssetDatabase.StopAssetEditing();}
+            AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+            foreach(var item in batch) {
+                var sprite=AssetDatabase.LoadAssetAtPath<Sprite>(item.path);
+                if(sprite==null)throw new InvalidOperationException("Sprite import failed: "+item.path);
+                sprites.Add(item.id,sprite);
+            }
+            NativeCheckpoint("textures",Math.Min(start+batchSize,plan.textures.Length),plan.textures.Length);
+        }
+        return sprites;
+    }
 
     static void Run()
     {
@@ -90,41 +193,17 @@ public static class MonkeyImporter
             Directory.CreateDirectory(directory);
         AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
         if (plan.sourceDiagnosticCount > 0) diagnostics.Add("SOURCE_GAPS: " + plan.sourceDiagnosticCount);
-        var spriteMap = new Dictionary<string, Sprite>();
-        foreach (var item in plan.textures)
-        {
-            AssetDatabase.ImportAsset(item.path,ImportAssetOptions.ForceUpdate|ImportAssetOptions.ForceSynchronousImport);
-            var importer = AssetImporter.GetAtPath(item.path) as TextureImporter;
-            if (importer == null) throw new InvalidOperationException("Missing texture importer: " + item.path);
-            importer.textureType = TextureImporterType.Sprite;
-            importer.textureShape = TextureImporterShape.Texture2D;
-            importer.spriteImportMode = SpriteImportMode.Single;
-            importer.spritePixelsPerUnit = plan.pixelsPerUnit;
-            importer.spritePivot = new Vector2(.5f,.5f);
-            importer.spriteBorder = new Vector4(item.border[0],item.border[1],item.border[2],item.border[3]);
-            var settings = new TextureImporterSettings();
-            importer.ReadTextureSettings(settings);
-            settings.spriteMeshType = SpriteMeshType.FullRect;
-            importer.SetTextureSettings(settings);
-            importer.mipmapEnabled = false;
-            importer.alphaIsTransparency = true;
-            importer.npotScale = TextureImporterNPOTScale.None;
-            importer.textureCompression = TextureImporterCompression.Uncompressed;
-            importer.maxTextureSize = 16384;
-            // Color space / alpha origin remains unknown in Analysis, never asserted as matched.
-            importer.SaveAndReimport();
-            AssetDatabase.ImportAsset(item.path,ImportAssetOptions.ForceUpdate|ImportAssetOptions.ForceSynchronousImport);
-            var sprite = AssetDatabase.LoadAssetAtPath<Sprite>(item.path);
-            if (sprite == null) throw new InvalidOperationException("Sprite import failed: " + item.path);
-            spriteMap.Add(item.id,sprite);
-        }
+        var spriteMap = ImportTextures(plan);
         if (plan.bitmapFonts.Length > 0 || plan.assets.Any(a=>a.path.EndsWith(".ttf",StringComparison.OrdinalIgnoreCase))) {
             if (Shader.Find("TextMeshPro/Bitmap Custom Atlas") == null || Shader.Find("TextMeshPro/Distance Field") == null)
                 TMPro.TMP_PackageResourceImporter.ImportResources(true,false,false);
         }
+        NativeCheckpoint("fonts",0,plan.bitmapFonts.Length+plan.assets.Count(a=>a.path.EndsWith(".ttf",StringComparison.OrdinalIgnoreCase)));
         var fonts = new Dictionary<string, TMPro.TMP_FontAsset>();
+        int fontProgress=0;int fontTotal=plan.bitmapFonts.Length+plan.assets.Count(a=>a.path.EndsWith(".ttf",StringComparison.OrdinalIgnoreCase));
         foreach (var item in plan.assets.Where(a => a.path.EndsWith(".ttf", StringComparison.OrdinalIgnoreCase)))
         {
+            NativeCheckpoint("fonts",fontProgress++,fontTotal);
             var source = AssetDatabase.LoadAssetAtPath<Font>(item.path);
             if (source == null) { diagnostics.Add("FONT_IMPORT_FAILED: " + item.id); continue; }
             if (Shader.Find("TextMeshPro/Distance Field") == null) {
@@ -147,6 +226,7 @@ public static class MonkeyImporter
             fonts[item.id] = font;
         }
         foreach (var spec in plan.bitmapFonts) {
+            NativeCheckpoint("fonts",fontProgress++,fontTotal);
             var atlasImporter = AssetImporter.GetAtPath(spec.path) as TextureImporter;
             if (atlasImporter == null) throw new InvalidOperationException("Bitmap atlas missing: " + spec.id);
             atlasImporter.textureType = TextureImporterType.Default;
@@ -196,8 +276,9 @@ public static class MonkeyImporter
             fonts[spec.id]=font;
         }
         // Additive preview scene preserves any previously open scene.
-        var previous = SceneManager.GetActiveScene();
-        var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene,NewSceneMode.Additive);
+        NativeCheckpoint("hierarchy",0,plan.nodes.Length);
+        var previous = SceneManager.GetActiveScene();priorScene=previous;
+        var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene,NewSceneMode.Additive);ownedScene=scene;
         if(!EditorSceneManager.SaveScene(scene,BootstrapPath))throw new InvalidOperationException("Isolated bootstrap scene save failed");
         var canvas = new GameObject("MonkeyCandidate",typeof(RectTransform),typeof(Canvas),
             typeof(UnityEngine.UI.CanvasScaler),typeof(UnityEngine.UI.GraphicRaycaster));
@@ -366,6 +447,7 @@ public static class MonkeyImporter
                 image.preserveAspect=image.type==UnityEngine.UI.Image.Type.Simple;image.raycastTarget=false;i++;
             }
         }
+        NativeCheckpoint("animations",0,plan.animations.Length);
         var motionReadback=BuildMotions(plan,nodeMap);
         var view = canvas.AddComponent<MonkeyCandidateView>();
         view.Images = canvas.GetComponentsInChildren<UnityEngine.UI.Image>(true);
@@ -375,10 +457,15 @@ public static class MonkeyImporter
         SceneManager.MoveGameObjectToScene(events,scene);
         var sourcePrefabResults=new List<SourcePrefabResult>();
         foreach(var spec in plan.sourcePrefabs ?? new SourcePrefabSpec[0]) {
+            if(string.IsNullOrEmpty(spec.path) || !spec.path.StartsWith("Assets/Generated/Views/Sources/",StringComparison.Ordinal) || spec.path.Contains(".."))
+                throw new InvalidOperationException("Invalid source prefab path");
+            Directory.CreateDirectory(Path.GetDirectoryName(spec.path));
+        }
+        AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+        foreach(var spec in plan.sourcePrefabs ?? new SourcePrefabSpec[0]) {
+            if(sourcePrefabResults.Count%16==0)NativeCheckpoint("source-prefabs",sourcePrefabResults.Count,plan.sourcePrefabs.Length);
             if(!spec.path.StartsWith("Assets/Generated/Views/Sources/",StringComparison.Ordinal) || spec.path.Contains("..") || File.Exists(spec.path))
                 throw new InvalidOperationException("Invalid or existing source prefab path: "+spec.path);
-            Directory.CreateDirectory(Path.GetDirectoryName(spec.path));
-            AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
             var originalRoot=nodeMap[spec.root].GetComponent<RectTransform>();
             var clone=UnityEngine.Object.Instantiate(originalRoot.gameObject,(Transform)null,false);
             var cloneRoot=clone.GetComponent<RectTransform>();
@@ -400,11 +487,13 @@ public static class MonkeyImporter
                     guid=AssetDatabase.AssetPathToGUID(spec.path),nodeCount=transforms.Length,missingScripts=missing});
             } finally { PrefabUtility.UnloadPrefabContents(contents); }
         }
+        NativeCheckpoint("candidate-save",0,1);
         var prefab = PrefabUtility.SaveAsPrefabAsset(canvas,PrefabPath,out var success);
         if (!success || prefab == null) throw new InvalidOperationException("Native Prefab save failed");
         UnityEngine.Object.DestroyImmediate(canvas);
         var instance=(GameObject)PrefabUtility.InstantiatePrefab(prefab,scene);
         if (!EditorSceneManager.SaveScene(scene,ScenePath)) throw new InvalidOperationException("Native scene save failed");
+        NativeCheckpoint("native-readback",0,1);
         var readback = new Readback {
             sourcePrefabs=sourcePrefabResults.ToArray(),
             jsonAssets=plan.assets.Where(a=>a.kind=="cc.JsonAsset").Select(a=> {
@@ -480,6 +569,7 @@ public static class MonkeyImporter
             }).ToArray();
         Directory.CreateDirectory("Analysis");
         File.WriteAllText("Analysis/editor-readback.json",JsonUtility.ToJson(readback,true));
+        nativeProgress.phase="complete";nativeProgress.processed=1;nativeProgress.total=1;WriteNativeProgress(readback.status=="imported"?"completed":"completed_partial");
         Debug.Log("Monkey native import: "+readback.status+"; readback Analysis/editor-readback.json");
         if (previous.IsValid()) SceneManager.SetActiveScene(previous);
         // Keep the candidate scene open for editing; no global SaveAssets, no other scenes saved.
