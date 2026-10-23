@@ -13,11 +13,13 @@ UNITY_TYPES={'Sprite','Texture2D','Texture','GameObject','Transform','RectTransf
 VALUE_TYPES={'Vector2f':'Vector2','Vector3f':'Vector3','Vector4f':'Vector4','Quaternionf':'Quaternion','ColorRGBA':'Color','Color32':'Color32'}
 
 
+CS_KEYWORDS=set('abstract as base bool break byte case catch char checked class const continue decimal default delegate do double else enum event explicit extern false finally fixed float for foreach goto if implicit in int interface internal is lock long namespace new null object operator out override params private protected public readonly ref return sbyte sealed short sizeof stackalloc static string struct switch this throw true try typeof uint ulong unchecked unsafe ushort using virtual void volatile while'.split())
+
 def identifier(value):
-    # @ escapes all C# keywords while preserving the reflected source name.
+    # Escape actual keywords only; ordinary MonoScript class names stay literal.
     if not isinstance(value,str) or not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*',value):
         fail('CSHARP_NAME_UNSUPPORTED',str(value),'Source identifier needs explicit name mapping')
-    return '@'+value
+    return '@'+value if value in CS_KEYWORDS else value
 
 
 def field_type(node):

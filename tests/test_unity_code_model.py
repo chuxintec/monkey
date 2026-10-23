@@ -11,6 +11,7 @@ class UnityCodeSchemaTests(unittest.TestCase):
         self.assertEqual(field_type(n),'UnityEngine.Sprite[]')
         self.assertEqual(field_type({'type':'UInt64','name':'assetQuantity'}),'ulong')
         self.assertEqual(identifier('class'),'@class')
+        self.assertEqual(identifier('FrameSpritePool'),'FrameSpritePool')
         with self.assertRaises(ParseError):field_type({'type':'PPtr<$UnknownClass>','name':'Unknown'})
         with self.assertRaises(ParseError):identifier('Name; execute()')
 
@@ -23,7 +24,7 @@ class UnityCodeSchemaTests(unittest.TestCase):
             data={'source':{'sha256':'b'*64},'objects':[obj,script],'embeddedSchemas':{'shape':schema}}
             write_json(source/'typed-objects.json',data);write_json(source/'inspection.json',{'typedObjectsSha256':sha(read(source/'typed-objects.json'))})
             result=model(source,root/'out');self.assertEqual(result['summary']['fields'],1)
-            code=(root/'out/CSharp/GameBase/Game/AudioSettings.cs').read_text();self.assertIn('public float @Volume;',code)
+            code=(root/'out/CSharp/GameBase/Game/AudioSettings.cs').read_text();self.assertIn('public float Volume;',code)
             self.assertNotIn('Invoke',code);self.assertEqual(result['summary']['methodsImplemented'],0)
             (source/'typed-objects.json').write_text('{}')
             with self.assertRaises(ParseError):model(source,root/'changed')

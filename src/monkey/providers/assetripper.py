@@ -41,7 +41,7 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self,*args):return None
 
 
-def export(source,executable,output,budget_seconds=600):
+def export(source,executable,output,budget_seconds=600,dependencies=None):
     if not 30<=budget_seconds<=1200:fail('UNITY_EXPORT_BUDGET','$','Expected 30..1200 seconds')
     source=safe(source);exe=safe(executable)
     if not source.is_file() or not exe.is_file():fail('UNITY_EXPORT_INPUT','$','Explicit file and existing provider executable required')
@@ -49,8 +49,19 @@ def export(source,executable,output,budget_seconds=600):
     if not source_raw.startswith((b'UnityFS\0',b'UnityRaw\0',b'UnityWeb\0')):
         fail('UNITY_CONTAINER_UNSUPPORTED',str(source),'First provider profile requires a verified Unity bundle signature')
     if exe.stat().st_size>256*1024*1024:fail('UNITY_PROVIDER_BUDGET',str(exe),'Provider executable exceeds budget')
-    out=new_output(output,[source,exe.parent]);runtime=out/'runtime';runtime.mkdir();inputs=out/'source';inputs.mkdir()
-    copied=inputs/source.name;copied.write_bytes(source_raw)
+    dependency_paths=[safe(p)for p in (dependencies or [])]
+    if len(dependency_paths)>2000 or len(set([source,*dependency_paths]))!=len(dependency_paths)+1:fail('UNITY_DEPENDENCY_SET','$','Duplicate or oversized explicit dependency set')
+    snapshots=[(source,source_raw)]
+    for path in dependency_paths:
+        data=read(path,max_bytes=MAX_INPUT)
+        if not data.startswith((b'UnityFS\0',b'UnityRaw\0',b'UnityWeb\0')):fail('UNITY_DEPENDENCY_FORMAT',str(path),'Expected explicit Unity bundle')
+        snapshots.append((path,data))
+    if sum(len(data)for _,data in snapshots)>1024*1024*1024:fail('UNITY_DEPENDENCY_BUDGET','$','Bundle inputs exceed1GiB')
+    if len({p.name.casefold()for p,_ in snapshots})!=len(snapshots):fail('UNITY_DEPENDENCY_NAME_COLLISION','$','Distinct source basenames collide')
+    out=new_output(output,[source,exe.parent,*dependency_paths]);runtime=out/'runtime';runtime.mkdir();inputs=out/'source';inputs.mkdir()
+    copied=[]
+    for path,data in snapshots:
+        dest=inputs/path.name;dest.write_bytes(data);copied.append(dest)
     owned_exe=runtime/exe.name;shutil.copy2(exe,owned_exe)
     binaries=[dict(name=exe.name,sha256=fingerprint(exe),bytes=exe.stat().st_size)]
     # Only declared companion library names, not a recursive provider-directory copy.
@@ -76,7 +87,7 @@ def export(source,executable,output,budget_seconds=600):
     if check.returncode or first_line!='AssetRipper.GUI.Web '+VERSION:
         fail('UNITY_PROVIDER_VERSION',str(exe),'Expected exact AssetRipper '+VERSION)
     receipt=dict(schemaVersion=1,provider='AssetRipper',providerVersion=VERSION,binaries=binaries,
-                 source=dict(bytes=len(source_raw),sha256=sha(source_raw)),targetVersion=TARGET_VERSION,
+                 source=dict(bytes=len(source_raw),sha256=sha(source_raw)),dependencies=[dict(name=p.name,bytes=len(data),sha256=sha(data))for p,data in snapshots[1:]],targetVersion=TARGET_VERSION,
                  status='started',stage='startup',budgetSeconds=budget_seconds,processExited=False,sourceCodeExecuted=False,
                  settingsWriteScope='owned runtime directory only',editor='not_run',business='not_run')
     journal=out/'export.json'
@@ -124,7 +135,7 @@ def export(source,executable,output,budget_seconds=600):
             if any(parsed.values.get(k)!=v for k,v in required.items()) or 'SaveSettingsToDisk'in parsed.values:
                 raise RuntimeError('Provider did not retain exact settings')
             receipt['settings']=required;receipt['settingsReadbackSha256']=sha(after);save('load')
-            request('/LoadFile',{'Path':str(copied)})
+            request('/LoadFile',{'Path':[str(p)for p in copied]})
             export_root=out/'exported'
             if export_root.exists():raise RuntimeError('Fresh provider export root already exists')
             save('export');request('/Export/UnityProject',{'Path':str(export_root),'CreateSubfolder':'false'})
@@ -151,7 +162,7 @@ def export(source,executable,output,budget_seconds=600):
                 try:process.wait(timeout=10)
                 except subprocess.TimeoutExpired:receipt['status']='pending_child_exit'
                 receipt.update(processExited=process.poll() is not None,exitCode=process.poll())
-            receipt['sourceUnchanged']=fingerprint(source)==sha(source_raw)
+            receipt['sourceUnchanged']=all(fingerprint(path)==sha(data)for path,data in snapshots)
             if not receipt['sourceUnchanged']:receipt['status']='source_changed'
             receipt['elapsedSeconds']=round(time.monotonic()-start,3);save()
     return receipt

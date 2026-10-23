@@ -446,3 +446,14 @@ full14公开单命令已完成16627声明CDN缓存SHA→双端生成→获取证
 full14双端static/name/routing四项集中审计全部pass零问题，非名称IR保持/17329资源身份保持/1776Spine闭包及原图复用，reader/像素/AST未重跑。实际Unity own53301，16:35:36Z启动，固定内部17:03:20Z/外层17:05:20Z，不顺延；原生结果待验。U自然安全点只读600个明确.ab缓存128字节header，全部UnityFS/2021.3.30f1；仅header证据，不是600包对象解析/业务恢复，记录current-bundle-headers.json。
 
 full14 Unity actual own53301 exit0/reap/方法475.455秒/强verify零诊断；之前full13同20源节点以及full11同12源节点差异已在本次新完整输入回读中闭合，旧失败副本仍原样，不追认。Source-prefab逐节点/Scene完整geometry、scale/quaternion、字体/图片/内部引用、字形/bitmap atlas/material、10508 View引用及版本门保留；业务/画面/Spine播放不晋级。当前公开单命令顺序Creator16:46:24Z新段，不改失败即停合同。
+
+
+## 2026-10-24 v0.2 U精确依赖资源子集闭合
+
+事件monkey-v02-unity-exact-dependency-20261024-01。当前codex/v0.2本地继续，不推送/Release；v0.1发布身份不变。600明确Bundle索引600/600、79977对象表项，不冒充正文全解析。FrameSpritePool三个外部Sprite依同文件external表和精确CAB/pathID唯一匹配；原型16个Sprite[]字段，原方法实现0。
+
+显式依赖/本地精确缓存已进入公开convert：--dependency-source可重复、--unity-texture-cache指定冻结池。3纹理用固定texture2ddecoder1.0.6一次解码到RGBA32，无翻转，原始hash和非纹理对象raw hash保持。3 PNG像素hash精确一致；先前隐式ASTC最大1LSB失败比较独立保留，不放宽比较。新outputs/unity-source-with-dependency-02输入5文件529624B，候选manifest96226025fd017ea4728f245c0a2cfcfaca71843e5b143a6c653bc6c2bda9b695，deadbeef引用0。
+
+原生probe03自有child67435、锚点2026-10-23T18:40:58.386769Z、内部19:08:58.386769Z/外层19:10:58.386769Z、方法1200秒，实际18:41:04.978708Z exit0/reap；16严格门通过：类注册、16字段/几何/GUID与十进制fileID、MissingScript0、3真实Sprite引用，独立editable copy保存/重导/重载引用保持。仅resource_subset_verified，原方法/视觉/玩法未验；公开Unity--native尚未整合。probe01/02冻结结果不变。
+
+启动Bundle精确纹理仅3/4，缺Assets/Textures/astc/512/pangzhijiangsi.a976bf1d.txt（sharedassets1.assets/pathID4），另hashf656c6db不是替代证据。本轮hydration blocked，不写派生包/启动Provider或Editor。另106MB缺TypeTree、CODEPHPY保护方法仍在；向总监报告具体原件条件，同时继续v0.2具名C#/TS和typed格式化，不等待ACK。15项定向检查通过（首次命令缺PYTHONPATH后按src:tests正确重跑），不代替上述实际Editor结果。

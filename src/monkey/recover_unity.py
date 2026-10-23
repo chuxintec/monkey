@@ -12,16 +12,18 @@ from .unity_code_model import model as code_model
 CODE_SUFFIXES={'.cs','.dll','.js','.jsc','.wasm','.lua','.so','.dylib'}
 
 
-def convert(source,output,provider_python,asset_ripper,budget_seconds=600):
+def convert(source,output,provider_python,asset_ripper,budget_seconds=600,dependencies=None,texture_cache=None):
     if not 30<=budget_seconds<=1200:fail('UNITY_EXPORT_BUDGET','$','Expected 30..1200 seconds')
     source=safe(source);exe=safe(asset_ripper);requested_python=Path(provider_python).absolute();python=safe(requested_python.resolve(strict=True))
     if not source.is_file() or not exe.is_file() or not python.is_file():fail('UNITY_PROVIDER_MISSING','$','Source and existing providers must be files')
     with source.open('rb') as stream:header=stream.read(9)
     if not header.startswith((b'UnityFS\0',b'UnityRaw\0',b'UnityWeb\0')):fail('UNITY_CONTAINER_UNSUPPORTED',str(source),'Initial profile requires a Unity bundle signature')
-    out=new_output(output,[source,exe.parent,python.parent])
+    dependencies=[safe(p)for p in (dependencies or [])]
+    if len(dependencies)>2000 or len(set([source,*dependencies]))!=len(dependencies)+1:fail('UNITY_DEPENDENCY_SET','$','Duplicate or oversized explicit dependencies')
+    out=new_output(output,[source,exe.parent,python.parent,*dependencies,*([safe(texture_cache)]if texture_cache else [])])
     report=dict(schemaVersion=1,toolVersion=__version__,sourceFamily='unity',sourceProfile='unityfs-unitypy-1.25.3-assetripper-2.0.0',
                 status='partial',workflowStatus='needs_action',completed=False,resultKind='candidate',
-                completionScope='supplied-unity-file-only',inputFiles=1,inputBytes=source.stat().st_size,projects=[],
+                completionScope='explicit-unity-bundles-and-consumed-texture-cache',inputFiles=1+len(dependencies),inputBytes=source.stat().st_size+sum(p.stat().st_size for p in dependencies),projects=[],
                 validation=dict(source='not_run',editor='not_run',visual='not_run',business='not_run'),diagnostics=[])
     def save():write_json(out/'conversion-result.json',report)
     save()
@@ -30,19 +32,47 @@ def convert(source,output,provider_python,asset_ripper,budget_seconds=600):
     if not inspected.get('sourceUnchanged') or not inspected.get('processExited') or inspected['status'] not in ('inspected','partial'):
         report['status']='failed';save();return report
     report['validation']['source']='partial' if inspected['summary']['unparsed'] else 'pass';save()
-    if inspected['summary'].get('externalTextureTokens',0):
-        report['status']='blocked'
-        report['diagnostics'].append(dict(code='UNITY_EXTERNAL_TEXTURE_PAYLOAD',count=inspected['summary']['externalTextureTokens'],
-                                         message='Original Texture2D carries resource key tokens. Exact cached payload resolution/hydration required before native export; no guessed pixels'))
-        save();return report
+    inspections=[(source,inspected)]
+    for index,path in enumerate(dependencies):
+        extra=inspect_unity(path,requested_python,out/('DependencyInspection-'+str(index)),min(budget_seconds,120))
+        inspections.append((path,extra))
+        if extra['status'] not in ('inspected','partial') or not extra.get('sourceUnchanged') or not extra.get('processExited'):
+            report['status']='failed';save();return report
+    active=[];hydrations=[];consumed={}
+    for index,(path,inspection) in enumerate(inspections):
+        working=path
+        if inspection['summary'].get('externalTextureTokens',0):
+            if texture_cache:
+                from .unity_textures import hydrate
+                hydrated=hydrate(path,texture_cache,requested_python,out/('TextureHydration-'+str(index)),min(budget_seconds,120))
+                details=load(read(out/('TextureHydration-'+str(index))/'hydration.json')) if Path(hydrated['report']).exists() else {}
+                hydrations.append(hydrated)
+                for entry in details.get('resolved',[]):consumed[entry['logicalPath']]=entry
+                if hydrated['status']=='hydrated':
+                    # Preserve unique source basenames when passing derived bytes to the provider.
+                    working=out/('DerivedBundle-'+str(index))/path.name;working.parent.mkdir();shutil.copy2(hydrated['derivedBundle'],working)
+                else:
+                    report.update(status='blocked',textureHydration=hydrations)
+                    report['diagnostics'].append(dict(code='UNITY_TEXTURE_HYDRATION_PENDING',sourceIndex=index,details=details.get('missing',[])));save();return report
+            else:
+                report['status']='blocked'
+                report['diagnostics'].append(dict(code='UNITY_EXTERNAL_TEXTURE_PAYLOAD',sourceIndex=index,count=inspection['summary']['externalTextureTokens'],message='Exact cached payload resolution/hydration required; no guessed pixels'))
+                save();return report
+        active.append(working)
+    report['textureHydration']=hydrations
+    report['dependencyInspections']=[dict(source=extra['source'],summary=extra['summary'],status=extra['status'])for _,extra in inspections[1:]]
+    report['consumedTextureCache']=list(consumed.values())
+    report['inputFiles']=len(inspections)+len(consumed);report['inputBytes']+=sum(r['cacheBytes']for r in consumed.values());save()
     generated=code_model(out/'SourceInspection',out/'CodeModel')
     report['codeModel']=generated;save()
-    exported=export_unity(source,exe,out/'ProviderExport',budget_seconds)
+    exported=export_unity(active[0],exe,out/'ProviderExport',budget_seconds,dependencies=active[1:])
     report['providerExport']={k:exported.get(k) for k in ('status','stage','targetVersion','processExited','outputFiles','outputBytes','sourceUnchanged','error')}
     if exported['status']!='exported_partial' or not exported.get('processExited') or not exported.get('sourceUnchanged'):
         report['status']='failed';save();return report
     raw_project=safe(out/'ProviderExport'/exported['project']);project=out/'UnityProject';shutil.copytree(raw_project,project)
-    recovery=project/'SourceRecovery';recovery.mkdir();originals=recovery/'Original';originals.mkdir();shutil.copy2(source,originals/source.name)
+    recovery=project/'SourceRecovery';recovery.mkdir();originals=recovery/'Original';originals.mkdir()
+    for path,_ in inspections:
+        shutil.copy2(path,originals/(fingerprint(path)[:16]+'-'+path.name))
     analysis=project/'Analysis';analysis.mkdir();shutil.copy2(out/'SourceInspection/typed-objects.json',analysis/'unity-typed-objects.json')
     package_path=project/'Packages/manifest.json'
     package=load(read(package_path));shutil.copy2(package_path,analysis/'provider-packages.json')
@@ -52,6 +82,16 @@ def convert(source,output,provider_python,asset_ripper,budget_seconds=600):
         write_json(package_path,package)
     write_json(analysis/'package-migration.json',dict(schemaVersion=1,targetVersion=TARGET_VERSION,removed=removed,vrBehavior='not_recovered'))
     if removed:report['diagnostics'].append(dict(code='UNITY_OBSOLETE_SOURCE_PACKAGE',items=removed))
+
+    write_json(analysis/'texture-hydration.json',dict(schemaVersion=1,stages=hydrations,consumed=list(consumed.values())))
+    for index,(_,extra) in enumerate(inspections[1:]):shutil.copy2(out/('DependencyInspection-'+str(index))/'typed-objects.json',analysis/('dependency-typed-'+str(index)+'.json'))
+    if consumed:
+        from .io import inside
+        pool=load(read(safe(texture_cache)));cache_rows={r['logicalPath']:r for r in pool['files']}
+        for logical,entry in consumed.items():
+            row=cache_rows[logical];path=safe(safe(texture_cache).parent/row['path']);payload=read(path,max_bytes=128*1024*1024)
+            if sha(payload)!=entry['cacheSha256']:fail('UNITY_TEXTURE_CACHE_CHANGED',logical,'Consumed cache changed before evidence copy')
+            dest=inside(recovery/'TextureCache',logical);dest.parent.mkdir(parents=True,exist_ok=True);dest.write_bytes(payload)
 
     models=load(read(out/'CodeModel/unity-code-model.json',max_bytes=128*1024*1024),max_nodes=8_000_000)
     known={Path('Assets/Scripts')/Path(c['target']).relative_to('CSharp'):c for c in models['classes']}

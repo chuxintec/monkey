@@ -1,5 +1,5 @@
 import unittest
-from monkey.sources.unity_worker import portable, identifier, texture_payload
+from monkey.sources.unity_worker import portable, identifier, texture_payload, astc_header
 
 
 class UnityIdentityTests(unittest.TestCase):
@@ -32,8 +32,17 @@ class UnityIdentityTests(unittest.TestCase):
         row=texture_payload({'image data':bytes([len(key)])+key})
         self.assertEqual(row['kind'],'external-key-token-candidate')
         self.assertEqual(row['resourceResolution'],'required')
+        extended=key+b'_5###';extended=texture_payload({'image data':bytes([len(extended)])+extended})
+        self.assertEqual(extended['key'],key.decode());self.assertEqual(extended['blockSizeHint'],5)
         self.assertFalse(row['nativePixelsVerified'])
         self.assertEqual(texture_payload({'image data':b'wrong'+key})['kind'],'inline-payload')
+
+    def test_astc_header_checks_exact_payload_dimensions_and_wire_block_hint(self):
+        header=b'\x13\xab\xa1\x5c'+bytes([5,5,1])+(10).to_bytes(3,'little')+(15).to_bytes(3,'little')+(1).to_bytes(3,'little')
+        raw=header+bytes(2*3*16)
+        self.assertEqual(astc_header(raw,10,15,5)['payloadBytes'],96)
+        for data,w,h,hint in [(raw+b'X',10,15,5),(raw,11,15,5),(raw,10,15,8)]:
+            with self.assertRaises(ValueError):astc_header(data,w,h,hint)
 
     def test_partial_pptr_is_preserved_as_data_instead_of_guessed_reference(self):
         refs=[];data=portable({'m_FileID':2,'m_PathID':7,'differentSchema':True},refs)
