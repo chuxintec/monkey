@@ -502,3 +502,27 @@ Typed格式化首个实现进入公开format-project：当前仅未导入Creator
 
 
 Typed grea native01 own73175于19:43:25.973864Z→19:43:43.423979Z正常TERM/reaped，Creator3.8.8 editor pass/0诊断。对照none/grea：91资源UUID及75SpriteFrame身份、脚本UUIDd70c6943-490a-5b7b-bf8a-ca7b490ad126/classIdd70c6lDSQpbe7+KyntJCtEm、5代码组件/数字边界/原字体页/129节点几何/Scene与独立Prefab保存重载保持，比较7门全true。初始未物化Prefab的fresh UUID不同（none09ecace9-6934-4d09-bc3d-956794e27e9d/grea1f486368-acee-4b13-a702-7a636cbd5310），明确不计已保持；已有native迁移仍pending。4格式化语义反例含数值JSON原字节，相关23定向检查通过；Creator verify摘要原先0资产改为实际candidate plan91/75，非native数量推断。详见FORMATTING.md。继续Unity typed格式器/公开编排、native对象身份迁移及其余源用例，不结束v0.2。
+
+
+总监event monkey-v02-format-identity-scope-20261024-01已明确审阅V0.2-PLAN首期范围：已存在native ID须保持；未物化Prefab首次生成ID与来源映射如实记录，fresh自动UUID不同不等于破坏旧身份。已导入/人工修改工程首期拒绝即可，完整native move不升级为本版前置。不重复已过探针；按本机支持接口尽量控制Prefab初始身份，无可核接口时记录实际ID/source映射而不虚构。优先Unity格式器、公开convert默认none/显式grea、生成接线、全Research真实导出。继续开发不等ACK；先前native-move pending为未支持范围，不是阻断本版的必做框架。
+
+
+Unity typed格式器首个生成工程profile已实现：113路径变化/183物理文件移动，Editor host保持原字节、通过Analysis/output-paths.json明确plan/Scene/Prefab/Material/Animation/Editor输出，数据/代码文本不全局替换。原meta GUID保持；20个待首次生成位置（字体SO/Prefab/Scene等）标首次分配，不假装旧ID。非已导入候选、ownership/stale/native ID字符串保护有反例。通用UnityImporter现直接绑定生成C#脚本到TMP，要求精确脚本GUID/普通数值方法签名并读回数字边界/独立实例/重载态及文件ID。原Lifecycle候选方法保留pending不编进Label组件，避免被引擎自动调用。新C#host/helper独立compile通过，相关32检查通过。
+
+真实MainUi129节点/5 C#绑定/80可转换组件，none01 manifest8b9a1a40dfdcadc45f31f2e7d4291aeb77b9a321cc93d45843cb16a7d7bfea21；grea01 manifestd8ea7bb144c24c847c12b46d18c8bbf6acbf316382baa38a0c12f1ad8528a248，两者尚未native。先none新段输出number-label-unity-format-native-none-01，实际锚点启动时+28/+30/方法1200秒，ps无主Editor冲突；仅自有copy/child，首新增严格失败停止，已知source行为partial不晋级玩法；前端独立格式器不含原生已导入移动，不作为本版前置。
+
+
+Unity格式none native01 own74623于20:17:39.052866Z→20:17:58.020921Z exit0/reaped，方法2.039秒，严格verify0诊断/editor partial（已知源未知组件，不作为玩法完成）。通用生产导入器已实际生成5 C#绑定/数字边界，Scene和独立Prefab都读回5绑定/十进制身份/未初始化态；129节点及原字体/引用/保存重开门保持。资源已释放，顺序启动grea01独立新段，实际锚点内部+28/外层+30/1200秒，不重跑none、不改冻结候选，首新增严格失败停。
+
+
+公开convert --format none|grea已接入，默认none；structured不再调用旧standardize，任意字符串/JSON/代码全局替换写入器已移除，只留旧manifest物理路径只读前缀lookup。grea在完整未格式化导出后两端全部prepared才晋升canonical；未格式化项目保留Unformatted，格式失败completed=false并阻止native。resume格式化工程首期拒绝、未知/直接Unity恢复profile的grea明确拒绝，不静默忽略。真实合成CLI none/grea各执行一次，none not_requested/grea applied，双端原件保留；17相关语义检查通过，含第二端格式失败两原candidate不晋升/native not_run。
+
+公开单条convert --target both --format grea --native现用同一合成输入新outputs/format-cli-native-package-01→独立native目录执行，源/生成/格式/Engine分层。orchestration在实际启动每段前自动写不可顺延+28/+30锚点、方法1200秒，ps资源检查，自有child顺序Unity→Creator，第一新增严格失败停，当前未宣称端到端完成；不会借合成验证当游戏恢复通过。
+
+
+单命令synthetic native01实际stopped：Unity own76092 exit0/reaped、strict0/editor partial；Creator own76364正常TERM/reaped，Scene/Prefab1节点几何/引用保存重载通过，但strict1 GENERATED_FILE_CHANGED。根因是package原始图assets/art/images/Original/...的合法Importer meta扩写未被新分目录nativeRoots收进回执；没有重跑失败副本。修正Creator回执覆盖自有assets根，并在导出manifest封存全部预先分配的资源/脚本GUID/UUID、原生verify逐项强核ID不变，既不跳过未记录meta也不放宽资产内容hash。新的无native ID首次分配继续单列来源映射。修正有定向检查后将新完整输出公开单条命令重跑，旧失败保持。
+
+
+单命令synthetic native02完成：orchestration completed_native_stages，Unity76820 exit0/reaped/strict0/editor partial、Creator77095正常TERM/reaped/strict0/editor pass。首轮缺meta回执失败不改；新修捕获全部自有assets并封存/复验所有此前已分配资源/脚本GUID/UUID，Importer扩写允许、ID重换即使重记native hash仍拒绝。相关30检查+身份变更反例通过。真实Unity129节点 none/grea比较6门全true，91既有meta GUID保持、5代码绑定/数值边界/Scene与独立Prefab保存重载通过；首次Prefab GUID 3e4eb429eb2f3409e99e030c7ab2721a/92ba4d626843745b18205e873c7b5e04按来源映射记录，不当旧ID。当前生成式Unity/Creator格式与公开fresh编排已实证，直接Unity provider格式、自动代码发现/接线、Research扩展仍未闭合，继续开发。
+
+U独立离线metadata-only新线索：启动40条Mono类型表对应27唯一script_id+old_type_hash身份，冻结600包含744嵌入Mono类型，其中18类可精确匹配。只做表/类型树匹配，未解析额外对象正文/解码纹理/执行源代码，不视为106MB已恢复。下一按版本/平台/精确哈希借取类型树并严格read校验，不放松字段/长度；原CODEPHPY方法仍未知。

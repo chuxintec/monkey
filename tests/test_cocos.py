@@ -55,16 +55,16 @@ class CreatorTests(unittest.TestCase):
             instruction=load(read(r/'candidate/extensions/monkey-import/import-plan.json'))
             self.assertEqual(instruction['sourcePrefabs'],p['sourcePrefabs'])
             self.assertFalse((r/'candidate'/spec['path']).exists())
-            from monkey.targets.layout import standardize
-            standardize(r/'candidate',cocos.PROFILE,p,{})
-            instruction=load(read(r/'candidate/extensions/monkey-import/import-plan.json'))
-            self.assertTrue(instruction['sourcePrefabs'][0]['path'].startswith('assets/prefabs/'))
-            self.assertEqual(cocos.verify(r/'candidate',r/'verify','editor')['editorValidation'],'not_run')
+            from monkey.formatting import preview,apply
+            preview(r/'candidate',r/'format-preview');apply(r/'candidate',r/'format-preview/format-plan.json',r/'formatted')
+            instruction=load(read(r/'formatted/extensions/monkey-import/import-plan.json'))
+            self.assertTrue(instruction['sourcePrefabs'][0]['path'].startswith('assets/content/prefabs/'))
+            self.assertEqual(cocos.verify(r/'formatted',r/'verify','editor')['editorValidation'],'not_run')
 
     def test_bitmap_font_page_is_adjacent_and_owned_after_standard_layout(self):
         import re
         from fixtures import FONT,FRAME,normal
-        from monkey.targets.layout import standardize
+        from monkey.formatting import preview,apply
         with tempfile.TemporaryDirectory() as temp:
             r=Path(temp).resolve();config=fixture(r/'source')
             font=dict(name='OriginalFont',fontSize=20,spriteFrame={'__uuid__':FRAME},_fntConfig=dict(fontSize=20,commonHeight=20,
@@ -73,11 +73,11 @@ class CreatorTests(unittest.TestCase):
             inspect(config,[2],r/'inspect');normalize(r/'inspect/source-manifest.json',r/'ir')
             plan=cocos.plan(r/'ir/ir.json','bitmap-adjacency',r/'plan')
             self.assertEqual(len([a for a in plan['assets'] if a['kind']=='bitmap']),1)
-            cocos.export(r/'plan/plan.json',r/'candidate');standardize(r/'candidate',cocos.PROFILE,plan,{})
-            native=load(read(r/'candidate/extensions/monkey-import/import-plan.json'));font=next(a for a in native['assets'] if a['kind']=='bitmap')
+            cocos.export(r/'plan/plan.json',r/'candidate');preview(r/'candidate',r/'format-preview');apply(r/'candidate',r/'format-preview/format-plan.json',r/'formatted')
+            native=load(read(r/'formatted/extensions/monkey-import/import-plan.json'));font=next(a for a in native['assets'] if a['kind']=='bitmap')
             atlas=next(a for a in native['assets'] if a['sourceId']==font['atlas'])
-            fnt=r/'candidate'/font['path'];page=re.search(r'page id=0 file="([^"]+)"',fnt.read_text())[1]
-            self.assertEqual(fnt.parent,(r/'candidate'/atlas['path']).parent)
+            fnt=r/'formatted'/font['path'];page=re.search(r'page id=0 file="([^"]+)"',fnt.read_text())[1]
+            self.assertEqual(fnt.parent,(r/'formatted'/atlas['path']).parent)
             self.assertEqual(page,Path(page).name)
             self.assertTrue((fnt.parent/page).is_file())
             self.assertEqual(sha((fnt.parent/page).read_bytes()),atlas['sha256'])

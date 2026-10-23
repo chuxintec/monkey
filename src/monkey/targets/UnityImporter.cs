@@ -24,6 +24,7 @@ public static class MonkeyImporter
     static TmpResourceResult tmpResourceResult;
     [Serializable] public class SourcePrefabSpec { public string sourceId,root,path; public string[] nodes; public int nodeCount; }
     [Serializable] public class SourcePrefabResult {
+        public MonkeyNumericCode.Result[] numericCodeBindings;
         public string sourceId,path,guid,geometryPhase; public int nodeCount,missingScripts,layoutSettlePasses;
         public bool savedReloaded,referencesVerified; public NodeResult[] nodes; public string[] referenceFailures;
     }
@@ -42,7 +43,9 @@ public static class MonkeyImporter
         public float[] position, rotation, scale, size, anchor, color;
         public float opacity; public bool active;
     }
+    [Serializable] public class NumericMethodsSpec { public string setter,getter; }
     [Serializable] public class ComponentSpec {
+        public string codeClassName,codeScriptGuid,sourceScriptIdentity; public NumericMethodsSpec numericMethods;
         public string sourceId, type, node, spriteFrame, font, text;
         public int mode, sizeMode, horizontalAlign, verticalAlign, overflow; public float fontSize,lineHeight;
         public bool enabled, convertible, trim, wrap, bold, italic; public float spacing; public BitmapProbe bitmapProbe;
@@ -62,6 +65,7 @@ public static class MonkeyImporter
     [Serializable] public class LabelResult { public string sourceId, text, fontGuid, geometryProbe; public float fontSize; public int characterCount; public bool allCharactersPresent; public GlyphBounds[] glyphBounds; }
     [Serializable] public class GlyphBounds { public uint unicode; public float left,top,width,height,quadPadding; }
     [Serializable] public class Readback {
+        public MonkeyNumericCode.Result[] numericCodeBindings,numericCodeExercise;
         public string status, unityVersion, prefabGuid, sceneGuid;
         public int spriteCount, nodeCount, missingScripts; public bool editableRoundtrip,sceneReopened; public string previewPath,previewSha256,previewError,colorSpace;
         public MotionResult[] animations; public string[] diagnostics; public NodeResult[] nodes; public SpriteResult[] sprites; public FileResult[] nativeFiles; public FontResult[] fonts; public LabelResult[] labels; public ViewReference[] viewReferences; public JsonResult[] jsonAssets; public SourcePrefabResult[] sourcePrefabs; public TmpResourceResult tmpResources;
@@ -77,9 +81,29 @@ public static class MonkeyImporter
         public string id, guid; public float[] size, border;
         public long fileId;
     }
-    const string PrefabPath = "Assets/Generated/Views/Candidate.prefab";
-    const string ScenePath = "Assets/Generated/Scenes/Candidate.unity";
-    const string BootstrapPath = "Assets/Generated/Scenes/ImportBootstrap.unity";
+    // Editor-only typed output locations. Original game source and text are never rewritten.
+    [Serializable] public class OutputPaths {
+        public string plan="Assets/Monkey/Editor/import-plan.json";
+        public string prefab="Assets/Generated/Views/Candidate.prefab",scene="Assets/Generated/Scenes/Candidate.unity",bootstrap="Assets/Generated/Scenes/ImportBootstrap.unity";
+        public string artRoot="Assets/Generated/Art",controllersRoot="Assets/Generated/Controllers",materialsRoot="Assets/Generated/Art",animationsRoot="Assets/Generated/Animations",sourcePrefabsRoot="Assets/Generated/Views/Sources";
+        public string editableProbe="Assets/Generated/Views/EditableProbe.prefab";
+        public string[] nativeRoots={"Assets/Generated","Assets/TextMesh Pro"},metaRoots={"Assets/Monkey"};
+    }
+    static OutputPaths outputPaths;
+    static OutputPaths Paths {
+        get {
+            if(outputPaths!=null)return outputPaths;
+            const string config="Analysis/output-paths.json";
+            var data=File.Exists(config)?JsonUtility.FromJson<OutputPaths>(File.ReadAllText(config)):new OutputPaths();
+            if(data==null||data.nativeRoots==null||data.metaRoots==null||data.nativeRoots.Length<1||data.nativeRoots.Length>8||data.metaRoots.Length<1||data.metaRoots.Length>8)throw new InvalidOperationException("Invalid typed output roots");
+            foreach(var path in new[]{data.plan,data.prefab,data.scene,data.bootstrap,data.artRoot,data.controllersRoot,data.materialsRoot,data.animationsRoot,data.sourcePrefabsRoot,data.editableProbe}.Concat(data.nativeRoots).Concat(data.metaRoots))
+                if(string.IsNullOrEmpty(path)||!path.StartsWith("Assets/",StringComparison.Ordinal)||path.Contains("..")||path.Contains("\\")||path.Contains(":")||path.Contains("\0"))throw new InvalidOperationException("Unsafe typed output location");
+            outputPaths=data;return data;
+        }
+    }
+    static string PrefabPath {get{return Paths.prefab;}}
+    static string ScenePath {get{return Paths.scene;}}
+    static string BootstrapPath {get{return Paths.bootstrap;}}
 
     [MenuItem("Tools/Monkey/Import Candidate")]
     public static void ImportCandidate() { BeginAsync(Application.isBatchMode); }
@@ -121,7 +145,7 @@ public static class MonkeyImporter
         Application.logMessageReceived-=CaptureEngineError;firstEngineError=null;handlingFailure=false;
         ownedScene=default(Scene);priorScene=default(Scene);nativeProgress=null;
         nativeClock=System.Diagnostics.Stopwatch.StartNew();
-        nativeProgress=new NativeProgress {status="running",phase="preflight",planSha256=Hash("Assets/Monkey/Editor/import-plan.json")};
+        nativeProgress=new NativeProgress {status="running",phase="preflight",planSha256=Hash(Paths.plan)};
         nativeDeadline=DateTime.MaxValue;nativeBudget=0;ownedScene=default(Scene);priorScene=default(Scene);tmpBitmapShader=null;tmpDistanceShader=null;tmpResourceResult=null;
             var budget=Environment.GetEnvironmentVariable("MONKEY_NATIVE_BUDGET_SECONDS");
             if(!string.IsNullOrEmpty(budget) && (!double.TryParse(budget,System.Globalization.NumberStyles.Float,System.Globalization.CultureInfo.InvariantCulture,out nativeBudget) || double.IsNaN(nativeBudget) || double.IsInfinity(nativeBudget) || nativeBudget<1 || nativeBudget>3600))
@@ -149,7 +173,7 @@ public static class MonkeyImporter
                 throw new InvalidOperationException("ASYNC_ENTRYPOINT_REQUIRES_BATCH_WITHOUT_QUIT: use monkey native-import");
             NativeCheckpoint("preflight",0,1);
             EditorApplication.update+=CheckAsyncBudget;
-            var plan=JsonUtility.FromJson<Plan>(File.ReadAllText("Assets/Monkey/Editor/import-plan.json"));
+            var plan=JsonUtility.FromJson<Plan>(File.ReadAllText(Paths.plan));
             if(NeedsTmp(plan) && !TmpFilesPresent()) {
                 NativeCheckpoint("tmp-resources",0,1);
                 var archive=ResolveTmpArchive(plan.tmpResources);
@@ -198,7 +222,7 @@ public static class MonkeyImporter
         if(!asyncRunning || packagePending)return;
         try {
             NativeCheckpoint("tmp-resources",tmpImportCompleted?1:0,1);
-            if(Hash("Assets/Monkey/Editor/import-plan.json")!=nativeProgress.planSha256)
+            if(Hash(Paths.plan)!=nativeProgress.planSha256)
                 throw new InvalidOperationException("IMPORT_PLAN_CHANGED_WHILE_PENDING");
             Run();FinishAsync(0);
         } catch(Exception error) {FailAsync(error);}
@@ -358,9 +382,9 @@ public static class MonkeyImporter
     static void Run()
     {
         ValidateEditorContext();
-        var plan = JsonUtility.FromJson<Plan>(File.ReadAllText("Assets/Monkey/Editor/import-plan.json"));
+        var plan = JsonUtility.FromJson<Plan>(File.ReadAllText(Paths.plan));
         var diagnostics = new List<string>();
-        foreach(var directory in new[]{Path.GetDirectoryName(PrefabPath),Path.GetDirectoryName(ScenePath),"Assets/Generated/Art","Assets/Generated/Controllers","Analysis"})
+        foreach(var directory in new[]{Path.GetDirectoryName(PrefabPath),Path.GetDirectoryName(ScenePath),Paths.artRoot,Paths.controllersRoot,Paths.materialsRoot,"Analysis"})
             Directory.CreateDirectory(directory);
         foreach(var font in plan.bitmapFonts)Directory.CreateDirectory(Path.GetDirectoryName(font.fontPath));
         foreach(var animation in plan.animations.Where(a=>a.convertible))Directory.CreateDirectory(Path.GetDirectoryName(animation.path));
@@ -556,6 +580,7 @@ public static class MonkeyImporter
                 var vertical = new [] { TMPro.VerticalAlignmentOptions.Top, TMPro.VerticalAlignmentOptions.Middle, TMPro.VerticalAlignmentOptions.Bottom };
                 label.horizontalAlignment = horizontal[Mathf.Clamp(spec.horizontalAlign,0,2)];
                 label.verticalAlignment = vertical[Mathf.Clamp(spec.verticalAlign,0,2)];
+                if(!string.IsNullOrEmpty(spec.codeClassName))MonkeyNumericCode.Bind(spec,label);
                 diagnostics.Add("LABEL_LINE_METRICS_REQUIRE_REFERENCE: " + spec.sourceId);
             }
         }
@@ -628,7 +653,7 @@ public static class MonkeyImporter
                 var width=spec.width*label.font.faceInfo.pointSize/Mathf.Max(label.fontSize,1)/Mathf.Max(gradient,1);
                 material.SetFloat("_OutlineWidth",Mathf.Clamp01(width));
                 material.SetColor("_OutlineColor",new Color(spec.outlineColor[0]/255f,spec.outlineColor[1]/255f,spec.outlineColor[2]/255f,spec.outlineColor[3]/255f));
-                var path="Assets/Generated/Art/"+spec.nativeId+".mat";AssetDatabase.CreateAsset(material,path);
+                var path=Paths.materialsRoot+"/"+spec.nativeId+".mat";AssetDatabase.CreateAsset(material,path);
                 label.fontSharedMaterial=material;
                 label.margin=new Vector4(spec.width,spec.width,spec.width,spec.width);
                 label.UpdateMeshPadding();
@@ -649,6 +674,7 @@ public static class MonkeyImporter
                 image.preserveAspect=image.type==UnityEngine.UI.Image.Type.Simple;image.raycastTarget=false;i++;
             }
         }
+        var numericCodeExercise=MonkeyNumericCode.Exercise(plan.components,nodeMap);
         NativeCheckpoint("animations",0,plan.animations.Length);
         var motionReadback=BuildMotions(plan,nodeMap);
         var view = canvas.AddComponent<MonkeyCandidateView>();
@@ -659,14 +685,14 @@ public static class MonkeyImporter
         SceneManager.MoveGameObjectToScene(events,scene);
         var sourcePrefabResults=new List<SourcePrefabResult>();
         foreach(var spec in plan.sourcePrefabs ?? new SourcePrefabSpec[0]) {
-            if(string.IsNullOrEmpty(spec.path) || !spec.path.StartsWith("Assets/Generated/Views/Sources/",StringComparison.Ordinal) || spec.path.Contains(".."))
+            if(string.IsNullOrEmpty(spec.path) || !spec.path.StartsWith(Paths.sourcePrefabsRoot+"/",StringComparison.Ordinal) || spec.path.Contains(".."))
                 throw new InvalidOperationException("Invalid source prefab path");
             Directory.CreateDirectory(Path.GetDirectoryName(spec.path));
         }
         AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
         foreach(var spec in plan.sourcePrefabs ?? new SourcePrefabSpec[0]) {
             if(sourcePrefabResults.Count%16==0)NativeCheckpoint("source-prefabs",sourcePrefabResults.Count,plan.sourcePrefabs.Length);
-            if(!spec.path.StartsWith("Assets/Generated/Views/Sources/",StringComparison.Ordinal) || spec.path.Contains("..") || File.Exists(spec.path))
+            if(!spec.path.StartsWith(Paths.sourcePrefabsRoot+"/",StringComparison.Ordinal) || spec.path.Contains("..") || File.Exists(spec.path))
                 throw new InvalidOperationException("Invalid or existing source prefab path: "+spec.path);
             // SaveAsPrefabAsset serializes this subtree without modifying it.
             // A managed active Instantiate can run layout lifecycle callbacks
@@ -697,7 +723,9 @@ public static class MonkeyImporter
                     else if(c.type=="cc.Layout")valid=go.GetComponent<UnityEngine.UI.LayoutGroup>()!=null;
                     if(!valid)referenceFailures.Add(c.sourceId);
                 }
-                sourcePrefabResults.Add(new SourcePrefabResult {sourceId=spec.sourceId,path=spec.path,
+                var persistentMap=SavedNodeMap(plan.nodes,sourcePrefab,spec,nodeSpecs);
+                var numericBindings=plan.components.Where(c=>c.convertible&&!string.IsNullOrEmpty(c.codeClassName)&&persistentMap.ContainsKey(c.node)).Select(c=>MonkeyNumericCode.Read(c,persistentMap[c.node].gameObject)).ToArray();
+                sourcePrefabResults.Add(new SourcePrefabResult {numericCodeBindings=numericBindings,sourceId=spec.sourceId,path=spec.path,
                     guid=AssetDatabase.AssetPathToGUID(spec.path),nodeCount=transforms.Length,missingScripts=missing,
                     savedReloaded=true,geometryPhase="native-layout-settled-v1",layoutSettlePasses=passes,
                     nodes=spec.nodes.Select(id=>DescribeNode(nodeSpecs[id],mapped[id])).ToArray(),
@@ -728,6 +756,7 @@ public static class MonkeyImporter
         NativeCheckpoint("native-readback",0,1);
         var savedNodeMap=SavedNodeMap(plan.nodes,instance);
         var readback = new Readback {
+            numericCodeExercise=numericCodeExercise,numericCodeBindings=plan.components.Where(c=>c.convertible&&!string.IsNullOrEmpty(c.codeClassName)).Select(c=>MonkeyNumericCode.Read(c,savedNodeMap[c.node].gameObject)).ToArray(),
             sourcePrefabs=sourcePrefabResults.ToArray(),tmpResources=tmpResourceResult,sceneReopened=true,
             jsonAssets=plan.assets.Where(a=>a.kind=="cc.JsonAsset").Select(a=> {
                 var text=AssetDatabase.LoadAssetAtPath<TextAsset>(a.path);
@@ -778,8 +807,8 @@ public static class MonkeyImporter
         }
         catch(Exception exception) {readback.previewError=exception.Message;}
         if (!EditorSceneManager.SaveScene(scene,ScenePath)) throw new InvalidOperationException("Scene save after native preview failed");
-        readback.nativeFiles = new[]{"Assets/Generated","Assets/TextMesh Pro"}.Where(Directory.Exists).SelectMany(folder=>Directory.GetFiles(folder,"*",SearchOption.AllDirectories))
-            .Concat(Directory.GetFiles("Assets/Monkey","*.meta",SearchOption.AllDirectories))
+        readback.nativeFiles = Paths.nativeRoots.Where(Directory.Exists).SelectMany(folder=>Directory.GetFiles(folder,"*",SearchOption.AllDirectories))
+            .Concat(Paths.metaRoots.Where(Directory.Exists).SelectMany(folder=>Directory.GetFiles(folder,"*.meta",SearchOption.AllDirectories)))
             .OrderBy(path=>path,StringComparer.Ordinal).Select(path=>new FileResult {
                 path=path.Replace('\\','/'), sha256=Hash(path)
             }).ToArray();
@@ -791,7 +820,7 @@ public static class MonkeyImporter
         // Keep the candidate scene open for editing; no global SaveAssets, no other scenes saved.
     }
     static bool CheckEditableClone() {
-        const string path="Assets/Generated/Views/EditableProbe.prefab";
+        var path=Paths.editableProbe;
         if(!AssetDatabase.CopyAsset(PrefabPath,path))throw new InvalidOperationException("Native editable probe copy failed");
         var contents=PrefabUtility.LoadPrefabContents(path);var original=contents.transform.GetChild(0).name;
         try {
@@ -834,7 +863,7 @@ public static class MonkeyImporter
         }
     }
     static void ConfigureScaleButton(GameObject go,UnityEngine.UI.Button button,ComponentSpec spec) {
-        var path="Assets/Generated/Controllers/"+spec.nativeId;
+        var path=Paths.controllersRoot+"/"+spec.nativeId;
         var controller=UnityEditor.Animations.AnimatorController.CreateAnimatorControllerAtPath(path+".controller");
         var normal=new AnimationClip {name="Normal"};var pressed=new AnimationClip {name="Pressed"};
         var scale=go.transform.localScale;
@@ -937,9 +966,9 @@ public static class MonkeyImporter
         var results=new List<MotionResult>();
         foreach(var spec in plan.animations ?? Array.Empty<MotionSpec>()) {
             if(!spec.convertible)continue;
-            if(!spec.path.StartsWith("Assets/Generated/Animations/") || spec.path.Contains("..") || File.Exists(spec.path))
+            if(!spec.path.StartsWith(Paths.animationsRoot+"/",StringComparison.Ordinal) || spec.path.Contains("..") || File.Exists(spec.path))
                 throw new InvalidOperationException("Unsafe/existing animation output: "+spec.path);
-            Directory.CreateDirectory("Assets/Generated/Animations");
+            Directory.CreateDirectory(Paths.animationsRoot);
             var clip=new AnimationClip {name=spec.name,frameRate=spec.sample};
             foreach(var track in spec.tracks) {
                 if(AnimationUtility.CalculateTransformPath(nodes[track.node].transform,nodes[spec.root].transform)!=track.path)

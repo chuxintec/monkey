@@ -53,6 +53,14 @@ def emit(source,model_path,output,numeric_fields,language='ts',namespace='monkey
     class_scopes=[c for c in model.get('classScopes',[]) if c['scopeBytes']==dict(start=scope_start,end=scope_end) and owner in c['constructorAliases'] and c['baseArgument']=='cc.Label']
     registrations=[r for r in model.get('registrations',[]) if r['name']==class_name]
     label_adapter=len(class_scopes)==len(registrations)==1
+    if label_adapter:
+        lifecycle=set('onLoad onEnable onDisable start update lateUpdate onDestroy reset onRestore Awake OnEnable OnDisable Start Update LateUpdate OnDestroy Reset OnValidate OnGUI'.split())
+        deferred=[m for m in supported if m['name']in lifecycle]
+        pending.extend(dict(m,targetStatus='pending-engine-lifecycle-contract')for m in deferred)
+        supported=[m for m in supported if m['name']not in lifecycle]
+        for field in fields:
+            if not any(m['semantic'].get('field')==field and m['semantic']['kind']=='write-instance-field'for m in supported):fail('CODE_LIFECYCLE_CONTRACT',field,'No non-lifecycle numeric setter remains')
+
     # Pending methods from other owners remain visible, never disappear from the denominator.
     out=new_output(output,[source,model_path]);files={};mappings=[]
     cs=['// Generated numeric-call subset. See Analysis/code-contract.json.']

@@ -7,7 +7,7 @@ from .project_model import import_plan_model,replace_slots,asset_path
 from .targets import cocos
 
 PLAN_PATH='extensions/monkey-import/import-plan.json'
-OUTPUT_PATHS=dict(scene='assets/scenes/Candidate.scene',prefabs='assets/content/prefabs',animations='assets/content/animations',nativeRoots=['assets/content','assets/scenes','assets/scripts'])
+OUTPUT_PATHS=dict(scene='assets/scenes/Candidate.scene',prefabs='assets/content/prefabs',animations='assets/content/animations',nativeRoots=['assets'])
 
 
 def _owned(root):
@@ -87,13 +87,13 @@ def _build(project):
         targets[key]=old
     typed=replace_slots(document,model['pathSlots'],changes);typed['outputPaths']=copy.deepcopy(OUTPUT_PATHS)
     for asset in typed['assets']:
-        original=next(a for a in document['assets']if a['sourceId']==asset['sourceId'])
+        original=assets[asset['sourceId']]
         if original['path']in rewrites:asset['sha256']=sha(rewrites[original['path']])
     edits={PLAN_PATH:encoded(typed)}
     def rewrite_report(data):
         updated=replace_slots(data,import_plan_model(data,cocos.PROFILE)['pathSlots'],changes)
         for item in updated.get('assets',[]):
-            old=next((a for a in document['assets']if a['sourceId']==item.get('sourceId')),None)
+            old=assets.get(item.get('sourceId'))
             if old and old['path']in rewrites and 'sha256'in item:item['sha256']=sha(rewrites[old['path']])
         emission=updated.get('codeEmission')
         if isinstance(emission,dict)and emission.get('scriptPath')in changes:emission['scriptPath']=changes[emission['scriptPath']]
@@ -127,11 +127,19 @@ def _build(project):
 
 
 def preview(project,output):
+    from .targets import unity
+    if stage_manifest(safe(project)).get('targetProfile')==unity.PROFILE:
+        from .formatting_unity import preview as unity_preview
+        return unity_preview(project,output)
     root,manifest,plan,*_=_build(project);out=new_output(output,[root]);write_json(out/'format-plan.json',plan)
     return dict(status='preview',physicalMoves=len(plan['physicalMoves']),typedPathChanges=len(plan['pathChanges']),nativeAssignmentPending=plan['nativeAssignmentPending'],report=str(out/'format-plan.json'))
 
 
 def apply(project,plan_path,output):
+    from .targets import unity
+    if stage_manifest(safe(project)).get('targetProfile')==unity.PROFILE:
+        from .formatting_unity import apply as unity_apply
+        return unity_apply(project,plan_path,output)
     plan_path=safe(plan_path);root,manifest,plan,moves,edits,rewrite_report,changes=_build(project)
     if load(read(plan_path,max_bytes=128*1024*1024),max_nodes=8_000_000)!=plan:fail('FORMAT_STALE_PLAN',str(plan_path),'Source/ownership/algorithm/typed plan changed since preview')
     out=new_output(output,[root,plan_path.parent])

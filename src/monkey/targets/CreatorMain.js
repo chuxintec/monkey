@@ -44,10 +44,10 @@ module.exports = {
             const manifest = JSON.parse(manifestRaw);
             const planRaw = fs.readFileSync(path.join(__dirname, 'import-plan.json'));
             const plan = JSON.parse(planRaw);
-            const outputPaths=plan.outputPaths||{scene:'assets/generated/views/Candidate.scene',prefabs:'assets/generated/prefabs',animations:'assets/generated/animations',nativeRoots:['assets/generated']};
+            const outputPaths=plan.outputPaths||{scene:'assets/generated/views/Candidate.scene',prefabs:'assets/generated/prefabs',animations:'assets/generated/animations',nativeRoots:['assets']};
             if(!Array.isArray(outputPaths.nativeRoots)||outputPaths.nativeRoots.length<1||outputPaths.nativeRoots.length>8)throw Error('Invalid native output roots');
             for(const value of [outputPaths.scene,outputPaths.prefabs,outputPaths.animations,...outputPaths.nativeRoots]) {
-                if(typeof value!=='string'||!value.startsWith('assets/'))throw Error('Invalid typed output path');within(root,value);
+                if(typeof value!=='string'||!(value==='assets'||value.startsWith('assets/')))throw Error('Invalid typed output path');within(root,value);
             }
 
             const project = JSON.parse(fs.readFileSync(within(root, 'package.json'), 'utf8'));

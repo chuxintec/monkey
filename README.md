@@ -1,5 +1,7 @@
 # monkey
 
+本地v0.2开发中：fresh package `convert`默认`--format none`，可选`--format grea`（先完整导出、再typed后处理，Unformatted保留基线），支持顺序`--native`；直接Unity provider恢复的grea暂拒绝。代码具名子集与原生接线、格式范围及真实证据分别见[CODE-SUBSET](docs/CODE-SUBSET.md)、[FORMATTING](docs/FORMATTING.md)。下文v0.1发布事实对应不可变Release，不把开发分支当新发布。
+
 Python 驱动的原包恢复工程命令行工具。产品目标：Cocos各版本原包→Unity6/Cocos3.8.8/both；Unity、Laya/LayaAir、Egret、自研及其他引擎原包→Unity6。按来源逐步实现，当前结构化reader仍限已验证的Cocos2.4.15子集。wxapkg/APK/已取得资源集合一键生成独立工程，含全部输入资源、恢复源码与目标代码初稿，交给AI继续开发。当前正式工具版本为 **v0.1（Python 包 0.1.0）**。已验证的原生资源恢复范围和业务缺口见下文；其他源引擎按 [v0.2 设计](docs/V0.2-PLAN.md)推进。
 
 ## 安装与依赖

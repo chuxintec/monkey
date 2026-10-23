@@ -274,12 +274,18 @@ def verify(candidate,output,level='static'):
                             'Saved native sprite differs: '+str({key:dict(expected=expected[key],actual=f.get(key)) for key in mismatches})))
             good=good and all(isinstance(n.get('nodeUuid'),str) and n['nodeUuid'] for n in rb.get('nodes',[]))
             good=good and all(isinstance(c.get('componentUuid'),str) and c['componentUuid'] for c in rb.get('components',[]))
+            from ..code_validation import numeric as verify_numeric
+            code_gaps=verify_numeric(plan['components'],rb.get('numericCodeBindings'),'cocos','scene',rb.get('numericCodeExercise',[]))
+            if code_gaps:good=False;diagnostics.extend(code_gaps)
             good=good and path_for('assets/generated/views/Candidate.scene') in native and bool(rb.get('sceneUuid'))
             actual_prefabs={v['sourceId']:v for v in rb.get('sourcePrefabs',[])}
             expected_prefabs={v['sourceId']:v for v in plan.get('sourcePrefabs',[])}
             if set(actual_prefabs)!=set(expected_prefabs):good=False
             for sid,spec in expected_prefabs.items():
                 actual=actual_prefabs.get(sid,{})
+                source_nodes=set(spec['nodes']);code_specs=[c for c in plan['components']if c.get('node')in source_nodes]
+                code_gaps=verify_numeric(code_specs,actual.get('numericCodeBindings'),'cocos',sid)
+                if code_gaps:good=False;diagnostics.extend(code_gaps)
                 for mismatch in actual.get('geometryMismatches',[]):
                     good=False
                     diagnostics.append(diagnostic('PREFAB_GEOMETRY_MISMATCH',mismatch.get('sourceId',sid),
@@ -301,10 +307,13 @@ def verify(candidate,output,level='static'):
         target=inside(root,f['path']);expected=native.get(f['path'],f['sha256'])
         if not target.is_file() or fingerprint(target)!=expected:diagnostics.append(diagnostic('GENERATED_FILE_CHANGED',f['path'],'Generated file differs'))
     for relative,h in native.items():
-        prefixes=('assets/','Analysis/') if m.get('layout')in ('game-standard-v1','grea-typed-v1') else ('assets/generated/','Analysis/')
+        prefixes=('assets/','Analysis/')
         if not relative.startswith(prefixes):fail('UNSAFE_NATIVE_FILE',relative,'Unexpected native output')
         p=inside(root,relative)
         if not p.is_file() or fingerprint(p)!=h:diagnostics.append(diagnostic('NATIVE_FILE_CHANGED',relative,'Saved native hash differs'))
+    from ..identities import verify as verify_assigned
+    identity_gaps=verify_assigned(root,m);diagnostics.extend(identity_gaps)
+    if identity_gaps and editor=='pass':editor='fail'
     # Static asset references are logical, not asserted native subresource UUIDs.
     plan=load(read(root/'extensions/monkey-import/import-plan.json',max_bytes=128*1024*1024),max_nodes=8_000_000);ids={a['sourceId'] for a in plan['assets']}
     for a in plan['assets']:

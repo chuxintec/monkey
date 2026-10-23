@@ -26,6 +26,14 @@ assert.equal(typeof a.asyncValue,'undefined');assert.equal(typeof a.arrow,'undef
             run=subprocess.run(['node',str(test)],capture_output=True,text=True)
             self.assertEqual(run.returncode,0,run.stderr)
 
+    def test_label_lifecycle_setter_is_not_bound_as_a_numeric_method(self):
+        with tempfile.TemporaryDirectory()as temp:
+            root=Path(temp).resolve();source=root/'source.js'
+            source.write_text('cc._RF.push({},"rf-meter","Meter");(function(Base){function M(){};return extend(M,Base),M.prototype.initValue=function(e){this.value=e;},M.prototype.getValue=function(){return this.value;},M.prototype.onEnable=function(e){this.value=e;};})(cc.Label);')
+            inspect(source,root/'model','Meter');result=emit(source,root/'model/code-model.json',root/'emit',['value'])
+            self.assertEqual((result['implementedMethods'],result['pendingMethods']),(2,1));code=(root/'emit/Cocos/assets/generated/scripts/Meter.ts').read_text();self.assertNotIn('onEnable',code)
+            contract=json.loads((root/'emit/Analysis/code-contract.json').read_text());self.assertEqual(contract['presentation']['kind'],'label-adapter');self.assertEqual(contract['pendingMethods'][0]['targetStatus'],'pending-engine-lifecycle-contract')
+
     def test_modified_facts_and_conflicting_type_contract_are_rejected_before_output(self):
         with tempfile.TemporaryDirectory()as temp:
             root=Path(temp).resolve();source=root/'source.js';source.write_text('function Box(){}; Box.prototype.set=function(x){this.value=x;};')

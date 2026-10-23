@@ -81,7 +81,8 @@ def _input_entries(unit):
     return entries(unit['path'])
 
 
-def convert_package(source, target, output, namespace='monkey-project',offline=False,input_set_path=None,resume_state=None,reuse_source_stages=None):
+def convert_package(source, target, output, namespace='monkey-project',offline=False,input_set_path=None,resume_state=None,reuse_source_stages=None,format_profile='none'):
+    if format_profile not in ('none','grea'):fail('FORMAT_PROFILE',str(format_profile),'Expected none or grea')
     from .inputs import input_set
     selection=input_set(input_set_path) if input_set_path else None
     source=safe(input_set_path or source)
@@ -401,17 +402,19 @@ Neither target requires monkey, Python, the source tree, the other target or the
             write_json(project/'Analysis/resource-ledger.json',dict(schemaVersion=1,coverage=coverage,files=dispositions))
             files=[dict(path=p.relative_to(project).as_posix(),sha256=fingerprint(p),bytes=p.stat().st_size,owner='generated')
                    for p in sorted(project.rglob('*')) if p.is_file() and p!=project/'manifest.json']
-            write_json(project/'manifest.json',dict(native_manifest, schemaVersion=1,toolVersion=__version__,targetProfile=profile,
+            from .identities import assigned
+            candidate_manifest=dict(native_manifest, schemaVersion=1,toolVersion=__version__,targetProfile=profile,
                        status='partial',resultKind='candidate',files=files,coverage=coverage,
-                       validation=dict(editor='not_run',compiled='not_run',behavior='not_run')))
+                       validation=dict(editor='not_run',compiled='not_run',behavior='not_run'))
+            assigned(project,candidate_manifest);write_json(project/'manifest.json',candidate_manifest)
             report['projects'].append(dict(path=project.name,targetProfile=profile,coverage=coverage,
                                            codeModules=draft_count,unresolvedSources=sum(r.get('entryType')=='unresolved_source' for r in code_index),
                                            drafts=draft_count,agentTasks=handoff['aggregateTasks'],handoff=handoff,manifestSha256=fingerprint(project/'manifest.json')))
         report.update(completed=True,nextAction=dict(code='NATIVE_OBJECT_AND_IMPORT_PENDING',
                       message='Files/modules retained; native Scene/Prefab/Spine/config restoration and editor orchestration remain pending'))
         report['diagnostics'].append(diagnostic('NATIVE_OBJECT_RECOVERY_PENDING','projects','Complete file accounting is not native object conversion'))
-        write_json(out/'conversion-result.json',report)
-        return report
+        from .post_format import run as post_format
+        return post_format(report,out,format_profile)
     except Exception as error:
         report.update(status='failed',workflowStatus='failed',failedStage=stage,
                       error=dict(code=getattr(error,'code','PACKAGE_FAILED'),message=str(error)))
@@ -427,6 +430,7 @@ def resume_package(output,input_set_path,offline=False):
     from .inputs import input_set
     from .io import stage_document,stage_bytes
     out=safe(output);raw_receipt=read(out/'conversion-result.json');prior=load(raw_receipt)
+    if prior.get('format',{}).get('profile','none')!='none':fail('RESUME_FORMAT_PROFILE_UNSUPPORTED',str(out),'Use a fresh output for a formatted package; existing formatted and unformatted projects are retained')
     declaration=input_set(input_set_path)
     candidate_base=out
     interrupted=[]

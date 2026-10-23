@@ -14,7 +14,12 @@ while(stack.length){
  if(n.type==='CallExpression'){
   const method=property(n.callee);if(method)calls.push({method,sourceBytes:range(n)});
   if(method==='push'&&property(n.callee.object)==='_RF'&&n.callee.object.object.type==='Identifier'&&n.callee.object.object.name==='cc'&&n.arguments.length===3&&n.arguments[1].type==='Literal'&&typeof n.arguments[1].value==='string'&&n.arguments[2].type==='Literal'&&typeof n.arguments[2].value==='string')registrations.push({identity:n.arguments[1].value,name:n.arguments[2].value,sourceBytes:range(n)});
-  if(n.callee.type==='FunctionExpression'&&n.arguments.length===1&&property(n.arguments[0])==='Label'&&n.arguments[0].object.type==='Identifier'&&n.arguments[0].object.name==='cc')classScopes.push({scopeBytes:range(n.callee),constructorAliases:n.callee.body.body.filter(x=>x.type==='FunctionDeclaration').map(x=>x.id.name),baseArgument:'cc.Label',inheritanceHelper:'unresolved-source-helper',sourceBytes:range(n)});
+  if(n.callee.type==='FunctionExpression'&&n.callee.params.length===1&&n.callee.params[0].type==='Identifier'&&n.arguments.length===1&&property(n.arguments[0])==='Label'&&n.arguments[0].object.type==='Identifier'&&n.arguments[0].object.name==='cc'){
+   const aliases=n.callee.body.body.filter(x=>x.type==='FunctionDeclaration').map(x=>x.id.name),base=n.callee.params[0].name,helpers=[];
+   const inspect=e=>{if(!e)return;if(e.type==='SequenceExpression'){e.expressions.forEach(inspect);return;}if(e.type==='CallExpression'&&e.callee.type==='Identifier'&&e.arguments.length===2&&e.arguments[0].type==='Identifier'&&aliases.includes(e.arguments[0].name)&&e.arguments[1].type==='Identifier'&&e.arguments[1].name===base)helpers.push({alias:e.callee.name,constructorAlias:e.arguments[0].name,baseAlias:base,sourceBytes:range(e)});};
+   for(const statement of n.callee.body.body)if(statement.type==='ReturnStatement')inspect(statement.argument);else if(statement.type==='ExpressionStatement')inspect(statement.expression);
+   if(helpers.length===1)classScopes.push({scopeBytes:range(n.callee),constructorAliases:[helpers[0].constructorAlias],baseArgument:'cc.Label',inheritanceHelper:'unresolved-source-helper',inheritanceCall:helpers[0],sourceBytes:range(n)});
+  }
  }
  if(n.type==='AssignmentExpression'&&n.operator==='='&&property(n.left)&&['FunctionExpression','ArrowFunctionExpression'].includes(n.right.type)){
   const fn=n.right,pname=property(n.left),owner=n.left.object;

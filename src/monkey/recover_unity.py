@@ -23,7 +23,7 @@ def convert(source,output,provider_python,asset_ripper,budget_seconds=600,depend
     out=new_output(output,[source,exe.parent,python.parent,*dependencies,*([safe(texture_cache)]if texture_cache else [])])
     report=dict(schemaVersion=1,toolVersion=__version__,sourceFamily='unity',sourceProfile='unityfs-unitypy-1.25.3-assetripper-2.0.0',
                 status='partial',workflowStatus='needs_action',completed=False,resultKind='candidate',
-                completionScope='explicit-unity-bundles-and-consumed-texture-cache',inputFiles=1+len(dependencies),inputBytes=source.stat().st_size+sum(p.stat().st_size for p in dependencies),projects=[],
+                format=dict(profile='none',applied=False),completionScope='explicit-unity-bundles-and-consumed-texture-cache',inputFiles=1+len(dependencies),inputBytes=source.stat().st_size+sum(p.stat().st_size for p in dependencies),projects=[],
                 validation=dict(source='not_run',editor='not_run',visual='not_run',business='not_run'),diagnostics=[])
     def save():write_json(out/'conversion-result.json',report)
     save()

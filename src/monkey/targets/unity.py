@@ -361,6 +361,9 @@ def export(plan_path, output):
     grid_path=out/'Assets/Generated/Views/IntrinsicGridLayoutGroup.cs'
     grid_path.write_bytes(files('monkey.targets').joinpath('IntrinsicGridLayoutGroup.cs').read_bytes())
     Path(str(grid_path)+'.meta').write_text('fileFormatVersion: 2\nguid: '+guid(p['namespace'],'intrinsic-grid-script')+'\n')
+    numeric_path=out/'Assets/Monkey/Editor/MonkeyNumericCode.cs'
+    numeric_path.write_bytes(files('monkey.targets').joinpath('UnityNumericCode.cs').read_bytes())
+    Path(str(numeric_path)+'.meta').write_text('fileFormatVersion: 2\nguid: '+guid(p['namespace'],'numeric-code-editor')+'\n')
     adapter=files('monkey.targets').joinpath('UnityImporter.cs').read_bytes()
     adapter_path=out/'Assets/Monkey/Editor/MonkeyImporter.cs';adapter_path.write_bytes(adapter)
     Path(str(adapter_path)+'.meta').write_text('fileFormatVersion: 2\nguid: '+guid(p['namespace'],'editor-adapter')+'\n')
@@ -455,9 +458,9 @@ def node_geometry_matches(actual,source,full=False):
 
 def verify(candidate, output, level='static'):
     root=safe(candidate);m=stage_manifest(root);diagnostics=[]
-    from .layout import translate
+    from .layout import lookup
     from ..sources.containers import fingerprint
-    path_for=lambda p:translate(p,m.get('pathMap',{}))
+    path_for=lambda p:lookup(p,m)
     native={};editor='not_run'
     if level=='editor':
         readback_path=root/'Analysis/editor-readback.json'
@@ -473,6 +476,8 @@ def verify(candidate, output, level='static'):
                 if not file.is_file() or fingerprint(file)!=expected:
                     diagnostics.append(diagnostic('NATIVE_FILE_CHANGED',relative,'Native file differs from saved readback'))
             instruction=load(read(root/path_for('Assets/Monkey/Editor/import-plan.json'),max_bytes=128*1024*1024),max_nodes=8_000_000)
+            from ..code_validation import numeric as verify_numeric
+            diagnostics.extend(verify_numeric(instruction['components'],rb.get('numericCodeBindings'),'unity','scene',rb.get('numericCodeExercise',[])))
             if instruction.get('bitmapFonts') or any(a['path'].lower().endswith('.ttf') for a in instruction['assets']):
                 resources=rb.get('tmpResources') or {}
                 expected_resources=instruction.get('tmpResources',{})
@@ -498,6 +503,9 @@ def verify(candidate, output, level='static'):
                             diagnostics.append(diagnostic('SOURCE_PREFAB_GEOMETRY_MISMATCH',sid,'Independent saved prefab differs: '+target))
                     if actual.get('referencesVerified') is not True or actual.get('referenceFailures'):
                         diagnostics.append(diagnostic('SOURCE_PREFAB_REFERENCE_MISMATCH',spec['sourceId'],'Saved component references differ: '+str(actual.get('referenceFailures'))))
+            for prefab in instruction.get('sourcePrefabs',[]):
+                source_nodes=set(prefab['nodes']);specs=[c for c in instruction['components']if c.get('node')in source_nodes]
+                diagnostics.extend(verify_numeric(specs,actual_prefabs.get(prefab['sourceId'],{}).get('numericCodeBindings'),'unity',prefab['sourceId']))
             for spec in instruction['assets']:
                 if spec['kind']=='cc.JsonAsset':
                     actual=json_assets.get(spec['id'],{})
@@ -578,6 +586,9 @@ def verify(candidate, output, level='static'):
             changed=not normalized_unity_version(read(path),'6000.6.2f1')
         if changed:
             diagnostics.append(diagnostic('GENERATED_FILE_CHANGED',item['path'],'Missing or modified generated file'))
+    from ..identities import verify as verify_assigned
+    identity_gaps=verify_assigned(root,m);diagnostics.extend(identity_gaps)
+    if identity_gaps and editor in ('pass','partial'):editor='fail'
     guids={}
     for path in (root/'Assets').rglob('*.meta'):
         for line in path.read_text(encoding='utf-8').splitlines():
@@ -595,7 +606,7 @@ def verify(candidate, output, level='static'):
         diagnostics.append(diagnostic('TARGET_LAYOUT_INVALID','Assets','Missing Editor adapter or runtime IR found'))
     out=new_output(output,[root])
     result=dict(schemaVersion=1,toolVersion=__version__,candidateManifestSha256=fingerprint(root/'manifest.json'),
-                diagnostics=diagnostics,staticValidation='conflict' if any(d['code'] in ('GENERATED_FILE_CHANGED','DUPLICATE_TARGET_GUID','TARGET_REFERENCE_MISSING','TARGET_LAYOUT_INVALID','NATIVE_FILE_CHANGED') for d in diagnostics) else 'pass',
+                diagnostics=diagnostics,staticValidation='conflict' if any(d['code'] in ('GENERATED_FILE_CHANGED','DUPLICATE_TARGET_GUID','TARGET_REFERENCE_MISSING','TARGET_LAYOUT_INVALID','NATIVE_FILE_CHANGED','ASSIGNED_NATIVE_IDENTITY_CHANGED') for d in diagnostics) else 'pass',
                 editorValidation=editor,visualValidation='not_run',businessValidation='not_run')
     write_json(out/'verification.json',result)
     return finish(out,result)

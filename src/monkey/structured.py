@@ -5,7 +5,6 @@ from .io import read,load,write_json,sha,stage_document,stage_bytes,stage_manife
 from .sources import bundle,project
 from .normalize import normalize,quarantine_graphs
 from .targets import unity,cocos
-from .targets.layout import standardize
 
 
 def validated_ir(stage):
@@ -121,12 +120,13 @@ def recover(tree, roots, configs, source_profile, out, profiles, namespace):
                 import uuid
                 temporary=stage/'Emitted'/(key+'-'+str(uuid.uuid4()))
             manifest=adapter.export(stage/(key+'-plan')/'plan.json',temporary)
-            standardize(temporary,profile,plan,inspected['sourceRoots'])
+            manifest['format']=dict(profile='none',applied=False)
+            finish(temporary,manifest)
             temporary.rename(out/key)
             result['projects'][profile]=dict(path=key,plan=str((stage/(key+'-plan')/'plan.json').relative_to(out)),
                        sourceObjects=len(inspected['assets']),nodes=len(ir['nodes']),components=len(plan['components']),
                        convertibleComponents=sum(c['convertible'] for c in plan['components']),
-                       nativeValidation='not_run',layout='game-standard-v1',namespace=namespace)
+                       nativeValidation='not_run',layout='native-export-v1',formatProfile='none',namespace=namespace)
         result['status']='partial'
     except (ValueError,OSError,KeyError,TypeError,IndexError) as error:
         result.update(status='failed',reason=getattr(error,'code','STRUCTURED_RECOVERY_FAILED'),message=str(error))

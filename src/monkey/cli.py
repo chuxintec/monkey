@@ -20,6 +20,7 @@ def main(argv=None):
     cap.add_argument('--json', action='store_true')
     p = sub.add_parser('convert', help='Convert a source project into an isolated native project candidate')
     p.add_argument('--source', help='Local wxapkg/APK, resource/project directory, project.json or bundle config.json')
+    p.add_argument('--format',choices=['none','grea'],default=None,help='Optional post-export layout; default none. Fresh package conversion only.')
     p.add_argument('--source-family', choices=['auto','cocos','unity'], default='auto')
     p.add_argument('--provider-python', help='Existing Python with UnityPy 1.25.3 for Unity source conversion')
     p.add_argument('--asset-ripper', help='Existing exact AssetRipper 2.0.0 provider executable')
@@ -75,7 +76,7 @@ def main(argv=None):
     p.add_argument('--provider-python', required=True, help='Existing Python with UnityPy 1.25.3; never installed automatically')
     p.add_argument('--out', required=True)
     p.add_argument('--budget-seconds', type=int, default=120)
-    p = sub.add_parser('format-project',help='Preview or apply a typed GREA layout into a fresh unimported Creator candidate')
+    p = sub.add_parser('format-project',help='Preview or apply a typed GREA layout into a fresh unimported Unity/Creator candidate')
     p.add_argument('--project',required=True)
     p.add_argument('--profile',choices=['grea'],default='grea')
     pick=p.add_mutually_exclusive_group(required=True)
@@ -149,7 +150,7 @@ def main(argv=None):
     try:
         if args.command == 'capabilities':
             print(json.dumps(dict(version=__version__, profiles=[PROFILE,PROJECT_PROFILE], targetProfiles=[UNITY_PROFILE,cocos.PROFILE],
-                schemaVersion=1, formatting=dict(implemented=['creator-unimported-owned-grea-v1'],pending=['unity-formatter','native-materialized-asset-moves','convert-format-orchestration']), unitySourceProfile=dict(name='unityfs-unitypy-1.25.3-assetripper-2.0.0',status='partial',inputs='explicit-bundle-files-and-exact-local-texture-cache',editor='one-prefab-schema-reference-save-reload-verified',publicNative=False,methodsRecovered=0), implemented=['convert','catalog','inspect','normalize','plan','export','verify','handoff','diff','register','apply','preflight','native-import','research-matrix','code-model','code-emit','format-project','project-model','inspect-unity','export-unity','unity-code-model','index-unity','hydrate-unity'], planned=[],
+                schemaVersion=1, formatting=dict(implemented=['unity-creator-unimported-owned-grea-v1','fresh-package-convert-none-grea'],pending=['direct-unity-provider-format'],rejected=['materialized-native-assets-require-a-future-native-move-adapter']), unitySourceProfile=dict(name='unityfs-unitypy-1.25.3-assetripper-2.0.0',status='partial',inputs='explicit-bundle-files-and-exact-local-texture-cache',editor='one-prefab-schema-reference-save-reload-verified',publicNative=False,methodsRecovered=0), implemented=['convert','catalog','inspect','normalize','plan','export','verify','handoff','diff','register','apply','preflight','native-import','research-matrix','code-model','code-emit','format-project','project-model','inspect-unity','export-unity','unity-code-model','index-unity','hydrate-unity'], planned=[],
                 targetValidation={UNITY_PROFILE:dict(static='implemented',editor='representative-subset-verified',visual='not_run'),cocos.PROFILE:dict(static='implemented',editor='representative-subset-verified',visual='not_run')},
                 compiledFormats=['compiled-v1','pack-v1','texture-pack-v1'],
                 containerFormats=['plain-wxapkg','APK-ZIP','Cocos-resource-directory'],
@@ -203,12 +204,14 @@ def main(argv=None):
             print(json.dumps(discover(args.root,args.out),ensure_ascii=False))
             return 0
         if args.command == 'convert':
+            if args.format is not None and (args.resume or args.recipe):parser.error('--format requires a fresh package conversion; resume/recipe retain their declared contract')
             source_file=Path(args.source) if args.source else None
             unity_source=args.source_family=='unity'
             if args.source_family=='auto' and source_file and source_file.is_file():
                 from .io import safe as safe_source
                 with safe_source(source_file).open('rb') as stream:unity_source=stream.read(9).startswith((b'UnityFS\0',b'UnityRaw\0',b'UnityWeb\0'))
             if unity_source:
+                if args.format=='grea':parser.error('Direct Unity recovery profile formatting is not implemented yet; preserve a none candidate')
                 if args.target not in ('unity','unity6',UNITY_PROFILE):parser.error('Unity sources target Unity 6 only')
                 if not all((args.source,args.out,args.provider_python,args.asset_ripper)):parser.error('Unity source requires --source --out --provider-python --asset-ripper')
                 if any((args.input_set,args.native,args.resume,args.recipe,args.reuse_source_stages,args.remote_manifest,args.remote_cache_root,args.acquisition_out,args.asset_index,args.all_assets,args.bindings,args.animation,args.evidence_source,args.source_profile,args.namespace,args.native_out,args.unity_editor,args.creator_editor,args.native_budget_seconds!=1200,args.remote_budget_seconds!=900)):
@@ -268,12 +271,12 @@ def main(argv=None):
                     acquired=acquire(remote_settings,args.offline);conversion_input_set=str(acquired['inputSet'])
                     if args.reuse_source_stages and Path(conversion_input_set).resolve()!=Path(args.input_set).resolve():
                         raise ValueError('New acquired files require fresh source stages; acquired evidence is preserved')
-                result=convert_package(args.source,args.target,args.out,args.namespace or 'monkey-project',args.offline,conversion_input_set,reuse_source_stages=args.reuse_source_stages)
+                result=convert_package(args.source,args.target,args.out,args.namespace or 'monkey-project',args.offline,conversion_input_set,reuse_source_stages=args.reuse_source_stages,format_profile=args.format or 'none')
                 if acquired:
                     from .acquisition import attach
                     attach(result,args.out,acquired)
                 summary=dict(status=result['workflowStatus'],resultKind=result['resultKind'],
-                     completed=result['completed'],projects=result['projects'],inputFiles=result['inputFiles'],
+                     completed=result['completed'],projects=result['projects'],format=result.get('format'),inputFiles=result['inputFiles'],
                      inputBytes=result['inputBytes'],diagnostics=len(result['diagnostics']),nextAction=result['nextAction'],
                      report=str(Path(args.out).resolve()/'conversion-result.json'))
                 if acquired:summary['remoteAcquisition']=dict(acquired['summary'],receipt=str(acquired['receipt']))
@@ -284,6 +287,7 @@ def main(argv=None):
                         summary['nextAction']=dict(code='REVIEW_NATIVE_AND_SOURCE_GAPS',message='Review native receipt; source/visual/business gaps remain separate')
                 print(json.dumps(summary,ensure_ascii=False))
                 return 1
+            if args.format=='grea':parser.error('--format grea requires a fresh package conversion')
             if args.native:parser.error('--native requires package conversion (use --target unity6/cocos38/both or --package)')
             if args.resume:
                 if any((args.source,args.target,args.out,args.source_profile,args.asset_index,args.all_assets,
