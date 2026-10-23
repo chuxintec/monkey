@@ -144,7 +144,7 @@ def export(plan_path,output):
         else:m=meta(a['uuid'],'bitmap-font','1.0.6',dict(fontSize=a['pointSize'],textureUuid=by_id[a['atlas']]['uuid']))
         write_json(Path(str(target)+'.meta'),m)
     project_id=identity(p['namespace'],'project')
-    write_json(out/'package.json',dict(name='monkey-native-candidate',version='0.2.0',uuid=project_id,creator=dict(version='3.8.8')))
+    write_json(out/'package.json',dict(name='monkey-native-candidate',version='3.8.8',uuid=project_id,creator=dict(version='3.8.8')))
     ext=out/'extensions/monkey-import'
     for name in ['main.js','scene.js']:(ext/name).write_bytes(files('monkey.targets').joinpath('Creator'+('Main.js' if name=='main.js' else 'Scene.js')).read_bytes())
     (ext/'animation.js').write_bytes(files('monkey.targets').joinpath('CreatorAnimation.js').read_bytes())

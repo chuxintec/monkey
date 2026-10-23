@@ -17,6 +17,22 @@ def main(argv=None):
     sub = parser.add_subparsers(dest='command', required=True)
     cap = sub.add_parser('capabilities')
     cap.add_argument('--json', action='store_true')
+    p = sub.add_parser('convert', help='Convert a source project into an isolated native project candidate')
+    p.add_argument('--source', help='Creator 2.4.15 project directory/project.json or bundle config.json')
+    p.add_argument('--target', choices=['unity','cocos',UNITY_PROFILE,cocos.PROFILE])
+    p.add_argument('--out', '--output', help='Fresh output directory; native project is created under project/')
+    p.add_argument('--resume', help='Recheck a previous conversion after native import, with identity checks')
+    p.add_argument('--recipe', help='Reusable JSON input/selection options; combine with --out')
+    p.add_argument('--offline', action='store_true', help='Explicitly generate and verify an offline candidate only')
+    p.add_argument('--namespace')
+    p.add_argument('--source-profile', choices=[PROFILE,PROJECT_PROFILE])
+    pick = p.add_mutually_exclusive_group()
+    pick.add_argument('--asset-index', type=int, action='append')
+    pick.add_argument('--all-assets', action='store_true', help='Explicitly select every bundle entry (project default)')
+    p.add_argument('--dependency-source', action='append', default=[])
+    p.add_argument('--evidence-source', action='append', default=[])
+    p.add_argument('--bindings')
+    p.add_argument('--animation', action='append')
     p = sub.add_parser('inspect')
     p.add_argument('--source', required=True)
     p.add_argument('--source-profile', choices=[PROFILE,PROJECT_PROFILE], required=True)
@@ -60,12 +76,34 @@ def main(argv=None):
     try:
         if args.command == 'capabilities':
             print(json.dumps(dict(version=__version__, profiles=[PROFILE,PROJECT_PROFILE], targetProfiles=[UNITY_PROFILE,cocos.PROFILE],
-                schemaVersion=1, implemented=['catalog','inspect','normalize','plan','export','verify','handoff','diff','register','apply'], planned=[],
+                schemaVersion=1, implemented=['convert','catalog','inspect','normalize','plan','export','verify','handoff','diff','register','apply'], planned=[],
                 targetValidation={UNITY_PROFILE:dict(static='implemented',editor='not_run',visual='not_run'),cocos.PROFILE:dict(static='implemented',editor='not_run',visual='not_run')},
                 compiledFormats=['compiled-v1','pack-v1','texture-pack-v1'],
                 imageFormats=['PNG','JPEG','ASTC (optional pinned decoder)'],animationSchemaVersion=1,
                 animationSubset=['local-position','local-scale','opacity','linear','constant-step','Normal','Loop'],animationEvents='manual-contract-only', targetEditorValidation='not_run'), ensure_ascii=False))
             return 0
+        if args.command == 'convert':
+            from .convert import convert, resume, recipe
+            if args.resume:
+                if any((args.source,args.target,args.out,args.source_profile,args.asset_index,args.all_assets,
+                        args.dependency_source,args.evidence_source,args.bindings,args.animation,args.offline,args.recipe,args.namespace)):
+                    parser.error('--resume cannot be combined with conversion inputs')
+                result = resume(args.resume)
+            elif args.recipe:
+                if not args.out or any((args.source,args.target,args.source_profile,args.asset_index,args.all_assets,
+                                        args.dependency_source,args.evidence_source,args.bindings,args.animation,args.namespace)):
+                    parser.error('--recipe requires --out and cannot be combined with explicit input options')
+                result = convert(output=args.out,offline=args.offline,**recipe(args.recipe))
+            else:
+                if not all((args.source,args.target,args.out)):
+                    parser.error('convert requires --source, --target and --out (or --resume)')
+                result = convert(args.source,args.target,args.out,args.namespace or 'monkey-project',args.source_profile,
+                             args.asset_index,args.all_assets,args.dependency_source,args.evidence_source,
+                             args.bindings,args.animation,args.offline)
+            print(json.dumps(dict(status=result['workflowStatus'], resultKind=result['resultKind'], completed=result['completed'], project=result['project'],
+                                  diagnostics=len(result['diagnostics']), validation=result['validation'],
+                                  nextAction=result['nextAction'],report=result.get('report') or str(Path(args.out).resolve()/'manifest.json')), ensure_ascii=False))
+            return 2 if result['workflowStatus']=='failed' else 1
         if args.command == 'inspect':
             if args.source_profile == PROJECT_PROFILE:
                 if args.dependency_source or args.evidence_source: parser.error('Editable project does not accept bundle dependencies')

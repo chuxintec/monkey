@@ -1,10 +1,21 @@
 # monkey
 
-Python 驱动的离线 Cocos 资源解析与原生工程候选工具。当前为 **0.1.0.dev1 本地开发候选**，没有发布。
+Python 驱动的 Cocos 资源解析与原生工程候选命令行工具。当前为 **0.3.0.dev1 本地开发候选**，没有发布。
+
+## 一条命令转换
+
+```sh
+bin/monkey convert --source /path/to/cocos-project --target unity --out outputs/my-unity
+bin/monkey convert --source /path/to/cocos-project --target cocos --out outputs/my-creator
+```
+
+源工程目前限 Creator 2.4.15；目标为 Unity 6000.6.2f1/uGUI 或 Creator 3.8.8。自动串联检查、解析、规范化、计划、生成、静态验证和交接；工程在输出的 `project/`，总报告为 `manifest.json`。既有目录拒绝覆盖。发布 bundle 需明确选择 `--asset-index` 或 `--all-assets`，可将范围与依赖写入可复用 recipe，详见 [命令说明](docs/USAGE.md)。
+
+**当前单命令自动化完成到候选生成。原生编辑器启动/导入尚未自动编排**；默认返回 `needs_action` 和具体下一动作，退出码 1，不能作为完整转换成功。显式 `--offline` 返回 `partial`。引擎完成原生保存回读后，用同一入口 `bin/monkey convert --resume outputs/my-creator` 校验身份并续验，无需重新解析资源。真实编辑器导入、视觉和业务分别报告。
 
 已实现两条明确的 2.4.15 输入路径：编辑器工程 JSON/meta，以及发布 bundle 的 compiled-v1/pack-v1/texture-pack-v1。工具不执行源脚本，不自动翻译业务、不恢复服务器、不模拟源引擎运行时。
 
-当前可运行 `catalog / inspect / normalize / plan / export / verify / handoff / diff / register / apply`。可生成 Unity 6000.6.2f1、uGUI 2.0.0 的图像、原BitmapFont/源TTF文字、有限布局/按钮/遮罩、Editor 导入指令和原生 View 引用脚本；**实际 Editor 导入/保存回读、原版画面对照与业务均尚未执行**。现已增加同源IR的 Cocos 3.8.8 离线资产/meta 与原生导入薄扩展候选；Creator 实导仍未执行。已实现登记生成区的差异预览和expected-manifest受控apply，人工区保持独立，移除项保留而不自动删除。
+当前可运行 `convert / catalog / inspect / normalize / plan / export / verify / handoff / diff / register / apply`。可生成 Unity 6000.6.2f1、uGUI 2.0.0 的图像、原BitmapFont/源TTF文字、有限布局/按钮/遮罩、Editor 导入指令和原生 View 引用脚本；Unity 实际导入和画面对照尚未执行。Creator 3.8.8 实导已进入资产阶段并发现 package 版本与 Mask 默认赋值问题，修复尚待原生复验；Scene/字体/页面验收未完成。已实现登记生成区的差异预览和 expected-manifest 受控 apply，人工区保持独立，移除项保留而不自动删除。
 
 ## 本地使用
 

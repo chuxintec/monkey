@@ -139,3 +139,35 @@ monkey plan --ir <normalized>/ir.json --namespace <stable-namespace> \
 Python生成六类数据：源位置、目标身份/相对路径、有限键、原生绑定/单位、中点验证探针、事件合同。Unity使用原生AnimationUtility，Creator按同一节点/向量分组为VectorTrack、透明度为RealTrack/UIOpacity；IR和创作脚本仅在Editor，Player不解释源对象图。原生.anim由Editor创建/保存/回读，离线没有实际曲线资产。`Analysis/animation-module.json`和单一AI模块任务聚合部分轨道及事件。
 
 部分映射不会自动播放、附加业务Animator或回调。事件只记录source位置、时间、函数名与JSON参数及manual-only状态，Native事件数组为空；真实采样/播放和可编辑重开未验证。首个真实`CellBoxClicked`为0.5秒/6标量轨道，另两条active未支持，不能标作完整动画还原。详见[动画验收](validation/2026-10-23-animation.md)。
+# 一键转换入口（2026-10-23）
+
+```sh
+bin/monkey convert --source /path/to/creator-2.4.15-project --target unity --out outputs/new-unity
+bin/monkey convert --source /path/to/creator-2.4.15-project --target cocos --out outputs/new-creator
+bin/monkey convert --recipe /path/to/recipe.json --out outputs/new-candidate
+bin/monkey convert --resume outputs/new-candidate
+```
+
+`--output` 是 `--out` 的别名；目标也可用完整 profile。源目录须含 project.json 或 config.json，带 hash 的 bundle config 可直接传文件。可编辑工程默认选择全部 metadata 资产并保留未知类型诊断；发布 bundle 需 `--asset-index N`（可重复）或显式 `--all-assets`。无 engineVersion 的 bundle 必须声明 `--source-profile cocos-2.4.15-bundle`，不靠文件名猜源版本。既有 2048 资产闭包、字节预算仍适用。
+
+recipe 为 UTF-8 JSON，可复用范围与依赖，路径相对 recipe 文件解析，不写输出路径：
+
+```json
+{
+  "source": "source/config.json",
+  "target": "cocos",
+  "source_profile": "cocos-2.4.15-bundle",
+  "namespace": "example-ui",
+  "selection": [2],
+  "dependencies": [],
+  "evidence": []
+}
+```
+
+也支持 `bindings`、`animations`、`all_assets`；未知字段/错误类型拒绝。recipe 不可混用显式输入选项；输出由 `--out` 指定。
+
+一次调用串联 inspect/normalize/plan/export/verify/handoff，原生候选在 `project/`，各阶段 manifest 独立保留，`conversion.json` 与顶层 `manifest.json` 汇总。失败保留阶段和 `failedStage`，不覆盖原件/旧输出、不删除证据。默认 `status=needs_action`、`resultKind=candidate`，明确原生导入待处理；显式 `--offline` 为 `partial`。当前尚无命令行自动启动编辑器/调用原生导入的实现，不把待处理项当自动化完成；外部编辑器仍需真实可用版本、登录/许可与窗口条件。
+
+`completed=true` 仅表示六个离线阶段执行完毕，不表示原生/视觉/业务完成。退出码沿用：0 无缺口，1 部分/需行动，2 输入/冲突/执行失败；当前 convert 因原生或后续验收未闭合返回 1。未支持的组件和业务在 handoff 内保留。
+
+`--resume` 校验工具版本、原始 conversion 收据、来源/证据 SHA、候选 manifest SHA 后复用工程，仅做原生回读验证；新检查写入独立 `checks/<id>/`。没有回读仍为 needs_action；实际原生引用与文件通过才为 resultKind=native，视觉/业务仍单列待验。引擎生成的 meta 通过原生回读合同校验，人工内容改动仍由 hash 检出。当前仅续验已完成候选；失败的中间生成阶段保留证据但尚不能自动续跑。登记增量仍使用既有 register/apply 合同。

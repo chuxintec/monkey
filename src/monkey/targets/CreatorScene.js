@@ -57,7 +57,7 @@ module.exports = {
                     } else if(c.type==='cc.Button') {
                         comp=node.addComponent(cc.Button);comp.target=node;comp.transition=c.transition;comp.duration=c.duration;
                         comp.zoomScale=c.zoomScale;comp.interactable=c.interactable;comp.clickEvents=[];
-                    } else if(c.type==='cc.Mask') {comp=node.addComponent(cc.Mask);comp.type=cc.Mask.Type.GRAPHICS_RECT;comp.inverted=false;
+                    } else if(c.type==='cc.Mask') {comp=node.addComponent(cc.Mask);comp.type=cc.Mask.Type.GRAPHICS_RECT;
                     } else if(c.type==='cc.ScrollView') {
                         comp=node.addComponent(cc.ScrollView);comp.content=nodes.get(c.content);comp.horizontal=c.horizontal;comp.vertical=c.vertical;
                     } else if(c.type==='cc.Widget') {
