@@ -19,3 +19,10 @@ Unity薄层改为128项一批：先同步确保已存在Importer；批内WriteIm
 `preflight --progress FILE`核验schema、枚举、计数/有限耗时、精确import-plan SHA；即使completed也只标reported_unverified，不能替代原生回读。日志有导入却无完成标记时明确NATIVE_IMPORT_COMPLETION_NOT_RECORDED。未来原生接续必须核验阶段产物/所有权并处理部分Scene/资产，不凭进度数字跳过；本轮没有冒称已实现原地native续跑。
 
 离线检查：新增进度身份/计数/状态和缺少完成标记反例，4项边界测试通过；Unity新薄层离线C#编译03通过（无Editor启动）。窗口04副本和冻结04不写入修复。批处理耗时改善、正常保存/重开、几何与源Prefab/Spine原生验收仍需新的实际窗口许可，当前未验。
+
+## 修复候选05
+
+全新`outputs/structured-foodstreet-05`双端整包生成completed=true/needs_action，5097文件/243799340字节逐项留存相等；含1630独立Prefab计划和双端30 Spine闭包/1缺bin。实际Unity脚本包含128项批处理、finally恢复导入、阶段进度与显式预算检查；当前emit源码身份与报告相同。Unity manifest `292255cee09a6940b222ff592afe560a83d08eb108764de0f6be433f253e6d5d`，Creator `d27456d15bca617757abbc22283ce2c417fb5f6bbed66ab6d4df0bd2dfd9ae01`。原04冻结manifest再次核对不变。
+
+05仍没有启动Editor；修复原生性能/保存/重开均未验，不用04的部分资产导入替代05通过。
+05两端静态verify均零诊断，证据`outputs/structured-foodstreet-05-unity-check`及`outputs/structured-foodstreet-05-cocos-check`。该检查不启动Editor，不构成批处理实际加速或页面通过。
