@@ -9,7 +9,7 @@
 |Unity2021.3.30f1 IL2CPP-Wasm|Unity6|partial：显式Bundle及依赖→Unity6候选已实现；代表1 Prefab/16字段/3 Sprite引用保存重载通过。启动4精确纹理已齐；显式冻结类型树池严格读到1567/1603对象，仍36MB缺结构；补充类型树尚未进入导出器，整包及业务未完成|U，用户最新打开《向僵尸开炮》优先|
 |Unity任意版本其他Mono/IL2CPP来源|Unity6|planned，逐serializedFile/AssetBundle/provider/profile增加|U|
 |Unity6来源|Unity6|planned，需明确版本真实样本|U|
-|Cocos Creator3.8.7发布资源|Unity6 / Cocos3.8.8 / both|planned，《下方了》真实app-config插件声明3.8.7已读，资源正文待核|C，U后|
+|Cocos Creator3.8.7发布资源|Unity6 / Cocos3.8.8 / both|partial：下方了496明确输入/38081754B，4804对象正文；986源Frame→1972变体双端原生强回读0差异。119源图/采样行为/Spine/业务待适配，Excel/Proto两zip缺失|C，持续逐case|
 |Cocos Creator3.x其他格式|Unity6 / Cocos3.8.8 / both|planned，不能套2.4 reader|C|
 |Cocos Creator2.4.x以下/1.x旧格式|Unity6 / Cocos3.8.8 / both|planned，逐格式/版本反例，不能笼统已支持|C|
 |Cocos2d-x及其他Cocos分支原包|Unity6 / Cocos3.8.8 / both|planned，独立识别和适配，不能套Creator序列化|逐来源样本|

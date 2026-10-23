@@ -205,6 +205,10 @@ def decode_document(document, adapter=ADAPTERS[0], max_depth=96):
 
 def asset_key(value, location='$'):
     """Native texture keys may be short hex hashes; never conflate with UUIDs."""
+    if isinstance(value,str)and '@'in value:
+        match=re.fullmatch(r'([^@]+)@([0-9a-f]{5})',value)
+        if not match:fail('INVALID_UUID',location,'Unsupported subasset suffix')
+        return asset_key(match[1],location)+'@'+match[2]
     if isinstance(value, str) and re.fullmatch(r'[0-9a-f]{8,16}', value):
         return value
     return uuid_full(value, location)

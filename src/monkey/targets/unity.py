@@ -73,7 +73,7 @@ def cross_axis_mapping(layout, parent, children):
 def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None):
     ir_path = safe(ir_path)
     ir = stage_document(ir_path)
-    if ir.get('schemaVersion') != 1 or ir.get('sourceProfile') not in ('cocos-2.4.15-bundle','cocos-2.4.15-project'):
+    if ir.get('schemaVersion') != 1 or ir.get('sourceProfile') not in ('cocos-2.4.15-bundle','cocos-2.4.15-project','cocos-3.8.7-bundle'):
         fail('UNSUPPORTED_IR', '$', 'Expected normalize schema 1')
     source_files = stage_manifest(ir_path.parent)['files']
     expected = {f['path']: f['sha256'] for f in source_files}
@@ -377,6 +377,9 @@ def export(plan_path, output):
     instruction['sourceDiagnosticCount']=len(p['diagnostics'])
     instruction['prefabGuid']=guid(p['namespace'],'native-prefab')
     instruction['sceneGuid']=guid(p['namespace'],'native-scene')
+    if p['galleryOnly']:
+        instruction['galleryReadback']='exact-sprite-and-rect-v1'
+        instruction['textures']=[dict(t,guid=guid(p['namespace'],t['id']))for t in instruction['textures']]
     write_json(out/'Assets/Monkey/Editor/import-plan.json',instruction)
     write_json(out/'Packages/manifest.json',dict(dependencies={'com.unity.ugui':'2.6.0',
                'com.unity.modules.ui':'1.0.0','com.unity.modules.imgui':'1.0.0','com.unity.modules.animation':'1.0.0'}))
@@ -456,6 +459,17 @@ def node_geometry_matches(actual,source,full=False):
     return True
 
 
+def gallery_readback(instruction,readback):
+    if instruction.get('galleryReadback')!='exact-sprite-and-rect-v1':return []
+    expected={t['id']:t for t in instruction['textures']if not t['id'].endswith('@original')}
+    rows=readback.get('gallery')
+    actual={r.get('id'):r for r in rows}if isinstance(rows,list)and all(isinstance(r,dict)for r in rows)else{}
+    valid=instruction.get('galleryOnly')is True and not instruction.get('nodes')and not instruction.get('components')and not instruction.get('sourcePrefabs')and readback.get('nativeScope')=='resources-and-gallery-only'and readback.get('sourceGraphVerification')=='not_run'
+    valid=valid and isinstance(rows,list)and len(actual)==len(rows)and set(actual)==set(expected)
+    if valid:valid=all(actual[key].get('spriteGuid')==spec['guid']and actual[key].get('geometryVerified')is True for key,spec in expected.items())
+    return []if valid else[diagnostic('NATIVE_GALLERY_READBACK','Analysis/editor-readback.json','Resource-only preview must prove exact sprite identities/rects without claiming source graph restoration')]
+
+
 def verify(candidate, output, level='static'):
     root=safe(candidate);m=stage_manifest(root);diagnostics=[]
     from .layout import lookup
@@ -476,6 +490,7 @@ def verify(candidate, output, level='static'):
                 if not file.is_file() or fingerprint(file)!=expected:
                     diagnostics.append(diagnostic('NATIVE_FILE_CHANGED',relative,'Native file differs from saved readback'))
             instruction=load(read(root/path_for('Assets/Monkey/Editor/import-plan.json'),max_bytes=128*1024*1024),max_nodes=8_000_000)
+            diagnostics.extend(gallery_readback(instruction,rb))
             from ..code_validation import numeric as verify_numeric
             diagnostics.extend(verify_numeric(instruction['components'],rb.get('numericCodeBindings'),'unity','scene',rb.get('numericCodeExercise',[])))
             if instruction.get('bitmapFonts') or any(a['path'].lower().endswith('.ttf') for a in instruction['assets']):

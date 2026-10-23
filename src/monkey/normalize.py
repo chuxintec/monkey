@@ -86,7 +86,7 @@ def sprite(atlas, frame):
 def normalize(manifest_path, output):
     manifest_path = safe(manifest_path)
     m = stage_document(manifest_path)
-    if m.get('sourceProfile') not in ('cocos-2.4.15-bundle','cocos-2.4.15-project') or m.get('schemaVersion') != 1:
+    if m.get('sourceProfile') not in ('cocos-2.4.15-bundle','cocos-2.4.15-project','cocos-3.8.7-bundle') or m.get('schemaVersion') != 1:
         fail('UNSUPPORTED_MANIFEST', '$', 'Expected inspect schema 1')
     roots = {name:safe(path) for name,path in m.get('sourceRoots',{m['bundle']:m['sourceRoot']}).items()}
     expected = {(i.get('bundle',m['bundle']),i['path']):i for i in m['inputs']}
@@ -135,13 +135,24 @@ def normalize(manifest_path, output):
             objects, value, kind = [], {}, asset.get('kind')
         lengths={k:len(result[k]) for k in ('assets','spriteFrames','bitmapFonts','materials','nodes','components','animationClips')}
         try:
+            cocos38=m.get('sourceProfile')=='cocos-3.8.7-bundle'
+            if cocos38 and kind in ('cc.Prefab','cc.Scene','cc.SceneAsset'):
+                result['quarantinedAssets'].append(dict(sourceId=sid,kind=kind,reason='COCOS3_GRAPH_ADAPTER_PENDING'))
+                diagnostics.append(diagnostic('COCOS3_GRAPH_ADAPTER_PENDING',asset.get('importPath',sid),'3.x UITransform/local transforms differ; preserve graph evidence without emitting guessed identity geometry',sid))
+                continue
             if kind == 'cc.SpriteFrame':
-                frame = value.get('data', {})
-                texture = frame.get('texture')
-                texture_key = texture.get('__uuid__') if isinstance(texture, dict) else texture
-                if texture_key is None and len(asset['references']) == 1:
-                    texture_key = asset['references'][0]
-                source = by_id.get(resolved(asset.get('bundle',m['bundle'])+':'+str(texture_key)), {})
+                resource_evidence={}
+                if cocos38:
+                    from .sources.cocos38 import frame as frame38
+                    frame,source,resource_evidence=frame38(asset,by_id,resolved)
+                    texture_key=resource_evidence['sourceTexture']
+                else:
+                    frame = value.get('data', {})
+                    texture = frame.get('texture')
+                    texture_key = texture.get('__uuid__') if isinstance(texture, dict) else texture
+                    if texture_key is None and len(asset['references']) == 1:
+                        texture_key = asset['references'][0]
+                    source = by_id.get(resolved(asset.get('bundle',m['bundle'])+':'+str(texture_key)), {})
                 path = source.get('native')
                 try:
                     if not path:
@@ -157,13 +168,15 @@ def normalize(manifest_path, output):
                     trimmed.save(out / trimmed_path)
                     full.save(out / full_path)
                     result['spriteFrames'].append(dict(sourceId=sid, textureRef=source['sourceId'],
-                        image=trimmed_path, originalImage=full_path, **semantic))
+                        image=trimmed_path, originalImage=full_path, **semantic,**(dict(sourceResourceEvidence=resource_evidence)if resource_evidence else {})))
                 except (ParseError, OSError, Image.DecompressionBombError) as error:
                     diagnostics.append(diagnostic(getattr(error, 'code', 'IMAGE_ERROR'),
                         getattr(error, 'location', sid), str(error), sid))
-            elif kind in ('cc.Texture2D', 'cc.TTFFont', 'cc.AudioClip', 'native'):
+            elif cocos38 and kind=='cc.Texture2D':
+                diagnostics.append(diagnostic('COCOS3_SAMPLER_HANDOFF',sid,'Source sampler preserved in typed texture metadata; target sampler behavior is pending',sid))
+            elif kind in ('cc.Texture2D', 'cc.ImageAsset', 'cc.TTFFont', 'cc.AudioClip', 'native'):
                 path = asset.get('native')
-                if path and kind != 'cc.Texture2D':
+                if path and kind not in ('cc.Texture2D','cc.ImageAsset'):
                     suffix = Path(path).suffix.lower()
                     if suffix in ('.ttf', '.mp3', '.wav', '.ogg', '.png', '.jpg', '.jpeg'):
                         target = 'assets/' + name + suffix

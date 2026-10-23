@@ -24,7 +24,7 @@ def pairs(values, location):
 
 
 class Bundle:
-    def __init__(self, config):
+    def __init__(self, config, source_profile=PROFILE):
         self.config_path = safe(config)
         self.root = self.config_path.parent
         self.inputs = {}
@@ -32,8 +32,11 @@ class Bundle:
         c = self.config
         if not isinstance(c, dict) or not isinstance(c.get('name'), str):
             fail('INVALID_CONFIG', '$', 'Expected named bundle config')
-        if c.get('engineVersion', '2.4.15') != '2.4.15':
-            fail('UNSUPPORTED_VERSION', '$.engineVersion', 'Profile requires 2.4.15')
+        from .cocos38 import PROFILE as COCOS38
+        if source_profile not in (PROFILE,COCOS38):fail('UNSUPPORTED_PROFILE',source_profile,'Explicit verified bundle profile required')
+        self.source_profile=source_profile;expected='3.8.7'if source_profile==COCOS38 else'2.4.15'
+        if c.get('engineVersion', expected) != expected:
+            fail('UNSUPPORTED_VERSION', '$.engineVersion', 'Profile requires '+expected)
         self.bases={}
         for kind in ('import','native'):
             base=c.get(kind+'Base',kind)
@@ -57,15 +60,17 @@ class Bundle:
         if len(self.keys) > 50000 or len(set(self.keys)) != len(self.keys):
             fail('INVALID_IDENTITIES', '$.uuids', 'Duplicate IDs or asset budget exceeded')
         self.lookup = {key: i for i, key in enumerate(self.keys)}
-        self.members = {}
+        self.members = {};self.member_candidates={}
         for pack, indices in c.get('packs', {}).items():
             if not re.fullmatch(r'[A-Za-z0-9_-]+', pack):
                 fail('INVALID_PACK', '$.packs', pack)
             for ordinal, index in enumerate(array(indices, '$.packs.' + pack)):
                 at(self.keys, index, '$.packs.' + pack)
-                if index in self.members:
+                candidate=(pack,ordinal,len(indices));self.member_candidates.setdefault(index,[]).append(candidate)
+                if len(self.member_candidates[index])>16:fail('PACK_VARIANT_BUDGET','$.packs',str(index))
+                if index in self.members and self.source_profile!=COCOS38:
                     fail('AMBIGUOUS_PACK', '$.packs', str(index))
-                self.members[index] = (pack, ordinal, len(indices))
+                self.members.setdefault(index,candidate)
         self.versions = {kind: pairs(c.get('versions', {}).get(kind, []), '$.versions.' + kind)
                          for kind in ('import', 'native')}
         redirects = array(c.get('redirect', []),'$.redirect')
@@ -73,6 +78,7 @@ class Bundle:
             fail('INVALID_REDIRECT','$.redirect','Expected index/dependency pairs')
         self.redirects = {}
         for index,ordinal in zip(redirects[::2],redirects[1::2]):
+            if self.source_profile==COCOS38 and isinstance(ordinal,str)and re.fullmatch(r'0|[1-9][0-9]{0,5}',ordinal):ordinal=int(ordinal)
             at(self.keys,index,'$.redirect.index')
             at(c.get('deps',[]),ordinal,'$.redirect.dependency')
             if index in self.redirects:
@@ -100,6 +106,7 @@ class Bundle:
     def version(self, kind, index, identity):
         versions = self.versions[kind]
         tags = [('str', identity)] if index is None else [('int', index), ('str', identity)]
+        if index is None and self.source_profile=='cocos-3.8.7-bundle'and identity in self.lookup:tags.append(('int',self.lookup[identity]))
         found = {versions[t] for t in tags if t in versions}
         if len(found) > 1:
             fail('AMBIGUOUS_VERSION', '$.versions.' + kind, identity)
@@ -119,7 +126,7 @@ class Bundle:
             fail('MISSING_OR_AMBIGUOUS_FILE', str(folder / stem), 'Exactly one configured file is required')
         return safe(candidates[0])
 
-    def asset(self, index):
+    def asset(self, index, _member=None):
         key = at(self.keys, index, '$.selection')
         if index in self.invalid_keys:
             fail('INVALID_SELECTED_IDENTITY', f'$.uuids[{index}]', self.invalid_keys[index])
@@ -134,7 +141,21 @@ class Bundle:
             entry.update(kind='redirect', document=None,redirectBundle=self.redirects[index],
                          redirectTarget=self.redirects[index]+':'+key)
             return entry
-        member = self.members.get(index)
+        candidates=self.member_candidates.get(index,[])
+        if _member is None and len(candidates)>1:
+            variants=[]
+            for candidate in candidates:
+                pack=candidate[0];folder=inside(self.root,self.bases['import']+'/'+pack[:2])
+                if not any(folder.glob(pack+'.*')):continue
+                variants.append(self.asset(index,_member=candidate))
+            if not variants:fail('MISSING_PACK_VARIANTS',source_id,'None of the configured pack variants were supplied')
+            from ..io import encoded
+            signatures={sha(encoded(v['document']))for v in variants}
+            if len(signatures)!=1:fail('AMBIGUOUS_PACK_CONTENTS',source_id,'Supplied variants decode to different source objects')
+            selected=sorted(variants,key=lambda v:v['importPath'])[0]
+            selected['equivalentPackSources']=[dict(importPath=v['importPath'],pack=v['pack'],ordinal=v['packOrdinal'],documentSha256=next(iter(signatures)))for v in variants]
+            return selected
+        member = _member or self.members.get(index)
         identity, ordinal, count = member if member else (key, None, None)
         version = self.version('import', None if member else index, identity)
         path = self.select('import', identity, version, '.json')
@@ -142,11 +163,13 @@ class Bundle:
             self.cache[path] = self.json(path)
         raw = self.cache[path]
         if member and isinstance(raw, dict) and raw.get('type') == 'cc.Texture2D':
-            sections = decode_document(raw, ADAPTERS[2])['sections']
-            if len(sections) != count:
+            from .cocos38 import PROFILE as COCOS38,texture_sections
+            sections=texture_sections(raw,ordinal)if self.source_profile==COCOS38 else decode_document(raw, ADAPTERS[2])['sections']
+            actual_count=len(raw['data'])if self.source_profile==COCOS38 else len(sections)
+            if actual_count != count:
                 fail('PACK_MEMBERSHIP_MISMATCH',str(path),'Texture pack count differs from config')
-            section = sections[ordinal]
-            decoded = dict(root=0,instances=[{'__type__':section['type'],'data':section['data']}])
+            section = sections[0]if self.source_profile==COCOS38 else sections[ordinal]
+            decoded = section if self.source_profile==COCOS38 else dict(root=0,instances=[{'__type__':section['type'],'data':section['data']}])
         elif member:
             if not isinstance(raw,list) or len(raw)!=6 or not isinstance(raw[5],list) or len(raw[5])!=count:
                 fail('PACK_MEMBERSHIP_MISMATCH',str(path),'Pack shape/count differs from config')
@@ -176,13 +199,13 @@ class Bundle:
 
 
 def inspect(config, selection, output, dependency_sources=(), evidence_sources=(), *, include_all_bundles=False,
-            max_assets=2048, max_bytes=128*1024*1024, resolve_provided=False):
+            max_assets=2048, max_bytes=128*1024*1024, resolve_provided=False, source_profile=PROFILE):
     if len(dependency_sources)>15:
         fail('BUNDLE_BUDGET','$','At most 16 explicit bundles')
-    primary = Bundle(config)
+    primary = Bundle(config,source_profile)
     bundles = {primary.config['name']:primary}
     for path in dependency_sources:
-        dep = Bundle(path)
+        dep = Bundle(path,source_profile)
         if dep.config['name'] in bundles:
             fail('DUPLICATE_BUNDLE',str(path),'Bundle names must be unique')
         bundles[dep.config['name']] = dep
@@ -285,8 +308,8 @@ def inspect(config, selection, output, dependency_sources=(), evidence_sources=(
         path=safe(path);raw=read(path)
         evidence.append(dict(path=str(path),sha256=sha(raw),bytes=len(raw)))
     out = new_output(output, [*[b.root for b in bundles.values()],*[safe(p) for p in evidence_sources]])
-    report = dict(schemaVersion=1, toolVersion=__version__, sourceProfile=PROFILE,
-                  sourceVersion='2.4.15', versionEvidence='explicit profile declaration; compiled header validated',
+    report = dict(schemaVersion=1, toolVersion=__version__, sourceProfile=source_profile,
+                  sourceVersion='3.8.7'if source_profile=='cocos-3.8.7-bundle'else'2.4.15', versionEvidence='explicit profile declaration; compiled header validated',
                   sourceRoot=str(primary.root), sourceRoots={name:str(b.root) for name,b in bundles.items()},
                   bundle=primary.config['name'], selection=selection,evidenceFiles=evidence,
                   inputs=sorted(inputs, key=lambda x: (x['bundle'],x['path'])),

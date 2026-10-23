@@ -35,7 +35,7 @@ public static class MonkeyImporter
     [Serializable] public class MotionTrackResult { public string path,property,nativeType; public float[] times,values,probeTimes,probeValues; public string[] interpolations; }
     [Serializable] public class MotionResult { public string id,path,guid,wrap; public float duration; public int eventCount,curveCount; public MotionTrackResult[] tracks; }
     [Serializable] public class TextureSpec {
-        public string id, path; public float[] border, size, originalSize, offset;
+        public string id, path, guid; public float[] border, size, originalSize, offset;
     }
     [Serializable] public class AssetSpec { public string id, kind, path, fontAssetPath; }
     [Serializable] public class NodeSpec {
@@ -65,11 +65,13 @@ public static class MonkeyImporter
     [Serializable] public class LabelResult { public string sourceId, text, fontGuid, geometryProbe; public float fontSize; public int characterCount; public bool allCharactersPresent; public GlyphBounds[] glyphBounds; }
     [Serializable] public class GlyphBounds { public uint unicode; public float left,top,width,height,quadPadding; }
     [Serializable] public class Readback {
+        public string nativeScope,sourceGraphVerification; public GalleryResult[] gallery;
         public MonkeyNumericCode.Result[] numericCodeBindings,numericCodeExercise;
         public string status, unityVersion, prefabGuid, sceneGuid;
         public int spriteCount, nodeCount, missingScripts; public bool editableRoundtrip,sceneReopened; public string previewPath,previewSha256,previewError,colorSpace;
         public MotionResult[] animations; public string[] diagnostics; public NodeResult[] nodes; public SpriteResult[] sprites; public FileResult[] nativeFiles; public FontResult[] fonts; public LabelResult[] labels; public ViewReference[] viewReferences; public JsonResult[] jsonAssets; public SourcePrefabResult[] sourcePrefabs; public TmpResourceResult tmpResources;
     }
+    [Serializable] public class GalleryResult { public string id,spriteGuid; public bool geometryVerified; }
     [Serializable] public class JsonResult { public string id,guid,textSha256; }
     [Serializable] public class ViewReference { public string sourceId,field; public int index; public long prefabFileId; public bool bound; }
     [Serializable] public class FileResult { public string path, sha256; }
@@ -754,8 +756,10 @@ public static class MonkeyImporter
         if(!EditorSceneManager.SaveScene(scene,ScenePath))throw new InvalidOperationException("Settled native scene save failed");
         NativeCheckpoint("scene-reopen",1,1);
         NativeCheckpoint("native-readback",0,1);
-        var savedNodeMap=SavedNodeMap(plan.nodes,instance);
+        var gallery=plan.galleryOnly?ReadSavedGallery(plan,instance):new GalleryResult[0];
+        var savedNodeMap=plan.galleryOnly?new Dictionary<string,RectTransform>():SavedNodeMap(plan.nodes,instance);
         var readback = new Readback {
+            nativeScope=plan.galleryOnly?"resources-and-gallery-only":"source-node-subset",sourceGraphVerification=plan.galleryOnly?"not_run":"saved-source-node-subset",gallery=gallery,
             numericCodeExercise=numericCodeExercise,numericCodeBindings=plan.components.Where(c=>c.convertible&&!string.IsNullOrEmpty(c.codeClassName)).Select(c=>MonkeyNumericCode.Read(c,savedNodeMap[c.node].gameObject)).ToArray(),
             sourcePrefabs=sourcePrefabResults.ToArray(),tmpResources=tmpResourceResult,sceneReopened=true,
             jsonAssets=plan.assets.Where(a=>a.kind=="cc.JsonAsset").Select(a=> {
@@ -907,6 +911,24 @@ public static class MonkeyImporter
             if(rects.Select((r,i)=>(value(r)-before[i]).sqrMagnitude).All(d=>d<1e-10f))return pass+1;
         }
         throw new InvalidOperationException("NATIVE_LAYOUT_DID_NOT_SETTLE");
+    }
+    static GalleryResult[] ReadSavedGallery(Plan plan,GameObject instance) {
+        if(plan.nodes.Length!=0 || plan.components.Length!=0 || plan.sourcePrefabs.Length!=0)throw new InvalidOperationException("Gallery cannot stand in for a source graph");
+        var expected=plan.textures.Where(t=>!t.id.EndsWith("@original")).ToArray();var design=instance.transform.Find("DesignRoot");
+        if(design==null || design.childCount!=expected.Length)throw new InvalidOperationException("Saved gallery boundary differs");
+        var result=new GalleryResult[expected.Length];
+        for(int i=0;i<expected.Length;i++) {
+            var rect=design.GetChild(i)as RectTransform;var image=rect!=null?rect.GetComponent<UnityEngine.UI.Image>():null;var spec=expected[i];
+            var type=spec.border.Any(v=>v>0)?UnityEngine.UI.Image.Type.Sliced:UnityEngine.UI.Image.Type.Simple;
+            if(rect==null || rect.name!="AssetPreview_"+i || rect.childCount!=0 || image==null || image.sprite==null || image.type!=type || image.raycastTarget || image.preserveAspect!=(type==UnityEngine.UI.Image.Type.Simple) ||
+               AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(image.sprite))!=spec.guid ||
+               (rect.anchorMin-Vector2.zero).sqrMagnitude>1e-10f || (rect.anchorMax-Vector2.zero).sqrMagnitude>1e-10f ||
+               (rect.pivot-new Vector2(.5f,.5f)).sqrMagnitude>1e-10f || (rect.sizeDelta-new Vector2(180,180)).sqrMagnitude>1e-10f ||
+               (rect.anchoredPosition-new Vector2(120+(i%3)*230,1130-(i/3)*230)).sqrMagnitude>1e-10f)
+                throw new InvalidOperationException("Saved gallery sprite/rect differs: "+spec.id);
+            result[i]=new GalleryResult{id=spec.id,spriteGuid=spec.guid,geometryVerified=true};
+        }
+        return result;
     }
     static Dictionary<string,RectTransform> SavedNodeMap(NodeSpec[] nodes,GameObject instance,SourcePrefabSpec prefab=null,Dictionary<string,NodeSpec> byId=null) {
         byId=byId??nodes.ToDictionary(n=>n.sourceId);

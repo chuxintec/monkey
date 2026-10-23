@@ -5,7 +5,7 @@ from ..sources.compiled import fail
 
 def input_ir(path, bindings_path=None):
     path=safe(path);ir=stage_document(path)
-    if ir.get('schemaVersion')!=1 or ir.get('sourceProfile') not in ('cocos-2.4.15-bundle','cocos-2.4.15-project'):
+    if ir.get('schemaVersion')!=1 or ir.get('sourceProfile') not in ('cocos-2.4.15-bundle','cocos-2.4.15-project','cocos-3.8.7-bundle'):
         fail('UNSUPPORTED_IR',str(path),'Expected supported normalize schema 1')
     expected={f['path']:f['sha256'] for f in stage_manifest(path.parent)['files']}
     bindings={};receipt=None

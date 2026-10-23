@@ -84,9 +84,9 @@ def recover(tree, roots, configs, source_profile, out, profiles, namespace, code
                             configSha256=sha(encoded(selected['data'])),reason='equivalent index; prefer supplied import/native payload tree'))
             if not paths:
                 result.update(status='needs_action',reason='BUNDLE_CONFIG_NOT_PROVIDED');write_json(stage/'recovery.json',result);return result
-            primary=bundle.Bundle(paths[0])
+            primary=bundle.Bundle(paths[0],source_profile)
             inspected=bundle.inspect(paths[0],list(range(len(primary.keys))),stage/'inspect',paths[1:],
-                    include_all_bundles=True,max_assets=50000,max_bytes=1024*1024*1024,resolve_provided=True)
+                    include_all_bundles=True,max_assets=50000,max_bytes=1024*1024*1024,resolve_provided=True,source_profile=source_profile)
         result['stages'].append(dict(stage='inspect',status=stage_manifest(stage/'inspect')['status'],assets=len(inspected['assets'])))
         if (stage/'normalize/manifest.json').exists():
             check_signature('normalize')

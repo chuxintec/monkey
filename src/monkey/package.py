@@ -135,6 +135,12 @@ def convert_package(source, target, output, namespace='monkey-project',offline=F
                             if isinstance(project_data,dict) and project_data.get('version')=='2.4.15':
                                 cocos_evidence.append(dict(path=name,kind='editable-cocos-project',version='2.4.15'))
                         except (ValueError,UnicodeError,RecursionError): pass
+                    if Path(name).name.startswith('settings.')and suffix=='.json':
+                        try:
+                            settings_data=json.loads(raw)
+                            if isinstance(settings_data,dict)and settings_data.get('CocosEngine')=='3.8.7':
+                                cocos_evidence.append(dict(path=name,kind='creator-published-settings',version='3.8.7',sha256=digest))
+                        except (ValueError,UnicodeError,RecursionError):pass
                     if category=='Bundle':
                         config=json.loads(raw)
                         configs.append(dict(path=unit['id']+'/'+local_name,ledgerPath=name,data=config))
@@ -219,7 +225,12 @@ def convert_package(source, target, output, namespace='monkey-project',offline=F
         asset_index=list(unique_assets.values())
         stage='structured-recovery'
         source_profile=selection['sourceProfile'] if selection else ('cocos-2.4.15-project' if any(e['kind']=='editable-cocos-project' for e in cocos_evidence) else
+                        'cocos-3.8.7-bundle'if any(e.get('version')=='3.8.7'for e in cocos_evidence)else
                         'cocos-2.4.15-bundle' if any(e.get('version')=='2.4.15' for e in cocos_evidence) else None)
+        if source_profile=='cocos-3.8.7-bundle'and not any(e['kind']=='creator-published-settings'and e['version']=='3.8.7'for e in cocos_evidence):
+            fail('COCOS3_VERSION_EVIDENCE_REQUIRED','settings','Published settings.CocosEngine=3.8.7 must be included in explicit inputs')
+        if source_profile!='cocos-3.8.7-bundle'and any(e['kind']=='creator-published-settings'and e['version']=='3.8.7'for e in cocos_evidence):
+            fail('SOURCE_ENGINE_PROFILE_CONFLICT','settings','Creator3.8.7 settings cannot use a 2.4 source graph adapter')
         if reuse_source_stages:
             from .replan import reuse_source_stages as reuse_stages
             report['sourceStageReuse']=reuse_stages(reuse_source_stages,out,selection,namespace)
