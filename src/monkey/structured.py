@@ -63,7 +63,26 @@ def recover(tree, roots, configs, source_profile, out, profiles, namespace):
             root=tree/roots[0]['id'];parsed=project.Project(root)
             inspected=project.inspect(root,list(range(len(parsed.keys))),stage/'inspect',max_assets=50000,whole_input=True)
         else:
-            paths=[tree/c['path'] for c in configs]
+            # Whole-input inventories can include byte-equivalent cached bundle indexes.
+            # Retain every original in the ledger, but inspect one proven-equivalent index.
+            from .io import encoded
+            grouped={}
+            for config in configs:
+                grouped.setdefault(config['data']['name'],[]).append(config)
+            paths=[];result['bundleIndexAliases']=[]
+            for name,choices in sorted(grouped.items()):
+                if len({sha(encoded(c['data'])) for c in choices})!=1:
+                    from .sources.compiled import fail
+                    fail('BUNDLE_IDENTITY_CONFLICT',name,'Different bundle indexes cannot be merged')
+                def supplied_payloads(c):
+                    parent=(tree/c['path']).parent
+                    return sum(1 for folder in ('import','native') for p in (parent/folder).rglob('*') if p.is_file())
+                selected=sorted(choices,key=lambda c:(-supplied_payloads(c),c['path']))[0]
+                paths.append(tree/selected['path'])
+                for alternate in choices:
+                    if alternate is not selected:
+                        result['bundleIndexAliases'].append(dict(bundle=name,path=alternate['path'],selected=selected['path'],
+                            configSha256=sha(encoded(selected['data'])),reason='equivalent index; prefer supplied import/native payload tree'))
             if not paths:
                 result.update(status='needs_action',reason='BUNDLE_CONFIG_NOT_PROVIDED');write_json(stage/'recovery.json',result);return result
             primary=bundle.Bundle(paths[0])

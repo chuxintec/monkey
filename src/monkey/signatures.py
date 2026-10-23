@@ -15,4 +15,4 @@ def phase_signatures():
     }
     # Include only actual dependencies present in this distribution.
     return {name:dict(sha256=sha(encoded(files)),files=files) for name,paths in groups.items()
-            for files in [{p:sha((root/p).read_bytes()) for p in [*paths,'signatures.py'] if (root/p).is_file()}]}
+            for files in [{p:sha((root/p).read_bytes()) for p in [*paths,'signatures.py','structured.py'] if (root/p).is_file()}]}

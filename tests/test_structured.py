@@ -62,6 +62,21 @@ class StructuredTests(unittest.TestCase):
                 for row in m['files']:self.assertEqual(sha(read(project/row['path'])),row['sha256'])
             self.assertEqual(before,{p:p.read_bytes() for p in before})
 
+    def test_equivalent_cached_index_kept_in_ledger_without_shadowing_payload_tree(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary).resolve();config=fixture(root/'source')
+            cache=root/'cache';cache.mkdir();(cache/'123456.json').write_bytes(config.read_bytes())
+            declaration=root/'inputs.json'
+            write_json(declaration,dict(schemaVersion=1,sourceProfile='cocos-2.4.15-bundle',inputs=[
+                dict(id='cache',path='cache'),dict(id='source',path='source')]))
+            result=convert_package(None,'both',root/'out',input_set_path=declaration)
+            recovery=result['structuredRecovery']
+            self.assertNotEqual(recovery['status'],'failed',recovery)
+            self.assertEqual(recovery['normalized']['spriteFrames'],1)
+            self.assertEqual(len(recovery['bundleIndexAliases']),1)
+            self.assertEqual(recovery['bundleIndexAliases'][0]['selected'],'source/config.json')
+            self.assertEqual(result['projects'][0]['coverage']['inputFiles'],sum(1 for base in (cache,config.parent) for p in base.rglob('*') if p.is_file()))
+
     def test_resume_preserves_checkpoint_and_refuses_manual_edits(self):
         from monkey.package import resume_package
         with tempfile.TemporaryDirectory() as temporary:
