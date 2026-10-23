@@ -79,7 +79,7 @@ v0.2出口：同一normalize结果可选择生成两个目标之一；Cocos实�
 | M01 解析/IR/资源 | 离线子集 candidate | 两类2.4.15输入reader、pack/redirect/来源hash、旋转trim九宫格、PNG/JPEG/可选ASTC；真实11张SpriteFrame与原件hash核验。真实源工程/更多native格式待扩 |
 | M02 Unity输出 | partial，Editor not_run | plan/export、原生Editor适配器/View引用脚本、静态verify、离线C#编译已通过；48个组件有原生结构候选（含13个源空Sprite保持禁用）；5处文字、必要布局/按钮/遮罩已补，需独立Editor窗口 |
 | M03 代表页与AI交接 | 离线partial | 奖励窗口36来源资产/48节点/82组件，11张SpriteFrame、原字体及160条诊断已按8个模块根因组交接；真实同状态页面/输入/AI业务补全未验 |
-| v0.2 Cocos输出 | 离线 candidate，Creator not_run | 同一IR→3.8.8工程资产/meta/原生导入扩展；见续包02验收 |
+| v0.2 Cocos输出 | 实际资产导入partial，工程窗口绑定blocked | 25项资产已导入/根UUID匹配；Scene、5Label、编辑重开、真实页面尚not_run；见首轮验收 |
 | v0.3 增量/交付 | 离线增量已实现，正式交付待验 | diff/register/dry-run/apply、manual/retained边界、事务备份及可移位包；引擎门槛仍独立 |
 
 新事实更新本表与简短变更记录，历史引用不抹除。不要生成与本表重复的每日任务库或为每次点击生成集成JSON。
@@ -127,3 +127,19 @@ v0.2已以同一`reward-ir-11`及字体证据输出`outputs/creator-reward-02`�
 `outputs/animation-unity-02`与`outputs/animation-creator-02`静态pass、部分动画候选；每目标一个动画AI模块。6组本增量定向检查pass，Unity薄层窄编译pass、Creator JS语法pass；没有重跑无变化15项基线、重复全库hash或制作新wheel。详情见[动画验收](validation/2026-10-23-animation.md)。原生曲线文件/实际采样/播放/可编辑重开/画面对照仍not_run。
 
 下一步仍为获得明确资源窗口后，优先实导已有unity-reward-v03-02/creator-reward-04，修实际失败点；该动画离线包不替代页面和原生工程门槛，不扩Spine/服务/其他引擎或新版本线。
+
+## 2026-10-23 v0.2 肥鹅样本实导验收准备
+
+用户明确使用肥鹅项目验收v0.2，按V02-ACCEPTANCE合同执行。冻结creator-reward-04的manifest与60个生成文件已核对，原样复制到`outputs/acceptance/v02-reward-01`；输入身份/来源/5个字体Label清单见`.private/v02-acceptance-01/input-identity.json`。冻结目录不作为Editor工程使用。
+
+当前仅完成副本与身份准备，等待总监明确资源接管；不因Creator未运行或开发者idle自行开始。收到接管消息后首轮最多12分钟，仅Creator3.8.8导入/Scene保存回读/编辑重开/浏览器真实页面PNG及必要UI命中，不启动Unity、不验证动画新包或改肥鹅工程/服务/档案。没有原版同状态截图时视觉对照准确partial。现有实导/编辑/视觉状态仍not_run；这段准备不是验收通过。
+
+## 2026-10-23 v0.2 首轮实导结果与释放
+
+总监确认肥鹅操作者明确释放后接管，窗口00:16:46–00:26:52 UTC（北京时间08:16:46–08:26:52），606秒，早于12分钟截止正常释放输入。仅操作monkey验收副本，未改肥鹅Unity/Player/Cocos/服务。
+
+首次受限CLI启动在macOS _RegisterApplication阶段SIGABRT；改用官方3.8项目参数--project、正常桌面权限后，Creator3.8.8/monkey-import插件加载，资产库ready。实际Creator写出25/25 imported=true的资产meta，25根UUID全部匹配，46个Texture/SpriteFrame子资源记录；尚未执行导入扩展的trim/九宫格设置和Scene创建。
+
+实际控制阻塞：CUA按bundle ID和已安装版本路径只能绑定无标题的推荐Dashboard启动提示；Window菜单没有工程可选窗口，无法安全绑定/操作已加载的monkey工程菜单。Dashboard显示登录界面，未登录/未输入凭据。按总监收敛指令停止同条件重试和源码排查，Dashboard正常退出；Creator仍报告running，工程startup记录PID41840，无法安全绑定主窗口故未强退，现无人输入；总监已收到释放消息。
+
+Candidate.scene/editor-readback/真实PNG不存在，5Label绑定、原生Scene保存、编辑重开、浏览器及UI命中均not_run；v0.2未通过。详见[首轮验收](validation/2026-10-23-v02-acceptance-round1.md)。后续须先恢复可操作工程窗口/工具绑定，再在明确新窗口中继续；后台不追加离线功能或把资产ready当作页面验收。
