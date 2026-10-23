@@ -86,7 +86,7 @@ def sprite(atlas, frame):
 def normalize(manifest_path, output):
     manifest_path = safe(manifest_path)
     m = stage_document(manifest_path)
-    if m.get('sourceProfile') not in ('cocos-2.4.15-bundle','cocos-2.4.15-project','cocos-3.8.7-bundle','cocos-2.4.11-bundle') or m.get('schemaVersion') != 1:
+    if m.get('sourceProfile') not in ('cocos-2.4.15-bundle','cocos-2.4.15-project','cocos-3.8.7-bundle','cocos-2.4.11-bundle','cocos-2.1.2-resource') or m.get('schemaVersion') != 1:
         fail('UNSUPPORTED_MANIFEST', '$', 'Expected inspect schema 1')
     roots = {name:safe(path) for name,path in m.get('sourceRoots',{m['bundle']:m['sourceRoot']}).items()}
     expected = {(i.get('bundle',m['bundle']),i['path']):i for i in m['inputs']}
@@ -136,6 +136,9 @@ def normalize(manifest_path, output):
         lengths={k:len(result[k]) for k in ('assets','spriteFrames','bitmapFonts','materials','nodes','components','animationClips')}
         try:
             cocos38=m.get('sourceProfile')=='cocos-3.8.7-bundle'
+            if m.get('sourceProfile')=='cocos-2.1.2-resource' and kind not in ('cc.SpriteFrame','cc.Texture2D','cc.TTFFont','cc.AudioClip'):
+                result['quarantinedAssets'].append(dict(sourceId=sid,kind=kind,reason='LEGACY_RESOURCE_ONLY'))
+                diagnostics.append(diagnostic('LEGACY_RESOURCE_ONLY',asset.get('importPath',sid),'2.1.2 graph, clip and other semantics require a dedicated adapter',sid));continue
             if cocos38 and kind in ('cc.Prefab','cc.Scene','cc.SceneAsset'):
                 result['quarantinedAssets'].append(dict(sourceId=sid,kind=kind,reason='COCOS3_GRAPH_ADAPTER_PENDING'))
                 diagnostics.append(diagnostic('COCOS3_GRAPH_ADAPTER_PENDING',asset.get('importPath',sid),'3.x UITransform/local transforms differ; preserve graph evidence without emitting guessed identity geometry',sid))

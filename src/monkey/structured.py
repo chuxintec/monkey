@@ -58,6 +58,9 @@ def recover(tree, roots, configs, source_profile, out, profiles, namespace, code
             for name,root in inspected['sourceRoots'].items():
                 if not Path(root).is_relative_to(tree):raise ValueError('Source stage escaped the immutable input snapshot')
             result.setdefault('reused',[]).append(dict(stage='inspect',sha256=sha(stage_bytes(existing))))
+        elif source_profile=='cocos-2.1.2-resource':
+            from .sources.cocos_legacy import inspect as inspect_legacy
+            inspected=inspect_legacy(tree,stage/'inspect')
         elif source_profile==project.PROFILE:
             root=tree/roots[0]['id'];parsed=project.Project(root)
             inspected=project.inspect(root,list(range(len(parsed.keys))),stage/'inspect',max_assets=50000,whole_input=True)
@@ -100,6 +103,7 @@ def recover(tree, roots, configs, source_profile, out, profiles, namespace, code
             from .package_code import project_ir
             ir_path,ir=project_ir(ir_path,inspected,code_emission,stage/'code-ir')
         result['stages'].append(dict(stage='normalize',status=stage_manifest(ir_path)['status'],nodes=len(ir['nodes']),components=len(ir['components'])))
+        if 'missingDeclaredAssets'in inspected:result['declaredAssetsNotProvided']=len(inspected['missingDeclaredAssets']);result['declaredAssets']=inspected.get('declaredAssets')
         result['objectTypes']=dict(Counter(a.get('kind') or 'unknown' for a in inspected['assets']))
         result['normalized']=dict(spriteFrames=len(ir['spriteFrames']),fonts=sum(a['kind']=='cc.TTFFont' for a in ir['assets']),
                                   jsonAssets=sum(a['kind']=='cc.JsonAsset' for a in ir['assets']),nodes=len(ir['nodes']),components=len(ir['components']))

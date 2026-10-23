@@ -155,8 +155,13 @@
     {
       "business": "not_run",
       "caseId": "0db37edb5ce8a25199774ff5",
-      "evidence": [],
-      "export": "not_run",
+      "evidence": [
+        {
+          "path": "docs/validation/source-unavailable-tianming.json",
+          "sha256": "21267178c2f34bef51da4cdec1b33119099a9beb340de82249306bb6d6e62140"
+        }
+      ],
+      "export": "blocked-source-unavailable",
       "metadataHint": {
         "backend": null,
         "confidence": "unknown",
@@ -166,9 +171,11 @@
       "metadataSha256": "fd710e669f350b3ed5097f1a45ecdf747038cec5233376f384a1d0722fa14884",
       "name": "天命行者",
       "native": "not_run",
-      "read": "not_run",
+      "profile": "unknown-source-unavailable",
+      "read": "blocked-declared-source-path-unavailable",
       "remaining": [
-        "Locate and freeze exact original inputs; inspect concrete source profile"
+        "declared archives source path is absent; Manager pointer agrees",
+        "no original inputs or concrete engine profile available"
       ],
       "sourceRevision": "1.2.67",
       "targets": [
@@ -215,8 +222,17 @@
     {
       "business": "not_run",
       "caseId": "f4fc626753dc7a5947717207",
-      "evidence": [],
-      "export": "not_run",
+      "evidence": [
+        {
+          "path": "outputs/cocos212-jizhi-package-03/conversion-result.json",
+          "sha256": "dc70193a27b08d10240af77a7925af6a9bb79f3449c00cd25ae56b3f1129cc82"
+        },
+        {
+          "path": "outputs/cocos212-jizhi-package-02-native/native-orchestration.json",
+          "sha256": "da369ac62685562664cd55125a98293f44c76118618a316f614d28f61a341d1e"
+        }
+      ],
+      "export": "partial-resource-candidate",
       "metadataHint": {
         "backend": null,
         "confidence": "unknown",
@@ -225,21 +241,35 @@
       },
       "metadataSha256": "4c1b74e88510ec2995941f13c77183d0ba5e85904c85080349bdc06eb199c6b5",
       "name": "机智逃脱",
-      "native": "not_run",
-      "read": "not_run",
+      "native": "211-source-frame-resource-subset-both-targets-verified; latest-coverage-update-not-rerun",
+      "profile": "cocos-2.1.2-resource",
+      "read": "partial-original-static-settings-and-version",
       "remaining": [
-        "Locate and freeze exact original inputs; inspect concrete source profile"
+        "18955 of 19298 declared asset identities not supplied",
+        "81 source graphs quarantined",
+        "956 module drafts, 5 unresolved sources",
+        "Spine, source methods, visual and gameplay"
       ],
       "sourceRevision": "147",
       "targets": [
-        "unity6"
+        "unity6",
+        "cocos38"
       ]
     },
     {
       "business": "not_run",
       "caseId": "ffeb5de0b10fdd29022e2114",
-      "evidence": [],
-      "export": "not_run",
+      "evidence": [
+        {
+          "path": "outputs/unity2021-wuxia-config-package-01/conversion-result.json",
+          "sha256": "b4acf887722ebf4d0c6e26b59ea5a57a28207711c972a08c59ecee433e7f8960"
+        },
+        {
+          "path": "outputs/unity2021-wuxia-package-01/conversion-result.json",
+          "sha256": "dad6cdfc9f8f73a9a4a7fd8b5c218aa606543b68c849007275ef4bd4b7602d77"
+        }
+      ],
+      "export": "partial-config-prefab-and-one-field-class; startup-blocked",
       "metadataHint": {
         "backend": "wasm",
         "confidence": "metadata_hint_only",
@@ -250,9 +280,13 @@
       "metadataSha256": "c166ac44fc02beb3d885e63b87aa0df606977d579d914ad2bc0398c25575894a",
       "name": "武侠大明星",
       "native": "not_run",
-      "read": "not_run",
+      "profile": "unityfs-unitypy-1.25.3-assetripper-2.0.0",
+      "read": "partial-1468-of-1559-startup-objects; exact-config-bundle",
       "remaining": [
-        "Locate and freeze exact original inputs; inspect concrete source profile"
+        "startup missing logo.24de1a47, cm_frame_smalltips.041d0ce7, EmojiOne.c4a4a55d",
+        "131 config Sprite references",
+        "91 startup objects without schema",
+        "source methods and native/visual/gameplay"
       ],
       "sourceRevision": "124",
       "targets": [
@@ -262,8 +296,17 @@
     {
       "business": "not_run",
       "caseId": "b5be2333922651f1fb6366b7",
-      "evidence": [],
-      "export": "not_run",
+      "evidence": [
+        {
+          "path": "outputs/tuanjie-eternal-package-02/conversion-result.json",
+          "sha256": "5f6ef51d2c1619a75b7cafc24e8e7a25bfabe454f36c2b5d7ac7e4bee40b2224"
+        },
+        {
+          "path": "outputs/tuanjie-eternal-package-02/SourceInspection/inspection.json",
+          "sha256": "f8590abe44bd804fc58fbdb38ff42d9942098ce9572f09cd8d894595b1335dee"
+        }
+      ],
+      "export": "blocked-provider-evidence-only",
       "metadataHint": {
         "backend": "wasm",
         "confidence": "metadata_hint_only",
@@ -274,9 +317,13 @@
       "metadataSha256": "c682739c4640cea21557acace071d01ff7ec7dbfa9e4596fb8c5cc3c16ba1fcb",
       "name": "永远的蔚蓝星球",
       "native": "not_run",
-      "read": "not_run",
+      "profile": "tuanjie-2022.3.61t9-provider-evidence-only",
+      "read": "partial-2888-of-3042-objects",
       "remaining": [
-        "Locate and freeze exact original inputs; inspect concrete source profile"
+        "fixed AssetRipper exports 3042 unreadable objects and zero native resources",
+        "154 unknown or budgeted objects",
+        "Tuanjie source profile and Lua methods",
+        "native/visual/gameplay"
       ],
       "sourceRevision": "100",
       "targets": [
@@ -286,8 +333,17 @@
     {
       "business": "not_run",
       "caseId": "05908d5361a2b4971c92a338",
-      "evidence": [],
-      "export": "not_run",
+      "evidence": [
+        {
+          "path": "outputs/egret-linghuashi-images-03/conversion-result.json",
+          "sha256": "654a70873ab7ffcf13f779b0aa61ddf7281b1aaf4bf74ee9a26bf49db8a360cb"
+        },
+        {
+          "path": "outputs/egret-linghuashi-images-03-native/native-orchestration.json",
+          "sha256": "44f0da84a52759331a1848f7d7f6d3fe399add733f8b7ce439a7031890597eb6"
+        }
+      ],
+      "export": "partial-derived-image-gallery-only",
       "metadataHint": {
         "backend": null,
         "confidence": "unknown",
@@ -296,10 +352,14 @@
       },
       "metadataSha256": "631e55b75abcf34acd873accee2ec77cf27021ca0a27ef30fd4b10ed2dbcb4f1",
       "name": "灵画师",
-      "native": "not_run",
-      "read": "not_run",
+      "native": "16-derived-full-image-gallery-Sprites-verified; source-graphs-not-restored",
+      "profile": "generic-image-resources-v1",
+      "read": "supplied-40-file-inventory-only; exact-Egret-version-unknown",
       "remaining": [
-        "Locate and freeze exact original inputs; inspect concrete source profile"
+        "binary resource manifest adapter",
+        "source atlas slices and UI graphs",
+        "exact engine version and source methods",
+        "remote assets, visual and gameplay"
       ],
       "sourceRevision": "166",
       "targets": [
@@ -356,9 +416,12 @@
   "schemaVersion": 1,
   "scope": "actual per-case evidence; metadata hints are not conversion success; native labels name their verified subset",
   "summary": {
-    "casesWithActualExports": 6,
+    "casesAttempted": 11,
+    "casesWithActualExports": 9,
+    "casesWithBlockedExport": 2,
     "completeGames": 0,
     "denominator": 11,
-    "remainingCasesNotExported": 5
+    "fullCompatibilityComplete": false,
+    "remainingCasesNotExported": 2
   }
 }

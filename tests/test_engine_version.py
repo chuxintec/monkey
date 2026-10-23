@@ -17,6 +17,16 @@ class EngineVersionTests(unittest.TestCase):
             fact=result['facts'][0];span=fact['sourceBytes'];self.assertEqual(sha(read(p)[span['start']:span['end']]),fact['sha256'])
             self.assertEqual(fact['version'],'2.4.11')
 
+    def test_legacy_settings_are_literal_ast_data_and_calls_are_rejected(self):
+        with tempfile.TemporaryDirectory()as t:
+            p=Path(t).resolve()/'source.js'
+            p.write_text('cc.ENGINE_VERSION="2.1.2";window._CCSettings={platform:"wechatgame",flag:!0,values:[-2,3,null]};throw Error("never execute");')
+            result=inspect(p,True)
+            self.assertEqual(result['settings'][0]['data'],{'platform':'wechatgame','flag':True,'values':[-2,3,None]})
+            self.assertFalse(result['sourceCodeExecuted'])
+            p.write_text('cc.ENGINE_VERSION="2.1.2";window._CCSettings={value:doNotCall()};')
+            with self.assertRaises(ValueError):inspect(p,True)
+
     def test_version_evidence_is_consumed_by_auto_package_source_profile(self):
         with tempfile.TemporaryDirectory()as t:
             root=Path(t).resolve();config=fixture(root/'source');data=load(read(config));data.pop('engineVersion');write_json(config,data)

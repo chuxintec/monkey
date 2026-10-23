@@ -150,7 +150,7 @@ def convert_package(source, target, output, namespace='monkey-project',offline=F
                     if Path(name).name in ('libcocos2djs.so','cocos2d-js.js','cocos2d-js-min.js'):
                         cocos_evidence.append(dict(path=name,kind='cocos-engine-name',version='unknown'))
                     if category=='Code': script_paths.append(row)
-                    if category=='Code'and suffix=='.js'and b'ENGINE_VERSION'in raw and any(v in raw for v in (b'2.4.11',b'2.4.15')):
+                    if category=='Code'and suffix=='.js'and b'ENGINE_VERSION'in raw :
                         from .sources.engine_facts import inspect as engine_facts
                         try:
                             facts=engine_facts(spool/digest)
@@ -232,6 +232,7 @@ def convert_package(source, target, output, namespace='monkey-project',offline=F
         asset_index=list(unique_assets.values())
         stage='structured-recovery'
         source_profile=selection['sourceProfile'] if selection else ('cocos-2.4.15-project' if any(e['kind']=='editable-cocos-project' for e in cocos_evidence) else
+                        'cocos-2.1.2-resource'if any(e.get('version')=='2.1.2'for e in cocos_evidence)else
                         'cocos-3.8.7-bundle'if any(e.get('version')=='3.8.7'for e in cocos_evidence)else
                         'cocos-2.4.11-bundle'if any(e.get('version')=='2.4.11'for e in cocos_evidence)else
                         'cocos-2.4.15-bundle' if any(e.get('version')=='2.4.15' for e in cocos_evidence) else None)
@@ -239,8 +240,8 @@ def convert_package(source, target, output, namespace='monkey-project',offline=F
             fail('SOURCE_VERSION_EVIDENCE_REQUIRED','2.4.11','Include original engine version assignment or explicit source bundle engineVersion')
         if source_profile=='cocos-3.8.7-bundle'and not any(e['kind']=='creator-published-settings'and e['version']=='3.8.7'for e in cocos_evidence):
             fail('COCOS3_VERSION_EVIDENCE_REQUIRED','settings','Published settings.CocosEngine=3.8.7 must be included in explicit inputs')
-        expected_version={'cocos-3.8.7-bundle':'3.8.7','cocos-2.4.11-bundle':'2.4.11','cocos-2.4.15-bundle':'2.4.15','cocos-2.4.15-project':'2.4.15'}.get(source_profile)
-        versions={e['version']for e in cocos_evidence if e.get('version')in ('3.8.7','2.4.11','2.4.15')}
+        expected_version={'cocos-3.8.7-bundle':'3.8.7','cocos-2.4.11-bundle':'2.4.11','cocos-2.4.15-bundle':'2.4.15','cocos-2.4.15-project':'2.4.15','cocos-2.1.2-resource':'2.1.2'}.get(source_profile)
+        versions={e['version']for e in cocos_evidence if e.get('version')and e['version']!='unknown'}
         if expected_version and versions-{expected_version}:
             fail('SOURCE_ENGINE_PROFILE_CONFLICT','engine','Conflicting source engine versions cannot share a profile')
         if reuse_source_stages:
@@ -437,6 +438,7 @@ Neither target requires monkey, Python, the source tree, the other target or the
             coverage['dispositions']=dict(Counter(r['disposition'] for r in dispositions))
             coverage['nativeObjects']='planned_native_import' if profile in structured.get('projects',{}) else 'pending_adapter'
             coverage['structuredObjects']=dict(Counter(a['state'] for a in objects))
+            if 'declaredAssetsNotProvided'in structured:coverage['declaredAssetsNotProvided']=structured['declaredAssetsNotProvided'];coverage['declaredAssets']=structured.get('declaredAssets')
             write_json(project/'Analysis/resource-ledger.json',dict(schemaVersion=1,coverage=coverage,files=dispositions))
             files=[dict(path=p.relative_to(project).as_posix(),sha256=fingerprint(p),bytes=p.stat().st_size,owner='generated')
                    for p in sorted(project.rglob('*')) if p.is_file() and p!=project/'manifest.json']

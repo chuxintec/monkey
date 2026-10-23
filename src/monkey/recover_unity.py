@@ -80,7 +80,9 @@ def convert(source,output,provider_python,asset_ripper,budget_seconds=600,depend
     generated=code_model(out/'SourceInspection',out/'CodeModel')
     report['codeModel']=generated;save()
     exported=export_unity(active[0],exe,out/'ProviderExport',budget_seconds,dependencies=active[1:])
-    report['providerExport']={k:exported.get(k) for k in ('status','stage','targetVersion','processExited','outputFiles','outputBytes','sourceUnchanged','error')}
+    report['providerExport']={k:exported.get(k) for k in ('status','stage','targetVersion','processExited','outputFiles','outputBytes','nativeAssetFiles','unreadableObjectFiles','sourceUnchanged','error')}
+    if exported['status']=='exported_evidence_only':
+        report['status']='blocked';report['diagnostics'].append(dict(code='UNITY_PROVIDER_EVIDENCE_ONLY',details=report['providerExport'],message='Provider retained unreadable objects but exported no native resource assets; no Unity candidate promoted'));save();return report
     if exported['status']!='exported_partial' or not exported.get('processExited') or not exported.get('sourceUnchanged'):
         report['status']='failed';report['diagnostics'].append(dict(code='UNITY_PROVIDER_EXPORT_FAILED',details=report['providerExport']));save();return report
     raw_project=safe(out/'ProviderExport'/exported['project']);project=out/'UnityProject';shutil.copytree(raw_project,project)

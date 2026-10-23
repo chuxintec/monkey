@@ -41,6 +41,19 @@ class UnityRouteTests(unittest.TestCase):
             self.assertEqual(result['diagnostics'][0]['disposition'],'blocked')
             self.assertFalse((root/'out/ProviderExport').exists())
 
+    def test_evidence_only_provider_does_not_promote_empty_unity_candidate(self):
+        from monkey.recover_unity import convert
+        with tempfile.TemporaryDirectory() as t:
+            root=Path(t).resolve();source=root/'source.ab';source.write_bytes(b'UnityFS\0test')
+            providers=root/'providers';providers.mkdir();provider=providers/'provider';provider.write_bytes(b'not executable')
+            inspection=dict(status='partial',sourceUnchanged=True,processExited=True,summary={'unparsed':2})
+            result=dict(status='exported_evidence_only',nativeAssetFiles=0,unreadableObjectFiles=3,sourceUnchanged=True,processExited=True)
+            with patch('monkey.recover_unity.inspect_unity',return_value=inspection),patch('monkey.recover_unity.code_model',return_value={}),patch('monkey.recover_unity.export_unity',return_value=result):
+                report=convert(source,root/'out',provider,provider)
+            self.assertFalse(report['completed']);self.assertEqual(report['projects'],[])
+            self.assertEqual(report['diagnostics'][0]['code'],'UNITY_PROVIDER_EVIDENCE_ONLY')
+            self.assertFalse((root/'out/UnityProject').exists())
+
     def test_public_settings_form_distinguishes_disabled_and_disk_save_flags(self):
         p=Form();p.feed('<input name="TargetVersion" value="6000.6.2f1"><input type="checkbox" name="Premium" checked disabled><input type="checkbox" name="SaveSettingsToDisk"><select name="ScriptContentLevel"><option value="Level2">x</option><option value="Level0" selected>y</option></select>')
         self.assertEqual(p.values,{'TargetVersion':'6000.6.2f1','ScriptContentLevel':'Level0'})

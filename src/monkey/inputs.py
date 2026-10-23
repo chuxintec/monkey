@@ -7,7 +7,7 @@ from .sources.compiled import fail
 
 def input_set(path):
     path=safe(path);raw=read(path);data=load(raw)
-    if data.get('schemaVersion')!=1 or data.get('sourceProfile') not in ('cocos-2.4.15-bundle','cocos-2.4.15-project','cocos-3.8.7-bundle','cocos-2.4.11-bundle'):
+    if data.get('schemaVersion')!=1 or data.get('sourceProfile') not in ('cocos-2.4.15-bundle','cocos-2.4.15-project','cocos-3.8.7-bundle','cocos-2.4.11-bundle','cocos-2.1.2-resource','generic-image-resources-v1'):
         fail('INPUT_SET_SCHEMA',str(path),'Expected input-set schema 1 and explicit supported sourceProfile')
     inputs=data.get('inputs')
     if not isinstance(inputs,list) or not 1<=len(inputs)<=16:
@@ -38,7 +38,7 @@ def input_set(path):
         cache=entry.get('cacheList')
         cache_path=inside(root,cache) if cache else None
         cache_kind=entry.get('cacheKind') or ('temp' if cache_path and cache_path.name=='tempFileList.json' else 'cache')
-        if cache_path and (not cache_path.is_file() or cache_kind not in ('cache','temp')):
+        if cache_path and (not cache_path.is_file() or cache_kind not in ('cache','temp','legacy-flat')):
             fail('INPUT_CACHE_SCHEMA',name,'Expected an existing explicit cache/temp list')
         roots.append(dict(id=name,path=root,config=config,cacheList=cache_path,cacheKind=cache_kind))
     for i,root in enumerate(roots):

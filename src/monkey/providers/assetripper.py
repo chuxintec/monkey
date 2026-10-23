@@ -152,7 +152,10 @@ def export(source,executable,output,budget_seconds=600,dependencies=None):
                     total+=path.stat().st_size
                     if total>2*1024*1024*1024 or len(files)>=50_000:raise RuntimeError('Provider output budget')
                     files.append(dict(path=path.relative_to(export_root).as_posix(),bytes=path.stat().st_size,sha256=fingerprint(path)))
-            receipt.update(status='exported_partial',project=str(project.relative_to(out)),outputFiles=len(files),outputBytes=total,
+            asset_files=[p for p in (project/'Assets').rglob('*')if p.is_file() and p.suffix.lower()not in ('.meta','.cs','.dll','.asmdef','.asmref','.js','.wasm')]
+            unreadable=list((project/'AssetRipper/UnreadableAssets').rglob('*.unreadable'))
+            receipt.update(status='exported_partial'if asset_files else 'exported_evidence_only',project=str(project.relative_to(out)),outputFiles=len(files),outputBytes=total,
+                           nativeAssetFiles=len(asset_files),unreadableObjectFiles=len(unreadable),
                            scriptRecovery='disabled; original typed evidence retained separately',shaderRecovery='original YAML, compilation not verified')
             write_json(out/'output-files.json',dict(schemaVersion=1,files=files));save('complete')
         except Exception as error:

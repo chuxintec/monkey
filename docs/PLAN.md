@@ -548,3 +548,12 @@ NumberLabel包级全量已收口：outputs/number-label-full-package-01新鲜172
 事件monkey-v02-unity2022-webdata-20261024-01：公开convert新增精确UnityWebData1.0识别，固定provider直接读取，各serialized原版本独立保留。勇者乱斗2022.3.16f1实际3799对象3338parsed/461未知，首01因45个ETC1仅1byte导致decoder失败冻结；手机反恐2022.3.34f1c1实际9675对象9598parsed/77未知。新增ETC1最小block字节强分类，默认blocked；显式--unity-quarantine-invalid-textures才移除自有派生中的坏对象，其余对象逐rawSHA保存重读相同，完整原件保留，引用不假补。新勇者02隔离45/保留3754，Provider92149 exit0/reaped、4303文件9229669B，recovery59ad197e2ee5d692fdd161df931acf8b2e4f96cbf3ad35763c5de821fd07ad81；手机01隔离40/保留9635，Provider92301 exit0/reaped、18066文件35824738B，recoveryc3de2369343bd1f5a04751dea21c7933551f0e1df736f231e9c287b94071c031。0字段类，2029/8913原代码隔离，7/4缺引用，原方法/原生/玩法未验；10定向检查通过，Provider失败现进入公开诊断。Research6/11实际候选，其余5继续。
 
 Unity typed值预算新增逐对象250000/全请求4000000强限；超大对象单列unparsed保留rawSHA，后续小对象继续，避免团结大型ComputeShader展开使整份已读结果无法载入。未放宽core上限或源schema；16相关反例检查通过，团结新inspection/导出另行记录。
+
+
+事件monkey-v02-research-expanded-20261024-01：Research动态11例全部进入定位/读取/导出/核对矩阵，9例实际不同范围导出、2例blocked、完整游戏0，fullCompatibilityComplete=false。新增2.1.2原engine/settings AST证明及109项legacy-flat缓存：129展开输入26806035B，211Frame/38纹理依赖/81隔离图/956源码草稿，19298声明身份中18955未提供，完整声明分母与现有引用缺口0分列。02 Unity93877于22:20:45.832681Z→22:21:03.159315Z exit0/reaped、Creator94149于22:21:04.060650Z→22:21:26.613506Z正常TERM/reaped，双端strict0；422变体/211gallery强核，sourceGraphs0。03仅补声明分母，不重复已过原生段。详见COCOS-LEGACY.md。
+
+新增显式non-Cocos family原图出口，Laya/LayaAir/Egret/Eraget/custom/other只允许Unity6，低层Creator plan也强拒绝。当前只源PNG/JPEG→派生gallery，原版本unknown、sourceSpriteFrames/graphs/methods全0；完整原件outside Assets、未知二进制不猜解析，图片/总像素预算和失败回执已实现。灵画师4包40文件19112966B/16原图，公开grea native03 Unity94895于22:24:49.703592Z→22:24:58.927183Z exit0/reaped、strict0；32变体/16gallery refs强核，manifest d83a54ee0c1fa1d985770366b678c8dd83cd2b29c84ce537e2273cc6c90028ce。原图集/界面/方法/远程清单adapter未实现，未冒充Egret全版本恢复。早期01接线错误冻结，Laya/custom仅自造反例，无额外真实样本。
+
+武侠启动1468/1559正文，6纹理键3缓存匹配/3精确缺件，启动blocked保留；独立4272B配置Bundle实际导出SpriteSaveInfo一类/一个Sprite[]字段、meta保持且Unity6 SDK编译通过。Provider95567 exit0/reaped，9文件16555B、131Sprite引用待补，recovery cb80fa0e7aa18e58a0ded0e6118faa62053200983aca39f3bb74bffdf75e437e。原生not_run。团结原始t9保留、2888/3042正文，Provider实际3042不可读对象/0原生资源；新门exported_evidence_only→blocked、无候选晋升，旧误分类01冻结。新02 Provider93252 exit0/reaped；Lua/资源专用adapter仍缺。天命Research/Manager指向的archives目录当前不存在，明确源定位blocked，不扫描玩家档或恢复项目。
+
+本组35定向检查通过；新增literal settings函数调用拒绝、evidence-only不得晋升两反例另9项通过。样本/输出均私有，工具源码与证据说明留本仓；继续资源闭包、Unity原生消费/格式与未支持adapter，不宣称v0.2已完成，不推送发布。

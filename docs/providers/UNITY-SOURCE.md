@@ -77,3 +77,10 @@ monkey inspect-unity --source /path/to/startup.bundle --provider-python /path/to
 两者原始文件不变，原方法/原生/视觉/玩法not_run；这是实际资源候选，不是完整项目通过。不能把上述版本外推全部2022、中国版或WebData来源。
 
 Typed正文另有每对象250000值/全请求4000000值预算。超大ComputeShader等对象保留类型、pathID、rawSHA与明确unparsed，不让一个巨型字段数组阻止其后小对象解析，不放宽整体读取上限；对象级/聚合反例已验证。
+
+
+### 其他Research用例与Provider证据分层
+
+武侠大明星原启动2021.3.18f1/6326649B SHA `1364a7385c7e295ffc46103acc1e97e80772fe6c58e7fef2302564b2bbe6407a`，1559对象1468严格parsed/91未知；6纹理令牌仅3个精确缓存命中。启动分支明确blocked：缺 `logo.24de1a47`、`cm_frame_smalltips.041d0ce7`、`EmojiOne.c4a4a55d`。独立4272B原Sprite配置bundle有据导出，不被启动缺件阻止：SpriteSaveInfo一类/一个Sprite[]字段保持脚本meta并通过本机Unity6 SDK编译；131Sprite引用仍缺，原方法0/native not_run。Provider95567 exit0/reaped，9文件16555B；recovery manifest `cb80fa0e7aa18e58a0ded0e6118faa62053200983aca39f3bb74bffdf75e437e`。
+
+永远的蔚蓝星球实际团结2022.3.61t9启动1761819B SHA `9fa7315932124bbc118117bc8d9acf12a9e18b95ae20386e827fb5626c908f78`。新inspection逐对象预算后3042对象2888parsed/154未知或预算缺口；全部完整版本保留，没有就近套普通Unity版本。固定AssetRipper虽返回ProjectSettings，但3042个对象全为UnreadableAssets，Assets原生资源0。因此新增强门：Provider receipt分列nativeAssetFiles与unreadableObjectFiles；没有实际原生资源时`exported_evidence_only`，公开convert必须blocked且不晋升Unity候选。旧01误分类partial原件/输出冻结，不追认成功；新02已正确blocked，Provider93252 exit0/reaped。团结原生资源/未知类/Lua方法/玩法仍未支持，不能凭UnityPy能读多数对象说已转换。
