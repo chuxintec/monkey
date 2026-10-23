@@ -49,7 +49,7 @@ class Names:
             part=str(part);clean=unicodedata.normalize('NFC',part)
             clean=re.sub(r'[<>:"/\\|?*\x00-\x1f]','_',clean).rstrip(' .') or '_unnamed'
             if _DEVICE.match(clean):
-                first,dot,last=clean.partition('.');clean=first+'_'+dot+last 
+                first,dot,last=clean.partition('.');clean=first+'_'+dot+last
             if clean!=part:reasons.append('cross-platform-normalization')
             if len(clean.encode())>80:clean=_trim(clean,64)+'--'+sha(clean.encode())[:8];reasons.append('long-segment')
             parts.append(clean)

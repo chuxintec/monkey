@@ -1,6 +1,6 @@
 # monkey
 
-Python 驱动的 Cocos 游戏恢复工程命令行工具。最终目标：wxapkg/APK/已取得资源集合一键生成Unity6/Creator3.8独立工程，含全部输入资源、恢复源码与目标代码初稿，交给AI继续开发。当前为 **0.3.0.dev1 本地开发候选**，没有发布。
+Python 驱动的原包恢复工程命令行工具。产品目标：Cocos各版本原包→Unity6/Cocos3.8.8/both；Unity、Laya/LayaAir、Egret、自研及其他引擎原包→Unity6。按来源逐步实现，当前结构化reader仍限已验证的Cocos2.4.15子集。wxapkg/APK/已取得资源集合一键生成独立工程，含全部输入资源、恢复源码与目标代码初稿，交给AI继续开发。当前为 **0.3.0.dev1 本地开发候选**，没有发布。
 
 ## 一条命令转换
 

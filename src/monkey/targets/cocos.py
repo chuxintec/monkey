@@ -110,6 +110,11 @@ def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None):
         if c['type']=='cc.LabelOutline' and c['convertible'] and not any(x['type']=='cc.Label' and x['node']==c['node'] and x['convertible'] for x in components):
             c['convertible']=False;c['nativeType']=None
             diagnostics.append(diagnostic('MISSING_OUTLINE_LABEL',c['sourceId'],'Label dependency could not be converted',c['sourceId']))
+    from .prefabs import plan_prefabs
+    prefabs,prefab_gaps=plan_prefabs(ir,components)
+    diagnostics.extend(prefab_gaps)
+    for prefab in prefabs:
+        prefab['path']=naming.path(prefab['sourceId'],'.prefab','assets/generated/prefabs')
     from ..assets.animation import plan_clips
     animations,animation_gaps=plan_clips(ir,namespace,PROFILE,animation_selection)
     naming.records.extend(a['nameEvidence'] for a in animations)
@@ -126,7 +131,7 @@ def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None):
         scopeMode=ir.get('scopeMode','asset-selection'),
         sourceIrSha256=sha(stage_bytes(path)),sourceManifestSha256=ir['sourceManifestSha256'],sourceManifestPath=ir.get('sourceManifestPath'),
         sourceRoots=ir.get('sourceRoots',{}),sourceLocations=ir.get('sourceLocations',{}),bindings=receipt,
-        designSize=[750,1334],assets=assets,copies=copies,animations=animations,naming=naming.report(),nodes=ir['nodes'],components=components,
+        designSize=[750,1334],assets=assets,copies=copies,animations=animations,sourcePrefabs=prefabs,naming=naming.report(),nodes=ir['nodes'],components=components,
         diagnostics=diagnostics,editorValidation='not_run',subresourceValidation='pending-native-import')
     write_json(out/'plan.json',result);return finish(out,result)
 
@@ -139,7 +144,7 @@ def export(plan_path,output):
         if not c['target'].startswith('assets/generated/art/') or sha(read(inside(path.parent,c['source'])))!=c['sha256']:
             fail('SOURCE_CHANGED',c['target'],'Invalid plan resource')
     out=new_output(output,[path.parent,*p.get('sourceRoots',{}).values()])
-    for folder in ['assets/generated/art','assets/generated/animations','assets/generated/views','assets/manual','extensions/monkey-import','Analysis']:
+    for folder in ['assets/generated/art','assets/generated/animations','assets/generated/views','assets/generated/prefabs','assets/manual','extensions/monkey-import','Analysis']:
         (out/folder).mkdir(parents=True,exist_ok=True)
     by_path={a['path']:a for a in p['assets']};by_id={a['sourceId']:a for a in p['assets']}
     for c in p['copies']:
@@ -154,14 +159,15 @@ def export(plan_path,output):
     write_json(out/'package.json',dict(name='monkey-native-candidate',version='3.8.8',uuid=project_id,creator=dict(version='3.8.8')))
     ext=out/'extensions/monkey-import'
     for name in ['main.js','scene.js']:(ext/name).write_bytes(files('monkey.targets').joinpath('Creator'+('Main.js' if name=='main.js' else 'Scene.js')).read_bytes())
+    (ext/'prefab.js').write_bytes(files('monkey.targets').joinpath('CreatorPrefab.js').read_bytes())
     (ext/'animation.js').write_bytes(files('monkey.targets').joinpath('CreatorAnimation.js').read_bytes())
     write_json(ext/'package.json',dict(package_version=2,version='0.2.0',name='monkey-import',main='./main.js',
         contributions=dict(scene=dict(script='./scene.js'),menu=[dict(path='Monkey',label='Import isolated candidate',message='import-candidate')],
                            messages={'import-candidate':dict(methods=['importCandidate'])})))
-    write_json(ext/'import-plan.json',{k:p[k] for k in ['schemaVersion','targetProfile','designSize','assets','nodes','components'] }|dict(projectUuid=project_id,animations=p.get('animations',[])))
+    write_json(ext/'import-plan.json',{k:p[k] for k in ['schemaVersion','targetProfile','designSize','assets','nodes','components'] }|dict(projectUuid=project_id,animations=p.get('animations',[]),sourcePrefabs=p.get('sourcePrefabs',[])))
     from ..assets.animation import module_report
     write_json(out/'Analysis/animation-module.json',module_report(p.get('animations',[])))
-    write_json(out/'Analysis/source-map.json',dict(assets=p['assets'],nodes=[dict(sourceId=n['sourceId'],target='assets/generated/views/Candidate.scene') for n in p['nodes']],
+    write_json(out/'Analysis/source-map.json',dict(assets=p['assets'],sourcePrefabs=p.get('sourcePrefabs',[]),nodes=[dict(sourceId=n['sourceId'],target='assets/generated/views/Candidate.scene') for n in p['nodes']],
         components=[dict(sourceId=c['sourceId'],node=c['node'],nativeType=c['nativeType']) for c in p['components']],
         sourceRoots=p['sourceRoots'],sourceLocations=p['sourceLocations'],subresources='actual UUIDs require native importer readback'))
     handoff_tasks=tasks(p['components'],[d for d in p['diagnostics'] if not d['code'].startswith('ANIMATION_')],'assets/generated/views/Candidate.scene','assets/manual/')
@@ -225,6 +231,17 @@ def verify(candidate,output,level='static'):
             good=good and all(isinstance(n.get('nodeUuid'),str) and n['nodeUuid'] for n in rb.get('nodes',[]))
             good=good and all(isinstance(c.get('componentUuid'),str) and c['componentUuid'] for c in rb.get('components',[]))
             good=good and path_for('assets/generated/views/Candidate.scene') in native and bool(rb.get('sceneUuid'))
+            actual_prefabs={v['sourceId']:v for v in rb.get('sourcePrefabs',[])}
+            expected_prefabs={v['sourceId']:v for v in plan.get('sourcePrefabs',[])}
+            if set(actual_prefabs)!=set(expected_prefabs):good=False
+            for sid,spec in expected_prefabs.items():
+                actual=actual_prefabs.get(sid,{})
+                expected_components={c['sourceId'] for c in plan['components'] if c['convertible'] and c['node'] in set(spec['nodes'])}
+                valid=(set(actual.get('components',[]))==expected_components and actual.get('path')==spec['path'] and bool(actual.get('uuid')) and
+                       actual.get('nodeCount')==spec['nodeCount'] and actual.get('savedReloaded') is True and
+                       actual.get('geometryVerified') is True and actual.get('referencesVerified') is True and spec['path'] in native)
+                if not valid:
+                    good=False;diagnostics.append(diagnostic('SOURCE_PREFAB_NOT_VERIFIED',sid,'Independent Creator prefab save/reload evidence absent or inconsistent'))
             from ..assets.animation import verify_native
             motion_gaps=verify_native(plan.get('animations',[]),rb.get('animations',[]),native);diagnostics.extend(motion_gaps);good=good and not motion_gaps
             if not good:diagnostics.append(diagnostic('EDITOR_READBACK_FAILED',str(rb_path),'Native identities/counts/version differ'))

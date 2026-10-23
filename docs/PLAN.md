@@ -14,9 +14,11 @@
 
 当前全量04已完成双目标生成与一次集中离线核对：两端17201项/884709704字节全部入账、静态verify零诊断、来源路由/保留字节零问题；23955对象、24784节点/28514组件、1694 Unity独立Prefab计划、8467帧、11 TTF/5位图字库、23 JsonAsset、1776/1776 Spine闭包。代码实现838d05b，914 RF初稿/业务未实现。旧4根5097与全量01–03均保留历史，不能用于覆盖当前分母。
 
-当前等待新的实际原生资源grant：05已包含窗口07字体/场景修复及原名路径，尚未启动引擎。下一必要gate为Unity6000.6.2f1字体→1694Prefab保存→Scene重开→原生回读/代表页；按1.51GB Assets、16934纹理申请外层30分钟、方法20分钟/内部总截止留2分钟。Creator3.8.8顺序单独验证，先解决可绑定工程窗口，独立Prefab原生适配仍无，不能按全源Prefab恢复通过。没有新实际许可不执行，也不复用窗口08。
+当前full05已取得独立Unity窗口：monkey-full05-native-grant-20261023-01，锚点16:42:23，内部17:10:23、外部17:12:23（北京时间）不顺延。08:47Z通过正常exec审批启动隔离 outputs/acceptance/full05-window-01，方法1200秒，实际PID/结果以journal为准。字体→1694Prefab保存→Scene重开→回读待实际执行。Creator独立Prefab适配已接入：复用源图边界→原名独立路径、Editor原生序列化保存→loadAsset/instantiate重载→层级/局部几何/组件/字体图片及内部节点引用核对；静态14项定向检查通过，原生尚not_run。下一步生成Creator-only全量新候选，不重导Unity05。用户追加所有Unity源版本一律目标Unity6，支持程度逐profile验收。
 
 人类追加CDN/远程包下载已执行：原16627 CDN文件全本地SHA核对、19实际GET中12同原件/7HTTP404，无新增可用文件。9 bundle均散文件且脚本原包内嵌；miniGame代码原包缺URL仍缺。肥鹅获取回执/README已补充，未动产品/角色/服务。详见validation/2026-10-23-full-foodstreet-audit.md的当前最终核对、P0/P1与复跑命令；下面早期状态是历史，不表示本轮阶段未做。
+
+用户本聊天最新范围：Cocos所有版本原包→Unity6/Cocos3.8.8/both；Unity所有版本及Laya/LayaAir、Egret、自研/其他引擎原包→Unity6。当前肥鹅→U→C先收拢，后续逐来源profile接入；未知格式不假称支持。
 
 ## 当前总目标与阶段
 

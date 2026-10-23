@@ -41,6 +41,23 @@ class CreatorTests(unittest.TestCase):
             write_json(r/'candidate/Analysis/editor-readback.json',dict(creatorVersion='3.8.8',projectUuid='wrong',assets=[],nodeCount=1))
             self.assertEqual(cocos.verify(r/'candidate',r/'verify','editor')['editorValidation'],'fail')
 
+    def test_independent_prefab_plan_preserves_source_name_and_is_not_native_evidence(self):
+        with tempfile.TemporaryDirectory() as temp:
+            r=Path(temp).resolve();p=self.build(r)
+            self.assertEqual(len(p['sourcePrefabs']),1)
+            spec=p['sourcePrefabs'][0]
+            self.assertEqual(spec['nodeCount'],1)
+            self.assertTrue(spec['path'].endswith('/UI/fixture.prefab'),spec['path'])
+            cocos.export(r/'plan/plan.json',r/'candidate')
+            instruction=load(read(r/'candidate/extensions/monkey-import/import-plan.json'))
+            self.assertEqual(instruction['sourcePrefabs'],p['sourcePrefabs'])
+            self.assertFalse((r/'candidate'/spec['path']).exists())
+            from monkey.targets.layout import standardize
+            standardize(r/'candidate',cocos.PROFILE,p,{})
+            instruction=load(read(r/'candidate/extensions/monkey-import/import-plan.json'))
+            self.assertTrue(instruction['sourcePrefabs'][0]['path'].startswith('assets/prefabs/'))
+            self.assertEqual(cocos.verify(r/'candidate',r/'verify','editor')['editorValidation'],'not_run')
+
     def test_ir_and_plan_tampering_rejected(self):
         with tempfile.TemporaryDirectory() as temp:
             r=Path(temp).resolve();self.build(r)

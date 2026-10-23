@@ -8,7 +8,7 @@
 
 Python核心保留统一输入/容器安全、来源身份、资源全账、可读命名、阶段签名与可控接续、目标计划、诊断和AI接续。Unity来源采用自己的typed对象/PPtr/GUID/fileID/pathID契约，不强塞成Cocos节点图；Cocos2/3的序列化适配独立，仅共享证明可等价的UI/资源语义。目标只使用原生对象/组件，Unity Player不嵌源引擎解释器。原名映射对两源家族统一适用。
 
-CLI继续convert --source/--input-set --target unity6|cocos38|both。加入真实source-family/version探测及有依据的显式profile；Unity来源选择cocos38/both必须拒绝。能力检测、工具可调用、真实解析、Editor导入、业务分别报告。unknown不伪造工程版本或默认最近reader。
+CLI继续convert --source/--input-set --target unity6|cocos38|both。加入真实source-family/version探测及有依据的显式profile；用户2026-10-23补充：Unity来源无论版本，目标一律Unity6，不保留旧目标版本分支；此目标规则不等于各版本解析已支持。Unity来源选择cocos38/both必须拒绝。能力检测、工具可调用、真实解析、Editor导入、业务分别报告。unknown不伪造工程版本或默认最近reader。
 
 ## U：指定Unity来源样本
 
@@ -27,3 +27,7 @@ Mono托管实现与IL2CPP/Wasm元数据/方法体分别分层；只有签名/空
 reader按3.x真实序列化、UUID子资源、redirect/bundle/pack、System/JS模块和依赖；新增UITransform/UIOpacity/Canvas/层/坐标差异，unsupported明确隔离。输出Creator3.8尽量保留同源结构/身份；输出Unity6复用原生目标薄层，不能用2.4 parser猜3.x。2.1/1.x等按已取得样本逐profile扩展，不把Cocos2d-x与Creator混同。
 
 出口为《下方了》明确输入→两套独立候选、Creator真实导入/保存重开/代表UI引用回读；Unity只对本轮新增语义作必要验证，不做无关全平台/逐场景矩阵。Research只读选样，不新建游戏开发项目。
+
+## 后续来源家族
+
+用户本聊天补充范围：Cocos所有版本原包输出Unity6/Cocos3.8.8或both；Unity所有版本、Laya/LayaAir、Egret（用户写作Eraget）、自研及其他引擎原包统一输出Unity6。后续扩展不改变当前肥鹅、U、C顺序；按取得样本逐来源识别和独立reader适配，未知不套用Cocos图或假称已支持。非Cocos来源请求cocos38/both一律拒绝。

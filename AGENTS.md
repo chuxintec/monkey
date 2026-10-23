@@ -20,3 +20,7 @@
 ## 已批准后续来源扩展（2026-10-23）
 
 人类授权已原生核验：总监turn01a167c9-388f-7920-80b6-961ab237c0d7，message01a167c9-38cf-7a21-8ae8-83a8bf19d8c0及01a167cb-ba50-73a3-8dbf-4a8bd7f56115。肥鹅当前包先收拢，之后持续U（用户最新打开向僵尸开炮的Unity来源→Unity6）再C（下方了Cocos3.8.7及旧格式→Cocos3.8/Unity6/both）；同一立项不重复问。当前组自然安全点可只读核样本和provider，原生仍新资源窗口。路线/真实支持状态见docs/ENGINE-ROADMAP.md与SUPPORT-MATRIX.md，不把计划当实现、不在projects开发新游戏、不改GREA/全局引擎、不新建Agent/远端发布。
+
+用户本聊天2026-10-23补充：Unity来源无论版本，目标一律Unity6；源格式支持仍须逐profile核验，不能宣称全版本已支持。
+
+用户本聊天最新补充范围：Cocos所有版本原包→Unity6/Cocos3.8.8/both；Unity、Laya/LayaAir、Egret（用户写作Eraget）、自研/其他引擎原包→Unity6。逐来源实现，不以范围代替已验证能力，当前肥鹅与U/C顺序保持。

@@ -33,7 +33,7 @@ def mappings(profile, plan):
             if asset.get('fontAssetPath'):pairs[asset['fontAssetPath']]='Assets/Game/Content/Fonts/'+asset['fontAssetPath'].removeprefix('Assets/Generated/Art/')
         for font in plan.get('bitmapFonts',[]):pairs[font['fontPath']]='Assets/Game/Content/Fonts/'+font['fontPath'].removeprefix('Assets/Generated/Art/')
     else:
-        pairs={'assets/generated/art/':'assets/art/images/','assets/generated/animations':'assets/art/animations',
+        pairs={'assets/generated/prefabs/':'assets/prefabs/','assets/generated/art/':'assets/art/images/','assets/generated/animations':'assets/art/animations',
                'assets/generated/views/':'assets/scenes/','assets/generated':'assets',
                'assets/manual':'assets/scripts/gameplay/recovery'}
         for a in plan['assets']:

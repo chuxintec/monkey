@@ -1,5 +1,7 @@
 # 一键工程转换
 
+产品目标规则：Cocos全部版本原包可选Unity6/Cocos3.8.8/both；Unity、Laya/LayaAir、Egret、自研与其他引擎全部版本原包仅以Unity6为目标。当前实际解析子集见[支持矩阵](SUPPORT-MATRIX.md)，未接入来源不能据以下命令视为已还原。
+
 在monkey根目录运行，无须逐阶段调用reader或export：
 
 ```sh

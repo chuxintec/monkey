@@ -2,6 +2,7 @@
 // Editor scene script. It creates an isolated native tree, never touches the open scene.
 const cc = require('cc');
 const motion=require('./animation.js');
+const prefabs=require('./prefab.js');
 const color = a => new cc.Color(...a);
 const loadAsset = (uuid, type) => new Promise((resolve,reject) => cc.assetManager.loadAny({uuid}, (e,a) => {
     if (e) reject(e); else if (!(a instanceof type)) reject(Error('Unexpected native asset type: '+uuid)); else resolve(a);
@@ -87,6 +88,7 @@ module.exports = {
                 const asset=new cc.SceneAsset();asset.scene=scene;
                 const serialized=EditorExtends.serialize(asset);
                 return {serialized:typeof serialized==='string'?serialized:JSON.stringify(serialized),nativeRefs,animationAssets,
+                    sourcePrefabs:prefabs.serialize(plan,nodes),
                     nodes:plan.nodes.map(n=>({sourceId:n.sourceId,nodeUuid:nodes.get(n.sourceId).uuid})),...describe(scene,plan)};
             } finally {scene.destroy();}
         },
@@ -133,7 +135,13 @@ module.exports = {
             for(const a of plan.assets.filter(a=>a.kind==='json')) {
                 const json=await loadAsset(a.uuid,cc.JsonAsset);jsonAssets.push({sourceId:a.sourceId,uuid:json._uuid,value:json.json});
             }
-            return {jsonAssets,animations,nodeCount:saved.length,nodes:[...mapped].map(([sourceId,n])=>({sourceId,nodeUuid:n.uuid,name:n.name,
+            const sourcePrefabs=[];
+            for(const spec of plan.sourcePrefabs||[]) {
+                const info=(plan.savedPrefabs||[]).find(p=>p.sourceId===spec.sourceId);
+                if(!info)throw Error('Saved prefab identity absent');
+                sourcePrefabs.push(prefabs.read(await loadAsset(info.uuid,cc.Prefab),spec,plan,info));
+            }
+            return {sourcePrefabs,jsonAssets,animations,nodeCount:saved.length,nodes:[...mapped].map(([sourceId,n])=>({sourceId,nodeUuid:n.uuid,name:n.name,
                 position:[n.position.x,n.position.y,n.position.z],size:[n.getComponent(cc.UITransform).width,n.getComponent(cc.UITransform).height]})),components:refs,labels,frames};
         }
     }

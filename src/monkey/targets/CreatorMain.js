@@ -34,6 +34,10 @@ module.exports = {
                 if (hash(fs.readFileSync(within(root, f.path))) !== f.sha256) throw Error('Generated content changed: ' + f.path);
             }
             for(const a of plan.animations||[])if(a.convertible&&fs.existsSync(within(root,a.path)))throw Error('Animation output exists; use fresh candidate');
+            for(const p of plan.sourcePrefabs||[]) {
+                if(!p.path.startsWith('assets/generated/prefabs/')||!p.path.endsWith('.prefab'))throw Error('Unsafe prefab path');
+                if(fs.existsSync(within(root,p.path)))throw Error('Prefab output exists; use fresh candidate');
+            }
             if (!(await req('query-ready'))) throw Error('Asset database not ready');
             const assets = [];
             for (const a of plan.assets) {
@@ -71,10 +75,23 @@ module.exports = {
                 if(!info||info.invalid)throw Error('Native animation save failed');
                 animationAssets.push({id:a.id,uuid:info.uuid,path:a.path});
             }
+            const savedPrefabs=[];
+            const expectedPrefabs=new Map((plan.sourcePrefabs||[]).map(p=>[p.sourceId,p]));
+            if((result.sourcePrefabs||[]).length!==expectedPrefabs.size)throw Error('Prefab serialization count mismatch');
+            for(const p of result.sourcePrefabs||[]) {
+                const spec=expectedPrefabs.get(p.sourceId);
+                if(!spec||p.path!==spec.path||typeof p.serialized!=='string')throw Error('Unexpected prefab serialization');
+                const dest=within(root,p.path);
+                fs.mkdirSync(path.dirname(dest),{recursive:true});
+                await req('refresh-asset','db://'+path.posix.dirname(p.path));
+                const info=await req('create-asset','db://'+p.path,p.serialized,{overwrite:false,rename:false});
+                if(!info||info.invalid)throw Error('Native prefab save failed: '+p.sourceId);
+                savedPrefabs.push({sourceId:p.sourceId,path:p.path,uuid:info.uuid});expectedPrefabs.delete(p.sourceId);
+            }
             const scene = await req('create-asset', 'db://assets/generated/views/Candidate.scene', result.serialized, {overwrite: false, rename: false});
             if (!scene || scene.invalid) throw Error('Native scene save failed');
             // Re-load saved/imported scene through the engine asset manager, not the in-memory tree.
-            const saved = await Editor.Message.request('scene', 'execute-scene-script', {name:'monkey-import',method:'readSaved',args:[scene.uuid,{...plan,assets,animationAssets}]});
+            const saved = await Editor.Message.request('scene', 'execute-scene-script', {name:'monkey-import',method:'readSaved',args:[scene.uuid,{...plan,assets,animationAssets,savedPrefabs}]});
             const nativeFiles = [];
             function collect(relative) {
                 const folder = within(root, relative);
