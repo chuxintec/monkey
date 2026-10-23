@@ -2,7 +2,7 @@
 import re
 from io import BytesIO
 from pathlib import Path
-from ..io import read,sha,inside,write_json
+from ..io import read,sha,inside,write_json,encoded
 from ..sources.compiled import fail,ParseError
 from ..normalize import open_texture
 
@@ -58,10 +58,22 @@ def recover_closures(manifest,destination):
                 fail('SPINE_FIELDS_UNSUPPORTED',asset['sourceId'],'Explicit atlas, textureNames and textures required')
             if atlas_pages(atlas)!=names or len(names)!=len(textures):
                 fail('SPINE_PAGE_MAPPING',asset['sourceId'],'Atlas page order and explicit texture mapping differ')
-            raw,relative=resource(asset);version=binary_version(raw)
-            row['skeletonVersion']=version or 'unknown'
-            if version is None:fail('SPINE_BINARY_VERSION_UNSUPPORTED',asset['sourceId'],'Only recognizable 3.x binary header supported; no guessed runtime')
-            files={'skeleton.bin':raw,'source.atlas':atlas.encode('utf-8')};dependencies=[]
+            inline=obj.get('_skeletonJson')
+            if not asset.get('native') and isinstance(inline,dict):
+                version=inline.get('skeleton',{}).get('spine') if isinstance(inline.get('skeleton'),dict) else None
+                if (not isinstance(version,str) or not version or not isinstance(inline.get('bones'),list)
+                        or not isinstance(inline.get('slots'),list) or not isinstance(inline.get('animations'),dict)
+                        or not isinstance(inline.get('skins'),(dict,list))):
+                    fail('SPINE_JSON_SCHEMA_UNSUPPORTED',asset['sourceId'],'Expected explicit skeleton version, bones, slots, skins and animations')
+                raw=encoded(inline);skeleton_name='skeleton.json'
+                row.update(skeletonSource='inline-json',runtimeCompatibility='not_validated',sourceNativeSha256=None)
+            else:
+                raw,relative=resource(asset);version=binary_version(raw);skeleton_name='skeleton.bin'
+                if version is None:fail('SPINE_BINARY_VERSION_UNSUPPORTED',asset['sourceId'],'Only recognizable 3.x binary header supported; no guessed runtime')
+                row.update(skeletonSource='native-binary',runtimeCompatibility='not_validated',sourceNativeSha256=sha(raw))
+            # Preserve nonstandard source version labels exactly; a data closure is not runtime compatibility.
+            row['skeletonVersion']=version
+            files={skeleton_name:raw,'source.atlas':atlas.encode('utf-8')};dependencies=[]
             for name,ref in zip(names,textures):
                 if Path(name).suffix.lower()!='.png':fail('SPINE_PAGE_FORMAT',name,'Only explicit PNG atlas page outputs supported')
                 key=ref.get('__uuid__') if isinstance(ref,dict) else None
@@ -78,7 +90,7 @@ def recover_closures(manifest,destination):
             for name,data in files.items():
                 path=inside(destination/folder,name);path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(data)
                 row['files'].append(dict(path=folder+'/'+name,sha256=sha(data),bytes=len(data)))
-            row.update(status='closure_recovered',dependencies=dependencies,sourceNativeSha256=sha(raw),
+            row.update(status='closure_recovered',dependencies=dependencies,sourceSkeletonSha256=sha(raw),
                        remaining='Compatible licensed native runtime and importer required; no animation/playback acceptance')
         except (ParseError,ValueError,OSError,KeyError,TypeError,StopIteration) as error:
             row.update(reason=getattr(error,'code','SPINE_SOURCE_UNSUPPORTED'),message=str(error))

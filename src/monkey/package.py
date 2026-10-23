@@ -189,6 +189,16 @@ def convert_package(source, target, output, namespace='monkey-project',offline=F
                 source_type=types[logical[1]] if isinstance(logical,list) and len(logical)>1 and type(logical[1]) is int and 0<=logical[1]<len(types) else None
                 asset_index.append(dict(sourceId=bundle+':'+canonical,uuid=canonical,bundle=bundle,index=index,sourceType=source_type,
                                         logicalKey=logical,sourceFiles=sorted(set(matches)),status='source_located' if matches else 'missing_reference'))
+        # Identical cache/CDN indexes describe the same logical entries, not extra missing assets.
+        unique_assets={}
+        for indexed in asset_index:
+            key=(indexed['bundle'],indexed['index'])
+            if key in unique_assets:
+                prior=unique_assets[key]
+                prior['sourceFiles']=sorted(set(prior['sourceFiles'])|set(indexed['sourceFiles']))
+                prior['status']='source_located' if prior['sourceFiles'] else 'missing_reference'
+            else:unique_assets[key]=indexed
+        asset_index=list(unique_assets.values())
         stage='structured-recovery'
         source_profile=selection['sourceProfile'] if selection else ('cocos-2.4.15-project' if any(e['kind']=='editable-cocos-project' for e in cocos_evidence) else
                         'cocos-2.4.15-bundle' if any(e.get('version')=='2.4.15' for e in cocos_evidence) else None)

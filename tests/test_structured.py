@@ -75,6 +75,9 @@ class StructuredTests(unittest.TestCase):
             self.assertEqual(recovery['normalized']['spriteFrames'],1)
             self.assertEqual(len(recovery['bundleIndexAliases']),1)
             self.assertEqual(recovery['bundleIndexAliases'][0]['selected'],'source/config.json')
+            indexed=load(read(root/'out/UnityProject/Analysis/cocos-assets.json'))['assets']
+            self.assertEqual(len(indexed),len(load(read(config))['uuids']))
+            self.assertEqual(len({(a['bundle'],a['index']) for a in indexed}),len(indexed))
             self.assertEqual(result['projects'][0]['coverage']['inputFiles'],sum(1 for base in (cache,config.parent) for p in base.rglob('*') if p.is_file()))
 
     def test_resume_preserves_checkpoint_and_refuses_manual_edits(self):

@@ -35,3 +35,5 @@ full-foodstreet-01完成17201项双端文件台账，但Structured/recovery.json
 人类当前monkey聊天追加批准下载CDN/远程包并补充肥鹅；已实际GET19个已知端点，12响应同原件、7HTTP404，原16627 CDN文件全部本地SHA/长度verified，无新增文件。9远程bundle均isZip=false，脚本原包内嵌；miniGame微信代码分包缺少可下载URL仍缺。肥鹅Analysis/acquisition/monkey-full-20261023-01及Evidence/README已补回执，不改产品/角色/服务。缓存462个wxfile原ID因冻结目录移除usr/gamecaches前缀，按明确前缀重定位全与CDN同hash，原manifest未改。当前full02正在normalize，资源窗口尚未申请/执行。
 
 全量02已解析23955源对象，包含1776 Spine、8467 SpriteFrame、1696 Prefab、358 AudioClip、23 JsonAsset；四个等价缓存索引已正确映射CDN。归一化实际输出约1.6GiB触发旧1GiB owned-output上限，阶段失败且保持证据；这是实际解码膨胀预算而不是漏源。仅whole-input输出上限有界增至4GiB，保留切片256MiB/原始解析32MiB/单文件128MiB/生成文档128MiB限制；生成IR70MiB在已声明128MiB元数据预算内。下一全新03继续，02不原地修改。
+
+全量03实际生成双目标原生计划：23955源对象→24784节点/28514组件/8467帧/11字体/23JsonAsset；Unity13550、Creator12588组件可转换，仍为计划而非原生对象。二进制Spine1762闭包，14项实际是内嵌JSON而非缺源。已补JSON骨骼原样语义导出、atlas/纹理闭包，精确保留含3.8-from-4.0-from-4.1-from-4.2.43等源版本标签，不推断兼容runtime；真实14项定向复验14/14闭合。修正相同缓存索引导致逻辑资源重复/假缺失计数，按(bundle,index)合并定位证据，原件账不去项。14项定向检查通过；03冻结不改，按新实现生成04最终核对候选。

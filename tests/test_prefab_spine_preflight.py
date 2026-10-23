@@ -38,6 +38,15 @@ class BoundaryTests(unittest.TestCase):
             row=result['skeletons'][0];self.assertEqual(row['runtime'],'not_installed')
             files={Path(f['path']).name:root/'out'/f['path'] for f in row['files']}
             self.assertEqual(files['skeleton.bin'].read_bytes(),binary);self.assertEqual(files['source.atlas'].read_text(),atlas)
+            inline={'skeleton':{'spine':'3.8-from-4.2.43'},'bones':[{'name':'root'}],'slots':[],'skins':{},'animations':{}}
+            skeleton['native']=None;skeleton['document']['instances'][0]['_skeletonJson']=inline
+            result=recover_closures(manifest,root/'inline')
+            self.assertEqual(result['closed'],1);row=result['skeletons'][0]
+            self.assertEqual(row['skeletonVersion'],'3.8-from-4.2.43')
+            self.assertEqual(row['runtimeCompatibility'],'not_validated');self.assertIsNone(row['sourceNativeSha256'])
+            path=next(f['path'] for f in row['files'] if f['path'].endswith('skeleton.json'))
+            import json
+            self.assertEqual(json.loads((root/'inline'/path).read_text()),inline)
             manifest['assets']=[skeleton];result=recover_closures(manifest,root/'missing')
             self.assertEqual(result['unresolved'],1);self.assertEqual(result['skeletons'][0]['reason'],'SPINE_TEXTURE_MISSING')
 
