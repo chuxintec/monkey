@@ -32,3 +32,6 @@
 用户直接授权已原生核验：总监turn01a169b8-b15c-7ec2-964b-63b9f7c9614b / human01a169b8-b2d8-7d71-8dcf-06f470bfe371。先创建私有chuxintec/monkey，提交/正常推送工具源码与文档，正式tag/Release v0.1（Python0.1.0），附件wheel/sdist/SHA；不上传游戏原件/私有样本/outputs/缓存/存档，不force或移动旧tag，不修改其他仓库/服务。需精确暂存清单、main可达历史/分发内容核验、GitHub API+ls-remote回读。旧0.3.dev证据不反向改写。
 
 v0.2先完成docs/V0.2-PLAN.md供总监核对，审阅通过后才实现；覆盖Research全部动态样本、可接续C#及实际JS、有据语义与可选--format none|grea后处理。发布v0.1后从不可变点开本地codex/v0.2；当前Unity来源实验stash保留但不混v0.1、不提前恢复。详细边界见Manager/decisions/20261024-monkey-v01-v02/PLAN.md。原生资源窗口/自有child/不改GREA与暂停游戏边界继续。
+
+
+2026-10-24后续人类要求已由本聊天原生read_thread核验：持续推进至v0.2开发完成（总监turn01a169c7-6e89-7c42-9e35-a7f6b70d58bf / human01a169c7-6ea9-7fb3-a08a-bb2fe1819996）。V0.2-PLAN/V0.2-EXAMPLES设计已通过Manager/decisions/20261024-monkey-v01-v02/DESIGN-REVIEW.md，不重新等礼节ACK。Cocos代码改为TypeScript优先、JS次选（同turn / human01a169c9-28a9-7120-96b0-df9511be3764），默认ts、明确ts|js选项；不以改后缀或any桩冒充实现。v0.1已发布并冻结，本地codex/v0.2持续开发授权不含v0.2推送/Release。上述覆盖本文件早期v0.2 JS优先/等待设计门的过时表述；其他资源/源只读/单主开发边界保持。

@@ -489,3 +489,16 @@ Creator NumberLabel TS原生段准备：candidate03仅MainUi129节点、同5原R
 Creator TS native01 own71766于19:28:21.200824Z→19:28:41.202280Z正常TERM exit-15/reaped，editor pass/0诊断，候选804703d0010a88fc25608e2fa519b3d94e7785e1a391cef3ba7c2a544685cd7c。真实注册NumberLabel、MainUi129节点，Scene与独立Prefab5原脚本接线/实际classId/字串字体/完整几何、数字边界/实例隔离、保存重载未初始化态通过。首次实际自动UUID86325443-58b5-4b92-b0e4-bc27ec362d46、classId86325RDWLVLkrDkvCfsNi1G；原TS meta ver4.0.24已读。未冒称这个自动ID跨fresh项目恒定；后续code-emit新增namespace+源RF稳定meta，新的固定meta模式需格式阶段再验。JS importer metadata仍待实证，不捏造模板。
 
 成组状态见docs/CODE-SUBSET.md。具名C#/TS原生代表已从facts/candidate推进到5绑定数值子集；公开convert集成、第二来源模块、typed none/grea格式化及全Research逐case仍未闭合，继续开发、不推送v0.2。
+
+
+Typed格式化首个实现进入公开format-project：当前仅未导入Creator候选，preview→冻结plan→新输出apply；Unity与native已导入移动adapter仍明确pending。94个typed目标路径变化/184物理文件移动，SourceName/逻辑key/节点/组件/资产UUID/meta/原数值资源不全局替换，BMFont只重发显式page引用。全部owned文件、owner、算法、case/Unicode冲突与stale plan强检，Library/已导入拒绝。3语义反例通过，含文字/逻辑key恰含旧路径也不改、篡改owned/stale/人工所有权/已导入保护。
+
+真实MainUi seeded-none candidate05 manifest71a110e66437afc0c69b844be0b5d11ba70b3a8ae04afb83fee74fcc8cd7f896，typed grea01 manifestdcfc2a92581c5fa2298a33b98e79ff6e53186e65dce704979c4ec2ffaee300e2；均未原生验。固定namespace/RF脚本meta已加入，两模式同seed。只有已分配resource/script UUID纳入保持门，未物化Prefab/节点native IDs仍pending，不能承诺fresh导入会自行分配相同ID。
+
+下一先none native02、通过并退出后才grea native01，各实际锚点内部+28/外层+30/方法1200秒，ps无资源冲突、自有新副本、首错停；本轮检查新固定脚本meta/typed路径/字体页/5个注册组件及资源引用/完整几何保存重载，不重跑完整full14，不改原件。
+
+
+固定meta none native02 own72833于19:42:33.598898Z→19:42:51.032834Z正常TERM/reaped，editor pass/0诊断，5类绑定/数值及129节点/字体页/引用/几何通过。typed grea01静态verify零诊断；离线逐项核91资产，nodes/components完全一致、resource UUID/meta原字节/非FNT资源字节保持。现在资源已释放，顺序grea native01新段同+28/+30/1200合同，验证同固定脚本UUID、typed目录/原字体页与资源绑定；未物化Prefab/局部节点ID不声称跨fresh相同。
+
+
+Typed grea native01 own73175于19:43:25.973864Z→19:43:43.423979Z正常TERM/reaped，Creator3.8.8 editor pass/0诊断。对照none/grea：91资源UUID及75SpriteFrame身份、脚本UUIDd70c6943-490a-5b7b-bf8a-ca7b490ad126/classIdd70c6lDSQpbe7+KyntJCtEm、5代码组件/数字边界/原字体页/129节点几何/Scene与独立Prefab保存重载保持，比较7门全true。初始未物化Prefab的fresh UUID不同（none09ecace9-6934-4d09-bc3d-956794e27e9d/grea1f486368-acee-4b13-a702-7a636cbd5310），明确不计已保持；已有native迁移仍pending。4格式化语义反例含数值JSON原字节，相关23定向检查通过；Creator verify摘要原先0资产改为实际candidate plan91/75，非native数量推断。详见FORMATTING.md。继续Unity typed格式器/公开编排、native对象身份迁移及其余源用例，不结束v0.2。

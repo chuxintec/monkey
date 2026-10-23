@@ -75,6 +75,13 @@ def main(argv=None):
     p.add_argument('--provider-python', required=True, help='Existing Python with UnityPy 1.25.3; never installed automatically')
     p.add_argument('--out', required=True)
     p.add_argument('--budget-seconds', type=int, default=120)
+    p = sub.add_parser('format-project',help='Preview or apply a typed GREA layout into a fresh unimported Creator candidate')
+    p.add_argument('--project',required=True)
+    p.add_argument('--profile',choices=['grea'],default='grea')
+    pick=p.add_mutually_exclusive_group(required=True)
+    pick.add_argument('--preview',action='store_true')
+    pick.add_argument('--plan')
+    p.add_argument('--out',required=True)
     p = sub.add_parser('project-model', help='Inspect explicit target asset path slots and identity without moving files')
     p.add_argument('--candidate', required=True)
     p.add_argument('--out', required=True)
@@ -142,7 +149,7 @@ def main(argv=None):
     try:
         if args.command == 'capabilities':
             print(json.dumps(dict(version=__version__, profiles=[PROFILE,PROJECT_PROFILE], targetProfiles=[UNITY_PROFILE,cocos.PROFILE],
-                schemaVersion=1, unitySourceProfile=dict(name='unityfs-unitypy-1.25.3-assetripper-2.0.0',status='partial',inputs='explicit-bundle-files-and-exact-local-texture-cache',editor='one-prefab-schema-reference-save-reload-verified',publicNative=False,methodsRecovered=0), implemented=['convert','catalog','inspect','normalize','plan','export','verify','handoff','diff','register','apply','preflight','native-import','research-matrix','code-model','code-emit','project-model','inspect-unity','export-unity','unity-code-model','index-unity','hydrate-unity'], planned=[],
+                schemaVersion=1, formatting=dict(implemented=['creator-unimported-owned-grea-v1'],pending=['unity-formatter','native-materialized-asset-moves','convert-format-orchestration']), unitySourceProfile=dict(name='unityfs-unitypy-1.25.3-assetripper-2.0.0',status='partial',inputs='explicit-bundle-files-and-exact-local-texture-cache',editor='one-prefab-schema-reference-save-reload-verified',publicNative=False,methodsRecovered=0), implemented=['convert','catalog','inspect','normalize','plan','export','verify','handoff','diff','register','apply','preflight','native-import','research-matrix','code-model','code-emit','format-project','project-model','inspect-unity','export-unity','unity-code-model','index-unity','hydrate-unity'], planned=[],
                 targetValidation={UNITY_PROFILE:dict(static='implemented',editor='representative-subset-verified',visual='not_run'),cocos.PROFILE:dict(static='implemented',editor='representative-subset-verified',visual='not_run')},
                 compiledFormats=['compiled-v1','pack-v1','texture-pack-v1'],
                 containerFormats=['plain-wxapkg','APK-ZIP','Cocos-resource-directory'],
@@ -179,6 +186,10 @@ def main(argv=None):
             result = inspect_unity(args.source,args.provider_python,args.out,args.budget_seconds)
             print(json.dumps(result,ensure_ascii=False))
             return 0 if result['status']=='inspected' else 1
+        if args.command == 'format-project':
+            from .formatting import preview as format_preview,apply as format_apply
+            result=format_preview(args.project,args.out)if args.preview else format_apply(args.project,args.plan,args.out)
+            print(json.dumps(result,ensure_ascii=False));return 0 if args.preview else 1
         if args.command == 'project-model':
             from .project_model import inspect as project_model
             print(json.dumps(project_model(args.candidate,args.out),ensure_ascii=False))
@@ -337,8 +348,8 @@ def main(argv=None):
             result = (cocos.verify if profile==cocos.PROFILE else verify)(args.candidate,args.out,args.level)
         else:
             result = handoff(args.candidate,args.out)
-        print(json.dumps(dict(status=result['status'], assets=len(result.get('assets',[])),
-                              spriteFrames=len(result.get('spriteFrames',[])),
+        print(json.dumps(dict(status=result['status'], assets=result.get('counts',{}).get('assets',len(result.get('assets',[]))),
+                              spriteFrames=result.get('counts',{}).get('spriteFrames',len(result.get('spriteFrames',[]))),
                               diagnostics=len(result['diagnostics']), report=str(args.out)+'/manifest.json'), ensure_ascii=False))
         return 1 if result['status'] == 'partial' else 0
     except (ParseError, OSError, ValueError, KeyError, TypeError, IndexError, RecursionError) as error:

@@ -44,9 +44,15 @@ module.exports = {
             const manifest = JSON.parse(manifestRaw);
             const planRaw = fs.readFileSync(path.join(__dirname, 'import-plan.json'));
             const plan = JSON.parse(planRaw);
+            const outputPaths=plan.outputPaths||{scene:'assets/generated/views/Candidate.scene',prefabs:'assets/generated/prefabs',animations:'assets/generated/animations',nativeRoots:['assets/generated']};
+            if(!Array.isArray(outputPaths.nativeRoots)||outputPaths.nativeRoots.length<1||outputPaths.nativeRoots.length>8)throw Error('Invalid native output roots');
+            for(const value of [outputPaths.scene,outputPaths.prefabs,outputPaths.animations,...outputPaths.nativeRoots]) {
+                if(typeof value!=='string'||!value.startsWith('assets/'))throw Error('Invalid typed output path');within(root,value);
+            }
+
             const project = JSON.parse(fs.readFileSync(within(root, 'package.json'), 'utf8'));
             if (manifest.targetProfile !== 'cocos-3.8.8' || project.creator.version !== '3.8.8' || Editor.App.version !== '3.8.8' || project.uuid !== plan.projectUuid || manifest.projectUuid !== project.uuid) throw Error('Wrong Creator/project');
-            if (fs.existsSync(within(root, 'assets/generated/views/Candidate.scene')) || fs.existsSync(within(root, 'Analysis/editor-readback.json'))) throw Error('Native output exists; use a fresh candidate');
+            if (fs.existsSync(within(root, outputPaths.scene)) || fs.existsSync(within(root, 'Analysis/editor-readback.json'))) throw Error('Native output exists; use a fresh candidate');
             // Creator import legitimately edits metas; all original content and glue must still match.
             for (const f of manifest.files) {
                 if (f.path.startsWith('assets/') && f.path.endsWith('.meta')) continue;
@@ -54,10 +60,19 @@ module.exports = {
             }
             for(const a of plan.animations||[])if(a.convertible&&fs.existsSync(within(root,a.path)))throw Error('Animation output exists; use fresh candidate');
             for(const p of plan.sourcePrefabs||[]) {
-                if(!p.path.startsWith('assets/generated/prefabs/')||!p.path.endsWith('.prefab'))throw Error('Unsafe prefab path');
+                if(!p.path.startsWith(outputPaths.prefabs+'/')||!p.path.endsWith('.prefab'))throw Error('Unsafe prefab path');
                 if(fs.existsSync(within(root,p.path)))throw Error('Prefab output exists; use fresh candidate');
             }
             if (!(await req('query-ready'))) throw Error('Asset database not ready');
+            let codeEmission=null;
+            if(manifest.codeEmission) {
+                const spec=manifest.codeEmission;
+                if(typeof spec.scriptPath!=='string'||!spec.scriptPath.startsWith('assets/'))throw Error('Typed script path required');
+                within(root,spec.scriptPath);
+                const info=await req('query-asset-info','db://'+spec.scriptPath);
+                if(!info||info.invalid||info.uuid!==spec.scriptUuid)throw Error('Native code script identity differs');
+                codeEmission={scriptPath:spec.scriptPath,scriptUuid:info.uuid,language:spec.language};
+            }
             const apiTiming={};
             const timedReq=async(message,...args)=>{
                 const start=Date.now();
@@ -119,7 +134,7 @@ module.exports = {
             if (!result || typeof result.serialized !== 'string') throw Error('No native scene serialization');
             const animationAssets=[];
             for(const a of result.animationAssets||[]) {
-                if(!a.path.startsWith('assets/generated/animations/')||!a.path.endsWith('.anim'))throw Error('Unsafe animation path');
+                if(!a.path.startsWith(outputPaths.animations+'/')||!a.path.endsWith('.anim'))throw Error('Unsafe animation path');
                 within(root,a.path);
                 const info=await req('create-asset','db://'+a.path,a.serialized,{overwrite:false,rename:false});
                 if(!info||info.invalid)throw Error('Native animation save failed');
@@ -136,7 +151,7 @@ module.exports = {
                 const dest=within(root,p.path);
                 fs.mkdirSync(path.dirname(dest),{recursive:true});
             }
-            if(expectedPrefabs.size)await timedReq('refresh-asset','db://assets/generated/prefabs');
+            if(expectedPrefabs.size)await timedReq('refresh-asset','db://'+outputPaths.prefabs);
             await batch.map(result.sourcePrefabs||[],8,async p=>{
                 execution.checkpoint('source-prefabs',savedPrefabs.length,(plan.sourcePrefabs||[]).length);
                 const info=await timedReq('create-asset','db://'+p.path,p.serialized,{overwrite:false,rename:false});
@@ -144,7 +159,7 @@ module.exports = {
                 savedPrefabs.push({sourceId:p.sourceId,path:p.path,uuid:info.uuid});expectedPrefabs.delete(p.sourceId);
             });
             execution.checkpoint('candidate-save');
-            const scene = await req('create-asset', 'db://assets/generated/views/Candidate.scene', result.serialized, {overwrite: false, rename: false});
+            const scene = await req('create-asset', 'db://'+outputPaths.scene, result.serialized, {overwrite: false, rename: false});
             if (!scene || scene.invalid) throw Error('Native scene save failed');
             // Re-load saved/imported scene through the engine asset manager, not the in-memory tree.
             execution.checkpoint('native-readback');
@@ -158,9 +173,9 @@ module.exports = {
                     else nativeFiles.push({path: rel, sha256: hash(fs.readFileSync(full))});
                 }
             }
-            collect('assets/generated');
+            for(const folder of outputPaths.nativeRoots)if(fs.existsSync(within(root,folder)))collect(folder);
             const rb = {...saved, assets, sceneUuid:scene.uuid, creatorVersion:Editor.App.version, projectUuid:project.uuid,
-                manifestSha256:hash(manifestRaw), nativeFiles,apiTiming,numericCodeExercise:result.numericCodeExercise||[]};
+                manifestSha256:hash(manifestRaw), nativeFiles,apiTiming,codeEmission,numericCodeExercise:result.numericCodeExercise||[]};
             fs.writeFileSync(within(root,'Analysis/editor-readback.json'),JSON.stringify(rb,null,2)+'\n',{flag:'wx'});
             return {sceneUuid:scene.uuid,nodeCount:rb.nodeCount,editorValidation:'readback-recorded'};
         }

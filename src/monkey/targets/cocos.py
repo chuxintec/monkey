@@ -219,7 +219,7 @@ def verify(candidate,output,level='static'):
     root=safe(candidate);m=stage_manifest(root);diagnostics=[]
     from .layout import translate
     from ..sources.containers import fingerprint
-    path_for=lambda p:translate(p,m.get('pathMap',{}))
+    path_for=lambda p:m.get('pathMap',{}).get(p,p)if m.get('pathMappingMode')=='exact'else translate(p,m.get('pathMap',{}))
     if m.get('targetProfile')!=PROFILE:fail('UNSUPPORTED_CANDIDATE',str(root),'Expected Creator profile')
     native={};editor='not_run'
     if level=='editor':
@@ -301,7 +301,7 @@ def verify(candidate,output,level='static'):
         target=inside(root,f['path']);expected=native.get(f['path'],f['sha256'])
         if not target.is_file() or fingerprint(target)!=expected:diagnostics.append(diagnostic('GENERATED_FILE_CHANGED',f['path'],'Generated file differs'))
     for relative,h in native.items():
-        prefixes=('assets/','Analysis/') if m.get('layout')=='game-standard-v1' else ('assets/generated/','Analysis/')
+        prefixes=('assets/','Analysis/') if m.get('layout')in ('game-standard-v1','grea-typed-v1') else ('assets/generated/','Analysis/')
         if not relative.startswith(prefixes):fail('UNSAFE_NATIVE_FILE',relative,'Unexpected native output')
         p=inside(root,relative)
         if not p.is_file() or fingerprint(p)!=h:diagnostics.append(diagnostic('NATIVE_FILE_CHANGED',relative,'Saved native hash differs'))
@@ -315,5 +315,6 @@ def verify(candidate,output,level='static'):
                 if c.get(field) is not None and c[field] not in ids:diagnostics.append(diagnostic('MISSING_REFERENCE',c['sourceId'],'Missing '+field))
     if any(d['code'] in ('GENERATED_FILE_CHANGED','NATIVE_FILE_CHANGED') for d in diagnostics) and editor=='pass':editor='fail'
     out=new_output(output,[root]);report=dict(schemaVersion=1,toolVersion=__version__,diagnostics=diagnostics,
-        staticValidation='conflict' if any(d['code']!='EDITOR_NOT_RUN' for d in diagnostics) else 'pass',editorValidation=editor)
+        staticValidation='conflict' if any(d['code']!='EDITOR_NOT_RUN' for d in diagnostics) else 'pass',editorValidation=editor,
+        counts=dict(scope='candidate-import-plan',assets=len(plan['assets']),spriteFrames=sum(a['kind']=='sprite'for a in plan['assets']),nodes=len(plan['nodes']),plannedPrefabs=len(plan.get('sourcePrefabs',[]))))
     write_json(out/'verification.json',report);return finish(out,report)
