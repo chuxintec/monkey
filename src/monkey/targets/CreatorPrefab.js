@@ -4,6 +4,7 @@ const cc=require('cc');
 const near=(a,b)=>a.length===b.length&&a.every((v,i)=>Math.abs(v-b[i])<0.001);
 function serialize(plan,nodes) {
     return (plan.sourcePrefabs||[]).map(spec=>{
+        if(plan.nativeDeadlineMs&&Date.now()>=plan.nativeDeadlineMs)throw Error('NATIVE_BUDGET_EXHAUSTED');
         const root=cc.instantiate(nodes.get(spec.root));
         try {
             root.parent=null;

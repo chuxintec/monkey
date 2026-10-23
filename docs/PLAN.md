@@ -4,9 +4,9 @@
 
 ## 当前：full07原生差异收口
 
-Unity实际原生工程为`outputs/acceptance/full07-window-01/UnityProject`：1694独立Prefab、Scene重开和editable roundtrip已完成，Missing Script0；离线回读仍有613几何、834字形、557引用及1项ProjectVersion正规化差异，尚未还原通过。Creator实际失败副本为`outputs/acceptance/full07-creator-window-01/CocosProject`：资产阶段5份fnt页图邻接路径缺失，未执行Prefab/Scene生成。两个自有child均退出释放。
+Unity实际原生工程为`outputs/acceptance/full07-window-01/UnityProject`：1694独立Prefab、Scene重开和editable roundtrip已完成，Missing Script0；离线回读仍有613几何、834字形、557引用及1项ProjectVersion正规化差异，尚未还原通过。Creator full08实际副本为`outputs/acceptance/full08-creator-window-01/CocosProject`：5份fnt页图邻接修复已由原生导入证明，全部生成BitmapFont缓存；界面工具只绑定旧42007，未能调用新进程520的菜单，Prefab/Scene仍未执行。所有本轮自有child均退出释放。
 
-当前成组修复：Creator字体页图同目录并保持UUID；Unity空Sprite字段兼容、源父pivot不依赖配置顺序、未使用TTF保留原生资源、隐藏文字独立原生测量及TMP实测padding对应墨迹范围、全量回执有界读取和原生文件流式SHA。20重复Layout仍待适配；不放宽容差，不以保存成功替代几何/文字/引用。修复验证后生成全新full08，两端顺序自登记≤30分钟原生复验。肥鹅已由用户暂停，无需再等其窗口回执。
+当前成组修复：Creator字体页图同目录并保持UUID；Unity空Sprite字段兼容、源父pivot不依赖配置顺序、未使用TTF保留原生资源、隐藏文字独立原生测量及TMP实测padding对应墨迹范围、全量回执有界读取和原生文件流式SHA。20重复Layout仍待适配；不放宽容差，不以保存成功替代几何/文字/引用。full08 Unity还未运行，保存的旧BitmapFont atlas/material空引用已补硬校验；Creator显式CLI自动执行入口已接入，工程路径/manifest/期限绑定、等asset-db和scene ready后一次调用，默认打开不执行。检查后生成全新full09，两端顺序自登记≤30分钟原生复验。肥鹅已由用户暂停，无需再等其窗口回执。
 
 `outputs/full-foodstreet-07/{UnityProject,CocosProject}`是冻结导出候选；上述acceptance目录才是实际引擎处理过的工程；full01–06及先前窗口是历史结果，均保留。后续来源profile在当前差额收拢后继续。
 
@@ -295,3 +295,9 @@ Creator新独立outputs/acceptance/full07-creator-window-01，接管09:40:41Z，
 16dbbb7已生成full08双目标；Creator manifest eeb9718a6b828b3d7d30cbe2ef61275ef7c4bd93692d265730067cc59297965c，static/name/routing通过，IR非名称不变。当前Creator新窗口outputs/acceptance/full08-creator-window-01，接管10:10:08Z、内部10:38:08Z/外层10:40:08Z；无Unity主进程、旧Creator42007低活动，正常审批后启动自有child，先核实际导入再调用方法。
 
 审阅full07真实native-page.png发现白色字块，5个保存的BitmapFont atlas及material主纹理引用为0；旧字形几何回读未覆盖纹理GUID。full08 Unity不启动，保留中间候选。新增强同步atlas导入、版本/material/atlas一起初始化、保存后GUID硬校验及回读验证；C#编译/负面引用测试已通过，需新Unity候选验证，不能只因702个ink几何匹配即称视觉正确。
+
+## 2026-10-23 Creator CLI调用缺口
+
+full08 own520已在10:15:39Z正常TERM exit-15/reap释放；5份font imported=true且有library UUID.json，缺页图根因已由原生证明解决。CUA只绑定旧42007，不调用错工程菜单；未生成Prefab/Scene。
+
+新增CreatorExecution显式执行器与native_creator host：仅CLI --execute设置专属环境，严格绑定新副本路径/manifest，等待本机Creator3.8.8公开asset-db.query-ready与scene.query-is-ready；deadline/方法预算、结构化进度与首错回执、normal TERM own child、原生后离线验证。普通打开/手工工程不自动执行。API依据为本机app.asar的builtin/scene/package.json及asset-db/package.json公开消息，官方扩展load生命周期；未改引擎。定向测试涵盖默认不执行、错误工程拒绝、成功/失败/超时、源漂移拒绝、只结束自己child与journal失败回收；真实自动调用尚待full09。

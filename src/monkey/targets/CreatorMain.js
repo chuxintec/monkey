@@ -3,6 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const execution=require('./execution.js');
 const hash = data => crypto.createHash('sha256').update(data).digest('hex');
 const req = (message, ...args) => Editor.Message.request('asset-db', message, ...args);
 function within(root, relative) {
@@ -17,7 +18,7 @@ function within(root, relative) {
     return dest;
 }
 module.exports = {
-    load() {}, unload() {},
+    load() {execution.start(()=>module.exports.methods.importCandidate()).catch(error=>console.error('MONKEY_NATIVE_BOOTSTRAP_FAILED: '+String(error.message||error).slice(0,1024)));}, unload() {execution.stop();},
     methods: {
         async importCandidate() {
             const root = path.resolve(Editor.Project.path);
@@ -41,6 +42,7 @@ module.exports = {
             if (!(await req('query-ready'))) throw Error('Asset database not ready');
             const assets = [];
             for (const a of plan.assets) {
+                execution.checkpoint('textures',assets.length,plan.assets.length);
                 const url = 'db://' + a.path;
                 await req('refresh-asset', url);
                 let info = await req('query-asset-info', url);
@@ -64,7 +66,9 @@ module.exports = {
                     assets.push({...a, spriteFrameUuid: sf.uuid, textureUuid: texture.uuid});
                 } else assets.push({...a});
             }
-            const options = {name: 'monkey-import', method: 'assemble', args: [{...plan, assets}]};
+            execution.checkpoint('hierarchy',0,plan.nodes.length);
+            const nativeDeadlineMs=execution.deadlineMs();
+            const options = {name: 'monkey-import', method: 'assemble', args: [{...plan, assets,nativeDeadlineMs}]};
             const result = await Editor.Message.request('scene', 'execute-scene-script', options);
             if (!result || typeof result.serialized !== 'string') throw Error('No native scene serialization');
             const animationAssets=[];
@@ -79,6 +83,7 @@ module.exports = {
             const expectedPrefabs=new Map((plan.sourcePrefabs||[]).map(p=>[p.sourceId,p]));
             if((result.sourcePrefabs||[]).length!==expectedPrefabs.size)throw Error('Prefab serialization count mismatch');
             for(const p of result.sourcePrefabs||[]) {
+                execution.checkpoint('source-prefabs',savedPrefabs.length,(plan.sourcePrefabs||[]).length);
                 const spec=expectedPrefabs.get(p.sourceId);
                 if(!spec||p.path!==spec.path||typeof p.serialized!=='string')throw Error('Unexpected prefab serialization');
                 const dest=within(root,p.path);
@@ -88,10 +93,12 @@ module.exports = {
                 if(!info||info.invalid)throw Error('Native prefab save failed: '+p.sourceId);
                 savedPrefabs.push({sourceId:p.sourceId,path:p.path,uuid:info.uuid});expectedPrefabs.delete(p.sourceId);
             }
+            execution.checkpoint('candidate-save');
             const scene = await req('create-asset', 'db://assets/generated/views/Candidate.scene', result.serialized, {overwrite: false, rename: false});
             if (!scene || scene.invalid) throw Error('Native scene save failed');
             // Re-load saved/imported scene through the engine asset manager, not the in-memory tree.
-            const saved = await Editor.Message.request('scene', 'execute-scene-script', {name:'monkey-import',method:'readSaved',args:[scene.uuid,{...plan,assets,animationAssets,savedPrefabs}]});
+            execution.checkpoint('native-readback');
+            const saved = await Editor.Message.request('scene', 'execute-scene-script', {name:'monkey-import',method:'readSaved',args:[scene.uuid,{...plan,assets,animationAssets,savedPrefabs,nativeDeadlineMs}]});
             const nativeFiles = [];
             function collect(relative) {
                 const folder = within(root, relative);

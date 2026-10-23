@@ -4,6 +4,7 @@ const cc = require('cc');
 const motion=require('./animation.js');
 const prefabs=require('./prefab.js');
 const color = a => new cc.Color(...a);
+const checkTime=plan=>{if(plan.nativeDeadlineMs&&Date.now()>=plan.nativeDeadlineMs)throw Error('NATIVE_BUDGET_EXHAUSTED');};
 const loadAsset = (uuid, type) => new Promise((resolve,reject) => cc.assetManager.loadAny({uuid}, (e,a) => {
     if (e) reject(e); else if (!(a instanceof type)) reject(Error('Unexpected native asset type: '+uuid)); else resolve(a);
 }));
@@ -32,6 +33,7 @@ module.exports = {
                 const native=new Map();
                 for(const a of plan.assets) native.set(a.sourceId,await loadAsset(a.kind==='sprite'?a.spriteFrameUuid:a.uuid,a.kind==='sprite'?cc.SpriteFrame:a.kind==='json'?cc.JsonAsset:cc.Font));
                 for(const n of plan.nodes) {
+                    checkTime(plan);
                     const node=new cc.Node(n.name);node.layer=cc.Layers.Enum.UI_2D;nodes.set(n.sourceId,node);
                     node.setPosition(...n.position);node.setRotation(new cc.Quat(...n.rotation));node.setScale(...n.scale);
                     const ui=node.addComponent(cc.UITransform);ui.setContentSize(...n.size);ui.setAnchorPoint(...n.anchor);
@@ -44,6 +46,7 @@ module.exports = {
                 for(const n of plan.nodes)for(let i=0;i<n.children.length;i++)nodes.get(n.children[i]).setSiblingIndex(i);
                 const nativeRefs=[];
                 for(const c of plan.components) {
+                    checkTime(plan);
                     if(!c.convertible || c.type==='cc.LabelOutline')continue;
                     const node=nodes.get(c.node);const source=plan.nodes.find(n=>n.sourceId===c.node);let comp;
                     if(c.type==='cc.Sprite') {
@@ -137,6 +140,7 @@ module.exports = {
             }
             const sourcePrefabs=[];
             for(const spec of plan.sourcePrefabs||[]) {
+                checkTime(plan);
                 const info=(plan.savedPrefabs||[]).find(p=>p.sourceId===spec.sourceId);
                 if(!info)throw Error('Saved prefab identity absent');
                 sourcePrefabs.push(prefabs.read(await loadAsset(info.uuid,cc.Prefab),spec,plan,info));

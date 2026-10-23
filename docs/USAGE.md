@@ -291,3 +291,16 @@ bin/monkey convert --input-set inputs.json --target both --namespace SAME_NAMESP
 ```
 
 只接受完全相同的输入路径/字节/SHA及namespace；阶段owner清单和实际文件需全部一致，且算法为当前或明确支持的names-v1元数据迁移（838d05b）。旧候选只读，新的SourceRecovery初稿按RF/模块原名重新组织，不合并旧候选中的人工业务修改。像素缓存只作不可改写的数据复用；引用、meta、manifest和handoff随新路径重新生成。任一身份/算法/文件漂移直接拒绝，不静默跳过。原生回读仍需实际新窗口。
+
+## Creator原生CLI执行
+
+新生成的Creator候选可复用同一`native-import`入口，Editor按显式路径选择；计划默认不启动，实际执行须`--execute`：
+
+```sh
+bin/monkey native-import --candidate outputs/game/CocosProject --out outputs/acceptance/game-creator-new \
+  --editor-path /Applications/Cocos/Creator/3.8.8/CocosCreator.app/Contents/MacOS/CocosCreator \
+  --expected-manifest MANIFEST_SHA256 --budget-seconds 1200 \
+  --deadline-utc INTERNAL_UTC --window-end-utc OUTER_UTC --execute
+```
+
+严格核验源候选后复制到全新CocosProject，仅本次child收到绑定路径/manifest的执行标志；等资产库和Scene就绪后调用一次原生导入。普通打开工程不自动执行。进度/首错/执行结果在acceptance目录，保存后核实际文件SHA和原生回读；退出0不等于原生通过。旧候选没有新执行入口时明确拒绝，应重新生成，不能借用其他已打开工程。当前实现已离线定向验证，真实端到端自动执行仍待验收。

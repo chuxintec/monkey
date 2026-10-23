@@ -59,6 +59,9 @@ def redact_log(path):
 
 
 def native_import(candidate,output,editor,expected_manifest,budget_seconds,deadline_utc,window_end_utc,execute=False):
+    if Path(editor).name in ('CocosCreator','CocosCreator.exe'):
+        from .native_creator import native_import as creator_import
+        return creator_import(candidate,output,editor,expected_manifest,budget_seconds,deadline_utc,window_end_utc,execute)
     if execute and threading.current_thread() is not threading.main_thread():raise ValueError('Native execution requires the CLI main thread for safe signal handling')
     deadline,end=utc(deadline_utc),utc(window_end_utc)
     if type(budget_seconds) is not int or not 1<=budget_seconds<=3600:raise ValueError('Method budget must be 1..3600 seconds')
