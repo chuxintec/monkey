@@ -361,3 +361,7 @@ Unity布局稳定探针05新登记：锚点14:07:45Z，内部14:35:45Z/外层14:
 Unity探针05 own19228已exit0/reap，方法2.607秒；7 Prefab/413节点严格新增回读得到Scene NODE5、独立Prefab几何9，7份字体/Sprite/内部组件引用全部通过。实际UI稳定过程解决所选nested父size/childposition主差额，不追认全量243已解决。剩下source Banner无活动孩子319→0、空负spacing content145→153；根Widget隔离Prefab缺父尺寸→0；inactive Upon缓存1334被native anchor即时拉伸1440。
 
 这些区别并非放宽比较：新增EMPTY_LAYOUT_HANDOFF保留空布局几何待动态内容adapter；全拉伸Widget必须有源父级且烘焙几何与源父/边距一致，缺父级/停用缓存差异分别显式WIDGET_PARENT_CONTEXT_REQUIRED/WIDGET_CACHED_GEOMETRY_HANDOFF。已有转换组件减少会单独报告，不把handoff算行为恢复。Probe06仍7图413节点，manifestd203d620ef86980569c239e843a719806ef351da9a00e08535b3b8e4642ff2f3，static pass，9项相关检查通过；C#未再改、沿用已核compile。宿主进度同时补已有components显式阶段，未知阶段仍拒绝。Creator10 static/name/routing已全部pass、身份稳定、源非命名IR不变。
+
+Unity边界探针06新登记：锚点14:12:09Z，内部14:40:09Z/外层14:42:09Z，方法1200秒；ps无主引擎冲突，仅新acceptance/native-font-geometry-probe-06，固定manifestd203d620ef86980569c239e843a719806ef351da9a00e08535b3b8e4642ff2f3，不顺延。
+
+Unity06 own19932已exit0/reap，7原图413节点的root Widget隔离上下文、空布局和inactive Widget反例按明示handoff闭合；剩仅OrderDrawerWindow一图Scene3/Prefab3。实际Banner的唯一活动孩子bigday.banner尺寸0x0，而父缓存319高（待原生广告内容填充），不是source child缺失。新增LAYOUT_CACHED_CONTAINER_HANDOFF：源线性容器缓存extent不等于明确活动子尺寸/边距/间距时保留源几何，待动态内容/lifecycle适配，不能用0高fitter覆盖。6项相关语义检查通过。下一集中Unity11应用，不为单字段再次冷跑小探针。Creator10三项离线核对通过，准备已批准全量独立窗口。

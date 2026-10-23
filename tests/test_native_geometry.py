@@ -68,6 +68,14 @@ assert.strictEqual(rejected,true);assert.deepStrictEqual(started,[0,1]);
         # anchors would resize it even before activation; this needs an adapter.
         self.assertFalse(widget_geometry_matches(widget,node,dict(size=[750,1440],anchor=[.5,.5])))
 
+    def test_dynamic_placeholder_is_not_a_zero_height_native_container(self):
+        from monkey.targets.unity_layout import linear_container_matches
+        layout=dict(layoutType=2,padding=[0,0,0,0],spacingXY=[0,0])
+        children=[dict(size=[0,0],active=True)]
+        self.assertFalse(linear_container_matches(layout,dict(size=[612,319]),children))
+        children[0]['size']=[612,319]
+        self.assertTrue(linear_container_matches(layout,dict(size=[612,319]),children))
+
     @unittest.skipUnless(shutil.which('node'),'Node unavailable')
     def test_prefab_collects_all_geometry_differences_without_claiming_verified(self):
         adapter=Path(__file__).resolve().parents[1]/'src/monkey/targets/CreatorPrefab.js'

@@ -12,6 +12,14 @@ def widget_geometry_matches(widget, node, parent):
             all(abs(a-b)<.001 for a,b in zip(position,node['position'])))
 
 
+def linear_container_matches(layout, parent, children):
+    axis=0 if layout['layoutType']==1 else 1
+    children=[child for child in children if child['active']]
+    before,after=((layout['padding'][0],layout['padding'][2]) if axis==0 else (layout['padding'][1],layout['padding'][3]))
+    extent=before+after+sum(child['size'][axis] for child in children)+max(0,len(children)-1)*layout['spacingXY'][axis]
+    return abs(extent-parent['size'][axis])<.001
+
+
 def cross_axis_mapping(layout, parent, children):
     # Creator linear layouts leave the other axis untouched. uGUI drives both axes;
     # only a shared, representable alignment is safe to emit as a standard group.

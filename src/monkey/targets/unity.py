@@ -211,6 +211,13 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
                 entry['convertible']=False
                 diagnostics.append(diagnostic('EMPTY_LAYOUT_HANDOFF',c['sourceId'],
                     'Empty source container size/negative spacing differs from uGUI empty fitter; preserve source geometry pending dynamic-content adapter',c['sourceId']))
+            elif entry['convertible'] and c['enabled'] and c['layoutType'] in (1,2):
+                from .unity_layout import linear_container_matches
+                parent=by_node[c['node']]
+                if not linear_container_matches(c,parent,[by_node[k] for k in parent['children']]):
+                    entry['convertible']=False
+                    diagnostics.append(diagnostic('LAYOUT_CACHED_CONTAINER_HANDOFF',c['sourceId'],
+                        'Cached source extent differs from declared active child sizes; preserve geometry pending dynamic-content/lifecycle evidence',c['sourceId']))
         elif c['type']=='cc.Button':
             if c['transition'] not in (0,3) or c['target'] not in (None,c['node']):
                 entry['convertible']=False
