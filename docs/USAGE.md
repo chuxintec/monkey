@@ -1,3 +1,7 @@
+# v0.1 命令说明
+
+正式工具版本v0.1，Python包0.1.0；`monkey --version`和`monkey capabilities --json`可核对。旧0.3.0.dev1为内部开发候选编号，旧证据不改写；跨toolVersion的resume/reuse按原身份合同拒绝，需明确新输出，不静默改旧候选。
+
 # 一键工程转换
 
 产品目标规则：Cocos全部版本原包可选Unity6/Cocos3.8.8/both；Unity、Laya/LayaAir、Egret、自研与其他引擎全部版本原包仅以Unity6为目标。当前实际解析子集见[支持矩阵](SUPPORT-MATRIX.md)，未接入来源不能据以下命令视为已还原。

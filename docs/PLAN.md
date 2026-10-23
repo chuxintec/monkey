@@ -2,17 +2,17 @@
 
 完工/阻塞/交付与续推按[DIRECTOR-CONTINUATION](/Users/wangmeng/Documents/Manager/standards/DIRECTOR-CONTINUATION.md)执行；本聊天已原生核验人类授权`01a166b4-5c18-78f3-8cc2-c0d07dd46a20`，总监路由`01a14c8c-6402-7d03-bab8-ec7ea8051abf`。更新本PLAN后以稳定事件ID报告，已批准就绪下一包连续推进，不因报告或普通ACK停下。
 
-## 当前：full14 单命令双端原生强回读零诊断，继续 U 来源适配
+## 当前：v0.1 发布准备，v0.2 先设计后开发
 
-公开 convert --remote-manifest --native 全链实际完成，native-orchestration=completed_native_stages。Unity own53301 16:35:36Z→16:46:23Z exit0/reap，方法475.455秒；Creator own55108 16:47:06Z→16:57:09Z normal TERM exit-15/reap，方法520.029秒。顺序运行且各自≤30分钟、未延钟；两端强 verification diagnostics=0，Unity editor=partial（源行为缺口），Creator editor=pass。每端1694独立Prefab、24784 Scene节点均保存重开并完整几何/Scale/Quaternion/引用回读；Unity16934 Sprite/16字体/1006Label/10508 View引用、MissingScript0，Creator16939帧/16978资产/5位图页/12568组件。实际证据见validation/2026-10-24-full14-single-command.md。
+已原生核验用户新授权：总监turn01a169b8-b15c-7ec2-964b-63b9f7c9614b / human01a169b8-b2d8-7d71-8dcf-06f470bfe371。创建私有chuxintec/monkey、提交推送main及v0.1并发布Release，Python版本0.1.0；覆盖此前禁止发布边界。只工具源码/可分发依赖/文档及wheel+sdist+SHA，不含私有游戏/outputs/缓存/玩家档。原生full14复用，不为版本号再跑Editor。后续授权不推定到其他仓库/服务。
 
-全输入17201文件/884709704B逐项入账，16627声明CDN/799052150B缓存SHA全部匹配、无新增GET；静态双端/name/routing核对零问题。未知地址和先前7HTTP404仍缺口。SourceNormalize/IR及资源原hash保留，未重读源/像素/AST。原件/肥鹅产品服务存档/GREA只读。full13及旧失败保持冻结，不追认。
+70e4a3e为已完成full14证据点。全输入17201文件/884709704B，16627 CDN/799052150B缓存SHA匹配；两端各1694独立Prefab/24784节点保存重开、完整geometry/引用强verify零诊断，Unity资源partial/Creator资源pass，详情validation/2026-10-24-full14-single-command.md。914业务占位初稿、部分动态行为/Spine播放/视觉交互仍未完成，未宣称整游戏或全版本通过。旧0.3.0.dev1包/候选/失败回执不改身份。
 
-原生资源出口完成不等于整游戏交付：1006 Creator Label CLAMP与18 Sprite CUSTOM保留烘焙几何及原始overflow/sizeMode，同时列动态尺寸行为handoff；Unity Grid以uGUI原生Flexible+Preferred及layoutPriority扩展处理。业务源码914初稿、缺失引用1521、Spine播放/原版视觉/真实交互仍未验收。CLI completed=true表示候选流程完成，仍needs_action/exit1。
+已检查main可达51提交/412历史blob/117历史路径，无.private/outputs/凭据特征/大blob异常，精确回执在.private/v01-release-audit。GitHub实际账号chuxintec，新仓库存在性检查未发现。版本/分发许可/安装说明已收拢，9项定向CLI/编排测试通过；wheel55条目、sdist124条目均核对，隔离已安装模块完成7合成文件→双端候选且CLI/capabilities均0.1.0。正在创建仓库/推送/Release；尚未发布成功，不提前报URL。
 
-本地CLI wheel 0.3.0.dev1已构建、ZIP检查包含导入器/JS解析器/许可证而无私有样本；隔离target安装后从非源码cwd用已安装模块完成合成wxapkg→双端全文件候选，退出与缺口语义符合合同。dist/full14-local/BUILD.json记录哈希与回执；仅本地开发候选，未发布/全局安装。
+Unity typed reader首个实验及3项身份/二进制反例已运行；启动数据严格1497/1603 parsed、106缺类型失败；3远程Bundle共1947对象严格读全、PPtr64用十进制字符串。草稿已stash单独保留，未混v0.1、未宣称Unity6工程通过。AssetRipper自有API探针正常退出，没有留运行服务或修改GREA。v0.2先docs/V0.2-PLAN.md审阅，再恢复/实施，不因旧U批准绕过新设计门。
 
-产品范围所有Cocos原包→Unity6/Creator3.8.8/both；所有Unity、Laya/LayaAir、Egret、自研/其他原包→Unity6。现有结构reader仍Cocos2.4.15子集，不以范围代替支持。当前正式继续已批准U《向僵尸开炮》Unity来源→Unity6，再C《下方了》3.8.7→双端；复用现有固定provider、建立独立typed/PPtr64身份，不执行未知源代码。不新Agent/全局安装/付费模型/推送/发布。
+v0.2方案已列实际11Research游戏与未知/缺源状态、独立Unity/Cocos3/旧格式reader、具名C#/实际JS及有据语义/引用合同、--format none|grea（默认none）导出后处理、typed路径/身份/动态key、preview/新输出/人工冲突保护与逐层验收。待提交具体方案给总监核对；不新Agent/改GREA/恢复肥鹅/全局安装。
 
 ## 历史依据与全量候选记录
 

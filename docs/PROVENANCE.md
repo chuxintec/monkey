@@ -5,7 +5,7 @@
 - 发布图标和奖励窗口样本只读取肥鹅已冻结 package/CDN 文件；每次 inspect 保留来源路径、版本选择、字节数、SHA-256，normalize 再核验。真实清单位于本项目 `.private/`，原件未写。
 - [Pillow](https://pypi.org/project/pillow/12.2.0/) 固定 12.2.0。[texture2ddecoder](https://pypi.org/project/texture2ddecoder/1.0.6/) 固定 1.0.6 可选，仅使用 ASTC decode；BGRA→RGBA 按[作者文档](https://github.com/K0lb3/texture2ddecoder)处理。来源为 PyPI 官方索引，依赖安装只在本项目 `.venv`。未启用 PVRTC 等其他 codec。
 - Unity profile 来自只读核对现有 6000.6.2f1 与 uGUI 2.0.0 清单。编译校验使用现有 Unity 引擎/Editor DLL 和现有 uGUI/TMP DLL，不复制这些 DLL 到产品，不运行原游戏或 Editor。此证据仅证明 adapter API/类型可编译。
-- 本轮无远端仓库、推送、发布、全局安装、引擎安装或付费生成。Python 最低 3.11 的跨版本实测仍未执行；当前宿主为 3.14.7。
+- 早期开发阶段无远端发布；2026-10-24用户另行授权创建私有仓库和Release v0.1。实际发布身份见对应发布回执。无全局安装、引擎安装或付费生成。Python最低3.11跨版本实测仍未执行；当前宿主为3.14.7。
 
 CONTINUE-01新增依据：冻结主包game.js的zh字体选择经人工只读核对，绑定JSON带整文件hash、字节范围及匹配source-manifest hash；没有执行或复制业务JS到产品。原TTF的字形覆盖由本项目标准库SFNT cmap4/12预检，渲染仍交给Unity原生字体接口。BitmapFont的逻辑字框及未缩放字距差异通过原字段和独立反例核对，转换器不嵌入Cocos运行时。
 

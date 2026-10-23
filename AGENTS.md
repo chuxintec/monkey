@@ -26,3 +26,9 @@
 用户本聊天最新补充范围：Cocos所有版本原包→Unity6/Cocos3.8.8/both；Unity、Laya/LayaAir、Egret（用户写作Eraget）、自研/其他引擎原包→Unity6。逐来源实现，不以范围代替已验证能力，当前肥鹅与U/C顺序保持。
 
 2026-10-23新增直接人类授权已原生核验：总监turn01a1680e-4f9f-7ea0-bebe-fd7c7bb513b3/message01a16811-5561-7060-b381-bb89e4ee4e8f。肥鹅已暂停，monkey可在只读确认无实际资源冲突后自行登记每次≤30分钟原生段（方法1200秒、内部截止留至少2分钟），顺序Unity→Creator；仅自有副本与child，首新失败停重试并离线修复，无依据不冷启动。不再等待肥鹅窗口回执，不关闭其他项目进程/服务/存档。
+
+## 2026-10-24 正式发布与 v0.2 设计门（覆盖旧发布禁令）
+
+用户直接授权已原生核验：总监turn01a169b8-b15c-7ec2-964b-63b9f7c9614b / human01a169b8-b2d8-7d71-8dcf-06f470bfe371。先创建私有chuxintec/monkey，提交/正常推送工具源码与文档，正式tag/Release v0.1（Python0.1.0），附件wheel/sdist/SHA；不上传游戏原件/私有样本/outputs/缓存/存档，不force或移动旧tag，不修改其他仓库/服务。需精确暂存清单、main可达历史/分发内容核验、GitHub API+ls-remote回读。旧0.3.dev证据不反向改写。
+
+v0.2先完成docs/V0.2-PLAN.md供总监核对，审阅通过后才实现；覆盖Research全部动态样本、可接续C#及实际JS、有据语义与可选--format none|grea后处理。发布v0.1后从不可变点开本地codex/v0.2；当前Unity来源实验stash保留但不混v0.1、不提前恢复。详细边界见Manager/decisions/20261024-monkey-v01-v02/PLAN.md。原生资源窗口/自有child/不改GREA与暂停游戏边界继续。

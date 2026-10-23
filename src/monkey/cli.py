@@ -14,6 +14,7 @@ from pathlib import Path
 
 def main(argv=None):
     parser = argparse.ArgumentParser(prog='monkey')
+    parser.add_argument('--version', action='version', version='%(prog)s ' + __version__)
     sub = parser.add_subparsers(dest='command', required=True)
     cap = sub.add_parser('capabilities')
     cap.add_argument('--json', action='store_true')

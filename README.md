@@ -1,6 +1,19 @@
 # monkey
 
-Python 驱动的原包恢复工程命令行工具。产品目标：Cocos各版本原包→Unity6/Cocos3.8.8/both；Unity、Laya/LayaAir、Egret、自研及其他引擎原包→Unity6。按来源逐步实现，当前结构化reader仍限已验证的Cocos2.4.15子集。wxapkg/APK/已取得资源集合一键生成独立工程，含全部输入资源、恢复源码与目标代码初稿，交给AI继续开发。当前为 **0.3.0.dev1 本地开发候选**，没有发布。
+Python 驱动的原包恢复工程命令行工具。产品目标：Cocos各版本原包→Unity6/Cocos3.8.8/both；Unity、Laya/LayaAir、Egret、自研及其他引擎原包→Unity6。按来源逐步实现，当前结构化reader仍限已验证的Cocos2.4.15子集。wxapkg/APK/已取得资源集合一键生成独立工程，含全部输入资源、恢复源码与目标代码初稿，交给AI继续开发。当前正式工具版本为 **v0.1（Python 包 0.1.0）**。已验证的原生资源恢复范围和业务缺口见下文；其他源引擎按 [v0.2 设计](docs/V0.2-PLAN.md)推进。
+
+## 安装与依赖
+
+Python 3.11+（本次实测3.14.7），基础依赖固定Pillow12.2.0。发布附件提供wheel和源码分发包：
+
+```sh
+python3 -m venv .venv
+.venv/bin/python -m pip install ./monkey_native-0.1.0-py3-none-any.whl
+.venv/bin/monkey --version
+.venv/bin/monkey capabilities --json
+```
+
+源码使用`bin/monkey`；安装包使用环境内`monkey`，两者同一CLI。JS模块静态解析需要已安装的Node.js；Acorn解析器和许可证随包提供。可选ASTC解码器固定texture2ddecoder1.0.6。原生导入需已有Unity6000.6.2f1或Creator3.8.8；工具不自动安装编辑器，也不把编辑器/游戏原件打入发行包。
 
 ## 一条命令转换
 
