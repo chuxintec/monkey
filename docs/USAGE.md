@@ -278,7 +278,7 @@ bin/monkey native-import --candidate outputs/game/UnityProject \
 
 宿主新建副本后直接启动已指定Editor的batchmode，固定`ImportBatchAsync`且不带`-quit`，等待包完成事件继续。`unity run`固定带`-quit`，不能用于这一异步入口。成功/失败/预算结束由薄层退出，宿主保存真实PID与退出状态，外层必要时仅普通terminate自己的child，无hard kill；未退出明确报attention。`execution-result.json`和`Verification/`分开记录启动、资源、原生回读和来源缺口。
 
-这是生成工程的可选原生验收阶段；没有--execute时不会启动引擎。新执行路径尚待实际窗口验证，进度或模拟测试不构成引擎通过。
+这是生成工程的可选原生验收阶段；没有--execute时不会启动引擎。Unity已实际完成代表样本导入、独立Prefab/Scene保存重开和回读；每个新工程仍须核验自己的结果，不能沿用样本通过状态。
 
 ## 原名恢复与受校验重新规划
 
@@ -303,4 +303,18 @@ bin/monkey native-import --candidate outputs/game/CocosProject --out outputs/acc
   --deadline-utc INTERNAL_UTC --window-end-utc OUTER_UTC --execute
 ```
 
-严格核验源候选后复制到全新CocosProject，仅本次child收到绑定路径/manifest的执行标志；等资产库和Scene就绪后调用一次原生导入。普通打开工程不自动执行。进度/首错/执行结果在acceptance目录，保存后核实际文件SHA和原生回读；退出0不等于原生通过。旧候选没有新执行入口时明确拒绝，应重新生成，不能借用其他已打开工程。当前实现已离线定向验证，真实端到端自动执行仍待验收。
+严格核验源候选后复制到全新CocosProject，仅本次child收到绑定路径/manifest的执行标志；等资产库和Scene都返回true后调用一次原生导入。普通打开工程不自动执行。进度/首错/执行结果在acceptance目录，保存后核实际文件SHA和原生回读；退出0不等于原生通过。旧候选没有新执行入口时明确拒绝，应重新生成，不能借用其他已打开工程。真实3源图/76节点样本已完成16原字体、3独立Prefab和Scene保存重载，几何/内部引用核对及editor/static验证通过；全量、原版视觉和游戏业务尚未通过。
+
+## 一次调用完成生成和原生阶段
+
+```sh
+bin/monkey convert --input-set inputs.json --target both --out outputs/game \
+  --native --unity-editor /path/to/Unity --creator-editor /path/to/CocosCreator \
+  --native-out outputs/game-native --native-budget-seconds 1200
+```
+
+适用于全新包级转换；`--source game.wxapkg`/APK/资源目录也可。单目标只提供对应Editor；指定的文件必须是已安装的相应可执行文件，不安装引擎。输入、候选与原生输出不能重叠，原生目录已存在则在转换前拒绝。
+
+每个Editor在开始自身阶段时固定28分钟内部截止及30分钟外部截止，预留2分钟正常退出，不顺延当前阶段。Unity→Creator串行，前者未退出、方法错误或有回读差异时停止；只有明确的源组件缺口且回读零差异时可继续下一端。两端完整运行的总时间可能超过30分钟。默认不带`--native`只生成候选；`--native`不能与`--offline`、`--resume`或slice recipe组合。
+
+`conversion-result.json`保留生成事实；独立原生根目录的`native-orchestration.json`记录顺序与阶段结果，每个子目录保存实际工程、执行结果及Verification。`completed_native_stages`只表示原生阶段执行完，源组件、原版视觉和业务缺口继续保留，不能据此宣称完整游戏转换。通用远程获取仍未接入，不会凭空补齐未提供的CDN包。

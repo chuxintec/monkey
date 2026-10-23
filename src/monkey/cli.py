@@ -36,7 +36,12 @@ def main(argv=None):
     p.add_argument('--evidence-source', action='append', default=[])
     p.add_argument('--bindings')
     p.add_argument('--animation', action='append')
-    p = sub.add_parser('native-import',help='Plan or explicitly execute a bounded async Unity import in a fresh copy')
+    p.add_argument('--native', action='store_true', help='After fresh package conversion, execute sequential bounded native imports')
+    p.add_argument('--native-out', help='Fresh separate native workspace; default OUTPUT-native')
+    p.add_argument('--unity-editor', help='Exact installed Unity executable for --native')
+    p.add_argument('--creator-editor', help='Exact installed CocosCreator executable for --native')
+    p.add_argument('--native-budget-seconds', type=int, default=1200, help='Method budget per Editor, 1..1200; each window is at most 30 minutes')
+    p = sub.add_parser('native-import',help='Plan or explicitly execute a bounded Unity/Creator import in a fresh copy')
     p.add_argument('--candidate',required=True);p.add_argument('--out',required=True)
     p.add_argument('--editor-path',required=True);p.add_argument('--expected-manifest',required=True)
     p.add_argument('--budget-seconds',type=int,default=600);p.add_argument('--deadline-utc',required=True)
@@ -87,16 +92,20 @@ def main(argv=None):
         if args.command == 'capabilities':
             print(json.dumps(dict(version=__version__, profiles=[PROFILE,PROJECT_PROFILE], targetProfiles=[UNITY_PROFILE,cocos.PROFILE],
                 schemaVersion=1, implemented=['convert','catalog','inspect','normalize','plan','export','verify','handoff','diff','register','apply','preflight','native-import'], planned=[],
-                targetValidation={UNITY_PROFILE:dict(static='implemented',editor='not_run',visual='not_run'),cocos.PROFILE:dict(static='implemented',editor='not_run',visual='not_run')},
+                targetValidation={UNITY_PROFILE:dict(static='implemented',editor='representative-subset-verified',visual='not_run'),cocos.PROFILE:dict(static='implemented',editor='representative-subset-verified',visual='not_run')},
                 compiledFormats=['compiled-v1','pack-v1','texture-pack-v1'],
                 containerFormats=['plain-wxapkg','APK-ZIP','Cocos-resource-directory'],
                 packageWorkflow=dict(fileAccounting='implemented',staticModuleRecovery='partial',codeDrafts='source-linked-contracts',
-                                     nativeObjectRecovery='shared-ir-supported-subset',packageResume='hash-checked',inputSets='explicit-local-roots',editorOrchestration='not_implemented'),
+                                     nativeObjectRecovery='shared-ir-supported-subset',packageResume='hash-checked',inputSets='explicit-local-roots',editorOrchestration='manifest-bound-native-import-command',remoteAcquisition='not_implemented'),
                 imageFormats=['PNG','JPEG','ASTC (optional pinned decoder)'],animationSchemaVersion=1,
-                animationSubset=['local-position','local-scale','opacity','linear','constant-step','Normal','Loop'],animationEvents='manual-contract-only', targetEditorValidation='not_run'), ensure_ascii=False))
+                animationSubset=['local-position','local-scale','opacity','linear','constant-step','Normal','Loop'],animationEvents='manual-contract-only', targetEditorValidation='representative-subsets-only'), ensure_ascii=False))
             return 0
         if args.command == 'convert':
             from .convert import convert, resume, recipe
+            if not args.native and any((args.native_out,args.unity_editor,args.creator_editor,args.native_budget_seconds!=1200)):
+                parser.error('native options require --native')
+            if args.native and (args.offline or args.resume or args.recipe):
+                parser.error('--native requires a fresh package conversion and cannot combine with --offline/--resume/--recipe')
             if args.reuse_source_stages and not args.input_set:parser.error('--reuse-source-stages requires --input-set and fresh --out')
             if args.resume and args.input_set:
                 if any((args.source,args.target,args.out,args.recipe,args.asset_index,args.all_assets,args.bindings,
@@ -115,12 +124,27 @@ def main(argv=None):
                         args.dependency_source,args.evidence_source,args.bindings,args.animation,args.source_profile)):
                     parser.error('package conversion requires --source/--target/--out; slice options are unsupported')
                 from .package import convert_package
+                native_settings=None
+                if args.native:
+                    from .orchestration import options
+                    if args.input_set:
+                        from .inputs import input_set
+                        source_roots=[r['path'] for r in input_set(args.input_set)['inputs']]
+                    else:source_roots=[args.source]
+                    native_settings=options(args.out,args.target,args.native_out,args.unity_editor,args.creator_editor,args.native_budget_seconds,source_roots)
                 result=convert_package(args.source,args.target,args.out,args.namespace or 'monkey-project',args.offline,args.input_set,reuse_source_stages=args.reuse_source_stages)
-                print(json.dumps(dict(status=result['workflowStatus'],resultKind=result['resultKind'],
+                summary=dict(status=result['workflowStatus'],resultKind=result['resultKind'],
                      completed=result['completed'],projects=result['projects'],inputFiles=result['inputFiles'],
                      inputBytes=result['inputBytes'],diagnostics=len(result['diagnostics']),nextAction=result['nextAction'],
-                     report=str(Path(args.out).resolve()/'conversion-result.json')),ensure_ascii=False))
+                     report=str(Path(args.out).resolve()/'conversion-result.json'))
+                if native_settings:
+                    from .orchestration import run
+                    summary['nativeExecution']=run(result,native_settings)
+                    if summary['nativeExecution']['status']!='not_run':
+                        summary['nextAction']=dict(code='REVIEW_NATIVE_AND_SOURCE_GAPS',message='Review native receipt; source/visual/business gaps remain separate')
+                print(json.dumps(summary,ensure_ascii=False))
                 return 1
+            if args.native:parser.error('--native requires package conversion (use --target unity6/cocos38/both or --package)')
             if args.resume:
                 if any((args.source,args.target,args.out,args.source_profile,args.asset_index,args.all_assets,
                         args.dependency_source,args.evidence_source,args.bindings,args.animation,args.offline,args.recipe,args.namespace)):

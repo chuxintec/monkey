@@ -10,6 +10,15 @@ bin/monkey convert --source /path/to/game.apk --target unity6 --out outputs/my-u
 bin/monkey convert --source /path/to/cocos-resources --target cocos38 --out outputs/my-creator
 ```
 
+包含原生导入的单命令（使用已安装的编辑器，默认仅转换时不启动）：
+
+```sh
+bin/monkey convert --source /path/to/game.wxapkg --target both --out outputs/my-game \
+  --native --unity-editor /path/to/Unity --creator-editor /path/to/CocosCreator
+```
+
+按Unity→Creator顺序在`outputs/my-game-native/`的新副本中运行，每段最多30分钟、方法默认1200秒；未退出、原生错误或回读差异会停止后续段。单目标只提供对应编辑器参数。`--native-out`可指定另一个全新目录；不能与`--offline`混用。候选、原生核对与游戏业务分别记录，仍有源组件/业务缺口时退出码保持1。
+
 当前已接入明文wxapkg、APK和资源目录的全文件盘点；输出`UnityProject/`、`CocosProject/`（单目标只生成对应项），两工程分别自包含。原包所有文件按原生可复制、去重映射、原格式待转、代码证据、明确运行时排除分类，报告为`conversion-result.json`。未知资源/不可编译初稿在`SourceRecovery/`，源UUID、逻辑键、代码候选和AI模块任务在`Analysis/`；每个工程含`AGENTS.md`与`Docs/START-HERE.md`。
 
 可恢复资源优先保留原Cocos路径与名称，GUID/UUID只作身份；派生变体、真实冲突或无名回退另有明确映射。见`Analysis/*name-map.json`。
@@ -27,13 +36,13 @@ bin/monkey convert --resume outputs/my-unity --input-set inputs.json
 
 静态AST支持有限literal loader/System.register和RF区域候选；恢复的源代码＋TS/C#合同初稿不等于业务已转译。Node为静态解析所需宿主，Acorn8.15.0已固定并随包提供，不执行输入JS。没有Node或格式未支持时保留完整源文件并报告缺口。
 
-**当前是全输入留存＋有限原生资源复制＋代码恢复候选，尚未完成全对象原生还原和编辑器自动导入**。已接入2.4.15共享IR：支持的节点图、SpriteFrame、字体及JsonAsset生成原生导入计划；未知组件、Spine等保留证据和缺口。默认返回needs_action，`--offline`为partial，退出码1；不能当完整转换成功。未取得的CDN/远程分包不包含，未知加密不破解、不安装APK。
+**当前是全输入留存＋受支持对象的原生工程候选，尚未完成全对象及游戏业务转换**。已接入2.4.15共享IR：支持的节点图、SpriteFrame、字体及JsonAsset生成原生导入计划；未知组件及Spine运行时接入等保留证据和缺口。默认返回needs_action，`--offline`为partial，退出码1；不能当完整转换成功。通用CDN获取尚未接入CLI，未取得的远程分包不包含。
 
-已有2.4.15切片转换链继续可用：`--target unity|cocos`、`--asset-index`/recipe，结果在`project/`；其完成候选支持`--resume`身份续验。包级工程支持按哈希校验续跑并归档原候选；人工修改会阻止覆盖。已提供native-import有界独立Unity执行器；原生回读尚未完整通过，人工代码增量合并未实现。详见[命令说明](docs/USAGE.md)。
+已有2.4.15切片转换链继续可用：`--target unity|cocos`、`--asset-index`/recipe，结果在`project/`；其完成候选支持`--resume`身份续验。包级工程支持按哈希校验续跑并归档原候选；人工修改会阻止覆盖。`convert --native`接续原生阶段；已有冻结候选也可单独使用`native-import`，固定manifest/工程/期限，实际保存后回读。人工业务代码增量合并未实现。详见[命令说明](docs/USAGE.md)。
 
 已实现两条明确的 2.4.15 输入路径：编辑器工程 JSON/meta，以及发布 bundle 的 compiled-v1/pack-v1/texture-pack-v1。工具不执行源脚本，代码初稿不代表业务语义已恢复，不伪造服务器、不模拟源引擎运行时。
 
-当前可运行 `convert / catalog / inspect / normalize / plan / export / verify / handoff / diff / register / apply / preflight / native-import`。可生成 Unity 6000.6.2f1、uGUI 2.6.0 的图像、原BitmapFont/源TTF文字、有限布局/按钮/遮罩、Editor 导入指令和原生 View 引用脚本；Unity 纹理阶段已实际推进，TMP资源入口失败待修复复验；原生Prefab/Scene保存重开和画面对照未验。Creator 3.8.8 实导已进入资产阶段并发现 package 版本与 Mask 默认赋值问题，修复尚待原生复验；Scene/字体/页面验收未完成。已实现登记生成区的差异预览和 expected-manifest 受控 apply，人工区保持独立，移除项保留而不自动删除。
+当前可运行 `convert / catalog / inspect / normalize / plan / export / verify / handoff / diff / register / apply / preflight / native-import`。Unity 6000.6.2f1/uGUI 2.6.0与Creator 3.8.8均已用真实3源图/76节点代表样本完成原字体、3独立Prefab和Scene保存重载、几何与引用核对；Unity另有8个Label字形核对及编辑保存重开。全量Unity先前保存过1694 Prefab，仍有原生差异，新全量复验进行中；Creator全量尚未通过。代表样本不等于所有来源版本、原版画面或游戏业务通过。已实现登记生成区的差异预览和expected-manifest受控apply，人工区保持独立，移除项保留而不自动删除。
 
 ## 本地使用
 

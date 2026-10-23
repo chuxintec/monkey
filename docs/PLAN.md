@@ -333,3 +333,7 @@ Unity04 own11411于13:29:12Z启动、13:29:31Z exit0/reap；回读零诊断，76
 Unity04 own11411已13:29:31Z exit0/reap，76节点几何/8 Label字形及原字体引用零诊断，Scene及editable roundtrip完成。Creator02 own12108于13:30:01Z启动、13:31:19Z normal TERM exit-15/reap，方法62.123秒，16原字体/3独立Prefab/76节点/8 Label/Scene保存重载、几何及内部引用验证通过，editor/static pass。不能由此称全量/视觉/业务通过。
 
 Unity10全量生成emitter a0fd18b，完整输入与源阶段/Spine页图复用；static/name/routing均pass，无身份或原名漂移。Creator新增有界批处理只改编辑期流程，已有小探针02冻结；新Creator03 manifesta4908311bc31d68dfa414189d6c7c40cce93dd38894c337c8a57e1759864bf26，static pass，待有界实证，不无依据直接启动全量。
+
+Unity10全量原生新登记：锚点13:37:42Z，内部14:05:42Z/外层14:07:42Z，方法1200秒。只读ps未见Unity/Creator主进程，normal exec审批后只启动outputs/acceptance/full10-unity-window-01新副本；首新错误保存后停止，只正常回收自有child，不顺延截止。
+
+单命令编排增量：convert --native已接续全新包级生成→Unity/Creator串行原生段；每段独立28/30分钟绝对截止、1200秒方法上限，默认不启动，支持独立--native-out。所有Editor参数/输出重叠/已有原生目录在转换前拒绝；manifest与生成回执绑定，未退出/原生错误/回读差异停止后续段。生成回执不改，native-orchestration.json另记实际阶段；源业务/视觉缺口不晋升。5项编排语义检查与4项既有convert检查通过；真实单命令双端整链尚未另跑，底层同一native-import已由代表样本实证，不为包装层无新语义重冷启动。README/USAGE/capabilities改为当前子集实证状态，不再保留TMP/Creator自动入口旧not_run作为当前事实。
