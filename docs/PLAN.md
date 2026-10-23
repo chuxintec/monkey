@@ -209,3 +209,5 @@ launcher3/structured3/边界4及SDK C#离线编译05通过，新执行路径没�
 用户再次明确产品形态为命令行一键工程转换，沿现有convert --source/--input-set --target --out入口继续，不要求逐阶段操作。窗口07异步TMP资源完成事件及原名资源加载实际通过；14:26:42自身PID36070 exit1回收并提前释放。实际新错误是bitmap字体材质初始化顺序与batch无名场景Additive限制；Prefab/Scene/readback仍未验。
 
 离线修复材质先赋值、专属batch干净初始场景Single替换与正常重开、菜单场景保护、Unity记录错误后安全点停止及仅hash回执。SDK窄C#编译通过，详情validation/2026-10-23-window07-font-scene.md。下一步冻结Unity单目标08并静态验证，向总监成组报告/申请独立新窗口；不重复Creator/旧reader矩阵，不自行重启Editor。
+
+08已通过真实CLI新生成Unity单目标：outputs/structured-foodstreet-08/UnityProject，emitter e1eeb74，manifest SHA 7ff13ed2870653db5bcf0d1491b38e9aba6d1efab6b7775b12afa3e44f6ede4b。5097/5097文件与243799340字节全部入账；状态needs_action/candidate，convert按合同exit1。Unity静态verify exit0/零诊断，11项受影响检查通过；SDK编译source SHA与当前C#一致，07冻结SHA不变。没有新Editor执行。准备按monkey-font-scene-fix-20261023-01报告成果并申请新独立窗口，原生修复效果/Prefab保存/Scene重开仍待验。

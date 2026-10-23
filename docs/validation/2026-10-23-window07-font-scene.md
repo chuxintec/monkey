@@ -9,3 +9,5 @@
 离线将原Bitmap Custom Atlas材质先绑定字体，再触发序列化校验；保留原shader、atlas与字形。独立batch仅替换自身干净初始无名场景，菜单模式拒绝用户无名/脏场景；已有已保存场景仍用Additive。自身唯一场景以OpenScene Single正常重开。新增捕获Unity Error/Exception/Assert并于安全点停止，脱敏回执只存hash/phase/planSHA，防止已记录错误后仍推进。
 
 .private/font-scene-compile-01/report.json为当前SDK C#编译pass，无Editor执行。真实修复效果、字体/native Prefab/Scene保存重开仍待下一实际资源grant；不复用窗口07。
+
+08已通过真实CLI新生成Unity单目标：outputs/structured-foodstreet-08/UnityProject，emitter e1eeb74，manifest SHA 7ff13ed2870653db5bcf0d1491b38e9aba6d1efab6b7775b12afa3e44f6ede4b。5097/5097文件与243799340字节全部入账；状态needs_action/candidate，convert按合同exit1。Unity静态verify exit0/零诊断，11项受影响检查通过；SDK编译source SHA与当前C#一致，07冻结SHA不变。没有新Editor执行。准备按monkey-font-scene-fix-20261023-01报告成果并申请新独立窗口，原生修复效果/Prefab保存/Scene重开仍待验。
