@@ -18,6 +18,23 @@ function within(root, relative) {
     if (!dest.startsWith(root + path.sep)) throw Error('Path escapes candidate');
     return dest;
 }
+async function sceneJob(method,args,phase) {
+    const call=async(name,values)=>{
+        try{return await Editor.Message.request('scene','execute-scene-script',{name:'monkey-import',method:name,args:values});}
+        catch(error){throw Error('NATIVE_SCENE_RPC_FAILED '+name+': '+String(error&&error.message||error).split('\n')[0].slice(0,512));}
+    };
+    const started=await call('beginJob',[method,args]);
+    if(!started||typeof started.jobId!=='string')throw Error('NATIVE_JOB_START_INVALID');
+    while(true) {
+        const state=await call('jobStatus',[started.jobId]);
+        if(!state||state.jobId!==started.jobId)throw Error('NATIVE_JOB_STATUS_INVALID');
+        execution.checkpoint(state.phase||phase,state.processed,state.total);
+        if(state.status==='failed')throw Error('Native '+method+' failed: '+state.error);
+        if(state.status==='completed')return call('takeJob',[started.jobId]);
+        if(state.status!=='running')throw Error('NATIVE_JOB_STATUS_INVALID');
+        await new Promise(resolve=>setTimeout(resolve,250));
+    }
+}
 module.exports = {
     load() {execution.start(()=>module.exports.methods.importCandidate()).catch(error=>console.error('MONKEY_NATIVE_BOOTSTRAP_FAILED: '+String(error.message||error).slice(0,1024)));}, unload() {execution.stop();},
     methods: {
@@ -91,8 +108,8 @@ module.exports = {
             fs.writeFileSync(within(root,'Analysis/native-api-timing.json'),JSON.stringify({stage:'assets',apiTiming},null,2)+'\n',{flag:'wx'});
             execution.checkpoint('hierarchy',0,plan.nodes.length);
             const nativeDeadlineMs=execution.deadlineMs();
-            const options = {name: 'monkey-import', method: 'assemble', args: [{...plan, assets,nativeDeadlineMs}]};
-            const result = await Editor.Message.request('scene', 'execute-scene-script', options);
+            const nativePlan={...plan,assets,nativeDeadlineMs,components:plan.components.filter(c=>c.convertible),animations:(plan.animations||[]).filter(a=>a.convertible)};
+            const result = await sceneJob('assemble',[nativePlan],'hierarchy');
             if (!result || typeof result.serialized !== 'string') throw Error('No native scene serialization');
             const animationAssets=[];
             for(const a of result.animationAssets||[]) {
@@ -125,7 +142,7 @@ module.exports = {
             if (!scene || scene.invalid) throw Error('Native scene save failed');
             // Re-load saved/imported scene through the engine asset manager, not the in-memory tree.
             execution.checkpoint('native-readback');
-            const saved = await Editor.Message.request('scene', 'execute-scene-script', {name:'monkey-import',method:'readSaved',args:[scene.uuid,{...plan,assets,animationAssets,savedPrefabs,nativeDeadlineMs}]});
+            const saved = await sceneJob('readSaved',[scene.uuid,{...nativePlan,animationAssets,savedPrefabs}],'native-readback');
             const nativeFiles = [];
             function collect(relative) {
                 const folder = within(root, relative);

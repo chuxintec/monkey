@@ -4,6 +4,7 @@ const cc = require('cc');
 const motion=require('./animation.js');
 const prefabs=require('./prefab.js');
 const batch=require('./batch.js');
+const jobs=require('./jobs.js');
 const color = a => new cc.Color(...a);
 const checkTime=plan=>{if(plan.nativeDeadlineMs&&Date.now()>=plan.nativeDeadlineMs)throw Error('NATIVE_BUDGET_EXHAUSTED');};
 const loadAsset = (uuid, type) => new Promise((resolve,reject) => cc.assetManager.loadAny({uuid}, (e,a) => {
@@ -17,6 +18,9 @@ function describe(root, plan) {
 module.exports = {
     load() {}, unload() {},
     methods: {
+        beginJob(method,args){return jobs.begin(method,args,module.exports.methods);},
+        jobStatus(id){return jobs.status(id);},
+        takeJob(id){return jobs.take(id);},
         async assemble(plan) {
             if (!globalThis.EditorExtends || typeof EditorExtends.serialize !== 'function') throw Error('Native serializer unavailable');
             const scene = new cc.Scene('Candidate');
@@ -32,8 +36,11 @@ module.exports = {
                 design.setPosition(-plan.designSize[0]/2,-plan.designSize[1]/2,0);
                 const nodes=new Map();const sourceNodes=new Map(plan.nodes.map(n=>[n.sourceId,n]));const assets=new Map(plan.assets.map(a=>[a.sourceId,a]));
                 const native=new Map();
-                await batch.map(plan.assets,16,async a=>{checkTime(plan);native.set(a.sourceId,await loadAsset(a.kind==='sprite'?a.spriteFrameUuid:a.uuid,a.kind==='sprite'?cc.SpriteFrame:a.kind==='json'?cc.JsonAsset:cc.Font));});
+                let loaded=0;
+                await batch.map(plan.assets,16,async a=>{checkTime(plan);native.set(a.sourceId,await loadAsset(a.kind==='sprite'?a.spriteFrameUuid:a.uuid,a.kind==='sprite'?cc.SpriteFrame:a.kind==='json'?cc.JsonAsset:cc.Font));jobs.progress('textures',++loaded,plan.assets.length);});
+                let nodeProgress=0;
                 for(const n of plan.nodes) {
+                    if(nodeProgress%256===0){jobs.progress('hierarchy',nodeProgress,plan.nodes.length);await new Promise(resolve=>setTimeout(resolve,0));}nodeProgress++;
                     checkTime(plan);
                     const node=new cc.Node(n.name);node.layer=cc.Layers.Enum.UI_2D;nodes.set(n.sourceId,node);
                     node.setPosition(...n.position);node.setRotation(new cc.Quat(...n.rotation));node.setScale(...n.scale);
@@ -46,7 +53,9 @@ module.exports = {
                 }
                 for(const n of plan.nodes)for(let i=0;i<n.children.length;i++)nodes.get(n.children[i]).setSiblingIndex(i);
                 const nativeRefs=[];
+                let componentProgress=0;
                 for(const c of plan.components) {
+                    if(componentProgress%256===0){jobs.progress('components',componentProgress,plan.components.length);await new Promise(resolve=>setTimeout(resolve,0));}componentProgress++;
                     checkTime(plan);
                     if(!c.convertible || c.type==='cc.LabelOutline')continue;
                     const node=nodes.get(c.node);const source=sourceNodes.get(c.node);let comp;
@@ -96,9 +105,11 @@ module.exports = {
                     animationAssets.push({id:spec.id,path:spec.path,serialized:typeof raw==='string'?raw:JSON.stringify(raw)});
                 }
                 const asset=new cc.SceneAsset();asset.scene=scene;
+                jobs.progress('candidate-save',0,1);
                 const serialized=EditorExtends.serialize(asset);
+                const sourcePrefabs=await prefabs.serialize(plan,nodes);
                 return {serialized:typeof serialized==='string'?serialized:JSON.stringify(serialized),nativeRefs,animationAssets,
-                    sourcePrefabs:prefabs.serialize(plan,nodes),
+                    sourcePrefabs,
                     nodes:plan.nodes.map(n=>({sourceId:n.sourceId,nodeUuid:nodes.get(n.sourceId).uuid})),...describe(scene,plan)};
             } finally {scene.destroy();}
         },
@@ -147,6 +158,8 @@ module.exports = {
             }
             const sourcePrefabs=[];
             for(const spec of plan.sourcePrefabs||[]) {
+                jobs.progress('native-readback',sourcePrefabs.length,(plan.sourcePrefabs||[]).length);
+                if(sourcePrefabs.length%16===0)await new Promise(resolve=>setTimeout(resolve,0));
                 checkTime(plan);
                 const info=(plan.savedPrefabs||[]).find(p=>p.sourceId===spec.sourceId);
                 if(!info)throw Error('Saved prefab identity absent');

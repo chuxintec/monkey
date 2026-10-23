@@ -93,7 +93,7 @@ assert.strictEqual(rejected,true);assert.deepStrictEqual(started,[0,1]);
         adapter=Path(__file__).resolve().parents[1]/'src/monkey/targets/CreatorPrefab.js'
         script=r'''
 const Module=require('module'),load=Module._load;
-Module._load=function(name,...args){if(name==='cc')return {instantiate:x=>x,UITransform:class {},Widget:class {}};return load.call(this,name,...args);};
+Module._load=function(name,...args){if(name==='cc')return {instantiate:x=>x,UITransform:class {},Widget:class {}};if(name==='./jobs.js')name=process.argv[2];return load.call(this,name,...args);};
 const adapter=require(process.argv[1]);
 const make=(name,width)=>({name,parent:null,children:[],position:{x:0,y:0,z:0},scale:{x:1,y:1,z:1},rotation:{x:0,y:0,z:0,w:1},active:true,
 getComponent:()=>({width,height:32,anchorX:.5,anchorY:.5}),destroy(){}});
@@ -107,5 +107,5 @@ const clean=adapter.read(root,{root:'root',nodes:['root','child'],nodeCount:2},p
 if(!clean.geometryVerified||clean.geometryMismatches.length)throw Error('Exact geometry rejected');
 process.stdout.write(JSON.stringify(result));
 '''
-        result=subprocess.run(['node','-e',script,str(adapter)],capture_output=True,text=True,check=True)
+        result=subprocess.run(['node','-e',script,str(adapter),str(adapter.with_name('CreatorJobs.js'))],capture_output=True,text=True,check=True)
         self.assertEqual([v['sourceId'] for v in json.loads(result.stdout)['geometryMismatches']],['root','child'])

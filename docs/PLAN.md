@@ -2,17 +2,17 @@
 
 完工/阻塞/交付与续推按[DIRECTOR-CONTINUATION](/Users/wangmeng/Documents/Manager/standards/DIRECTOR-CONTINUATION.md)执行；本聊天已原生核验人类授权`01a166b4-5c18-78f3-8cc2-c0d07dd46a20`，总监路由`01a14c8c-6402-7d03-bab8-ec7ea8051abf`。更新本PLAN后以稳定事件ID报告，已批准就绪下一包连续推进，不因报告或普通ACK停下。
 
-## 当前：全量原生差异收口，代表探针后集中复验
+## 当前：Unity全量原生差异收口，Creator全量实测在途
 
-最新全量实际依据为 `outputs/acceptance/full10-unity-window-01/UnityProject`：1694独立Prefab/24784节点/16934 Sprite/16原字体保存、Scene及editable roundtrip完成、Missing Script0。严格回读剩243项NODE几何差异，字形/字体atlas与material/10508 View引用/版本差异零；旧full07的2005项保留历史（613几何/834字形/557引用/1版本）。尚未几何/视觉/业务通过。冻结候选与acceptance实际工程、历史失败目录分开保留。
+最新Unity全量实际副本为 `outputs/acceptance/full10-unity-window-01/UnityProject`：1694独立Prefab/24784节点/16934 Sprite/16原字体保存、Scene及editable roundtrip完成、Missing Script0；严格回读剩243项NODE几何差异，字形/字体atlas与material/10508 View引用/版本零差异。旧full07原2005项保留历史（613几何/834字形/557引用/1版本）。full10独立Prefab当时只核节点数/MissingScript，不能追认为逐项几何已通过；尚无原版画面/业务通过。
 
-最新Unity探针04实际16原字体/3 Prefab/76节点、Scene重开/编辑重开完成，8 Label字形、5 atlas/material绑定及节点几何回读全部通过，零诊断；整体partial仍保留业务和源组件缺口。Creator探针02已通过显式CLI自动方法、16原字体/3 Prefab/76节点/Scene保存重载的几何及引用核对，editor/static pass、零诊断；没有原版画面对照或业务通过。所有本轮自有child已退出并回收。
+Creator实际小探针05（候选04）已editor/static pass零诊断：67资产/76节点/16原字体/3独立Prefab/Scene保存重载，实际字体、Sprite裁切边框、几何及内部引用核对通过，方法1.636秒、own17562已正常退出/reap。中间进度协议与metadata屏障失败各自保留，不把旧失败时间当性能通过。全量Creator10 `outputs/full-foodstreet-10-creator/CocosProject` manifest7fb3a4b7f996da9402ae1ecc9f9b921ab874e49046b63ea86938d143e08c770c，static/name/routing全pass；full10实际own20570已14:18:41Z normal TERM exit-15/reap；16978资产阶段完成，但assemble命中SceneFacade单次RPC的30秒超时，实际Prefab/Scene0。当前新增Editor-only短调用任务接口，待新小样/全量实证，旧窗口已释放。
 
-全量新Unity10已生成：`outputs/full-foodstreet-10-unity/UnityProject`，manifest05c028933feb5329b41a6964f76b73d58edae1b6ffceb073706932e28418754a，static/name/routing零问题，17201文件/884709704字节全入账、17329种子身份稳定、1694 Prefab计划、1776 Spine闭包全复用，源reader/像素/AST不重跑。121份无法由单一标准uGUI横向对齐保留的源Layout明示handoff，20多Layout冲突继续保留，不能把保留几何称布局行为已恢复。
+Unity代码已成组修复实际LayoutGroup有界稳定、直接原生保存子树、独立Prefab保存重载逐节点/字体Sprite及内部引用核对；新增localScale/Quaternion原生读数。7原图413节点探针05/06证明nested布局主偏移、根Widget隔离上下文与inactive Widget/空容器反例；最终剩一个广告占位父319高/活动孩子0x0，已明确LAYOUT_CACHED_CONTAINER_HANDOFF保留几何，等动态内容adapter，不以0高fitter覆盖。根Widget缺父上下文、inactive缓存、空布局、cross-axis不可表达分别handoff，不能算已转换行为。`.private/full-local-transform-compile-01` C#与11项定向检查通过，未改.001容差；新全量Unity11已复用既有源阶段生成（manifesta4e286808cae2d8b758a6fd9968d2542e05f5f6066276a78ff6b45d05ffaa9db），三项离线核对在途，尚未新原生验证，不追认全量243已解决。
 
-Creator02方法62.123秒处理67资产，逐图刷新/顺序保存不能直接假设满足全量窗口。当前批处理修复：去除就绪后逐图重复refresh、仅变更meta、8路有界提交/16路身份查询与原生load、Prefab父目录统一刷新及8路独立保存；仍使用原生分配subresource UUID、实际保存后严格回读，失败停止新调度并等待已开始项。新增API计数/耗时证据。12项定向检查及JS语法通过，小探针03已static pass，原生性能/语义待验。下一步Unity10全量→Creator03小探针顺序验证，再Creator全量候选；不放宽任何回读标准。
+两端全量显式输入始终17201文件/884709704字节，1776 Spine闭包/原图复用、原reader/像素/AST不重跑，原件/肥鹅/GREA/服务/存档不变。候选、acceptance实际工程、历史结果分别保留。
 
-CLI通用CDN获取、更多来源profile及完整游戏业务仍未交付；肥鹅明确URL获取回执已补入原项目。用户目标矩阵为所有Cocos原包→Unity6/Creator3.8.8/both；所有Unity、Laya/LayaAir、Egret、自研/其他引擎→Unity6，按实际profile逐个实现，不以范围代替已支持能力。
+单命令 `convert --native` 已实现生成→Unity/Creator顺序独立原生段，每段固定期限、失败/未退出/回读差异不派下一端，生成/原生回执分开；5编排+4convert检查通过，底层native-import已有实际引擎证据，包装层未另跑全双端整链。通用CDN获取CLI、U/C及更多来源reader、完整业务仍未交付；肥鹅明确URL获取与回执已补原项目。用户矩阵仍为所有Cocos原包→Unity6/Creator3.8.8/both；所有Unity、Laya/LayaAir、Egret、自研/其他引擎→Unity6，逐profile实现，不以范围代替已支持能力。
 
 ## 历史依据与全量候选记录
 
@@ -36,7 +36,7 @@ CLI通用CDN获取、更多来源profile及完整游戏业务仍未交付；肥�
 
 用户2026-10-23批准：一个命令将wxapkg/APK及明确提供的Cocos本地资源集合导出Creator3.8/Unity6独立恢复工程；包含全部已取得资源、恢复源码与目标TS/C#初稿，按五层/类型归类，提供AI接续入口。最终产品不止单奖励页、手选asset-index或缺口报告。实际可打开、资源覆盖、代码编译、行为保真分别验收。
 
-当前顺序：P1统一CLI与原生导入问题收口 → P2安全包级入口、全资源台账和标准化导出 → P3源模块/导出/依赖索引、双目标代码初稿 → P4真实打开编辑与AI接续核对。既有v0.1–v0.3作为历史切片验证，不替代该总目标。原生自动编排与失败阶段续跑仍待实现。
+当前顺序：P1统一CLI与原生导入问题收口 → P2安全包级入口、全资源台账和标准化导出 → P3源模块/导出/依赖索引、双目标代码初稿 → P4真实打开编辑与AI接续核对。既有v0.1–v0.3作为历史切片验证，不替代该总目标。显式原生编排已实现；失败的原生中间阶段自动续跑未实现，须保留失败副本并用新候选验证。
 
 所有输入文件有去向：原生转换、可复制、重复映射、原格式待转、缺失引用、明确过滤。未知/无法编译部分进入工程SourceRecovery编译排除区，不能整个原包换名当标准化。仅对已明确支持格式恢复；用户已追加CDN/远程包获取，肥鹅已完成明确URL的实际GET/本地SHA核对；通用CLI还需接入有界获取与缓存复用，未知地址不得臆造。禁止执行原JS/动态库、破解未知加密或安装APK。
 
@@ -369,3 +369,9 @@ Unity06 own19932已exit0/reap，7原图413节点的root Widget隔离上下文、
 Creator10全量新登记：锚点14:15:31Z，内部14:43:31Z/外层14:45:31Z，方法1200秒；ps无引擎主进程，固定manifest7fb3a4b7f996da9402ae1ecc9f9b921ab874e49046b63ea86938d143e08c770c，新acceptance/full10-creator-window-01。仅自有新副本，metadata有界+原生reimport屏障，首错保留停止，不顺延截止。
 
 下一Unity11在已有Scene/独立Prefab几何门基础上补原生localScale/Quaternion实际读数；新transformReadback=full-local-v1强制存在并核验，q与-q只作同一旋转精确等价，不改原.001容差；旧冻结候选无新标志保持原对账口径。7项几何/引用/批处理/占位语义检查及4 structured检查通过，.private/full-local-transform-compile-01 C#编译pass。新增只读回执不另冷跑一字段小样，随本次成组全量11验证。
+
+## 2026-10-23 Creator全量RPC边界与新任务接口
+
+full10 own20570于14:16:33Z启动、14:18:41Z normal TERM exit-15/reap；方法87.821秒，16978资产metadata/重导入/原生身份阶段完成后assemble触发SceneFacadeManager.executeSceneScriptMethod timeout（约30秒RPC上限）。实际独立Prefab/Scene0。API计数与耗时保存，错误保留；没有重跑原失败工程、没有顺延窗口或修改引擎。
+
+新增CreatorJobs编辑期任务合同：beginJob只白名单assemble/readSaved，立即返回jobId；jobStatus短调用读进度；takeJob只消费完成结果一次。所有任务仍绑定nativeDeadlineMs，过期/首错停止、foreign ID/重入/未知方法拒绝；每256节点/组件及16 Prefab协作yield，Renderer资产加载不再占据一次长RPC。只把可转换组件/动画送原生任务，未转换数据仍完整留在冻结plan/SourceRecovery与handoff，不改分母。接口错误只记首行，避免SceneFacade把全plan参数灌入错误回执。19项定向检查和4 JS语法检查通过；新3图76节点Creator任务小探针01 manifest55a58f191c323c1e2ab7f620aa0809a86b0666fced709563f098b246b3f40270，static pass，真实新接口尚待验，不能把小样性能推成全量通过。

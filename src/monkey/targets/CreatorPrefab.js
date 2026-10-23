@@ -1,9 +1,13 @@
 'use strict';
 // Editor-only native Prefab serialization; no source runtime or business execution.
 const cc=require('cc');
+const jobs=require('./jobs.js');
 const near=(a,b)=>a.length===b.length&&a.every((v,i)=>Math.abs(v-b[i])<0.001);
-function serialize(plan,nodes) {
-    return (plan.sourcePrefabs||[]).map(spec=>{
+async function serialize(plan,nodes) {
+    const result=[];
+    for(const spec of plan.sourcePrefabs||[]) {
+        jobs.progress('source-prefabs',result.length,(plan.sourcePrefabs||[]).length);
+        if(result.length%16===0)await new Promise(resolve=>setTimeout(resolve,0));
         if(plan.nativeDeadlineMs&&Date.now()>=plan.nativeDeadlineMs)throw Error('NATIVE_BUDGET_EXHAUSTED');
         const root=cc.instantiate(nodes.get(spec.root));
         try {
@@ -12,9 +16,10 @@ function serialize(plan,nodes) {
             rebind(root);
             const prefab=new cc.Prefab();prefab.name=root.name;prefab.data=root;
             const raw=EditorExtends.serialize(prefab);
-            return {sourceId:spec.sourceId,path:spec.path,serialized:typeof raw==='string'?raw:JSON.stringify(raw)};
+            result.push({sourceId:spec.sourceId,path:spec.path,serialized:typeof raw==='string'?raw:JSON.stringify(raw)});
         } finally {root.destroy();}
-    });
+    }
+    return result;
 }
 function read(prefab,spec,plan,info) {
     const root=cc.instantiate(prefab);
