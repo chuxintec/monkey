@@ -6,7 +6,7 @@ from .io import sha,encoded
 def phase_signatures():
     root=Path(__file__).parent
     groups={
-        'package':['package.py','inputs.py','sources/code.py','sources/index-modules.cjs','sources/containers.py','sources/cache.py'],
+        'package':['package.py','inputs.py','sources/code.py','sources/index-modules.cjs','sources/containers.py','sources/cache.py','handoff_package.py','replan.py'],
         'inspect':['io.py','inputs.py',*[str(p.relative_to(root)) for p in sorted((root/'sources').glob('*.py'))]],
         'normalize':['io.py','normalize.py',*[str(p.relative_to(root)) for p in sorted((root/'assets').glob('*.py'))]],
         'UnityProject-plan':['io.py','targets/unity.py','targets/common.py','targets/prefabs.py','assets/animation.py'],
@@ -15,4 +15,4 @@ def phase_signatures():
     }
     # Include only actual dependencies present in this distribution.
     return {name:dict(sha256=sha(encoded(files)),files=files) for name,paths in groups.items()
-            for files in [{p:sha((root/p).read_bytes()) for p in [*paths,'signatures.py','structured.py'] if (root/p).is_file()}]}
+            for files in [{p:sha((root/p).read_bytes()) for p in [*paths,'signatures.py','structured.py','names.py'] if (root/p).is_file()}]}

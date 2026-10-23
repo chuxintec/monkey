@@ -2,11 +2,15 @@
 
 完工/阻塞/交付与续推按[DIRECTOR-CONTINUATION](/Users/wangmeng/Documents/Manager/standards/DIRECTOR-CONTINUATION.md)执行；本聊天已原生核验人类授权`01a166b4-5c18-78f3-8cc2-c0d07dd46a20`，总监路由`01a14c8c-6402-7d03-bab8-ec7ea8051abf`。更新本PLAN后以稳定事件ID报告，已批准就绪下一包连续推进，不因报告或普通ACK停下。
 
-## 当前：肥鹅全部资料转换与集中核对
+## 当前：肥鹅全量候选的原名整改与原生核对
 
 用户原生授权已核验：总监turn01a16781-e3f9-78d1-9fcd-001f73f41486 / human message01a16781-e596-7581-9fd9-76378aef0afb，要求使用monkey完整转换肥鹅全部资料并核对排查。合同为Manager/decisions/20261022-monkey/FOODSTREET-FULL-CONVERSION-AUDIT.md。
 
-此前四根5097文件仅为局部输入，不是全资料分母。当前对账Evidence清单17216项/905618352字节与source17097项、冻结package-snapshot、plain包、decoded-config、获取缺口和参考资料；原件只读。全新显式input-set经公开CLI生成Unity6/Creator3.8，逐项路由与重复映射、原生/代码/视觉分层核对。旧08/07保持冻结，不复用窗口08申请；实际全量候选就绪后重新报告资源需求。无新Agent，不改肥鹅/服务/GREA，不联网补缺或装runtime。
+此前四根5097文件仅为局部输入，不是全资料分母。当前对账Evidence清单17216项/905618352字节与source17097项、冻结package-snapshot、plain包、decoded-config、获取缺口和参考资料；原件只读。全新显式input-set经公开CLI生成Unity6/Creator3.8，逐项路由与重复映射、原生/代码/视觉分层核对。旧08/07保持冻结，不复用窗口08申请；实际全量候选就绪后重新报告资源需求。无新Agent，不改肥鹅产品/服务/GREA；联网仅限追加用户批准的明确CDN/配置地址，不扫描目录或装runtime。
+
+用户原生新授权已核验：总监turn01a167a4-ae5a-76c0-bafd-0db3f9dd141f / human message01a167a4-ae8e-7bb1-adea-6f17d9cf2a4d，要求参考AssetDeoce恢复原始名称。当前已将config.paths/源_name贯穿共享命名分配、IR、双端plan/emit、Unity源Prefab、Spine/字库/音频/JSON及有据RF模块初稿，保持身份和原件。旧04冻结，原生验收以即将生成的新命名候选为准，不启动旧04。
+
+新增受校验reuse-source-stages：相同input-set/namespace、完整输入路径SHA一致、旧阶段owner清单及文件SHA全部一致，只接受当前算法或明确838d05b名称元数据迁移。复用已校验源读取/像素/源码证据，重建元数据和两端计划输出；漂移拒绝，不绕过算法签名。Spine页图也按骨骼/atlas/纹理SHA及冻结工程owner回执复用，避免重复图像解码。16项相关检查和当前SDK C#窄编译通过；实样命名预览在.private/full-foodstreet-audit-01/naming-preview.json，最终路径/恢复与消歧统计待新候选实核。
 
 当前全量04已完成双目标生成与一次集中离线核对：两端17201项/884709704字节全部入账、静态verify零诊断、来源路由/保留字节零问题；23955对象、24784节点/28514组件、1694 Unity独立Prefab计划、8467帧、11 TTF/5位图字库、23 JsonAsset、1776/1776 Spine闭包。代码实现838d05b，914 RF初稿/业务未实现。旧4根5097与全量01–03均保留历史，不能用于覆盖当前分母。
 
@@ -239,3 +243,5 @@ launcher3/structured3/边界4及SDK C#离线编译05通过，新执行路径没�
 全量03实际生成双目标原生计划：23955源对象→24784节点/28514组件/8467帧/11字体/23JsonAsset；Unity13550、Creator12588组件可转换，仍为计划而非原生对象。二进制Spine1762闭包，14项实际是内嵌JSON而非缺源。已补JSON骨骼原样语义导出、atlas/纹理闭包，精确保留含3.8-from-4.0-from-4.1-from-4.2.43等源版本标签，不推断兼容runtime；真实14项定向复验14/14闭合。修正相同缓存索引导致逻辑资源重复/假缺失计数，按(bundle,index)合并定位证据，原件账不去项。14项定向检查通过；03冻结不改，按新实现生成04最终核对候选。
 
 全量04最终离线成果/资源申请报告准备事件monkey-foodstreet-full-candidate-20261023-01。后续只在实际grant后推进必要原生gate；没有当前前置满足的额外源码扩展包，不为等待制造测试或新版本。
+
+原名整改实现/16项定向检查及当前SDK C#编译已通过，文档validation/2026-10-23-original-names.md。准备固定实现后用公开--reuse-source-stages从838d05b全量04新建05：校验完整输入、旧source stages、源码证据与Spine页图所有权/SHA，只重建名称元数据和两端目标，不重跑源reader/像素/AST。旧04及所有历史不改；新工程原名覆盖统计和身份完成后申请新原生窗口。

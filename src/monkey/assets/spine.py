@@ -38,7 +38,7 @@ def atlas_pages(text):
     return pages
 
 
-def recover_closures(manifest,destination):
+def recover_closures(manifest,destination,previous=None):
     destination=Path(destination);assets={a['sourceId']:a for a in manifest['assets']}
     inputs={(i.get('bundle',manifest['bundle']),i['path']):i for i in manifest['inputs']}
     def resource(asset):
@@ -47,6 +47,20 @@ def recover_closures(manifest,destination):
         expected=inputs.get((bundle,relative));raw=read(inside(Path(manifest['sourceRoots'][bundle]),relative),max_bytes=128*1024*1024)
         if expected is None or expected['sha256']!=sha(raw):fail('SPINE_SOURCE_CHANGED',relative,'Native resource differs from frozen receipt')
         return raw,relative
+    from ..names import Names,source_names
+    naming=Names(source_names(manifest))
+    old_rows={};old_root=None;old_owned={};decoded_pages=0;reused_pages=0
+    if previous:
+        from ..io import stage_manifest,load,safe
+        from ..sources.containers import fingerprint
+        old_root=safe(previous[0])
+        if fingerprint(old_root/'manifest.json')!=previous[1]:fail('REPLAN_STAGE_DRIFT','spine','Frozen candidate manifest changed')
+        old_owned={f['path']:f for f in stage_manifest(old_root)['files']}
+        def old_bytes(path):
+            raw=read(inside(old_root,path),max_bytes=128*1024*1024)
+            if path not in old_owned or sha(raw)!=old_owned[path]['sha256']:fail('REPLAN_STAGE_DRIFT',path,'Frozen Spine bytes changed')
+            return raw
+        old_rows={r['sourceId']:r for r in load(old_bytes('Analysis/spine-closures.json'))['skeletons']}
     results=[]
     for asset in manifest['assets']:
         if asset.get('kind')!='sp.SkeletonData':continue
@@ -83,10 +97,24 @@ def recover_closures(manifest,destination):
                     seen.add(sid);sid=assets[sid].get('redirectTarget')
                 texture=assets.get(sid)
                 if not texture or texture.get('kind')!='cc.Texture2D':fail('SPINE_TEXTURE_MISSING',str(sid),'Explicit texture dependency not provided')
-                image_raw,image_path=resource(texture);image=open_texture(image_raw,Path(image_path).suffix.lower())
-                stream=BytesIO();image.save(stream,format='PNG');files[name]=stream.getvalue()
+                image_raw,image_path=resource(texture)
+                prior=old_rows.get(asset['sourceId'])
+                if prior and prior['status']=='closure_recovered':
+                    atlas_file=next((f for f in prior['files'] if f['path'].endswith('.atlas')),None)
+                    dependency=next((d for d in prior['dependencies'] if d['page']==name),None)
+                    page=next((f for f in prior['files'] if f['path'].endswith('/'+name)),None)
+                    if (prior.get('sourceSkeletonSha256')!=sha(raw) or atlas_file is None
+                            or sha(old_bytes(atlas_file['path']))!=sha(atlas.encode('utf-8'))
+                            or dependency is None or dependency['sourceId']!=sid or dependency['sourceSha256']!=sha(image_raw) or page is None):
+                        fail('REPLAN_SPINE_SOURCE_CHANGED',asset['sourceId'],'Frozen closure does not match current skeleton/atlas/texture identities')
+                    files[name]=old_bytes(page['path']);reused_pages+=1
+                else:
+                    image=open_texture(image_raw,Path(image_path).suffix.lower())
+                    stream=BytesIO();image.save(stream,format='PNG');files[name]=stream.getvalue();decoded_pages+=1
                 dependencies.append(dict(page=name,sourceId=sid,sourceSha256=sha(image_raw)))
-            folder='SourceRecovery/Spine/'+sha(asset['sourceId'].encode())[:24]
+            folder=naming.path(asset['sourceId'],'','SourceRecovery/Spine')
+            stem=Path(folder).name
+            files={((stem+Path(name).suffix) if name in ('skeleton.bin','skeleton.json','source.atlas') else name):data for name,data in files.items()}
             for name,data in files.items():
                 path=inside(destination/folder,name);path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(data)
                 row['files'].append(dict(path=folder+'/'+name,sha256=sha(data),bytes=len(data)))
@@ -96,6 +124,6 @@ def recover_closures(manifest,destination):
             row.update(reason=getattr(error,'code','SPINE_SOURCE_UNSUPPORTED'),message=str(error))
         results.append(row)
     report=dict(schemaVersion=1,skeletons=results,closed=sum(r['status']=='closure_recovered' for r in results),
-                unresolved=sum(r['status']!='closure_recovered' for r in results),nativeValidation='not_run')
+                unresolved=sum(r['status']!='closure_recovered' for r in results),nativeValidation='not_run',naming=naming.report(),decodedPages=decoded_pages,reusedPages=reused_pages)
     (destination/'Analysis').mkdir(parents=True,exist_ok=True)
     write_json(destination/'Analysis/spine-closures.json',report);return report

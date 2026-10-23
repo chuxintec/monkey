@@ -116,9 +116,10 @@ def normalize(manifest_path, output):
                 fail('REDIRECT_CYCLE',key,'Bundle redirection cycle')
             seen.add(key);key=aliases[key]
         return key
+    from .names import source_names
     result = dict(schemaVersion=1, toolVersion=__version__, sourceProfile=m['sourceProfile'],
                   sourceManifestSha256=sha(stage_bytes(manifest_path)),sourceManifestPath=str(manifest_path),sourceRoots=m.get('sourceRoots',{m['bundle']:m['sourceRoot']}),
-                  sourceLocations={a['sourceId']:dict(bundle=a.get('bundle',m['bundle']),importPath=a.get('importPath'),nativePath=a.get('native')) for a in m['assets']}, evidenceFiles=m.get('evidenceFiles',[]),aliases=aliases, assets=[], spriteFrames=[], bitmapFonts=[],materials=[], nodes=[],
+                  sourceNames=source_names(m),sourceLocations={a['sourceId']:dict(bundle=a.get('bundle',m['bundle']),importPath=a.get('importPath'),nativePath=a.get('native')) for a in m['assets']}, evidenceFiles=m.get('evidenceFiles',[]),aliases=aliases, assets=[], spriteFrames=[], bitmapFonts=[],materials=[], nodes=[],
                   components=[], quarantinedAssets=[], animationSchemaVersion=1,animationClips=[],diagnostics=diagnostics,
                   scopeMode='whole-input' if m.get('packageSelection') else 'asset-selection',
                   coordinateConvention=dict(origin='center anchor', x='right', y='up', units='pixels'))

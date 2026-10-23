@@ -30,3 +30,7 @@ AST模块框架改编自GREA `tools/cocos/index-modules.cjs`，来源SHA256 `462
 未复制整个私有仓库或对其宣称MIT许可；未引入Go依赖、CDN请求、猜测音频/Spine扩展名或吞掉失败。
 Spine原生闭包适配尚未实现。原始PSD等文件留存上限128MiB，不代表结构解析或图像像素预算放宽。
 生成的受控阶段文档读取上限128MiB/800万值，原始普通JSON保持独立预算。
+
+## 原始命名恢复（2026-10-23）
+
+只读参考用户自有AssetDeoce/pkg/decoder/decoder.go的Config.Paths[index][0]→assetPath/末段name逻辑（Manager/.runtime/vendor-reviews/AssetDeoce）；未运行Go或复制私有实现。monkey自己的bundle reader已读取logicalPath，本次独立Python共享Names分配器将它贯穿IR、target plans和native保存路径。中文保留，路径穿越拒绝用于输出并给明确unknown回退，真实大小写/Unicode/同类型冲突按语义类型再短ID消歧；原始JSON数值和源字节不改。GUID/UUID计算不依赖显示路径。

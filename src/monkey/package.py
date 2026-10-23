@@ -81,7 +81,7 @@ def _input_entries(unit):
     return entries(unit['path'])
 
 
-def convert_package(source, target, output, namespace='monkey-project',offline=False,input_set_path=None,resume_state=None):
+def convert_package(source, target, output, namespace='monkey-project',offline=False,input_set_path=None,resume_state=None,reuse_source_stages=None):
     from .inputs import input_set
     selection=input_set(input_set_path) if input_set_path else None
     source=safe(input_set_path or source)
@@ -147,19 +147,25 @@ def convert_package(source, target, output, namespace='monkey-project',offline=F
                           inventorySha256=sha(json.dumps(rows,sort_keys=True).encode()))
             stage='source-code'
             recovered=[]
-            for row in script_paths:
-                raw=read(spool/row['sha256'],max_bytes=MAX_FILE)
-                if sha(raw)!=row['sha256']:fail('SOURCE_CHANGED',row['path'],'Inventory cache changed')
-                if row['suffix']=='.js':
-                    found,error=modules(raw,spool/row['sha256'])
-                else:
-                    found,error=[],dict(code='SOURCE_CODE_FORMAT_PENDING',message='Complete source retained; no verified TS/bytecode/WASM module parser')
-                if error:
-                    report['diagnostics'].append(diagnostic(error['code'],row['path'],error.get('message','Unresolved source module wrapper'),row['sourceId']))
-                    recovered.append(dict(sourceId=row['sourceId'],sourcePath=row['path'],entryType='unresolved_source',status='unresolved',reason=error))
-                for mod in found:
-                    mod['entryType']='module_candidate';mod['sourceFile']=row['path'];mod['sourceId']=row['sourceId']+'#'+str(mod['name'] or mod['candidate_id'])+'@'+str(mod['source_bytes']['start'])
-                    recovered.append(mod)
+            if reuse_source_stages:
+                from .replan import reused_code
+                recovered,code_diagnostics=reused_code(reuse_source_stages,selection,namespace,rows)
+                report['diagnostics'].extend(code_diagnostics)
+                report['sourceCodeParserExecuted']=False
+            else:
+                for row in script_paths:
+                    raw=read(spool/row['sha256'],max_bytes=MAX_FILE)
+                    if sha(raw)!=row['sha256']:fail('SOURCE_CHANGED',row['path'],'Inventory cache changed')
+                    if row['suffix']=='.js':
+                        found,error=modules(raw,spool/row['sha256'])
+                    else:
+                        found,error=[],dict(code='SOURCE_CODE_FORMAT_PENDING',message='Complete source retained; no verified TS/bytecode/WASM module parser')
+                    if error:
+                        report['diagnostics'].append(diagnostic(error['code'],row['path'],error.get('message','Unresolved source module wrapper'),row['sourceId']))
+                        recovered.append(dict(sourceId=row['sourceId'],sourcePath=row['path'],entryType='unresolved_source',status='unresolved',reason=error))
+                    for mod in found:
+                        mod['entryType']='module_candidate';mod['sourceFile']=row['path'];mod['sourceId']=row['sourceId']+'#'+str(mod['name'] or mod['candidate_id'])+'@'+str(mod['source_bytes']['start'])
+                        recovered.append(mod)
         # Resolve physical source records for each literal UUID/logical resource key.
         stage='asset-index';asset_index=[];bundles={};by_stem={}
         for row in rows: by_stem.setdefault(Path(row['path']).name.split('.')[0],[]).append(row['path'])
@@ -202,18 +208,30 @@ def convert_package(source, target, output, namespace='monkey-project',offline=F
         stage='structured-recovery'
         source_profile=selection['sourceProfile'] if selection else ('cocos-2.4.15-project' if any(e['kind']=='editable-cocos-project' for e in cocos_evidence) else
                         'cocos-2.4.15-bundle' if any(e.get('version')=='2.4.15' for e in cocos_evidence) else None)
+        if reuse_source_stages:
+            from .replan import reuse_source_stages as reuse_stages
+            report['sourceStageReuse']=reuse_stages(reuse_source_stages,out,selection,namespace)
         from .structured import recover
         structured=recover(tree,roots,configs,source_profile,out,profiles,namespace)
         report['structuredRecovery']=structured
         if structured['status'] in ('failed','needs_action'):
             report['diagnostics'].append(diagnostic('STRUCTURED_RECOVERY_PENDING','Structured/recovery.json',structured.get('reason','Unresolved structural recovery')))
         stage='target-workspaces'
+        from .names import Names as OutputNames
+        row_by_path={r['path']:r for r in rows};file_metadata={}
+        for indexed in sorted(asset_index,key=lambda a:(a['bundle'],str(a.get('logicalKey')),a['sourceId'])):
+            logical=indexed.get('logicalKey')
+            if not isinstance(logical,list) or not logical or not isinstance(logical[0],str):continue
+            for path in indexed['sourceFiles']:
+                source_row=row_by_path[path]
+                if source_row['category'] in ('Images','Fonts','Audio','Spine'):
+                    file_metadata.setdefault(source_row['sha256'],dict(bundle=indexed['bundle'],logicalPath=logical[0],sourceType=indexed.get('sourceType')))
         for profile in profiles:
             project=out/('UnityProject' if profile==unity.PROFILE else 'CocosProject')
             native_manifest=stage_manifest(project) if (project/'manifest.json').exists() else {}
             if not project.exists():
                 project.mkdir();_base(project,profile,namespace)
-            dispositions=[];seen={};targets={}
+            dispositions=[];seen={};targets={};content_paths={};naming=OutputNames();module_naming=OutputNames()
             for row in rows:
                 raw=read(spool/row['sha256'],max_bytes=MAX_FILE);record=dict(row);category=row['category'];digest=row['sha256']
                 if sha(raw)!=digest:fail('SOURCE_CHANGED',row['path'],'Inventory cache changed')
@@ -221,10 +239,18 @@ def convert_package(source, target, output, namespace='monkey-project',offline=F
                 if direct:
                     folder=('Assets/Game/Content/'+category if profile==unity.PROFILE else
                             'assets/fonts' if category=='Fonts' else 'assets/audio' if category=='Audio' else 'assets/art/images')
-                    dest=folder+'/'+digest[:24]+row['suffix']
+                    prefix=folder+'/Original'
                 else:
                     section='SourceCode' if category=='Code' else 'Excluded' if row['disposition']=='filtered' else 'Unconverted'
-                    dest='SourceRecovery/'+section+'/'+category+'/'+digest+row['suffix']
+                    prefix='SourceRecovery/'+section+'/'+category
+                content_key=(category,digest,row['suffix'])
+                metadata=file_metadata.get(digest) or dict(bundle=row['inputRoot'],logicalPath=row['localPath'],nameProvenance='input-relative-path')
+                if content_key in content_paths:
+                    dest=content_paths[content_key]
+                    naming.records.append(dict(sourceId=row['sourceId'],identity=row['sourceId'],originalPath=metadata.get('logicalPath'),sourceName=metadata.get('sourceName'),provenance='config.paths' if digest in file_metadata else 'input-relative-path',target=dest,reasons=['content-deduplicated']))
+                else:
+                    dest=naming.path(row['sourceId'],row['suffix'],prefix,metadata=metadata)
+                    content_paths[content_key]=dest
                 if dest in seen:
                     record['duplicateOf']=seen[dest];record['disposition']='deduplicated'
                 else:
@@ -247,8 +273,9 @@ def convert_package(source, target, output, namespace='monkey-project',offline=F
                 record={k:v for k,v in mod.items() if k!='source'}
                 if 'source' in mod:
                     token,cs,ts=drafts(mod,mod['sourceId'])
-                    evidence='SourceRecovery/Modules/'+token+'.js'
-                    draft='SourceRecovery/CodeDrafts/'+('CSharp/'+token+'.cs' if profile==unity.PROFILE else 'TypeScript/'+token+'.ts')
+                    meta=dict(bundle=mod.get('sourceFile','source').split('/')[0],sourceName=mod.get('name'))
+                    evidence=module_naming.path(mod['sourceId'],'.js','SourceRecovery/Modules',metadata=meta)
+                    draft=module_naming.path(mod['sourceId'],'.cs' if profile==unity.PROFILE else '.ts','SourceRecovery/CodeDrafts/'+('CSharp' if profile==unity.PROFILE else 'TypeScript'),metadata=meta)
                     _write(project,evidence,mod['source'].encode())
                     _write(project,draft,(cs if profile==unity.PROFILE else ts).encode())
                     record.update(sourceEvidence=evidence,draft=draft,status='draft_generated',source_recovered=True,
@@ -260,6 +287,8 @@ def convert_package(source, target, output, namespace='monkey-project',offline=F
                                       verification=['native compile','affected module behavior','failure/unavailable path']))
                 code_index.append(record)
             (project/'Analysis').mkdir(exist_ok=True)
+            write_json(project/'Analysis/package-name-map.json',naming.report())
+            write_json(project/'Analysis/module-name-map.json',module_naming.report())
             states=dict(Counter(r['disposition'] for r in dispositions))
             coverage=dict(inputFiles=len(rows),accountedFiles=len(dispositions),inputBytes=report['inputBytes'],
                           accountedBytes=sum(r['bytes'] for r in dispositions),dispositions=states,
@@ -348,7 +377,12 @@ Neither target requires monkey, Python, the source tree, the other target or the
             if inspected_path.exists():
                 from .assets.spine import recover_closures
                 from .io import stage_document
-                spine=recover_closures(stage_document(inspected_path),project)
+                previous=None
+                if reuse_source_stages:
+                    prior=load(read(safe(reuse_source_stages)/'conversion-result.json'))
+                    cached=next((p for p in prior['projects'] if p['path']==project.name),prior['projects'][0])
+                    previous=(safe(reuse_source_stages)/cached['path'],cached['manifestSha256'])
+                spine=recover_closures(stage_document(inspected_path),project,previous=previous)
                 coverage['spineClosures']=dict(closed=spine['closed'],unresolved=spine['unresolved'],nativeValidation='not_run')
             objects=load(read(project/'Analysis/structured-objects.json'))['objects']
             by_input={}

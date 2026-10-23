@@ -41,12 +41,14 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
         if set(label_bindings)-known_ids:fail('UNKNOWN_BINDING_COMPONENT',str(bindings_path),'Binding references unknown Label')
         binding_receipt=dict(sha256=sha(raw),**binding)
         diagnostics=[d for d in diagnostics if not (d.get('sourceId') in label_bindings and d['message'].startswith('system font requires'))]
+    from ..names import Names
+    naming=Names(ir.get('sourceNames'))
     textures, copies = [], []
     def resource(relative, identity, role):
         source = inside(ir_path.parent, relative)
         if relative not in expected or sha(read(source)) != expected[relative]:
             fail('SOURCE_CHANGED', relative, 'Normalized asset differs from output manifest')
-        target = 'Assets/Generated/Art/'+guid(namespace,identity)+source.suffix.lower()
+        target = naming.path(identity,source.suffix.lower(),'Assets/Generated/Art')
         copies.append(dict(source=relative,target=target,sha256=expected[relative],sourceId=identity,role=role,
                            guid=guid(namespace,identity)))
         return target
@@ -60,13 +62,15 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
                              border=[0,0,0,0],size=frame['originalSize'],originalSize=frame['originalSize'],offset=[0,0]))
     assets=[]
     for asset in ir['assets']:
-        assets.append(dict(id=asset['sourceId'],kind=asset['kind'],path=resource(asset['path'],asset['sourceId'],'native'),fontCoverage=asset.get('fontCoverage')))
+        item=dict(id=asset['sourceId'],kind=asset['kind'],path=resource(asset['path'],asset['sourceId'],'native'),fontCoverage=asset.get('fontCoverage'))
+        if asset['kind']=='cc.TTFFont':item['fontAssetPath']=naming.path(asset['sourceId'],'.asset','Assets/Generated/Art')
+        assets.append(item)
     bitmap_fonts=[]
     for font in ir.get('bitmapFonts',[]):
         item={k:v for k,v in font.items() if k!='atlasImage'}
         item['id']=font['sourceId']
         item['path']=resource(font['atlasImage'],font['sourceId']+'@atlas','bitmap-atlas')
-        item['fontPath']='Assets/Generated/Art/'+guid(namespace,font['sourceId'])+'.asset'
+        item['fontPath']=naming.path(font['sourceId'],'.asset','Assets/Generated/Art')
         bitmap_fonts.append(item)
     resource_ids = {a['id'] for a in assets if a['kind']=='cc.TTFFont'}|{f['id'] for f in bitmap_fonts}
     sprite_ids = {s['id'] for s in textures}
@@ -200,21 +204,23 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
         components.append(entry)
     from ..assets.animation import plan_clips
     animations,animation_gaps=plan_clips(ir,namespace,PROFILE,animation_selection)
+    naming.records.extend(a['nameEvidence'] for a in animations)
     if animation_selection:
         unselected={c['sourceId'] for c in ir.get('animationClips',[]) if c['sourceId'] not in animation_selection}
         diagnostics=[d for d in diagnostics if d.get('sourceId') not in unselected]
     diagnostics.extend(animation_gaps)
     from .prefabs import plan_prefabs
     source_prefabs,prefab_gaps=plan_prefabs(ir,components)
+    for prefab in source_prefabs:prefab['path']=naming.path(prefab['sourceId'],'.prefab','Assets/Generated/Views/Sources')
     diagnostics.extend(prefab_gaps)
     out = new_output(output,[ir_path.parent])
     (out/'resources').mkdir()
     for copy in copies:
-        target = out/'resources'/Path(copy['target']).name
+        target = out/'resources'/(sha(copy['target'].encode())[:24]+Path(copy['target']).suffix)
         target.write_bytes(read(inside(ir_path.parent,copy['source'])))
         copy['source']='resources/'+target.name
     result=dict(schemaVersion=1,toolVersion=__version__,targetProfile=PROFILE,namespace=namespace,
-                sourcePrefabs=source_prefabs,
+                sourcePrefabs=source_prefabs,naming=naming.report(),
                 scopeMode=ir.get('scopeMode','asset-selection'),
                 sourceIrSha256=sha(stage_bytes(ir_path)),sourceManifestPath=ir.get('sourceManifestPath'),sourceManifestSha256=ir['sourceManifestSha256'],
                 sourceRoots=ir.get('sourceRoots',{}),sourceLocations=ir.get('sourceLocations',{}),designSize=[750,1334],pixelsPerUnit=100,
@@ -244,7 +250,7 @@ def export(plan_path, output):
         (out/folder).mkdir(parents=True,exist_ok=True)
     ownership=[]
     for c in p['copies']:
-        target=inside(out,c['target']);target.write_bytes(read(inside(plan_path.parent,c['source'])))
+        target=inside(out,c['target']);target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(read(inside(plan_path.parent,c['source'])))
         Path(str(target)+'.meta').write_text('fileFormatVersion: 2\nguid: '+c['guid']+'\n',encoding='utf-8')
         ownership.append(dict(path=c['target'],sourceId=c['sourceId'],guid=c['guid']))
     view_path=out/'Assets/Generated/Views/MonkeyCandidateView.cs'
@@ -311,6 +317,7 @@ def export(plan_path, output):
             target='Assets/Generated/Views/Candidate.prefab',viewField={'cc.Sprite':'Images','cc.Label':'Labels','cc.Button':'Buttons'}.get(c['type']),
             bindingEvidence='Actual indices and native fileIDs require Analysis/editor-readback.json') for c in p['components']]))
     if p.get('bindings'):write_json(out/'Analysis/font-bindings.json',p['bindings'])
+    write_json(out/'Analysis/name-map.json',p.get('naming',{}))
     report=dict(schemaVersion=1,toolVersion=__version__,targetProfile=PROFILE,namespace=p['namespace'],
                 scopeMode=p.get('scopeMode','asset-selection'),
                 planSha256=sha(stage_bytes(plan_path)),sourceRoots=p.get('sourceRoots',{}),sourceManifestSha256=p.get('sourceManifestSha256'),diagnostics=p['diagnostics'],editorValidation='not_run',

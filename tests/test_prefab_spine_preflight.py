@@ -37,16 +37,22 @@ class BoundaryTests(unittest.TestCase):
             result=recover_closures(manifest,root/'out');self.assertEqual(result['closed'],1)
             row=result['skeletons'][0];self.assertEqual(row['runtime'],'not_installed')
             files={Path(f['path']).name:root/'out'/f['path'] for f in row['files']}
-            self.assertEqual(files['skeleton.bin'].read_bytes(),binary);self.assertEqual(files['source.atlas'].read_text(),atlas)
+            self.assertEqual(next(p for n,p in files.items() if n.endswith('.bin')).read_bytes(),binary);self.assertEqual(next(p for n,p in files.items() if n.endswith('.atlas')).read_text(),atlas)
             inline={'skeleton':{'spine':'3.8-from-4.2.43'},'bones':[{'name':'root'}],'slots':[],'skins':{},'animations':{}}
             skeleton['native']=None;skeleton['document']['instances'][0]['_skeletonJson']=inline
             result=recover_closures(manifest,root/'inline')
             self.assertEqual(result['closed'],1);row=result['skeletons'][0]
             self.assertEqual(row['skeletonVersion'],'3.8-from-4.2.43')
             self.assertEqual(row['runtimeCompatibility'],'not_validated');self.assertIsNone(row['sourceNativeSha256'])
-            path=next(f['path'] for f in row['files'] if f['path'].endswith('skeleton.json'))
+            path=next(f['path'] for f in row['files'] if f['path'].endswith('.json'))
             import json
             self.assertEqual(json.loads((root/'inline'/path).read_text()),inline)
+            from monkey.io import finish
+            from unittest.mock import patch
+            finish(root/'inline',dict(schemaVersion=1,diagnostics=[]))
+            with patch('monkey.assets.spine.open_texture',side_effect=AssertionError('pixel decode repeated')):
+                reused=recover_closures(manifest,root/'reused',previous=(root/'inline',sha((root/'inline/manifest.json').read_bytes())))
+            self.assertEqual(reused['closed'],1,reused);self.assertEqual(reused['decodedPages'],0);self.assertEqual(reused['reusedPages'],1)
             manifest['assets']=[skeleton];result=recover_closures(manifest,root/'missing')
             self.assertEqual(result['unresolved'],1);self.assertEqual(result['skeletons'][0]['reason'],'SPINE_TEXTURE_MISSING')
 

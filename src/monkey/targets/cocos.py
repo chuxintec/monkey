@@ -18,9 +18,9 @@ def meta(uid,importer,version,user=None):
     return dict(ver=version,uuid=uid,importer=importer,imported=False,files=[],subMetas={},userData=user or {})
 
 
-def bitmap_text(font,atlas_name):
+def bitmap_text(font,atlas_name,face="MonkeySourceBitmap"):
     # Normalized sourceRect is top-origin; metrics stores the logical point-size bearing.
-    lines=[f'info face="MonkeySourceBitmap" size={font["pointSize"]} bold=0 italic=0 unicode=1',
+    lines=[f'info face="{face}" size={font["pointSize"]} bold=0 italic=0 unicode=1',
            f'common lineHeight={font["lineHeight"]} base={font["pointSize"]} scaleW={font["atlasSize"][0]} scaleH={font["atlasSize"][1]} pages=1 packed=0',
            f'page id=0 file="{atlas_name}"',f'chars count={len(font["glyphs"])}']
     for g in font['glyphs']:
@@ -33,9 +33,11 @@ def bitmap_text(font,atlas_name):
 
 def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None):
     path,ir,bindings,receipt,resource,resolve=input_ir(ir_path,bindings_path)
+    from ..names import Names
+    naming=Names(ir.get('sourceNames'))
     diagnostics=list(ir['diagnostics']);assets=[];copies=[]
     def add(sid,relative,kind,suffix,**fields):
-        raw=resource(relative);uid=identity(namespace,sid);target='assets/generated/art/'+uid+suffix
+        raw=resource(relative);uid=identity(namespace,sid);target=naming.path(sid,suffix,'assets/generated/art')
         item=dict(sourceId=sid,uuid=uid,path=target,kind=kind,sha256=sha(raw),**fields)
         assets.append(item);copies.append(dict(source=relative,target=target,sha256=sha(raw)))
         return item
@@ -53,8 +55,8 @@ def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None):
     for f in ir.get('bitmapFonts',[]):
         atlas=add(f['sourceId']+'@atlas',f['atlasImage'],'sprite','.png',size=f['atlasSize'],originalSize=f['atlasSize'],
                   offset=[0,0],border=[0,0,0,0],subresource='spriteFrame')
-        uid=identity(namespace,f['sourceId']);target='assets/generated/art/'+uid+'.fnt'
-        raw=bitmap_text(f,Path(atlas['path']).name)
+        uid=identity(namespace,f['sourceId']);target=naming.path(f['sourceId'],'.fnt','assets/generated/art')
+        raw=bitmap_text(f,Path(atlas['path']).name,Path(target).stem)
         assets.append(dict(sourceId=f['sourceId'],uuid=uid,path=target,kind='bitmap',sha256=sha(raw),
                            atlas=atlas['sourceId'],pointSize=f['pointSize'],glyphCount=len(f['glyphs']),kerningCount=len(f['kernings'])))
         copies.append(dict(source=None,target=target,sha256=sha(raw),text=raw.decode()))
@@ -110,6 +112,7 @@ def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None):
             diagnostics.append(diagnostic('MISSING_OUTLINE_LABEL',c['sourceId'],'Label dependency could not be converted',c['sourceId']))
     from ..assets.animation import plan_clips
     animations,animation_gaps=plan_clips(ir,namespace,PROFILE,animation_selection)
+    naming.records.extend(a['nameEvidence'] for a in animations)
     if animation_selection:
         unselected={c['sourceId'] for c in ir.get('animationClips',[]) if c['sourceId'] not in animation_selection}
         diagnostics=[d for d in diagnostics if d.get('sourceId') not in unselected]
@@ -123,7 +126,7 @@ def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None):
         scopeMode=ir.get('scopeMode','asset-selection'),
         sourceIrSha256=sha(stage_bytes(path)),sourceManifestSha256=ir['sourceManifestSha256'],sourceManifestPath=ir.get('sourceManifestPath'),
         sourceRoots=ir.get('sourceRoots',{}),sourceLocations=ir.get('sourceLocations',{}),bindings=receipt,
-        designSize=[750,1334],assets=assets,copies=copies,animations=animations,nodes=ir['nodes'],components=components,
+        designSize=[750,1334],assets=assets,copies=copies,animations=animations,naming=naming.report(),nodes=ir['nodes'],components=components,
         diagnostics=diagnostics,editorValidation='not_run',subresourceValidation='pending-native-import')
     write_json(out/'plan.json',result);return finish(out,result)
 
@@ -140,7 +143,7 @@ def export(plan_path,output):
         (out/folder).mkdir(parents=True,exist_ok=True)
     by_path={a['path']:a for a in p['assets']};by_id={a['sourceId']:a for a in p['assets']}
     for c in p['copies']:
-        target=inside(out,c['target']);target.write_bytes(read(inside(path.parent,c['source'])))
+        target=inside(out,c['target']);target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(read(inside(path.parent,c['source'])))
         a=by_path[c['target']]
         if a['kind']=='sprite':m=meta(a['uuid'],'image','1.0.27',dict(type='sprite-frame',fixAlphaTransparencyArtifacts=False,hasAlpha=True))
         elif a['kind']=='ttf':m=meta(a['uuid'],'ttf-font','1.0.1')
@@ -169,6 +172,7 @@ def export(plan_path,output):
         verification=dict(static='pending',editor='not_run',visual='not_run',business='not_run')))
     if p['bindings']:write_json(out/'Analysis/font-bindings.json',p['bindings'])
     (out/'README.md').write_text('Creator 3.8.8 isolated candidate. Open only in an authorized resource window.\nRun Monkey/Import isolated candidate once after assets import. Existing outputs are refused.\nNative scene and child UUIDs require Editor; no source engine interpreter ships.\n')
+    write_json(out/'Analysis/name-map.json',p.get('naming',{}))
     report=dict(schemaVersion=1,toolVersion=__version__,targetProfile=PROFILE,namespace=p['namespace'],projectUuid=project_id,
         scopeMode=p.get('scopeMode','asset-selection'),
         sourceManifestSha256=p['sourceManifestSha256'],sourceRoots=p['sourceRoots'],planSha256=sha(stage_bytes(path)),diagnostics=p['diagnostics'],

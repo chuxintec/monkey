@@ -19,6 +19,7 @@ def main(argv=None):
     cap.add_argument('--json', action='store_true')
     p = sub.add_parser('convert', help='Convert a source project into an isolated native project candidate')
     p.add_argument('--source', help='Local wxapkg/APK, resource/project directory, project.json or bundle config.json')
+    p.add_argument('--reuse-source-stages',help='Fresh package output using verified source stages; supports names-v1 metadata migration')
     p.add_argument('--input-set', help='Explicit local roots and identity/provenance manifest (schema 1)')
     p.add_argument('--target', choices=['unity','cocos','unity6','cocos38','both',UNITY_PROFILE,cocos.PROFILE])
     p.add_argument('--package', action='store_true', help='Inventory all input files and generate self-contained recovery workspaces')
@@ -96,9 +97,10 @@ def main(argv=None):
             return 0
         if args.command == 'convert':
             from .convert import convert, resume, recipe
+            if args.reuse_source_stages and not args.input_set:parser.error('--reuse-source-stages requires --input-set and fresh --out')
             if args.resume and args.input_set:
                 if any((args.source,args.target,args.out,args.recipe,args.asset_index,args.all_assets,args.bindings,
-                        args.dependency_source,args.evidence_source,args.animation,args.source_profile,args.namespace,args.package)):
+                        args.dependency_source,args.evidence_source,args.animation,args.source_profile,args.namespace,args.package,args.reuse_source_stages)):
                     parser.error('package resume accepts --resume, --input-set and optional --offline only')
                 from .package import resume_package
                 result=resume_package(args.resume,args.input_set,args.offline)
@@ -113,7 +115,7 @@ def main(argv=None):
                         args.dependency_source,args.evidence_source,args.bindings,args.animation,args.source_profile)):
                     parser.error('package conversion requires --source/--target/--out; slice options are unsupported')
                 from .package import convert_package
-                result=convert_package(args.source,args.target,args.out,args.namespace or 'monkey-project',args.offline,args.input_set)
+                result=convert_package(args.source,args.target,args.out,args.namespace or 'monkey-project',args.offline,args.input_set,reuse_source_stages=args.reuse_source_stages)
                 print(json.dumps(dict(status=result['workflowStatus'],resultKind=result['resultKind'],
                      completed=result['completed'],projects=result['projects'],inputFiles=result['inputFiles'],
                      inputBytes=result['inputBytes'],diagnostics=len(result['diagnostics']),nextAction=result['nextAction'],

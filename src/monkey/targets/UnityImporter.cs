@@ -33,7 +33,7 @@ public static class MonkeyImporter
     [Serializable] public class TextureSpec {
         public string id, path; public float[] border, size, originalSize, offset;
     }
-    [Serializable] public class AssetSpec { public string id, kind, path; }
+    [Serializable] public class AssetSpec { public string id, kind, path, fontAssetPath; }
     [Serializable] public class NodeSpec {
         public string sourceId, name, parent; public string[] children, components;
         public float[] position, rotation, scale, size, anchor, color;
@@ -355,6 +355,8 @@ public static class MonkeyImporter
         var diagnostics = new List<string>();
         foreach(var directory in new[]{Path.GetDirectoryName(PrefabPath),Path.GetDirectoryName(ScenePath),"Assets/Generated/Art","Assets/Generated/Controllers","Analysis"})
             Directory.CreateDirectory(directory);
+        foreach(var font in plan.bitmapFonts)Directory.CreateDirectory(Path.GetDirectoryName(font.fontPath));
+        foreach(var animation in plan.animations.Where(a=>a.convertible))Directory.CreateDirectory(Path.GetDirectoryName(animation.path));
         AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
         if (plan.sourceDiagnosticCount > 0) diagnostics.Add("SOURCE_GAPS: " + plan.sourceDiagnosticCount);
         if(NeedsTmp(plan))EnsureTmpResources(plan.tmpResources);
@@ -377,7 +379,7 @@ public static class MonkeyImporter
             if (!font.TryAddCharacters(needed,out string missing)) {diagnostics.Add("TTF_GLYPHS_MISSING: " + missing);UnityEngine.Object.DestroyImmediate(font);continue;}
             font.atlasPopulationMode=TMPro.AtlasPopulationMode.Static;
             font.fallbackFontAssetTable=new List<TMPro.TMP_FontAsset>();
-            var path = item.path.Substring(0,item.path.Length-4) + ".asset";
+            var path = !string.IsNullOrEmpty(item.fontAssetPath)?item.fontAssetPath:item.path.Substring(0,item.path.Length-4) + ".asset";
             if (File.Exists(path)) throw new InvalidOperationException("Font target exists: " + path);
             AssetDatabase.CreateAsset(font,path);
             if (font.material != null) AssetDatabase.AddObjectToAsset(font.material,font);
@@ -400,12 +402,12 @@ public static class MonkeyImporter
             if (shader == null) throw new InvalidOperationException("Native TMP bitmap shader unavailable after resource import");
             var font = ScriptableObject.CreateInstance<TMPro.TMP_FontAsset>();
             // Custom Atlas shader samples RGBA, retaining the source font's colored outline.
-            var material = new Material(shader); material.name="BitmapFontMaterial";
+            var material = new Material(shader); material.name=Path.GetFileNameWithoutExtension(spec.fontPath)+" Material";
             material.mainTexture=atlas; material.SetColor("_FaceColor",Color.white);
             font.material=material;
-            font.name = "SourceBitmapFont";
+            font.name = Path.GetFileNameWithoutExtension(spec.fontPath);
             font.faceInfo = new UnityEngine.TextCore.FaceInfo {
-                familyName="SourceBitmapFont",styleName="Original",pointSize=(int)spec.pointSize,scale=1,
+                familyName=font.name,styleName="Original",pointSize=(int)spec.pointSize,scale=1,
                 lineHeight=spec.lineHeight,ascentLine=spec.ascent,descentLine=spec.descent,
                 capLine=spec.ascent,meanLine=spec.ascent*.5f,baseline=0
             };

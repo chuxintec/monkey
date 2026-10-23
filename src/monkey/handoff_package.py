@@ -56,6 +56,8 @@ def enrich(project,out,rows,code_index,tasks):
                detailIndex='Analysis/agent-work-details.json',dispatchPolicy='coherent_module_batches_no_automatic_agents'))
     write_json(project/'Analysis/code-index.json',dict(schemaVersion=1,modules=code_index))
     write_json(project/'Analysis/component-code-bindings.json',dict(schemaVersion=1,bindings=bindings))
+    from .names import Names,source_names
+    naming=Names(source_names(inspected)) if inspected else Names()
     objects=[];by_tree={r['inputRoot']+'/'+r['localPath']:r for r in rows}
     frames={a['sourceId'] for a in ir['spriteFrames']} if ir else set()
     texture_sources={a['textureRef'] for a in ir['spriteFrames']} if ir else set()
@@ -71,7 +73,7 @@ def enrich(project,out,rows,code_index,tasks):
             record=dict(sourceId=asset['sourceId'],kind=asset.get('kind'),sourceInputs=source_ids,logicalPath=asset.get('logicalPath'),
                         state='decoded_only' if asset.get('document') else 'unresolved',nativeValidation='not_run')
             if asset.get('document'):
-                relative='Analysis/Decoded/'+sha(asset['sourceId'].encode())[:24]+'.json'
+                relative=naming.path(asset['sourceId'],'.json','Analysis/Decoded')
                 dest=project/relative;dest.parent.mkdir(parents=True,exist_ok=True)
                 write_json(dest,dict(schemaVersion=1,sourceId=asset['sourceId'],kind=asset.get('kind'),document=asset['document']))
                 record['decodedEvidence']=relative
@@ -82,6 +84,7 @@ def enrich(project,out,rows,code_index,tasks):
                 if asset['sourceId'] in node_assets:record['state']='normalized_node_graph'
                 if asset['sourceId'] in quarantined:record['state']='quarantined_graph'
             objects.append(record)
+    write_json(project/'Analysis/decoded-name-map.json',naming.report())
     write_json(project/'Analysis/structured-objects.json',dict(schemaVersion=1,objects=objects))
     return dict(codeRegionDetails=len(by_code),componentBindings=len(bindings),viewBatches=len(groups),unclassifiedRegions=len(pool),
                 aggregateTasks=len(aggregates),structuredObjects=len(objects))

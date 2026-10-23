@@ -138,6 +138,14 @@ def plan_clips(ir,namespace,profile,selection=None):
             out.append(dict(id=clip['sourceId']+'@'+owner['sourceId'],name=clip['name'],root=owner['node'],duration=clip['duration'],sample=clip['sample'],
                 wrap=clip['wrap'],tracks=tracks,convertible=bool(tracks) and clip['timingSupported'],partial=clip['partial'] or len(tracks)!=len(clip['tracks']),
                 events=clip['events'],path=('Assets/Generated/Animations/' if profile.startswith('unity-') else 'assets/generated/animations/')+identity+'.anim',autoPlay=False))
+    from ..names import Names
+    naming=Names(ir.get('sourceNames'))
+    for item in out:
+        source=item['id'].split('@',1)[0]
+        meta=dict(ir.get('sourceNames',{}).get(source,{}));meta['sourceId']=source
+        if not meta.get('sourceName'):meta['sourceName']=item['name']
+        item['path']=naming.path(item['id'],'.anim','Assets/Generated/Animations' if profile.startswith('unity-') else 'assets/generated/animations',metadata=meta)
+        item['nameEvidence']=naming.records[-1]
     return out,gaps
 
 

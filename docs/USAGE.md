@@ -277,3 +277,15 @@ bin/monkey native-import --candidate outputs/game/UnityProject \
 宿主新建副本后直接启动已指定Editor的batchmode，固定`ImportBatchAsync`且不带`-quit`，等待包完成事件继续。`unity run`固定带`-quit`，不能用于这一异步入口。成功/失败/预算结束由薄层退出，宿主保存真实PID与退出状态，外层必要时仅普通terminate自己的child，无hard kill；未退出明确报attention。`execution-result.json`和`Verification/`分开记录启动、资源、原生回读和来源缺口。
 
 这是生成工程的可选原生验收阶段；没有--execute时不会启动引擎。新执行路径尚待实际窗口验证，进度或模拟测试不构成引擎通过。
+
+## 原名恢复与受校验重新规划
+
+可恢复的config.paths优先，源_name其次，均无可靠名称才用unknown短ID。目标保留bundle和相对目录；原尺寸/字库atlas等派生资源有语义后缀，真实冲突才消歧。Analysis/name-map.json、package-name-map.json、decoded-name-map.json、module-name-map.json以及spine-closures.json记录映射与原因；中间缓存可以继续哈希命名。
+
+名称规则更新可从明确支持的旧阶段生成新候选，无需重新执行未变化的reader/像素/AST解析：
+
+```sh
+bin/monkey convert --input-set inputs.json --target both --namespace SAME_NAMESPACE --reuse-source-stages outputs/FROZEN_OLD --out outputs/FRESH_NEW
+```
+
+只接受完全相同的输入路径/字节/SHA及namespace；阶段owner清单和实际文件需全部一致，且算法为当前或明确支持的names-v1元数据迁移（838d05b）。旧候选只读，新的SourceRecovery初稿按RF/模块原名重新组织，不合并旧候选中的人工业务修改。像素缓存只作不可改写的数据复用；引用、meta、manifest和handoff随新路径重新生成。任一身份/算法/文件漂移直接拒绝，不静默跳过。原生回读仍需实际新窗口。
