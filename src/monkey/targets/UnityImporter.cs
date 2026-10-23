@@ -379,7 +379,13 @@ public static class MonkeyImporter
                 throw new InvalidOperationException("Invalid or existing source prefab path: "+spec.path);
             Directory.CreateDirectory(Path.GetDirectoryName(spec.path));
             AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
-            var clone=UnityEngine.Object.Instantiate(nodeMap[spec.root].gameObject);
+            var originalRoot=nodeMap[spec.root].GetComponent<RectTransform>();
+            var clone=UnityEngine.Object.Instantiate(originalRoot.gameObject,(Transform)null,false);
+            var cloneRoot=clone.GetComponent<RectTransform>();
+            cloneRoot.anchorMin=originalRoot.anchorMin;cloneRoot.anchorMax=originalRoot.anchorMax;
+            cloneRoot.pivot=originalRoot.pivot;cloneRoot.sizeDelta=originalRoot.sizeDelta;
+            cloneRoot.anchoredPosition3D=originalRoot.anchoredPosition3D;
+            cloneRoot.localRotation=originalRoot.localRotation;cloneRoot.localScale=originalRoot.localScale;
             clone.name=nodeMap[spec.root].name;
             try {
                 var sourcePrefab=PrefabUtility.SaveAsPrefabAsset(clone,spec.path,out bool saved);
