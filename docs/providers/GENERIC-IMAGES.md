@@ -2,6 +2,8 @@
 
 开发版增加明确的 `--source-family laya|layaair|egret|eraget|custom|other`，目标只允许Unity6；Eraget归为Egret。当前通用出口是 **已提供原始PNG/JPEG的派生gallery**，不解析这些引擎的节点、图集切片或方法。显式family属于用户声明，精确源引擎版本保持unknown；不能把这个通用子域说成Laya/Egret全版本恢复。直接低层Creator plan同样拒绝此IR。
 
+另有基于已审阅callback的[自定义二进制数据/图集profile](CUSTOM-BINARY-RESOURCE.md)，支持来源表、Plist/Skin数据与精确纹理闭包。灵画师当前166修订已据缓存同SHA、直接启动与运行时版本确认Egret5.2.32；不以历史gallery或该样本声称真实Laya已支持。
+
 ```sh
 bin/monkey convert --source-family egret --source /path/to/decrypted.wxapkg \
   --target unity6 --out outputs/images --format grea

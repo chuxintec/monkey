@@ -40,7 +40,7 @@ def main(argv=None):
     p.add_argument('--recipe', help='Reusable JSON input/selection options; combine with --out')
     p.add_argument('--offline', action='store_true', help='Explicitly generate and verify an offline candidate only')
     p.add_argument('--namespace')
-    p.add_argument('--source-profile', choices=[PROFILE,PROJECT_PROFILE])
+    p.add_argument('--source-profile', choices=[PROFILE,PROJECT_PROFILE,'generic-image-resources-v1','egret-custom-resource-plist-v1'])
     pick = p.add_mutually_exclusive_group()
     pick.add_argument('--asset-index', type=int, action='append')
     pick.add_argument('--all-assets', action='store_true', help='Explicitly select every bundle entry (project default)')
@@ -155,8 +155,8 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         if args.command == 'capabilities':
-            print(json.dumps(dict(version=__version__, profiles=[PROFILE,PROJECT_PROFILE,'cocos-2.4.11-bundle','cocos-3.8.7-bundle','cocos-2.1.2-resource','generic-image-resources-v1'], targetProfiles=[UNITY_PROFILE,cocos.PROFILE],
-                additionalPackageProfiles={'cocos-2.1.2-resource':dict(scope='version-proven-resource-subset',native='211-source-frames-both-targets-verified',graphs='pending',operations=['package-convert']), 'generic-image-resources-v1':dict(scope='derived-original-image-gallery-only',families=['laya','layaair','egret','eraget','custom','other'],targets=['unity6'],native='Egret-16-derived-images-verified',sourceGraphs='not-restored',operations=['package-convert']), 'cocos-2.4.11-bundle':dict(scope='version-proven-published-bundle-subset',native='91-source-graphs-both-targets-verified',operations=['package-convert']), 'cocos-3.8.7-bundle':dict(scope='version-proven-static-node-ui-and-resource-subset',native='83-source-graphs-810-nodes-81-prefabs-and-986-frames-both-targets-verified',graphs='36-nested-prefab-instances-pending',operations=['package-convert'])},
+            print(json.dumps(dict(version=__version__, profiles=[PROFILE,PROJECT_PROFILE,'cocos-2.4.11-bundle','cocos-3.8.7-bundle','cocos-2.1.2-resource','generic-image-resources-v1','egret-custom-resource-plist-v1'], targetProfiles=[UNITY_PROFILE,cocos.PROFILE],
+                additionalPackageProfiles={'egret-custom-resource-plist-v1':dict(scope='reviewed-custom-resource-manifest-plist-binjson-v2',targets=['unity6'],sourceSkins='typed-data-only-native-layout-pending',remoteAcquisition='explicit-manifest-cache-and-bounded-fetch',native='132-source-frames-verified; expanded-atlas-set-pending',operations=['package-convert']), 'cocos-2.1.2-resource':dict(scope='version-proven-resource-subset',native='211-source-frames-both-targets-verified',graphs='pending',operations=['package-convert']), 'generic-image-resources-v1':dict(scope='derived-original-image-gallery-only',families=['laya','layaair','egret','eraget','custom','other'],targets=['unity6'],native='Egret-16-derived-images-verified',sourceGraphs='not-restored',operations=['package-convert']), 'cocos-2.4.11-bundle':dict(scope='version-proven-published-bundle-subset',native='91-source-graphs-both-targets-verified',operations=['package-convert']), 'cocos-3.8.7-bundle':dict(scope='version-proven-static-node-ui-and-resource-subset',native='83-source-graphs-810-nodes-81-prefabs-and-986-frames-both-targets-verified',graphs='36-nested-prefab-instances-pending',operations=['package-convert'])},
                 schemaVersion=1, formatting=dict(implemented=['unity-creator-unimported-owned-grea-v1','fresh-package-convert-none-grea'],pending=['unity-general-scene-native-format','unity-source-positive-native-move-sample'],rejected=['materialized-native-assets-require-a-future-native-move-adapter']), unitySourceProfile=dict(name='unityfs-unitypy-1.25.3-assetripper-2.0.0',status='partial',inputs='explicit-unity-bundle-or-webdata-files-and-exact-local-texture-cache',additionalContainers=['UnityWebData1.0'],invalidTexturePolicy='block-default-explicit-quarantine-retains-original',dependencyClosure='explicit-frozen-pool-exact-serialized-file-closure',editor='one-prefab-schema-reference-save-reload-verified',publicNative=True,nativeProfile='unity-leaf-prefab-sprite-array-v1',nativeFormatting='typed-resource-moves-with-dynamic-path-pins; real sample pinned all 134 assets',methodsRecovered=0), implemented=['convert','catalog','inspect','normalize','plan','export','verify','handoff','diff','register','apply','preflight','native-import','research-matrix','code-model','code-emit','format-project','project-model','inspect-unity','export-unity','unity-code-model','index-unity','hydrate-unity'], planned=[],
                 targetValidation={UNITY_PROFILE:dict(static='implemented',editor='representative-subset-verified',visual='not_run'),cocos.PROFILE:dict(static='implemented',editor='representative-subset-verified',visual='not_run')},
                 compiledFormats=['compiled-v1','pack-v1','texture-pack-v1'],
@@ -217,15 +217,29 @@ def main(argv=None):
             if args.format is not None and (args.resume or args.recipe):parser.error('--format requires a fresh package conversion; resume/recipe retain their declared contract')
             generic_selection=None
             generic_family=args.source_family if args.source_family in ('laya','layaair','egret','eraget','custom','other')else None
+            if args.source_family=='auto' and args.source_profile in ('generic-image-resources-v1','egret-custom-resource-plist-v1'):
+                generic_family='egret'if args.source_profile=='egret-custom-resource-plist-v1'else'other'
             if args.input_set and args.source_family=='auto':
                 from .inputs import input_set
                 generic_selection=input_set(args.input_set)
                 if generic_selection['sourceProfile']=='generic-image-resources-v1':generic_family='other'
+                elif generic_selection['sourceProfile']=='egret-custom-resource-plist-v1':generic_family='egret'
             if generic_family:
                 if args.target not in ('unity','unity6',UNITY_PROFILE):parser.error('Non-Cocos sources target Unity 6 only')
                 if not all((args.source or args.input_set,args.target,args.out))or args.source and args.input_set:parser.error('Image-resource conversion requires --source or --input-set, --target unity6 and --out')
-                if any((args.resume,args.recipe,args.reuse_source_stages,args.remote_manifest,args.remote_cache_root,args.acquisition_out,args.numeric_code_contract,args.provider_python,args.asset_ripper,args.unity_texture_cache,args.unity_schema_manifest,args.unity_dependency_manifest,args.unity_quarantine_invalid_textures,args.asset_index,args.all_assets,args.bindings,args.animation,args.source_profile,args.dependency_source,args.evidence_source,args.cocos_code_language!='ts',args.provider_budget_seconds!=600,args.remote_budget_seconds!=900)):
+                if args.source_profile and args.source_profile not in ('generic-image-resources-v1','egret-custom-resource-plist-v1'):parser.error('Resource sources require a supported explicit resource profile')
+                if any((args.resume,args.recipe,args.reuse_source_stages,args.numeric_code_contract,args.provider_python,args.asset_ripper,args.unity_texture_cache,args.unity_schema_manifest,args.unity_dependency_manifest,args.unity_quarantine_invalid_textures,args.asset_index,args.all_assets,args.bindings,args.animation,args.dependency_source,args.evidence_source,args.cocos_code_language!='ts',args.provider_budget_seconds!=600)):
                     parser.error('Initial generic image profile supports explicit local roots; source adapters, remote manifests and source code binding are pending')
+                if not args.remote_manifest and any((args.remote_cache_root,args.acquisition_out,args.remote_budget_seconds!=900)):parser.error('Remote options require --remote-manifest')
+                acquired=None;remote_settings=None;conversion_input_set=args.input_set
+                if args.remote_manifest:
+                    if not args.input_set:parser.error('Egret remote acquisition requires an explicit --input-set')
+                    from .inputs import input_set
+                    generic_selection=generic_selection or input_set(args.input_set)
+                    if generic_selection['sourceProfile']!='egret-custom-resource-plist-v1':parser.error('Generic family image acquisition is pending; remote resource roots require the reviewed Egret profile')
+                    from .acquisition import prepare
+                    acquisition_out=Path(args.acquisition_out).resolve()if args.acquisition_out else Path(args.out).resolve().with_name(Path(args.out).resolve().name+'-acquired')
+                    remote_settings=prepare(args.remote_manifest,acquisition_out,generic_selection,args.remote_cache_root,args.remote_budget_seconds,[Path(args.out).resolve()])
                 if args.native and args.offline:parser.error('--native cannot combine with --offline')
                 if not args.native and any((args.native_out,args.unity_editor,args.creator_editor,args.native_budget_seconds!=1200)):parser.error('native options require --native')
                 settings=None
@@ -234,10 +248,17 @@ def main(argv=None):
                     from .inputs import input_set
                     generic_selection=generic_selection or (input_set(args.input_set)if args.input_set else None)
                     roots=[r['path']for r in generic_selection['inputs']]if generic_selection else [args.source]
+                    if remote_settings:roots.append(acquisition_out)
                     settings=options(args.out,args.target,args.native_out,args.unity_editor,args.creator_editor,args.native_budget_seconds,roots)
+                if remote_settings:
+                    from .acquisition import acquire
+                    acquired=acquire(remote_settings,args.offline);conversion_input_set=str(acquired['inputSet'])
                 from .resource_package import convert as convert_images
-                result=convert_images(args.source,args.target,args.out,args.namespace or 'monkey-project',args.offline,args.input_set,args.format or 'none',generic_family)
-                summary=dict(status=result['workflowStatus'],completed=result['completed'],resultKind=result['resultKind'],sourceFamily=result['sourceFamily'],completionScope=result['completionScope'],projects=result['projects'],diagnostics=result['diagnostics'],report=str(Path(args.out).resolve()/'conversion-result.json'))
+                result=convert_images(args.source,args.target,args.out,args.namespace or 'monkey-project',args.offline,conversion_input_set,args.format or 'none',generic_family,args.source_profile)
+                if acquired:
+                    from .acquisition import attach
+                    attach(result,args.out,acquired)
+                summary=dict(status=result['workflowStatus'],completed=result['completed'],resultKind=result['resultKind'],sourceFamily=result['sourceFamily'],sourceProfile=result['sourceProfile'],completionScope=result['completionScope'],sourceSpriteFrames=result['sourceSpriteFrames'],derivedFullImageFrames=result.get('derivedFullImageFrames',0),sourceData=result.get('sourceData'),projects=result['projects'],diagnostics=result['diagnostics'],report=str(Path(args.out).resolve()/'conversion-result.json'))
                 if settings:
                     from .orchestration import run
                     summary['nativeExecution']=run(result,settings)

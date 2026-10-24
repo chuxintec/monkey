@@ -200,8 +200,8 @@
       "profile": "unknown-source-unavailable",
       "read": "blocked-declared-source-path-unavailable",
       "remaining": [
-        "declared archives source path is absent; Manager pointer agrees",
-        "no original inputs or concrete engine profile available"
+        "old archives absence retained as history; new authorized WeChat cache intake now in progress",
+        "current target AppID/revision and original inputs not yet frozen"
       ],
       "sourceRevision": "1.2.67",
       "targets": [
@@ -271,7 +271,7 @@
       "profile": "cocos-2.1.2-resource",
       "read": "partial-original-static-settings-and-version",
       "remaining": [
-        "18955 of 19298 declared asset identities not supplied",
+        "old18955 of19298 declarations unprovided; current WeChat cache147 present, source intake in progress",
         "81 source graphs quarantined",
         "956 module drafts, 5 unresolved sources",
         "Spine, source methods, visual and gameplay"
@@ -364,15 +364,31 @@
       "caseId": "05908d5361a2b4971c92a338",
       "evidence": [
         {
-          "path": "outputs/egret-linghuashi-images-03/conversion-result.json",
-          "sha256": "654a70873ab7ffcf13f779b0aa61ddf7281b1aaf4bf74ee9a26bf49db8a360cb"
+          "path": "docs/validation/egret5232-source-baseline.json",
+          "sha256": "90369c4ab14769e66d28e07a8f1455510a6f3b4aac6c30bfe47af1043650036b"
         },
         {
-          "path": "outputs/egret-linghuashi-images-03-native/native-orchestration.json",
-          "sha256": "44f0da84a52759331a1848f7d7f6d3fe399add733f8b7ce439a7031890597eb6"
+          "path": "outputs/egret-linghuashi-atlas-package-09/conversion-result.json",
+          "sha256": "051ad6cae704f7573da48eaf4f1405ea78db709ea53f352a422e93dd63e2584d"
+        },
+        {
+          "path": "outputs/egret-linghuashi-atlas-package-09-native/native-orchestration.json",
+          "sha256": "d6d35e276fb77fcb9cb305b6372e46602e55ecb642bcea883594906d90433555"
+        },
+        {
+          "path": "outputs/egret-linghuashi-atlas-package-10/conversion-result.json",
+          "sha256": "fcc6a2272fab2d4ccc262ac1377c5cbc902211dba5fd8aa55b575a44b62cadde"
+        },
+        {
+          "path": "outputs/egret-linghuashi-atlas-pixel-audit-10/audit.json",
+          "sha256": "98e1e91208e8ec70d17b81fb581d4e18e11368a01f2c4ec7c9ba1c05978612ac"
+        },
+        {
+          "path": "outputs/egret-atlas-acquisition-02/acquisition.json",
+          "sha256": "8efb9d2e9f2506a3805bb2dc705b750b8fdd156398418b3d61b4f91e19c0f13a"
         }
       ],
-      "export": "partial-derived-image-gallery-only",
+      "export": "partial-source-atlas-and-typed-skin-data",
       "metadataHint": {
         "backend": null,
         "confidence": "unknown",
@@ -381,14 +397,15 @@
       },
       "metadataSha256": "631e55b75abcf34acd873accee2ec77cf27021ca0a27ef30fd4b10ed2dbcb4f1",
       "name": "灵画师",
-      "native": "16-derived-full-image-gallery-Sprites-verified; source-graphs-not-restored",
-      "profile": "generic-image-resources-v1",
-      "read": "supplied-40-file-inventory-only; exact-Egret-version-unknown",
+      "native": "132-source-frames-verified; all1920-offline-pixels-verified; source-UI-not-restored",
+      "profile": "egret-custom-resource-plist-v1",
+      "read": "Egret5.2.32-current-cache166-matches-Research; reviewed-binary-resource-Plist-Skin-data",
       "remaining": [
-        "binary resource manifest adapter",
-        "source atlas slices and UI graphs",
-        "exact engine version and source methods",
-        "remote assets, visual and gameplay"
+        "native EUI Skin graph/layout/animation/font adaptation",
+        "all1920 latest native not_run; representative132 verified",
+        "48171 declared resource payloads not supplied beyond53 atlas pages",
+        "protected/unknown source methods and config encoding",
+        "visual and gameplay"
       ],
       "sourceRevision": "166",
       "targets": [

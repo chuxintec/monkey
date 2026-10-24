@@ -35,3 +35,7 @@ v0.2先完成docs/V0.2-PLAN.md供总监核对，审阅通过后才实现；覆�
 
 
 2026-10-24后续人类要求已由本聊天原生read_thread核验：持续推进至v0.2开发完成（总监turn01a169c7-6e89-7c42-9e35-a7f6b70d58bf / human01a169c7-6ea9-7fb3-a08a-bb2fe1819996）。V0.2-PLAN/V0.2-EXAMPLES设计已通过Manager/decisions/20261024-monkey-v01-v02/DESIGN-REVIEW.md，不重新等礼节ACK。Cocos代码改为TypeScript优先、JS次选（同turn / human01a169c9-28a9-7120-96b0-df9511be3764），默认ts、明确ts|js选项；不以改后缀或any桩冒充实现。v0.1已发布并冻结，本地codex/v0.2持续开发授权不含v0.2推送/Release。上述覆盖本文件早期v0.2 JS优先/等待设计门的过时表述；其他资源/源只读/单主开发边界保持。
+
+2026-10-24 最新取舍已原生核验：总监turn01a16b73-715f-7043-96c9-a2545e403812 / human01a16b73-717e-7021-9a9c-e8219f8667ea。天命行者、机智逃脱缺源时直接只读目标微信小游戏包/资源缓存、身份与清单，按原来源声明精确远端补取，不等待旧archives目录；不读无关聊天/玩家档、不清缓存、不混版本。灵画师按用户指定Laya核实际AppID/入口/加载器/二进制格式；既有Egret/EUI证据须区分库/格式复用或串包，保留事实并向总监说明，不强套分类。部分不可逆代码/缺类型/不可支持引擎不强制全恢复、明确limitations；嵌套Prefab/模板实例/override及动态Layout/Widget/Label行为仍为必修能力，不能全部改handoff。完整游戏0不作为工具版本必须恢复全部游戏的门槛。具体Manager/decisions/20261024-monkey-v01-v02/SCOPE-AND-STRUCTURAL-PRIORITIES.md；已批准就绪工作持续推进，无新Agent/安装/发布授权。
+
+后续human01a16b77-a82c-7e53-805d-265e0f7296d0要求实际核实灵画师；本聊天已原生核验并核入口字节：当前wxcbc1fc07fb13d667/166原包与Research同SHA，直接egret.runEgret且runtime自报5.2.32，故按Egret/EUI与custom binary→Unity6推进，覆盖上段初步Laya判断。Laya总体范围等待真实样本，不把灵画师记为Laya已支持。缓存补源及嵌套/override/动态布局要求不变，细则Manager同目录LINGHUASHI-EGRET-CONFIRMED.md。

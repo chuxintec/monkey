@@ -33,7 +33,7 @@ def bitmap_text(font,atlas_name,face="MonkeySourceBitmap"):
 
 def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None):
     path,ir,bindings,receipt,resource,resolve=input_ir(ir_path,bindings_path)
-    if ir.get('sourceProfile')=='generic-image-resources-v1':fail('SOURCE_TARGET_UNSUPPORTED',str(ir_path),'Non-Cocos sources target Unity 6 only')
+    if ir.get('sourceProfile')in ('generic-image-resources-v1','egret-custom-resource-plist-v1'):fail('SOURCE_TARGET_UNSUPPORTED',str(ir_path),'Non-Cocos sources target Unity 6 only')
     from ..names import Names
     naming=Names(ir.get('sourceNames'))
     diagnostics=list(ir['diagnostics']);assets=[];copies=[]

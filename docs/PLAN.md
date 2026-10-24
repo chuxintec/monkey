@@ -2,7 +2,9 @@
 
 完工/阻塞/交付与续推按[DIRECTOR-CONTINUATION](/Users/wangmeng/Documents/Manager/standards/DIRECTOR-CONTINUATION.md)执行；本聊天已原生核验人类授权`01a166b4-5c18-78f3-8cc2-c0d07dd46a20`，总监路由`01a14c8c-6402-7d03-bab8-ec7ea8051abf`。更新本PLAN后以稳定事件ID报告，已批准就绪下一包连续推进，不因报告或普通ACK停下。
 
-## 当前：v0.1 已实际发布，v0.2 设计主体通过并补合同样例
+## 当前：v0.1 已发布；v0.2 补源与结构行为持续开发
+
+2026-10-24最新取舍已原生核验：总监human01a16b73-717e-7021-9a9c-e8219f8667ea授权天命/机智从微信目标包/资源缓存与有据远端补源，不等旧archives；不可逆代码/缺类型/不可支持引擎按真实limitations保留，不要求全游戏全方法恢复。嵌套Prefab/实例/override及动态Layout/Widget/Label行为仍必须解决，不能全部handoff。随后human01a16b77-a82c-7e53-805d-265e0f7296d0要求核实灵画师引擎：当前166缓存包与Research同SHA，实际egret.runEgret及Capabilities.engineVersion=5.2.32，故按Egret/EUI+custom binary推进；短暂Laya判断已纠正，不借此声称支持真实Laya。原生核验与本地源字节证据复用，不重复开团队/安装/发布。
 
 已按用户直接授权（总监human01a169b8-b2d8-7d71-8dcf-06f470bfe371）创建私有https://github.com/chuxintec/monkey，正常推送main与不可变v0.1并发布正式Release https://github.com/chuxintec/monkey/releases/tag/v0.1。Python0.1.0，源码8363fde1ce2f1a5164b5109a16bf558a28f8977c、annotated tag a21c410782d5069c68c888a6ef62785e3c57a9b5。GitHub REST与ls-remote核对private/main/tag/peeled SHA一致，Release draft=false/prerelease=false；wheel223293B SHA30e267edf4e6c8d2df89c3282edb629e8f8d62c671a701b1759b488ac9c6a9d5，sdist350714B SHA7674afdf1dce52e44eefa2a7e0bbdf464cc979fc10e08f8ff9fb4b531e43b362，SHA256SUMS共3附件已实际下载再核对API/local SHA。回执.private/v01-release-audit/published.json。
 
@@ -594,3 +596,15 @@ Unity typed值预算新增逐对象250000/全请求4000000强限；超大对象�
 公开新10：496输入38081754B、83图/810节点/81Prefab/986Frame不变，双端格式成功；Unity manifest d7a6c143a5db8d3e73a847bec6c1d7dbe307942d47fa66bd2c207ea8acdfc56b，Creator 0ac57d3e28988db54508811333c531ad8095b0db9bbcf8b6080826690e8a20d1。当前源码重解析model与冻结完全相等，helper context也相等；30974个owned文件全核。C#SHA e95db24463f04ebd4b6d7cdced345c8dd99f6270699088ca01b586dfa8e43d10，TS SHA9d481af7ddcdf49ae7b08958f8cba9e45690b5f9da483b91bd78eec9ad415955。Unity6 SDK编译及TS5.8.2 strict过，C#/.NET8.0.21、TS编译产物/Node、JS次选/Node各13实际边界调用过（负零位、NaN/Inf、外插、mul-add舍入与大数运算序）。仅运行受控生成代码。26定向检查全过，包括TS/JS包级both+grea及未知helper/模型篡改反例。
 
 审计outputs/parabola-math-audit-10的audit.json/runtime-receipt.json封存输入/代码/编译产物/检查hash；没有新Editor/Player，资源Editor沿此前07/08，不据此晋级视觉/业务。Research仍11attempted/9不同范围导出/2blocked/完整游戏0。继续专用来源atlas/图等有据缺口与v0.2出口整理，不推送/Release、不以此检查点结束版本。
+
+事件monkey-v02-egret-binary-atlas-20261024-01：新增可复用egret-custom-resource-plist-v1，静态核9类已审阅callback及BinJson helper词法绑定，解析resource prefixes/types/URLs/groups、Plist trim/body边界、VERSION2 Skin typed JSON。源代码/原配置不执行，不把Skin解码等同原生UI。初始全9.9MiB AST触及256MiB后改整体tokenize+≤64KiB候选/≤2MiB lexical AST，原预算不抬高；截断/多余尾/变长整数/索引/大小/路径冲突明确拒绝。config.bin与Skin格式不同，保持隔离，不用错误全包同格式推断。
+
+旧4包40文件19112966B读出3清单48252声明、53图集1920切片、3026 Skin；最初28声明可得/53纹理页缺失。基于原默认inChina=true、testMode=false及生产CDN literal，只取清单精确hash文件名。先单页1GET取得Emoji1537x509/290374B/SHA61142f5aabd84a130c11505855b6fc0e2efee703a57baa5859d638279fe8d104；完整53页52GET+1缓存共7975531B，全部可用，未猜不同hash/地区。冻结SHA后公开convert复用统一remote/cache/offline/acquisition→独立源root→同reader/像素→grea/native，原件只读。未扩至其余48171声明载荷，缺数保留。
+
+实际公开09：41输入19403340B、132真实源切片+17整图预览（两类分母不混）、298Sprite变体，manifest229847969e423e63de80ace23bba5121b437cbdeeae0c74ccae3900abaea7607。自登记≤30min段，ps确认无主Editor后own Unity8815于01:07:12.912716Z→01:07:24.952861Z exit0/reaped，方法1.18秒，strict0/editorpartial；GUID/rect/尺寸/引用与保存重开通过。源节点0、sourceGraphVerification=not_run，视觉/玩法未跑。原始一页的132 trim/full及264目标PNG逐RGBA核过。
+
+完整53页offline10：93输入27088497B、1920源切片、69独立整图预览，53页全闭合、81声明已提供/48171缺件；sourceSkins仍3026、nativeSourceGraphs0。1920源切片和3840目标trim/full变体逐像素完全一致（outputs/egret-linghuashi-atlas-pixel-audit-10），manifest47277e354e8674ad02570cb152369e8c78adc835386ad1d9d1112a4ba64e1a62。全10 Editor尚not_run，不把09代表结果写成全量通过。27资源/缓存/编排检查及35关联格式检查通过，聚合AI任务/START-HERE/来源表自包含，所有JS/BIN/解码Skin在编译根外。
+
+当前灵画师引擎已按最新human要求独立确认Egret5.2.32，而非先前初步Laya：本机wxcbc1fc07fb13d667/166主包2857006B，实际64字符SHA256为2e200f176380470eff845c868d1b96391b93261e375a23997697c6eb29886de1，与Research完全一致；入口bootstrap9a27...8193直接egret.runEgret，原runtime版本literal5.2.32及RenderNode实现。公共精确span/hash见egret5232-source-baseline.json。总监来源材料的主包SHA有误拼接，以上为本聊天实际重算值；不照抄长于64字符的字段。未据此声称Laya已支持，广义Laya仍等待真实样本。
+
+最新取舍已同步AGENTS/方案/支持矩阵与case：不可逆源引擎/方法保留limitations，不强求全游戏；嵌套Prefab/override/动态布局仍必须解决。当前转入天命/机智微信缓存补源：已只读定位目标applet packages/local，机智146/147可见、灵画师165/166可见，未读usrmmkv玩家档。天命需定位AppID；applet元数据库不是明文SQLite，仅探header/只读schema失败，未取凭据或绕解。下一先冻结机智147当前包/资源索引并有据补取，同时以允许标题/AppID元数据定位天命，之后解决下方了36嵌套图及真实动态布局，不等旧归档答复、不新增团队/安装/发布。

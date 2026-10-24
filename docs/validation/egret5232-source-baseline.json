@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "appId": "wxcbc1fc07fb13d667",
+  "revision": "166",
+  "encryptedPackageBytes": 2857006,
+  "encryptedPackageSha256": "2e200f176380470eff845c868d1b96391b93261e375a23997697c6eb29886de1",
+  "cacheAndResearchEqual": true,
+  "bootstrapBytes": 1036492,
+  "bootstrapSha256": "9a27c668dde318073dfe6d0989ea1914991f60757df30a4de7d110e750aa8193",
+  "engineFamily": "egret",
+  "runtimeDeclaredVersion": "5.2.32",
+  "sourceCodeExecuted": false,
+  "facts": [
+    {
+      "kind": "startup",
+      "sourceBytes": {
+        "start": 1036441,
+        "end": 1036458
+      },
+      "sha256": "7475ceda16e0f6418a615ab5e5dba42677a7c60f756d550e353f2107c5745eeb",
+      "literal": "egret.runEgret(i)"
+    },
+    {
+      "kind": "version",
+      "sourceBytes": {
+        "start": 213712,
+        "end": 213734
+      },
+      "sha256": "3dba20b841021c6f8e51d1a6dd8e4e36338f5a349f89b724026b7d9c7732c770",
+      "literal": "engineVersion=\"5.2.32\""
+    },
+    {
+      "kind": "renderer",
+      "sourceBytes": {
+        "start": 118590,
+        "end": 118610
+      },
+      "sha256": "d9ef4f26647def1cd3addaab338e5f1f94562d8a42a769538bb4a61128ab1515",
+      "literal": "egret.sys.RenderNode"
+    }
+  ]
+}
