@@ -2,7 +2,7 @@
 
 完工/阻塞/交付与续推按[DIRECTOR-CONTINUATION](/Users/wangmeng/Documents/Manager/standards/DIRECTOR-CONTINUATION.md)执行；本聊天已原生核验人类授权`01a166b4-5c18-78f3-8cc2-c0d07dd46a20`，总监路由`01a14c8c-6402-7d03-bab8-ec7ea8051abf`。更新本PLAN后以稳定事件ID报告，已批准就绪下一包连续推进，不因报告或普通ACK停下。
 
-## 当前：两份批量完整初版已冻结，准备工具本地交付（2026-10-25）
+## 当前：两份批量完整初版及dev3工具已本地交付（2026-10-25）
 
 依据用户全量先行纠正`01a16e53-16d8-7351-b6e3-981caef2ceb5`及重启续推`01a16e87-16ec-7111-9d25-967b392eed98`：先批量导出已取得全集与具名代码证据，再由游戏Agent继续开发。分支`codex/full-project-handoff`，本地工具0.2.0.dev3；无远端发布。grea实际MCP已核2026.10.24rc1；两个游戏工程保持只读。
 
@@ -10,7 +10,7 @@
 - 向僵尸：`outputs/bulk-zombie-handoff-03/UnityProject`已冻结，recovery manifest `f2410ed90d038867dca6b6093e7927fe1c516c408dacf471a1da83242a623752`，163473文件/3252286957字节。887原始文件逐项原字节保留，7595已取得纹理（含13未引用原件）齐；7626纹理对象水合、426对象对应425确切404键隔离、不造像素。一次AssetRipper导出601输入，65362资源文件、65309唯一GUID、64476唯一内容hash，53新媒体GUID待Editor，0重复GUID。原路径精确映射57346/63302，5956未映射、975未解析、1992 provider占位引用显式保留。13有据字段类/57字段，20181元数据类型/20129具名声明初稿、138243方法签名，0方法实现；Editor/Player/业务not_run。入口同名初版文档。
 - 工具：已有可恢复检查点`09b026c`；增量原生、源Scene/实际fileID、具名代码、固定CDN补取、601 typed复用、可续接纹理准备、独立限时provider、全量组装/冻结均经公开CLI实际执行。跨Bundle同名脚本仅在MonoScript原字节及有据字段完全一致时合并，保留全部源身份；不按名称猜合并。代码生成输入只取必需字段，完整745576030字节typed分片保留。
 
-三次肥鹅增量和一次AssetRipper原生child均已退出回收，无新引擎运行；正在冻结工具源码与本地wheel/sdist及公开命令交付。此处交付的是可接续初版，完整玩法/全像素一致性/所有源版本支持均不扩大宣称。完整失败层及过程见`docs/validation/2026-10-25-bulk-development-notes.md`；机器回执在`.private/full-project-handoff-01`和上述outputs。清理维护已完成，不再扩清理。
+三次肥鹅增量和一次AssetRipper原生child均已退出回收，无新引擎运行；工具分发已从不可变源码`f7015311b0641ec4daea9fa36bb3ff86156d972f`构建，wheel453353字节/SHA `9b52c3419ba731def190b141ea040be1a36f2f219335fbb5256108eaae83f3c4`，sdist610970字节/SHA `3bcfb4f99ee7d15ce547b73cce4f90062eb9e15f638595c20af1c0b7933c3e95`。wheel/sdist的123产品文件字节一致；隔离离开checkout安装后6命令帮助/能力回读、13字段类重新生成逐字节一致、163473份Unity来源冻结文件哈希复核通过；末次53项定向检查及13类离线C#编译通过。分发与总回执在`.private/full-project-handoff-01/package`和`delivery.json`，公开命令见`docs/BULK-INITIAL-DEV3.md`。此处交付的是可接续初版，完整玩法/全像素一致性/所有源版本支持均不扩大宣称。完整失败层及过程见`docs/validation/2026-10-25-bulk-development-notes.md`；机器回执在`.private/full-project-handoff-01`和上述outputs。清理维护已完成，不再扩清理。
 
 ## 历史：dev2语义校验与身份保护已接收
 

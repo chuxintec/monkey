@@ -38,3 +38,14 @@ monkey freeze-unity-handoff --candidate "$MONKEY_INITIAL/UnityProject" --texture
 肥鹅的追加链为`code-handoff --apply-owned`、`native-finish-plan`、`native-finish --execute`、`handoff --native-contract`、`verify --level editor`、`freeze-handoff --apply-owned`。原生方法`MonkeyImporter.FinishBulkBatch`仅另存两个源Scene并读回5标签，使用原有Library与媒体；受控失败层续接必须显式`--previous-execution`，只接受退出回收且hash匹配、没有已保存源Scene的owned层。当前冻结工程不可再次用旧manifest/旧截止执行。
 
 两初版入口为各自`Docs/BULK-INITIAL-HANDOFF.md`。只交付工具源码/包及本地工程身份，不把私有原件、outputs或大缓存写入发行包。完整输入、去重原生资源、原生Editor读回、代码声明、未实现业务和缺口分别报告。
+
+## 本地工具包身份
+
+源码提交`f7015311b0641ec4daea9fa36bb3ff86156d972f`，tree `915261dc51e20aad23048219fd76588a1e0bbb78`。
+
+|制品|字节|SHA256|
+|---|---:|---|
+|monkey_native-0.2.0.dev3-py3-none-any.whl|453353|9b52c3419ba731def190b141ea040be1a36f2f219335fbb5256108eaae83f3c4|
+|monkey_native-0.2.0.dev3.tar.gz|610970|3bcfb4f99ee7d15ce547b73cce4f90062eb9e15f638595c20af1c0b7933c3e95|
+
+位置`.private/full-project-handoff-01/package/dist`。123产品文件在源码/wheel/sdist逐字节一致，隔离安装无需checkout，6条新命令帮助和能力已读回；安装包重新生成13字段类与实际初版相同，且163473份冻结文件完整哈希复核通过。末次53项定向检查通过；安装验收不等于Unity来源Editor/Player验收。
