@@ -11,7 +11,7 @@ using UnityEngine.SceneManagement;
 public static partial class MonkeyImporter
 {
     [Serializable] public class Plan {
-        public float[] designSize; public float pixelsPerUnit;
+        public float[] designSize; public float pixelsPerUnit; public string uiGeometryReadback;
         public TextureSpec[] textures; public AssetSpec[] assets; public BitmapSpec[] bitmapFonts; public int sourceDiagnosticCount;
         public NodeSpec[] nodes; public ComponentSpec[] components; public MotionSpec[] animations; public bool galleryOnly; public SourcePrefabSpec[] sourcePrefabs; public PrefabInstanceSpec[] prefabInstances; public TmpResourceSpec tmpResources;
     }
@@ -27,7 +27,7 @@ public static partial class MonkeyImporter
         public PrefabInstanceResult[] prefabInstances;
         public MonkeyNumericCode.Result[] numericCodeBindings;
         public string sourceId,path,guid,geometryPhase,nativePrefabType; public int nodeCount,missingScripts,layoutSettlePasses;
-        public bool savedReloaded,referencesVerified; public NodeResult[] nodes; public string[] referenceFailures;
+        public bool savedReloaded,referencesVerified; public NodeResult[] nodes,nativeInitialNodes; public string[] referenceFailures;
     }
     [Serializable] public class MotionKey { public float time,value; public string interpolation; }
     [Serializable] public class MotionProbe { public float time,value; }
@@ -53,7 +53,7 @@ public static partial class MonkeyImporter
         public string target,content,nativeId; public int flags,maskType,layoutType,resize,horizontalDirection,verticalDirection,startAxis,transition;
         public bool inverted,horizontal,vertical,interactable; public float zoomScale,duration,width;
         public float[] margins,spacingXY,padding,effectiveCellSize,outlineColor;
-        public bool crossAxisScale; public float crossAxisAlignment;
+        public bool crossAxisScale; public float crossAxisAlignment; public bool[] absolute,centerAbsolute; public float[] center; public int alignMode; public bool affectedByScale,alignCross;
     }
     [Serializable] public class BitmapProbe { public float advance,inkRight; }
     [Serializable] public class BitmapSpec {
@@ -63,7 +63,7 @@ public static partial class MonkeyImporter
     [Serializable] public class GlyphSpec { public uint unicode, index; public int[] rect; public float[] metrics; }
     [Serializable] public class KerningSpec { public uint first, second; public float advance; }
     [Serializable] public class FontResult { public string id, guid, atlasGuid, materialAtlasGuid; public int glyphCount, characterCount; public float pointSize, lineHeight; }
-    [Serializable] public class LabelResult { public string sourceId, text, fontGuid, geometryProbe; public float fontSize; public int characterCount; public bool allCharactersPresent; public GlyphBounds[] glyphBounds; }
+    [Serializable] public class LabelResult { public string sourceId, text, fontGuid, geometryProbe; public float fontSize,lineBoxHeight,lineBoxLineHeight,lineBoxExtra; public int characterCount,lineCount; public bool lineBoxPresent,lineBoxActive; public bool allCharactersPresent; public GlyphBounds[] glyphBounds; }
     [Serializable] public class GlyphBounds { public uint unicode; public float left,top,width,height,quadPadding; }
     [Serializable] public class Readback {
         public PrefabInstanceResult[] prefabInstances;
@@ -71,7 +71,7 @@ public static partial class MonkeyImporter
         public MonkeyNumericCode.Result[] numericCodeBindings,numericCodeExercise;
         public string status, unityVersion, prefabGuid, sceneGuid;
         public int spriteCount, nodeCount, missingScripts; public bool editableRoundtrip,sceneReopened; public string previewPath,previewSha256,previewError,colorSpace;
-        public MotionResult[] animations; public string[] diagnostics; public NodeResult[] nodes; public SpriteResult[] sprites; public FileResult[] nativeFiles; public FontResult[] fonts; public LabelResult[] labels; public ViewReference[] viewReferences; public JsonResult[] jsonAssets; public SourcePrefabResult[] sourcePrefabs; public TmpResourceResult tmpResources;
+        public DynamicUiResult[] dynamicUiProbes; public MotionResult[] animations; public string[] diagnostics; public NodeResult[] nodes,nativeInitialNodes; public SpriteResult[] sprites; public FileResult[] nativeFiles; public FontResult[] fonts; public LabelResult[] labels; public ViewReference[] viewReferences; public JsonResult[] jsonAssets; public SourcePrefabResult[] sourcePrefabs; public TmpResourceResult tmpResources;
     }
     [Serializable] public class GalleryResult { public string id,spriteGuid; public bool geometryVerified; }
     [Serializable] public class JsonResult { public string id,guid,textSha256; }
@@ -591,23 +591,21 @@ public static partial class MonkeyImporter
                 var vertical = new [] { TMPro.VerticalAlignmentOptions.Top, TMPro.VerticalAlignmentOptions.Middle, TMPro.VerticalAlignmentOptions.Bottom };
                 label.horizontalAlignment = horizontal[Mathf.Clamp(spec.horizontalAlign,0,2)];
                 label.verticalAlignment = vertical[Mathf.Clamp(spec.verticalAlign,0,2)];
+                ConfigureLabel(go,label,spec,plan.bitmapFonts.Any(f=>f.id==spec.font));
                 if(!string.IsNullOrEmpty(spec.codeClassName))MonkeyNumericCode.Bind(spec,label);
                 diagnostics.Add("LABEL_LINE_METRICS_REQUIRE_REFERENCE: " + spec.sourceId);
             }
         }
         foreach(var spec in plan.components.Where(c=>c.convertible)) {
             var go=nodeMap[spec.node];var rect=(RectTransform)go.transform;
-            if(spec.type=="cc.Widget" && spec.enabled && spec.flags==45) {
-                rect.anchorMin=Vector2.zero;rect.anchorMax=Vector2.one;
-                rect.offsetMin=new Vector2(spec.margins[0],spec.margins[1]);
-                rect.offsetMax=new Vector2(-spec.margins[2],-spec.margins[3]);
-            }
+            if(spec.type=="cc.Widget")ConfigureWidget(go,spec);
             else if(spec.type=="cc.Mask") {
                 var mask=go.AddComponent<UnityEngine.UI.RectMask2D>();mask.enabled=spec.enabled;
             }
             else if(spec.type=="cc.Layout") {
                 if(go.GetComponent<UnityEngine.UI.LayoutGroup>()!=null || go.GetComponent<UnityEngine.UI.ContentSizeFitter>()!=null)
                     throw new InvalidOperationException("Native layout conflict: "+spec.sourceId);
+                if(spec.layoutType==1||spec.layoutType==2){ConfigureLinearLayout(go,spec);continue;}
                 var padding=new RectOffset((int)spec.padding[0],(int)spec.padding[2],(int)spec.padding[3],(int)spec.padding[1]);
                 var fitter=go.AddComponent<UnityEngine.UI.ContentSizeFitter>();
                 if(spec.layoutType==3) {
@@ -703,6 +701,8 @@ public static partial class MonkeyImporter
             if(!spec.path.StartsWith(Paths.sourcePrefabsRoot+"/",StringComparison.Ordinal) || spec.path.Contains("..") || File.Exists(spec.path))
                 throw new InvalidOperationException("Invalid or existing source prefab path: "+spec.path);
             PrepareNativeInstances(plan,spec.sourceId,nodeMap,nodeSpecs);
+            SettleNativeLayout(canvas);
+            var initialPrefabNodes=spec.nodes.Select(id=>DescribeNode(nodeSpecs[id],(RectTransform)nodeMap[id].transform)).ToArray();
             // SaveAsPrefabAsset serializes this subtree without modifying it.
             // A managed active Instantiate can run layout lifecycle callbacks
             // while the cloned hierarchy is still initializing.
@@ -712,8 +712,12 @@ public static partial class MonkeyImporter
             bool rootVariant=(plan.prefabInstances??new PrefabInstanceSpec[0]).Any(p=>p.owner==spec.sourceId&&p.root==spec.root);
             if(nativePrefabType!=(rootVariant?PrefabAssetType.Variant:PrefabAssetType.Regular))throw new InvalidOperationException("Native Prefab/Variant type differs from source relationship");
             prefabTemplateHashes.Add(spec.sourceId,Hash(spec.path));
-            var contents=PrefabUtility.LoadPrefabContents(spec.path);
+            var contents=PrefabUtility.LoadPrefabContents(spec.path);GameObject uiContext=null;
             try {
+                // A UI Prefab has no Canvas in LoadPrefabContents. Supply the
+                // same declared preview context before measuring wrapped TMP
+                // lines, without saving or changing the shared asset.
+                uiContext=CreatePrefabUiContext(contents,plan);
                 int passes=SettleNativeLayout(contents);
                 var transforms=contents.GetComponentsInChildren<Transform>(true);
                 int missing=transforms.Sum(t=>GameObjectUtility.GetMonoBehavioursWithMissingScriptCount(t.gameObject));
@@ -739,12 +743,15 @@ public static partial class MonkeyImporter
                 var persistentMap=SavedNodeMap(plan.nodes,sourcePrefab,spec,nodeSpecs);
                 var numericBindings=plan.components.Where(c=>c.convertible&&!string.IsNullOrEmpty(c.codeClassName)&&persistentMap.ContainsKey(c.node)).Select(c=>MonkeyNumericCode.Read(c,persistentMap[c.node].gameObject)).ToArray();
                 sourcePrefabResults.Add(new SourcePrefabResult {prefabInstances=ReadNativeInstances(plan,mapped,spec.sourceId),numericCodeBindings=numericBindings,sourceId=spec.sourceId,path=spec.path,
-                    nativePrefabType=nativePrefabType.ToString(),
+                    nativePrefabType=nativePrefabType.ToString(),nativeInitialNodes=initialPrefabNodes,
                     guid=AssetDatabase.AssetPathToGUID(spec.path),nodeCount=transforms.Length,missingScripts=missing,
                     savedReloaded=true,geometryPhase="native-layout-settled-v1",layoutSettlePasses=passes,
                     nodes=spec.nodes.Select(id=>DescribeNode(nodeSpecs[id],mapped[id])).ToArray(),
                     referencesVerified=referenceFailures.Count==0,referenceFailures=referenceFailures.ToArray()});
-            } finally { PrefabUtility.UnloadPrefabContents(contents); }
+            } finally {
+                if(uiContext!=null){contents.transform.SetParent(null,false);UnityEngine.Object.DestroyImmediate(uiContext);}
+                PrefabUtility.UnloadPrefabContents(contents);
+            }
         }
         foreach(var owner in (plan.prefabInstances??new PrefabInstanceSpec[0]).Select(p=>p.owner).Distinct().Where(s=>!prefabTemplateHashes.ContainsKey(s)))
             PrepareNativeInstances(plan,owner,nodeMap,nodeSpecs);
@@ -752,6 +759,8 @@ public static partial class MonkeyImporter
         view.Images = canvas.GetComponentsInChildren<UnityEngine.UI.Image>(true);
         view.Labels = canvas.GetComponentsInChildren<TMPro.TextMeshProUGUI>(true);
         view.Buttons = canvas.GetComponentsInChildren<UnityEngine.UI.Button>(true);
+        SettleNativeLayout(canvas);
+        var initialSceneNodes=plan.nodes.Select(n=>DescribeNode(n,(RectTransform)nodeMap[n.sourceId].transform)).ToArray();
         NativeCheckpoint("candidate-save",0,1);
         var prefab = PrefabUtility.SaveAsPrefabAsset(canvas,PrefabPath,out var success);
         if (!success || prefab == null) throw new InvalidOperationException("Native Prefab save failed");
@@ -787,7 +796,7 @@ public static partial class MonkeyImporter
                 using(var hash=System.Security.Cryptography.SHA256.Create())return new JsonResult {id=a.id,guid=AssetDatabase.AssetPathToGUID(a.path),
                     textSha256=BitConverter.ToString(hash.ComputeHash(System.Text.Encoding.UTF8.GetBytes(text.text))).Replace("-","").ToLowerInvariant()};
             }).ToArray(),
-            status=diagnostics.Count==0?"imported":"partial",unityVersion=Application.unityVersion,
+            dynamicUiProbes=ProbeDynamicUi(plan,instance),nativeInitialNodes=initialSceneNodes,status=diagnostics.Count==0?"imported":"partial",unityVersion=Application.unityVersion,
             prefabGuid=AssetDatabase.AssetPathToGUID(PrefabPath),sceneGuid=AssetDatabase.AssetPathToGUID(ScenePath),
             animations=motionReadback,spriteCount=spriteMap.Count,nodeCount=nodeMap.Count,
             missingScripts=instance.GetComponentsInChildren<Transform>(true).Sum(t=>GameObjectUtility.GetMonoBehavioursWithMissingScriptCount(t.gameObject)),
@@ -928,7 +937,10 @@ public static partial class MonkeyImporter
     }
     static int SettleNativeLayout(GameObject root) {
         var groups=root.GetComponentsInChildren<UnityEngine.UI.LayoutGroup>(true).Where(g=>g.isActiveAndEnabled).Reverse().ToArray();
-        if(groups.Length==0)return 0;
+        var fitters=root.GetComponentsInChildren<UnityEngine.UI.ContentSizeFitter>(true).Where(f=>f.isActiveAndEnabled).ToArray();
+        var constraints=root.GetComponentsInChildren<NativeRectConstraints>(true).Where(f=>f.isActiveAndEnabled).ToArray();
+        if(groups.Length==0&&fitters.Length==0&&constraints.Length==0)return 0;
+        var controllers=groups.Select(g=>(RectTransform)g.transform).Concat(fitters.Select(f=>(RectTransform)f.transform)).Distinct().ToArray();
         var rects=root.GetComponentsInChildren<RectTransform>(true);
         Func<RectTransform,Vector4> value=r=>new Vector4(r.rect.width,r.rect.height,r.localPosition.x,r.localPosition.y);
         for(int pass=0;pass<8;pass++) {
@@ -936,7 +948,9 @@ public static partial class MonkeyImporter
             var before=rects.Select(value).ToArray();
             // DesignRoot is not an ILayoutController: forcing only that root is
             // a no-op. Resolve actual native groups, children before parents.
-            foreach(var group in groups)UnityEngine.UI.LayoutRebuilder.ForceRebuildLayoutImmediate((RectTransform)group.transform);
+            foreach(var constraint in constraints)constraint.Refresh();
+            foreach(var label in root.GetComponentsInChildren<TMPro.TextMeshProUGUI>(true).Where(l=>l.isActiveAndEnabled))label.ForceMeshUpdate();
+            foreach(var controller in controllers)UnityEngine.UI.LayoutRebuilder.ForceRebuildLayoutImmediate(controller);
             Canvas.ForceUpdateCanvases();
             if(rects.Select((r,i)=>(value(r)-before[i]).sqrMagnitude).All(d=>d<1e-10f))return pass+1;
         }
@@ -1000,7 +1014,10 @@ public static partial class MonkeyImporter
                 measured.ForceMeshUpdate(true,true);
             }
             float padding=bitmap?TMPro.ShaderUtilities.GetPadding(measured.fontSharedMaterial,measured.extraPadding,(measured.fontStyle&TMPro.FontStyles.Bold)!=0):0;
-            return new LabelResult {sourceId=spec.sourceId,text=measured.text,fontGuid=AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(measured.font)),
+            var lineBox=label.GetComponent<NativeTextLineBox>();
+            return new LabelResult {lineBoxPresent=lineBox!=null,lineBoxActive=lineBox!=null&&lineBox.isActiveAndEnabled,
+                lineBoxHeight=lineBox!=null?lineBox.preferredHeight:0,lineBoxLineHeight=lineBox!=null?lineBox.LineHeight:0,lineBoxExtra=lineBox!=null?lineBox.ExtraLineFraction:0,
+                lineCount=measured.textInfo.lineCount,sourceId=spec.sourceId,text=measured.text,fontGuid=AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(measured.font)),
                 fontSize=measured.fontSize,characterCount=measured.textInfo.characterCount,geometryProbe=geometryProbe,
                 glyphBounds=measured.textInfo.characterInfo.Take(measured.textInfo.characterCount).Where(info=>info.isVisible).Select(info=>new GlyphBounds {
                     unicode=info.character,left=info.bottomLeft.x,top=info.topLeft.y,width=info.topRight.x-info.topLeft.x,height=info.topLeft.y-info.bottomLeft.y,

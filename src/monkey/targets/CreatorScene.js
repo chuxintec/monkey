@@ -4,6 +4,7 @@ const cc = require('cc');
 const motion=require('./animation.js');
 const prefabs=require('./prefab.js');
 const relations=require('./prefab-instances.js');
+const dynamic=require('./dynamic-ui.js');
 const batch=require('./batch.js');
 const jobs=require('./jobs.js');
 const numeric=require('./numeric-code.js');
@@ -73,7 +74,7 @@ module.exports = {
                         comp=node.addComponent(c.codeClassName?numeric.type(c):cc.Label);if(c.codeClassName)codeEntries.push({component:comp,spec:c});comp.overflow=c.nativeOverflow??c.overflow;comp.useSystemFont=false;comp.font=native.get(c.font);
                         comp.string=c.text;comp.fontSize=c.fontSize;comp.lineHeight=c.lineHeight;comp.spacingX=c.spacing;
                         comp.horizontalAlign=c.horizontalAlign;comp.verticalAlign=c.verticalAlign;
-                        comp.enableWrapText=c.wrap;comp.isBold=!!c.bold;comp.color=color(source.color);
+                        comp.enableWrapText=c.wrap;comp.isBold=!!c.bold;comp.isItalic=!!c.italic;comp.isUnderline=!!c.underline;comp.color=color(source.color);
                     } else if(c.type==='cc.Button') {
                         comp=node.addComponent(cc.Button);comp.target=node;comp.transition=c.transition;comp.duration=c.duration;
                         comp.zoomScale=c.zoomScale;comp.interactable=c.interactable;comp.clickEvents=[];
@@ -81,14 +82,20 @@ module.exports = {
                     } else if(c.type==='cc.ScrollView') {
                         comp=node.addComponent(cc.ScrollView);comp.enabled=c.enabled;comp.horizontal=c.horizontal;comp.vertical=c.vertical;comp.content=nodes.get(c.content);
                     } else if(c.type==='cc.Widget') {
-                        comp=node.addComponent(cc.Widget);comp.target=node.parent;comp.alignMode=c.alignMode;
+                        comp=node.addComponent(cc.Widget);comp.target=c.target?nodes.get(c.target):null;comp.alignMode=c.alignMode;
                         comp.isAlignTop=!!(c.flags&1);comp.isAlignBottom=!!(c.flags&4);comp.isAlignLeft=!!(c.flags&8);comp.isAlignRight=!!(c.flags&32);
                         [comp.left,comp.bottom,comp.right,comp.top]=c.margins;
+                        [comp.isAbsoluteLeft,comp.isAbsoluteBottom,comp.isAbsoluteRight,comp.isAbsoluteTop]=c.absolute;
+                        [comp.horizontalCenter,comp.verticalCenter]=c.center||[0,0];
+                        [comp.isAbsoluteHorizontalCenter,comp.isAbsoluteVerticalCenter]=c.centerAbsolute||[true,true];
                     } else if(c.type==='cc.Layout') {
                         comp=node.addComponent(cc.Layout);comp.type=c.layoutType;comp.resizeMode=c.resize;comp.cellSize=new cc.Size(...c.cellSize);
                         [comp.paddingLeft,comp.paddingBottom,comp.paddingRight,comp.paddingTop]=c.padding;
                         [comp.spacingX,comp.spacingY]=c.spacingXY;comp.startAxis=c.startAxis;
                         comp.horizontalDirection=c.horizontalDirection;comp.verticalDirection=c.verticalDirection;comp.affectedByScale=c.affectedByScale;
+                        if(c.layoutType===1)comp.alignVertical=!!c.alignCross;
+                        if(c.layoutType===2)comp.alignHorizontal=!!c.alignCross;
+                        comp.constraint=c.constraint||0;comp.constraintNum=c.constraintCount||2;
                     } else throw Error('Unimplemented native type: '+c.type);
                     if(c.type!=='cc.Sprite')comp.enabled=c.enabled;
                     nativeRefs.push({sourceId:c.sourceId,nodeUuid:node.uuid,componentUuid:comp.uuid,type:c.type});
@@ -115,14 +122,16 @@ module.exports = {
                     const assemblyId=relations.keep(plan,scene,nodes,{nativeRefs,animationAssets,numericCodeExercise,...describe(scene,plan)});
                     retained=true;return {assemblyId,nativeRefs,animationAssets,numericCodeExercise};
                 }
+                dynamic.settle(scene,nodes,plan);
+                const nativeInitialNodes=dynamic.capture(nodes);
                 const asset=new cc.SceneAsset();asset.scene=scene;
                 jobs.progress('candidate-save',0,1);
                 const serialized=EditorExtends.serialize(asset);
                 const sourcePrefabs=await prefabs.serialize(plan,nodes);
-                return {serialized:typeof serialized==='string'?serialized:JSON.stringify(serialized),nativeRefs,animationAssets,
+                return {serialized:typeof serialized==='string'?serialized:JSON.stringify(serialized),nativeInitialNodes,nativeRefs,animationAssets,
                     sourcePrefabs,numericCodeExercise,
                     nodes:plan.nodes.map(n=>({sourceId:n.sourceId,nodeUuid:nodes.get(n.sourceId).uuid})),...describe(scene,plan)};
-            } finally {if(!retained)scene.destroy();}
+            } finally {if(!retained){dynamic.release(scene);scene.destroy();}}
         },
         async readSaved(uuid,plan) {
             const asset=await loadAsset(uuid,cc.SceneAsset);const scene=asset.scene;
@@ -163,7 +172,8 @@ module.exports = {
                 }
                 frames.push({sourceId:a.sourceId,uuid:sf._uuid,textureUuid:sf.texture&&sf.texture._uuid,
                     rect:[sf.rect.x,sf.rect.y,sf.rect.width,sf.rect.height],originalSize:[sf.originalSize.width,sf.originalSize.height],
-                    offset:[sf.offset.x,sf.offset.y],border:[sf.insetLeft,sf.insetTop,sf.insetRight,sf.insetBottom]});
+                    offset:[sf.offset.x,sf.offset.y],border:[sf.insetLeft,sf.insetTop,sf.insetRight,sf.insetBottom],
+                    mesh:sf.vertices?{rawPosition:sf.vertices.rawPosition.flatMap(v=>[v.x,v.y,v.z]),indexes:Array.from(sf.vertices.indexes),uv:Array.from(sf.vertices.uv),nuv:Array.from(sf.vertices.nuv)}:null});
             }
             const animations=[];
             for(const info of plan.animationAssets||[]) {
@@ -193,7 +203,7 @@ module.exports = {
                 if(!info)throw Error('Saved prefab identity absent');
                 sourcePrefabs.push(prefabs.read(templates.get(spec.sourceId),spec,plan,info,templates));
             }
-            return {sourcePrefabs,prefabInstances,jsonAssets,fontPages,animations,numericCodeBindings,nodeCount:saved.length,nodes:[...mapped].map(([sourceId,n])=>({sourceId,nodeUuid:n.uuid,name:n.name,
+            return {dynamicUiProbes:dynamic.probe(plan,design),nativeInitialNodes:plan.nativeInitialNodes,sourcePrefabs,prefabInstances,jsonAssets,fontPages,animations,numericCodeBindings,nodeCount:saved.length,nodes:[...mapped].map(([sourceId,n])=>({sourceId,nodeUuid:n.uuid,name:n.name,
                 position:[n.position.x,n.position.y,n.position.z],size:[n.getComponent(cc.UITransform).width,n.getComponent(cc.UITransform).height],
                 pivot:[n.getComponent(cc.UITransform).anchorX,n.getComponent(cc.UITransform).anchorY],scale:[n.scale.x,n.scale.y,n.scale.z],
                 rotation:[n.rotation.x,n.rotation.y,n.rotation.z,n.rotation.w],active:n.active,...prefabs.uiState(n,sourceNodes.get(sourceId))})),components:refs,labels,frames};

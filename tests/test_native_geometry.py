@@ -110,7 +110,7 @@ assert.strictEqual(rejected,true);assert.deepStrictEqual(started,[0,1]);
         adapter=Path(__file__).resolve().parents[1]/'src/monkey/targets/CreatorPrefab.js'
         script=r'''
 const Module=require('module'),load=Module._load;
-Module._load=function(name,...args){if(name==='cc')return {instantiate:x=>x,UITransform:class {},Widget:class {}};if(name==='./jobs.js')name=process.argv[2];return load.call(this,name,...args);};
+Module._load=function(name,...args){if(name==='cc')return {instantiate:x=>x,UITransform:class {},Widget:class {}};if(name==='./jobs.js')name=process.argv[2];if(name==='./dynamic-ui.js')name=require('path').join(require('path').dirname(process.argv[1]),'CreatorDynamicUi.js');if(name==='./prefab-instances.js')name=require('path').join(require('path').dirname(process.argv[1]),'CreatorPrefabInstances.js');return load.call(this,name,...args);};
 const adapter=require(process.argv[1]);
 const make=(name,width)=>({name,parent:null,children:[],position:{x:0,y:0,z:0},scale:{x:1,y:1,z:1},rotation:{x:0,y:0,z:0,w:1},active:true,
 getComponent:()=>({width,height:32,anchorX:.5,anchorY:.5}),destroy(){}});

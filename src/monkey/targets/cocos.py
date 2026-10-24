@@ -84,12 +84,7 @@ def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None):
             if c.get('spriteFrame') is None:
                 c['needsSpriteBinding']=True;diagnostics.append(diagnostic('SOURCE_SPRITE_UNBOUND',sid,'Keep native Sprite disabled pending real binding',sid))
             frame=asset_by_id.get(c.get('spriteFrame'))
-            if c['convertible'] and frame and c['sizeMode'] in (1,2):
-                intrinsic=frame['size'] if c['sizeMode']==1 else frame['originalSize']
-                if any(abs(a-b)>.001 for a,b in zip(intrinsic,source_nodes[c['node']]['size'])):
-                    c.update(nativeSizeMode=0,sizingPolicy='source-baked-custom-v1')
-                    diagnostics.append(diagnostic('SPRITE_CACHED_SIZE_HANDOFF',sid,
-                        'Native Sprite uses CUSTOM to retain the baked source rect; source automatic resize behavior remains unverified',sid))
+            if c['convertible']:c.update(nativeSizeMode=c['sizeMode'],sizingPolicy='native-sprite-sizing-v1')
         elif c['type']=='cc.Label':
             font=asset_by_id.get(c.get('font'))
             if not font or font['kind'] not in ('ttf','bitmap'):gap('FONT_NOT_CONVERTIBLE','No matching original font; no system fallback')
@@ -100,15 +95,12 @@ def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None):
                 available={g['unicode'] for g in font_by_id[c['font']]['glyphs']}
                 if any(ord(ch) not in available for ch in c['text'] if ch not in '\r\n'):gap('SOURCE_FONT_GLYPHS_MISSING','Bitmap lacks glyphs')
                 c['bold']=False
-            numeric_baked=c.get('sourceScriptIdentity') and c.get('codeClassName') and c.get('numericMethods') and c['overflow']==2 and not c.get('wrap')
-            if (c['overflow']!=0 and not numeric_baked) or c.get('italic') or c.get('underline'):gap('LABEL_SUBSET_UNSUPPORTED','Nonzero overflow requires an explicit presentation adapter; no style synthesis')
-            if c['convertible']:
-                c.update(nativeOverflow=1,sizingPolicy='source-baked-clamp-v1')
-                diagnostics.append(diagnostic('LABEL_AUTOSIZE_SEMANTICS_HANDOFF',sid,
-                    'Native Label uses CLAMP with the baked source rect; source automatic sizing behavior requires separate comparison',sid))
+            if c['overflow']not in(0,1,2,3):gap('LABEL_SUBSET_UNSUPPORTED','Unknown overflow mode')
+            if c['convertible']:c.update(nativeOverflow=c['overflow'],sizingPolicy='native-label-sizing-v1')
             diagnostics.append(diagnostic('CREATOR_TEXT_METRICS_NOT_VERIFIED',sid,'Original font selected; cross-version glyph layout needs real source comparison',sid))
         elif c['type']=='cc.Widget':
-            if c['flags'] not in (0,45) or c['target'] is not None or not all(c['absolute']):gap('WIDGET_SUBSET_UNSUPPORTED','Only parent absolute disabled/full stretch')
+            if c['flags']&~63 or c.get('alignMode',1)not in(0,1,2):gap('WIDGET_SUBSET_UNSUPPORTED','Unknown flags or align policy')
+            c.setdefault('center',[0,0]);c.setdefault('centerAbsolute',[True,True])
         elif c['type']=='cc.Mask':
             if c['maskType']!=0 or c['inverted']:gap('MASK_SUBSET_UNSUPPORTED','Only plain rectangle')
         elif c['type']=='cc.ScrollView':
@@ -120,7 +112,7 @@ def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None):
         elif c['type']=='cc.LabelOutline':
             if not any(x['type']=='cc.Label' and x['node']==c['node'] for x in ir['components']):gap('MISSING_OUTLINE_LABEL','Outline has no Label')
         elif c['type']=='cc.Layout':
-            if c['layoutType'] not in (1,2,3) or c['resize']!=1 or c['affectedByScale']:gap('LAYOUT_SUBSET_UNSUPPORTED','Only unscaled container resize')
+            if c['layoutType']not in(0,1,2,3)or c['resize']not in(0,1,2)or c.get('constraint',0)not in(0,1,2):gap('LAYOUT_SUBSET_UNSUPPORTED','Unknown native Layout mode')
         if not c['convertible']:diagnostics.append(diagnostic('COMPONENT_HANDOFF',sid,'Unsupported native mapping: '+c['type'],sid))
         c['nativeType']=('cc.Label' if c['type']=='cc.LabelOutline' else c['type']) if c['convertible'] else None;components.append(c)
     for c in components:
@@ -191,13 +183,19 @@ def export(plan_path,output):
     (ext/'numeric-code.js').write_bytes(files('monkey.targets').joinpath('CreatorNumericCode.js').read_bytes())
     (ext/'prefab.js').write_bytes(files('monkey.targets').joinpath('CreatorPrefab.js').read_bytes())
     (ext/'prefab-instances.js').write_bytes(files('monkey.targets').joinpath('CreatorPrefabInstances.js').read_bytes())
+    (ext/'dynamic-ui.js').write_bytes(files('monkey.targets').joinpath('CreatorDynamicUi.js').read_bytes())
+    (ext/'sprite-metadata.js').write_bytes(files('monkey.targets').joinpath('CreatorSpriteMetadata.js').read_bytes())
     (ext/'batch.js').write_bytes(files('monkey.targets').joinpath('CreatorBatch.js').read_bytes())
     (ext/'jobs.js').write_bytes(files('monkey.targets').joinpath('CreatorJobs.js').read_bytes())
     (ext/'animation.js').write_bytes(files('monkey.targets').joinpath('CreatorAnimation.js').read_bytes())
     write_json(ext/'package.json',dict(package_version=2,version='0.2.0',name='monkey-import',main='./main.js',
         contributions=dict(scene=dict(script='./scene.js'),menu=[dict(path='Monkey',label='Import isolated candidate',message='import-candidate')],
                            messages={'import-candidate':dict(methods=['importCandidate'])})))
-    write_json(ext/'import-plan.json',{k:p[k] for k in ['schemaVersion','targetProfile','designSize','assets','nodes','components'] }|dict(projectUuid=project_id,animations=p.get('animations',[]),sourcePrefabs=p.get('sourcePrefabs',[]),prefabInstances=p.get('prefabInstances',[]),prefabRelationshipReadback='creator-native-fileid-v1',sceneGeometryReadback='full-local-v1',bitmapPageReadback='sprite-frame-v1'))
+    write_json(ext/'import-plan.json',{k:p[k] for k in ['schemaVersion','targetProfile','designSize','assets','nodes','components'] }|dict(projectUuid=project_id,animations=p.get('animations',[]),sourcePrefabs=p.get('sourcePrefabs',[]),prefabInstances=p.get('prefabInstances',[]),prefabRelationshipReadback='creator-native-fileid-v1',uiGeometryReadback='native-ui-layout-roundtrip-v1',sceneGeometryReadback='full-local-v1',bitmapPageReadback='sprite-frame-v1',spriteMeshReadback='native-rect-mesh-v1'))
+    from .dynamic_ui import driven_fields
+    instruction_path=ext/'import-plan.json';instruction=load(instruction_path.read_bytes())
+    instruction['uiDrivenFields']={sid:{key:sorted(axes)for key,axes in fields.items()}for sid,fields in driven_fields(instruction).items()}
+    write_json(instruction_path,instruction)
     from ..assets.animation import module_report
     write_json(out/'Analysis/animation-module.json',module_report(p.get('animations',[])))
     write_json(out/'Analysis/source-map.json',dict(assets=p['assets'],sourcePrefabs=p.get('sourcePrefabs',[]),nodes=[dict(sourceId=n['sourceId'],target='assets/generated/views/Candidate.scene') for n in p['nodes']],
@@ -268,7 +266,12 @@ def verify(candidate,output,level='static'):
             if plan.get('sceneGeometryReadback')=='full-local-v1':
                 from .unity import node_geometry_matches
                 saved_nodes={n['sourceId']:n for n in rb.get('nodes',[])}
-                for spec in plan['nodes']:
+                from .dynamic_ui import expectations,verify_probes
+                probe_gaps=verify_probes(plan,rb.get('dynamicUiProbes'));diagnostics.extend(probe_gaps)
+                if probe_gaps:good=False
+                scene_expected,ui_gaps=expectations(plan,rb.get('nativeInitialNodes'),'CreatorScene');diagnostics.extend(ui_gaps)
+                if ui_gaps:good=False
+                for spec in scene_expected:
                     actual_node=saved_nodes.get(spec['sourceId'])
                     if not node_geometry_matches(actual_node,spec,True) or ('sourceLayer'in spec and actual_node.get('sourceLayer')!=spec['sourceLayer']):
                         good=False;diagnostics.append(diagnostic('SCENE_GEOMETRY_MISMATCH',spec['sourceId'],'Saved native Scene transform differs from the frozen source plan'))
@@ -281,6 +284,14 @@ def verify(candidate,output,level='static'):
                     expected=dict(uuid=actual_assets.get(sid,{}).get('spriteFrameUuid'),textureUuid=actual_assets.get(sid,{}).get('textureUuid'),
                                   rect=a.get('trimOrigin',[0,0])+a['size'],originalSize=a['originalSize'],offset=a['offset'],border=a['border'])
                     mismatches=[key for key,value in expected.items() if (f.get(key)!=value if key in ('uuid','textureUuid') else not near(f.get(key),value))]
+                    if plan.get('spriteMeshReadback')=='native-rect-mesh-v1':
+                        w,h=a['size'];tw,th=a['originalSize'];x,y=a.get('trimOrigin',[0,0]);mesh=f.get('mesh')or{}
+                        expected_mesh=dict(rawPosition=[-w/2,-h/2,0,w/2,-h/2,0,-w/2,h/2,0,w/2,h/2,0],indexes=[0,1,2,2,1,3],
+                            uv=[x,th-y,x+w,th-y,x,th-y-h,x+w,th-y-h],nuv=[x/tw,(th-y-h)/th,(x+w)/tw,(th-y-h)/th,x/tw,(th-y)/th,(x+w)/tw,(th-y)/th])
+                        for key,value in expected_mesh.items():
+                            actual=mesh.get(key)
+                            if not isinstance(actual,list)or len(actual)!=len(value)or any(type(v)not in(int,float)or abs(v-e)>1e-6 for v,e in zip(actual,value)):
+                                good=False;diagnostics.append(diagnostic('SPRITE_NATIVE_MESH_MISMATCH',sid,'Saved native RECT mesh '+key+' differs'))
                     if mismatches:
                         good=False;diagnostics.append(diagnostic('SPRITE_READBACK_MISMATCH',sid,
                             'Saved native sprite differs: '+str({key:dict(expected=expected[key],actual=f.get(key)) for key in mismatches})))
@@ -298,6 +309,10 @@ def verify(candidate,output,level='static'):
                 source_nodes=set(spec['nodes']);code_specs=[c for c in plan['components']if c.get('node')in source_nodes]
                 code_gaps=verify_numeric(code_specs,actual.get('numericCodeBindings'),'cocos',sid)
                 if code_gaps:good=False;diagnostics.extend(code_gaps)
+                if plan.get('uiGeometryReadback')=='native-ui-layout-roundtrip-v1':
+                    from .dynamic_ui import expectations
+                    _,ui_gaps=expectations(plan,actual.get('nativeInitialNodes'),sid,[n for n in plan['nodes']if n['sourceId']in source_nodes])
+                    if ui_gaps:good=False;diagnostics.extend(ui_gaps)
                 for mismatch in actual.get('geometryMismatches',[]):
                     good=False
                     diagnostics.append(diagnostic('PREFAB_GEOMETRY_MISMATCH',mismatch.get('sourceId',sid),

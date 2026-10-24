@@ -5,6 +5,7 @@ const path = require('path');
 const crypto = require('crypto');
 const execution=require('./execution.js');
 const batch=require('./batch.js');
+const spriteMetadata=require('./sprite-metadata.js');
 const hash = data => crypto.createHash('sha256').update(data).digest('hex');
 const req = (message, ...args) => Editor.Message.request('asset-db', message, ...args);
 function within(root, relative) {
@@ -99,11 +100,9 @@ module.exports = {
                         width: a.size[0], height: a.size[1], rawWidth: a.originalSize[0], rawHeight: a.originalSize[1],
                         offsetX: a.offset[0], offsetY: a.offset[1], borderLeft: left, borderTop: top, borderRight: right, borderBottom: bottom};
                     // Subresource IDs are assigned by the native importer and retained, never synthesized.
-                    if(Object.entries(desired).some(([key,value])=>u[key]!==value)) {
-                        Object.assign(u,desired);
-                        // Auto-trim mesh data belongs to the old rect; let the
-                        // native importer recompute it from custom metadata.
-                        delete u.vertices;
+                    const vertices=spriteMetadata.rectVertices(a);
+                    if(Object.entries(desired).some(([key,value])=>u[key]!==value)||JSON.stringify(u.vertices)!==JSON.stringify(vertices)) {
+                        Object.assign(u,desired,{vertices,meshType:0});
                         await timedReq('save-asset-meta', a.uuid, JSON.stringify(m));
                         // A folder refresh does not reimport changed subresource
                         // metadata. Await the public per-asset reimport barrier.
@@ -142,7 +141,7 @@ module.exports = {
                         if(!p||p.path!==spec.path||p.sourceId!==spec.sourceId||typeof p.serialized!=='string')throw Error('Native prefab serialization differs');
                         const info=await timedReq('create-asset','db://'+p.path,p.serialized,{overwrite:false,rename:false});
                         if(!info||info.invalid)throw Error('Native prefab save failed');
-                        savedPrefabs.push({sourceId:p.sourceId,path:p.path,uuid:info.uuid,sha256:hash(fs.readFileSync(dest))});
+                        savedPrefabs.push({sourceId:p.sourceId,path:p.path,uuid:info.uuid,nativeInitialNodes:p.nativeInitialNodes,sha256:hash(fs.readFileSync(dest))});
                     }
                     result=await sceneJob('finishAssembly',[assemblyId,savedPrefabs,nativePlan],'candidate-save');
                 }finally{
@@ -172,14 +171,14 @@ module.exports = {
                 execution.checkpoint('source-prefabs',savedPrefabs.length,(plan.sourcePrefabs||[]).length);
                 const info=await timedReq('create-asset','db://'+p.path,p.serialized,{overwrite:false,rename:false});
                 if(!info||info.invalid)throw Error('Native prefab save failed: '+p.sourceId);
-                savedPrefabs.push({sourceId:p.sourceId,path:p.path,uuid:info.uuid});expectedPrefabs.delete(p.sourceId);
+                savedPrefabs.push({sourceId:p.sourceId,path:p.path,uuid:info.uuid,nativeInitialNodes:p.nativeInitialNodes});expectedPrefabs.delete(p.sourceId);
             });
             execution.checkpoint('candidate-save');
             const scene = await req('create-asset', 'db://'+outputPaths.scene, result.serialized, {overwrite: false, rename: false});
             if (!scene || scene.invalid) throw Error('Native scene save failed');
             // Re-load saved/imported scene through the engine asset manager, not the in-memory tree.
             execution.checkpoint('native-readback');
-            const saved = await sceneJob('readSaved',[scene.uuid,{...nativePlan,animationAssets,savedPrefabs}],'native-readback');
+            const saved = await sceneJob('readSaved',[scene.uuid,{...nativePlan,animationAssets,savedPrefabs,nativeInitialNodes:result.nativeInitialNodes}],'native-readback');
             for(const p of savedPrefabs)if(p.sha256&&hash(fs.readFileSync(within(root,p.path)))!==p.sha256)throw Error('Shared native template changed: '+p.sourceId);
             const nativeFiles = [];
             function collect(relative) {

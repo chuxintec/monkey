@@ -2,6 +2,7 @@
 // Editor-only native Prefab serialization; no source runtime or business execution.
 const cc=require('cc');
 const jobs=require('./jobs.js');
+const dynamic=require('./dynamic-ui.js');
 const near=(a,b)=>a.length===b.length&&a.every((v,i)=>Math.abs(v-b[i])<0.001);
 function uiState(node,src) {
     if(!src.sourceGeometryProfile)return {};
@@ -27,11 +28,12 @@ async function serialize(plan,nodes) {
         try {
             root.parent=null;
             if(spec.rootNamePolicy==='creator-asset-basename-v1')root.name=spec.nativeRootName;
-            const rebind=node=>{for(const widget of node.getComponents(cc.Widget))widget.target=node.parent;for(const child of node.children)rebind(child);};
-            rebind(root);
+            const mapped=new Map();const sources=new Map(plan.nodes.map(n=>[n.sourceId,n]));
+            function walk(sid,n){mapped.set(sid,n);sources.get(sid).children.forEach((child,i)=>walk(child,n.children[i]));}walk(spec.root,root);
+            const nativeInitialNodes=dynamic.settleRoot(root,mapped,plan);
             const prefab=new cc.Prefab();prefab.name=root.name;prefab.data=root;
             const raw=EditorExtends.serialize(prefab);
-            result.push({sourceId:spec.sourceId,path:spec.path,serialized:typeof raw==='string'?raw:JSON.stringify(raw)});
+            result.push({sourceId:spec.sourceId,path:spec.path,nativeInitialNodes,serialized:typeof raw==='string'?raw:JSON.stringify(raw)});
         } finally {root.destroy();}
     }
     return result;
@@ -43,7 +45,7 @@ function read(prefab,spec,plan,info,templates) {
         const sources=new Map(plan.nodes.map(n=>[n.sourceId,n]));const mapped=new Map(),geometryMismatches=[];
         if(spec.rootNamePolicy&&(spec.rootNamePolicy!=='creator-asset-basename-v1'||spec.sourceRootName!==sources.get(spec.root).name||spec.nativeRootName!==spec.path.split('/').pop().slice(0,-7)))throw Error('Prefab name policy differs');
         function match(sid,node) {
-            const src=sources.get(sid),ui=node.getComponent(cc.UITransform);
+            const original=sources.get(sid),src=dynamic.expected(original,plan,info.nativeInitialNodes),ui=node.getComponent(cc.UITransform);
             const expectedName=sid===spec.root&&spec.rootNamePolicy==='creator-asset-basename-v1'?spec.nativeRootName:src&&src.name;
             if(!src||expectedName!==node.name||src.children.length!==node.children.length||!ui)throw Error('Prefab hierarchy differs: '+sid);
             const actual={position:[node.position.x,node.position.y,node.position.z],scale:[node.scale.x,node.scale.y,node.scale.z],
@@ -65,7 +67,7 @@ function read(prefab,spec,plan,info,templates) {
             if(c.type==='cc.Sprite'&&comp.sizeMode!==(c.nativeSizeMode??c.sizeMode))throw Error('Prefab Sprite sizing policy differs');
             if(c.type==='cc.ScrollView'&&comp.content!==mapped.get(c.content))throw Error('Prefab scroll reference escapes graph');
             if(c.type==='cc.Button'&&comp.target!==node)throw Error('Prefab button reference differs');
-            if(c.type==='cc.Widget'&&comp.target!==node.parent)throw Error('Prefab widget reference differs');
+            if(c.type==='cc.Widget'&&comp.target!==(c.target?mapped.get(c.target):null))throw Error('Prefab widget reference differs');
             components.push(c.sourceId);
         }
         return {...info,prefabInstances:require('./prefab-instances.js').read(plan,mapped,templates,plan.savedPrefabs||[],spec.sourceId),nodeCount:mapped.size,savedReloaded:true,geometryVerified:geometryMismatches.length===0,geometryMismatches,referencesVerified:true,components,

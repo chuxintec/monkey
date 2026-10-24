@@ -406,12 +406,13 @@ def component_ir(namespace, index, obj):
         known = {'_string','_N$string','_N$file','_fontSize','_lineHeight','_horizontalAlign','_verticalAlign',
                  '_N$horizontalAlign','_N$verticalAlign','_materials','_overflow','_N$overflow','_enableWrapText','_isSystemFontUsed','_fontFamily','_N$fontFamily','_cacheMode','_styleFlags','_spacingX'}
         if not base['font']: gaps.append('system font requires source-backed explicit matching font binding')
-        if base['overflow'] != 0: gaps.append('label overflow mode requires native mapping')
+        if base['overflow'] not in (0,1,2,3): gaps.append('unknown label overflow mode')
     elif typ == 'cc.Widget':
         base.update(flags=obj.get('_alignFlags',0),target=ref(obj.get('_target'),namespace),
                     margins=[obj.get(k,0) for k in ('_left','_bottom','_right','_top')],
-                    absolute=[obj.get(k,True) for k in ('_isAbsLeft','_isAbsBottom','_isAbsRight','_isAbsTop')],alignMode=obj.get('alignMode',1))
-        known={'_alignFlags','_target','_left','_bottom','_right','_top','_isAbsLeft','_isAbsBottom','_isAbsRight','_isAbsTop','_originalWidth','_originalHeight','alignMode'}
+                    absolute=[obj.get(k,True) for k in ('_isAbsLeft','_isAbsBottom','_isAbsRight','_isAbsTop')],alignMode=obj.get('alignMode',1),
+                    center=[obj.get('_horizontalCenter',0),obj.get('_verticalCenter',0)],centerAbsolute=[obj.get('_isAbsHorizontalCenter',True),obj.get('_isAbsVerticalCenter',True)])
+        known={'_alignFlags','_target','_left','_bottom','_right','_top','_isAbsLeft','_isAbsBottom','_isAbsRight','_isAbsTop','_originalWidth','_originalHeight','alignMode','_horizontalCenter','_verticalCenter','_isAbsHorizontalCenter','_isAbsVerticalCenter'}
     elif typ == 'cc.Mask':
         base.update(maskType=obj.get('_type',obj.get('_N$type',0)),inverted=obj.get('_inverted',obj.get('_N$inverted',False)))
         known={'_type','_N$type','_inverted','_N$inverted','_alphaThreshold','_N$alphaThreshold','_spriteFrame','_materials','_segments'}
@@ -425,8 +426,8 @@ def component_ir(namespace, index, obj):
                     padding=[obj.get('_N$paddingLeft',0),obj.get('_N$paddingBottom',0),obj.get('_N$paddingRight',0),obj.get('_N$paddingTop',0)],
                     horizontalDirection=obj.get('_N$horizontalDirection',0),verticalDirection=obj.get('_N$verticalDirection',1),
                     startAxis=obj.get('_N$startAxis',0),cellSize=vector(obj.get('_cellSize'),['width','height'],[40,40]),
-                    affectedByScale=obj.get('_affectedByScale',False))
-        known={'_N$layoutType','_resize','_N$spacingX','_N$spacingY','_N$paddingLeft','_N$paddingRight','_N$paddingTop','_N$paddingBottom','_N$horizontalDirection','_N$verticalDirection','_N$startAxis','_cellSize','_layoutSize','_affectedByScale'}
+                    affectedByScale=obj.get('_affectedByScale',False),alignCross=obj.get('_isAlign',False),constraint=obj.get('_constraint',0),constraintCount=obj.get('_constraintNum',2))
+        known={'_N$layoutType','_resize','_N$spacingX','_N$spacingY','_N$paddingLeft','_N$paddingRight','_N$paddingTop','_N$paddingBottom','_N$horizontalDirection','_N$verticalDirection','_N$startAxis','_cellSize','_layoutSize','_affectedByScale','_isAlign','_constraint','_constraintNum'}
     elif typ == 'cc.Button':
         events=[]
         for ordinal,event in enumerate(obj.get('clickEvents',[]) or []):

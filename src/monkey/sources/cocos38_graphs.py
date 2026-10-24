@@ -30,6 +30,8 @@ def resolved_graph(asset,resolver):
         for key in ('sourceId','node','target','content'):
             if key in component:component[key]=source_id(component[key])
     for gap in gaps:gap['sourceId']=source_id(gap['sourceId'])
+    live={n['sourceId']for n in nodes}
+    resolved['prefabInstances']=[link for link in resolved['prefabInstances']if link['root']in live]
     return nodes,components,gaps,resolved
 
 
@@ -123,7 +125,7 @@ def _graph(asset,instances_resolved):
         typ=obj.get('__type__')
         if not typ:continue
         sid=namespace+'#'+index
-        if typ not in ('cc.Sprite','cc.Label'):
+        if typ not in ('cc.Sprite','cc.Label','cc.Widget','cc.Layout'):
             components.append(dict(sourceId=sid,type=typ,node=ref(obj.get('node'),namespace),enabled=obj.get('_enabled',True),materials=[],supported=False,sourceData=copy.deepcopy(obj)))
             gap(index,'Creator 3.8 component requires a separate semantic adapter: '+typ);continue
         value=copy.deepcopy(obj)
@@ -139,10 +141,23 @@ def _graph(asset,instances_resolved):
                 value.pop(field,None)
             if obj.get('_enableShadow'):gap(index,'Label shadow requires a separate adapter')
             for field in ('_enableShadow','_shadowColor','_shadowOffset','_shadowBlur'):value.pop(field,None)
-        else:
+        elif typ=='cc.Sprite':
             value['_sizeMode']=value.get('_sizeMode',1)
             if obj.get('_useGrayscale'):gap(index,'Sprite grayscale shader requires a separate adapter')
             value.pop('_useGrayscale',None)
+        elif typ=='cc.Widget':
+            value.pop('_materials',None)
+            value['alignMode']=value.pop('_alignMode',1)
+            value.pop('_lockFlags',None)
+        elif typ=='cc.Layout':
+            value.pop('_materials',None)
+            aliases={'_layoutType':'_N$layoutType','_resizeMode':'_resize'}
+            aliases.update({name:'_N$'+name[1:]for name in ('_spacingX','_spacingY','_paddingLeft','_paddingBottom','_paddingRight','_paddingTop','_horizontalDirection','_verticalDirection','_startAxis')})
+            for src,dest in aliases.items():
+                if src in value:value[dest]=value.pop(src)
+            value.setdefault('_N$verticalDirection',1)
+            value.setdefault('_resize',0)
+            value['_cellSize']=dict(zip(['width','height'],source_vector(value.get('_cellSize'),5,['width','height'],[40,40],'Layout._cellSize')))
         component,missing=component_ir(namespace,index,value)
         component['sourceGeometryProfile']=PROFILE
         if obj.get('_enableShadow') or obj.get('_useGrayscale'):component['supported']=False
@@ -152,4 +167,21 @@ def _graph(asset,instances_resolved):
             outline=dict(__type__='cc.LabelOutline',node=obj.get('node'),_enabled=obj.get('_enabled',True),_width=obj.get('_outlineWidth',2),_color=obj.get('_outlineColor',dict(r=0,g=0,b=0,a=255)))
             effect,missing=component_ir(namespace,index+'/outline',outline);components.append(effect)
             for message in missing:gap(index,message)
+    # Prefab.data / SceneAsset.scene is the live hierarchy. Compiled object
+    # tables may also retain detached records (including stale _parent links);
+    # instantiating the asset does not attach those records to its tree.
+    definition=objects[0]if objects and isinstance(objects[0],dict)else{}
+    root=definition.get('data')if definition.get('__type__')=='cc.Prefab'else definition.get('scene')if definition.get('__type__')=='cc.SceneAsset'else None
+    if isinstance(root,dict)and set(root)=={'__id__'}:
+        root_id=ref(root,namespace);by_node={n['sourceId']:n for n in nodes};live=set();pending=[root_id]
+        if root_id not in by_node:fail('COCOS3_ROOT_NODE_MISSING',namespace,'Asset root does not identify an available source Node/Scene')
+        while pending:
+            sid=pending.pop()
+            if sid in live:continue
+            live.add(sid)
+            if sid in by_node:pending.extend(by_node[sid]['children'])
+        for n in nodes:
+            if n['sourceId']not in live:gaps.append(dict(sourceId=n['sourceId'],message='Detached serialized node is outside the asset root hierarchy; original record retained in source evidence'))
+        nodes=[n for n in nodes if n['sourceId']in live]
+        components=[c for c in components if c.get('node')in live]
     return nodes,components,gaps

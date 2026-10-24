@@ -92,7 +92,7 @@ class CreatorTests(unittest.TestCase):
             checked=unity.verify(r/'unity',r/'unity-checked','editor')
             self.assertTrue(any(d['code']=='BITMAP_ATLAS_READBACK_MISMATCH' for d in checked['diagnostics']))
 
-    def test_cached_sprite_rect_keeps_original_mode_and_explicit_resize_handoff(self):
+    def test_cached_sprite_rect_preserves_native_automatic_sizing_policy(self):
         from monkey.io import finish
         for size,needs_handoff in [([7,6],False),([100,144],True)]:
             with self.subTest(size=size),tempfile.TemporaryDirectory() as temp:
@@ -103,8 +103,9 @@ class CreatorTests(unittest.TestCase):
                 plan=cocos.plan(root/'ir/ir.json','cached-size',root/'cached-plan')
                 actual=next(c for c in plan['components'] if c['sourceId']==sprite['sourceId'])
                 self.assertEqual(actual['sizeMode'],2)
-                self.assertEqual(actual.get('nativeSizeMode')==0,needs_handoff)
-                self.assertEqual(any(d['code']=='SPRITE_CACHED_SIZE_HANDOFF' for d in plan['diagnostics']),needs_handoff)
+                self.assertEqual(actual['nativeSizeMode'],2)
+                self.assertEqual(actual['sizingPolicy'],'native-sprite-sizing-v1')
+                self.assertFalse(any(d['code']=='SPRITE_CACHED_SIZE_HANDOFF' for d in plan['diagnostics']))
 
     def test_native_scene_identity_without_geometry_is_not_accepted(self):
         with tempfile.TemporaryDirectory() as temp:

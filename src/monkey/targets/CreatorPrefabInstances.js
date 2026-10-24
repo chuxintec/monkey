@@ -2,6 +2,7 @@
 // Creator 3.8.8 Editor-only assembly. Native PrefabInfo/overrides are serialized
 // by the installed SDK; no source graph or interpreter is included in Player.
 const cc=require('cc');
+const dynamic=require('./dynamic-ui.js');
 let current=null,sequence=0;
 const api=()=>{
     const u=cc.Prefab._utils,p=globalThis.EditorExtends&&EditorExtends.PrefabUtils;
@@ -14,7 +15,7 @@ function session(id,plan) {
     return current;
 }
 function keep(plan,scene,nodes,result){if(current)throw Error('Native assembly session already exists');current={id:'prefabs-'+(++sequence),plan,scene,nodes,result,prepared:new Set()};return current.id;}
-function release(id){if(current&&current.id===id){current.scene.destroy();current=null;}}
+function release(id){if(current&&current.id===id){dynamic.release(current.scene);current.scene.destroy();current=null;}}
 function mapTree(root,spec,plan) {
     const source=new Map(plan.nodes.map(n=>[n.sourceId,n])),mapped=new Map();
     function walk(id,node){const s=source.get(id);if(!s||!node||s.children.length!==node.children.length)throw Error('Native template topology differs: '+id);mapped.set(id,node);s.children.forEach((child,i)=>walk(child,node.children[i]));}
@@ -84,22 +85,26 @@ async function serializePrefab(id,sid,saved,plan,load) {
     const root=cc.instantiate(state.nodes.get(spec.root));
     try {
         root.parent=null;root.name=spec.nativeRootName;
+        const mapped=mapTree(root,spec,plan);
+        const nativeInitialNodes=dynamic.settleRoot(root,mapped,plan);
         const prefab=new cc.Prefab();prefab.name=root.name;prefab.data=root;
         const {p}=api();
         if(root._prefab&&root._prefab.instance)throw Error('Creator root template inheritance requires a dedicated native asset contract');
         p.addPrefabInfo(root,root,prefab);root._prefab.nestedPrefabInstanceRoots=instanceRoots(root);
         p.checkAndStripNode(root,true);
-        const raw=EditorExtends.serialize(prefab);return {sourceId:sid,path:spec.path,serialized:typeof raw==='string'?raw:JSON.stringify(raw)};
+        const raw=EditorExtends.serialize(prefab);return {sourceId:sid,path:spec.path,nativeInitialNodes,serialized:typeof raw==='string'?raw:JSON.stringify(raw)};
     }finally{root.destroy();}
 }
 async function finish(id,saved,plan,load) {
     const state=session(id,plan);
     try {
         for(const owner of new Set(plan.prefabInstances.map(x=>x.owner)))await prepare(state,owner,saved,load);
+        dynamic.settle(state.scene,state.nodes,plan);
+        const nativeInitialNodes=dynamic.capture(state.nodes);
         const {u,p}=api(),info=new u.PrefabInfo();info.root=state.scene;info.nestedPrefabInstanceRoots=instanceRoots(state.scene);state.scene._prefab=info;
         p.checkAndStripNode(state.scene,true);
         const asset=new cc.SceneAsset();asset.scene=state.scene;const raw=EditorExtends.serialize(asset);
-        return {...state.result,serialized:typeof raw==='string'?raw:JSON.stringify(raw)};
+        return {...state.result,nativeInitialNodes,serialized:typeof raw==='string'?raw:JSON.stringify(raw)};
     }finally{release(id);}
 }
 function read(plan,mapped,templates,saved,owner=null){

@@ -31,12 +31,21 @@ class Creator38GraphTests(unittest.TestCase):
             with self.assertRaisesRegex(ParseError,'VALUE_TYPE'):graph(asset([dict(__type__='cc.Node',_lpos=raw)]))
         with self.assertRaisesRegex(ParseError,'UI_TRANSFORM_DISABLED'):graph(asset([dict(__type__='cc.Node',_components=[dict(__type__='cc.UITransform',node=ref(0),_enabled=False)])]))
 
-    def test_wrong_component_owner_is_rejected_and_unknown_widget_is_explicitly_unsupported(self):
+    def test_wrong_owner_is_rejected_and_widget_uses_native_semantic_fields(self):
         with self.assertRaisesRegex(ParseError,'COMPONENT_OWNER'):
             graph(asset([dict(__type__='cc.Node',_components=[dict(__type__='cc.Sprite',node=ref(9))])]))
         nodes,components,gaps=graph(asset([dict(__type__='cc.Node',_components=[dict(__type__='cc.Widget',node=ref(0),_alignFlags=45)])]))
-        self.assertFalse(components[0]['supported']);self.assertEqual(components[0]['sourceData']['_alignFlags'],45)
-        self.assertTrue(any('separate semantic adapter'in g['message']for g in gaps))
+        self.assertEqual(components[0]['flags'],45);self.assertEqual(components[0]['alignMode'],1)
+        self.assertEqual(components[0]['center'],[0,0]);self.assertFalse(gaps)
+
+    def test_asset_root_closure_keeps_detached_records_in_evidence_only(self):
+        import copy
+        data=asset([dict(__type__='cc.Prefab',data=ref(1)),
+            dict(__type__='cc.Node',_children=[ref(2)]),dict(__type__='cc.Node',_parent=ref(1)),
+            dict(__type__='cc.Node',_name='Detached',_parent=ref(1))])
+        before=copy.deepcopy(data);nodes,components,gaps=graph(data)
+        self.assertEqual([n['sourceId'].rsplit('#',1)[1]for n in nodes],['1','2'])
+        self.assertTrue(any('Detached serialized node'in g['message']for g in gaps));self.assertEqual(data,before)
 
 
 if __name__=='__main__':unittest.main()
