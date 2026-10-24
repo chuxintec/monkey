@@ -14,7 +14,7 @@
 |团结2022.3.61t9|Unity6|blocked：typed2888/3042读取，固定Provider仅3042不可读证据、0原生资源；未晋升候选|专用来源adapter待实现|
 |Unity任意版本其他Mono/IL2CPP来源|Unity6|planned，逐serializedFile/AssetBundle/provider/profile增加|U|
 |Unity6来源|Unity6|planned，需明确版本真实样本|U|
-|Cocos Creator3.8.7发布资源|Unity6 / Cocos3.8.8 / both|partial：下方了496明确输入/38081754B，4804对象正文；986源Frame→1972变体双端原生强回读0差异。119源图/采样行为/Spine/业务待适配，Excel/Proto两zip缺失|C，持续逐case|
+|Cocos Creator3.8.7发布资源|Unity6 / Cocos3.8.8 / both|partial：下方了496明确输入/38081754B，4804对象正文；986源Frame→1972变体，新增83源图/810节点/81 Prefab双端原生0严格差异。36嵌套图/采样行为/Spine/业务待适配，Excel/Proto两zip缺失|C，持续逐case|
 |Cocos Creator3.x其他格式|Unity6 / Cocos3.8.8 / both|planned，不能套2.4 reader|C|
 |Cocos Creator2.4.x以下/1.x旧格式|Unity6 / Cocos3.8.8 / both|planned，逐格式/版本反例，不能笼统已支持|C|
 |Cocos2d-x及其他Cocos分支原包|Unity6 / Cocos3.8.8 / both|planned，独立识别和适配，不能套Creator序列化|逐来源样本|

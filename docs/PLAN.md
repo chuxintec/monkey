@@ -576,3 +576,13 @@ Unity typed值预算新增逐对象250000/全请求4000000强限；超大对象�
 事件monkey-v02-unity-acquisition-cli-20261024-01：Unity来源复用既有acquisition到公开convert，支持显式remote-manifest/remote-cache-root/acquisition-out/offline，不再只接受手工合并纹理表。ASTC精确逻辑路径入纹理池，真实Unity容器入显式依赖或冻结精确查找池；未知文件只在SourceRecovery/Acquired保留并diagnostic，不导入Assets。缓存同逻辑键异字节拒绝，实际source尺寸/mip仍由既有水合器强核；不猜URL/hash/版本，不执行下载代码。全可用原件+脱敏回执在native封存前附加，暂存完成再晋升，源变化保留原owned基线。
 
 公开真实offline04使用114原缓存表+3显式精确URL/SHA，localVerified3/110848B、0GET/0missing，6键齐；Provider99626 exit0/reaped、0.655秒，44原生资源/2408文件/0占位，candidate owned全核。recovery bd3caf0ed9e2f8e2487b39282fd6fcf006bc3b4cfc434f362045c560ac38caa2，acquisition receipt15820ec524708207ca6186bb3cce52475e2297750a5d24fbba2ac37d4151ff80。34定向检查通过；未重跑已过Editor。继续源atlas/图适配与代码接续，v0.2未完成，不推送发布。
+
+事件monkey-v02-cocos387-source-graphs-20261024-01：3.8.7新增真实静态源图adapter，读取_lpos/_lrot/_lscale、UITransform、UIOpacity及renderer颜色，省略默认值依据官方v3.8.7固定9文件SHA（docs/validation/cocos387-engine-baseline.json），不套2.4 identity。吸收几何组件时保留sourceGeometryComponents；错tag/owner/重复UI组件/未归一化Quaternion/disabled UITransform阻断，PrefabInstance/非空nested/override整图隔离。未知组件原名/数据留handoff且supported=false，不能靠同名2.4缺省意外原生化。共享目标规划显式尊重unsupported。Scene/Prefab新增opacity/已发renderer颜色强核；Creator保留并强核layer，Unity原layer作为provenance及camera/layer待办。
+
+实际119原图→83静态图/810节点/81 Prefab/908组件，36嵌套图隔离；35源Image边、sampler、Spine和方法/视觉/交互仍缺，986Frame/1972变体不变。118节点非白色、2非255opacity；Unity363/Creator380发出renderer节点做颜色强核，95Label/1源字体。当前源策略与冻结08候选810节点/908组件逐项完全一致，审计保留outputs/cocos38-xiafangle-graphs-08-current-policy-audit。
+
+07 Unity own1431于23:50:14.643489Z→23:50:42.606725Z exit0/reaped，方法6.82秒、strict0/editorpartial，源图/资源/保存重开通过。07 Creator导出source-map漏unsupported.nativeType，structured失败而文件记账fallback完成，入口缺失因此Creator未启动；该失败冻结。补nativeType=None、两个真实反例，并在全组Editor启动前预检所有请求目标的owned入口，避免第一引擎先跑、第二才发现缺发出。此前未先检查structured.status是本轮一次可避免调度错误，后续已补门。
+
+08仅重建Creator；own2304于23:53:25.726798Z→23:54:10.873039Z正常TERM/reaped，方法21.22秒、strict0/editorpass，810节点/81Prefab/95Label源几何/引用/颜色/透明度/层/保存重开通过。Python后补layer强核editor级只读复验pass/0诊断，无新Editor；一次误用static层级看到importer meta变化的冲突结果保留，改用正确editor层级核对，没有降低meta校验或改旧证据。Unity07 manifest ba63a4652259a04bfcb368e3e694f8c1a898df0c3053dbf360099ada41bb6153；Creator08 7983feacd55006b06aa94f7aca2aa2cbc5dca635e187346e1963a6a00ae7a10c。
+
+34定向检查在本项目.venv全过（含可选ASTC），host C#与两个JS语法检查过；篡改Unityplan的早期stage hash错误现保留既有PLAN_CHANGED代码，不放宽内容保护。未重跑已过Unity、未全库测试/发布。Research仍11/9不同范围输出/2blocked/完整游戏0，更新当前case ledger而保留旧gallery/失败记录。继续代码接续与专用来源缺口，v0.2尚未完成。

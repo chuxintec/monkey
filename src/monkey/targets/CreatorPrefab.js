@@ -3,6 +3,20 @@
 const cc=require('cc');
 const jobs=require('./jobs.js');
 const near=(a,b)=>a.length===b.length&&a.every((v,i)=>Math.abs(v-b[i])<0.001);
+function uiState(node,src) {
+    if(!src.sourceGeometryProfile)return {};
+    const group=node.getComponent(cc.UIOpacity);const opacity=group&&group.enabled?group.opacity:255;
+    if(node.layer!==src.sourceLayer||Math.abs(opacity-src.opacity)>.001)throw Error('Source UI layer/opacity differs: '+src.sourceId);
+    const state={sourceLayer:node.layer,opacity};
+    if(src.verifyUiColor) {
+        const renderer=node.getComponent(cc.Sprite)||node.getComponent(cc.Label);
+        if(!renderer)throw Error('Source UI renderer missing: '+src.sourceId);
+        const color=[renderer.color.r,renderer.color.g,renderer.color.b,renderer.color.a];
+        if(!near(color,src.color))throw Error('Source renderer color differs: '+src.sourceId);
+        state.color=color;
+    }
+    return state;
+}
 async function serialize(plan,nodes) {
     const result=[];
     for(const spec of plan.sourcePrefabs||[]) {
@@ -33,8 +47,8 @@ function read(prefab,spec,plan,info) {
             const expectedName=sid===spec.root&&spec.rootNamePolicy==='creator-asset-basename-v1'?spec.nativeRootName:src&&src.name;
             if(!src||expectedName!==node.name||src.children.length!==node.children.length||!ui)throw Error('Prefab hierarchy differs: '+sid);
             const actual={position:[node.position.x,node.position.y,node.position.z],scale:[node.scale.x,node.scale.y,node.scale.z],
-                rotation:[node.rotation.x,node.rotation.y,node.rotation.z,node.rotation.w],size:[ui.width,ui.height],anchor:[ui.anchorX,ui.anchorY],active:node.active};
-            const fields=Object.keys(actual).filter(key=>key==='active'?actual[key]!==src[key]:!near(actual[key],src[key]));
+                rotation:[node.rotation.x,node.rotation.y,node.rotation.z,node.rotation.w],size:[ui.width,ui.height],anchor:[ui.anchorX,ui.anchorY],active:node.active,...uiState(node,src)};
+            const fields=Object.keys(actual).filter(key=>['active','sourceLayer','opacity'].includes(key)?actual[key]!==src[key]:!near(actual[key],src[key]));
             if(fields.length)geometryMismatches.push({sourceId:sid,fields,expected:Object.fromEntries(fields.map(key=>[key,src[key]])),actual:Object.fromEntries(fields.map(key=>[key,actual[key]]))});
             mapped.set(sid,node);src.children.forEach((child,i)=>match(child,node.children[i]));
         }
@@ -58,4 +72,4 @@ function read(prefab,spec,plan,info) {
             numericCodeBindings,rootNamePolicy:spec.rootNamePolicy||'source-name-v1',sourceRootName:sources.get(spec.root).name,nativeRootName:root.name};
     } finally {root.destroy();}
 }
-module.exports={serialize,read};
+module.exports={serialize,read,uiState};

@@ -15,3 +15,5 @@ monkey convert --input-set sources.json --target both --out fresh
 实际下方了修订70：3原wxapkg和472可见缓存映射，496个输入/38081754B；4804正文、986源Frame形成1972 trim/full变体。两端独立编辑器资源导入/保存重开/尺寸与引用回读0差异；Unity还有986个预览引用及rect逐项验证，明确sourceGraphVerification=not_run。119源图、35图像边、3124复杂代码草稿、两原始zip配置包和视觉/玩法未闭合。详细窗口和不可变候选SHA见PLAN。
 
 原生05曾因资源gallery误用源节点边界检查失败，进程退出且Creator未启动。修正为独立的gallery引用/几何强检查，非空源图仍走原检查；06在新候选/新窗口通过。旧失败不改，资源预览不当作源UI或玩法恢复。
+
+2026-10-24新增[3.8.7静态源图适配](COCOS-3.8-GRAPHS.md)：119图中83图/810节点/81 Prefab经双端原生保存重开/引用/几何强核；36嵌套实例或override图保持隔离。原资源06 gallery证据未改写，新增07 Unity与08 Creator证据分列，不把gallery当源UI恢复。

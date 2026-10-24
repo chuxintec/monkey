@@ -179,6 +179,11 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
         c=entry
         entry['convertible']=c['type'] in native_types and c['node'] in node_ids
         entry['nativeId']=guid(namespace,c['sourceId'])
+        if c.get('supported') is False:
+            entry['convertible']=False
+            diagnostics.append(diagnostic('SOURCE_COMPONENT_PROFILE_HANDOFF',c['sourceId'],'Source component semantics are not implemented for this profile',c['sourceId']))
+            components.append(entry);continue
+
         if any(resolve_id(mat) not in native_materials for mat in c.get('materials',[])):
             entry['convertible']=False
             diagnostics.append(diagnostic('CUSTOM_MATERIAL_HANDOFF',c['sourceId'],'Material is not recognized standard UI texture',c['sourceId']))
@@ -318,6 +323,11 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
         target = out/'resources'/(sha(copy['target'].encode())[:24]+Path(copy['target']).suffix)
         target.write_bytes(read(inside(ir_path.parent,copy['source'])))
         copy['source']='resources/'+target.name
+    from .common import native_color_nodes
+    nodes=native_color_nodes(nodes,components)
+    for node in nodes:
+        if node.get('sourceGeometryProfile'):
+            diagnostics.append(diagnostic('COCOS3_UNITY_LAYER_HANDOFF',node['sourceId'],'Original layer bits retained as provenance; native uGUI uses target UI layer 5, source camera visibility is pending',node['sourceId']))
     result=dict(schemaVersion=1,toolVersion=__version__,targetProfile=PROFILE,namespace=namespace,
                 sourcePrefabs=source_prefabs,naming=naming.report(),
                 scopeMode=ir.get('scopeMode','asset-selection'),
@@ -330,7 +340,12 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
 
 
 def export(plan_path, output):
-    plan_path=safe(plan_path);p=stage_document(plan_path)
+    plan_path=safe(plan_path)
+    from ..sources.compiled import ParseError
+    try:p=stage_document(plan_path)
+    except ParseError as error:
+        if error.code=='STAGE_DOCUMENT_CHANGED':fail('PLAN_CHANGED',str(plan_path),'Plan differs from manifest')
+        raise
     if p.get('targetProfile')!=PROFILE or p.get('schemaVersion')!=1:
         fail('UNSUPPORTED_PLAN','$','Expected Unity plan schema 1')
     # Plan JSON itself must match its create-only manifest, not just copied images.
@@ -451,6 +466,9 @@ def node_geometry_matches(actual,source,full=False):
         return False
     if any(not close(actual.get(key),source[field]) for key,field in [('size','size'),('pivot','anchor'),('position','position')]):
         return False
+    if source.get('sourceGeometryProfile'):
+        if not close(actual.get('opacity'),source['opacity']):return False
+        if source.get('verifyUiColor') and not close(actual.get('color'),source['color']):return False
     if full:
         rotation=actual.get('rotation');expected=source['rotation']
         # q and -q describe the same native rotation. No angular tolerance change.

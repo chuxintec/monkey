@@ -39,7 +39,7 @@ public static class MonkeyImporter
     }
     [Serializable] public class AssetSpec { public string id, kind, path, fontAssetPath; }
     [Serializable] public class NodeSpec {
-        public string sourceId, name, parent; public string[] children, components;
+        public string sourceId, name, parent,sourceGeometryProfile; public bool verifyUiColor; public string[] children, components;
         public float[] position, rotation, scale, size, anchor, color;
         public float opacity; public bool active;
     }
@@ -76,7 +76,7 @@ public static class MonkeyImporter
     [Serializable] public class ViewReference { public string sourceId,field; public int index; public long prefabFileId; public bool bound; }
     [Serializable] public class FileResult { public string path, sha256; }
     [Serializable] public class NodeResult {
-        public string sourceId, hierarchy; public float[] size, pivot, position,scale,rotation;
+        public string sourceId, hierarchy; public float[] size, pivot, position,scale,rotation,color; public float opacity;
         public bool active; public string[] componentTypes;
     }
     [Serializable] public class SpriteResult {
@@ -897,11 +897,22 @@ public static class MonkeyImporter
         EditorUtility.SetDirty(controller);AssetDatabase.SaveAssetIfDirty(controller);
     }
     static NodeResult DescribeNode(NodeSpec source,RectTransform rect) {
+        float opacity=255f;float[] color=null;
+        if(!string.IsNullOrEmpty(source.sourceGeometryProfile)) {
+            var group=rect.GetComponent<CanvasGroup>();opacity=(group!=null&&group.enabled?group.alpha:1f)*255f;
+            if(Math.Abs(opacity-source.opacity)>.001f)throw new InvalidOperationException("Source UI opacity differs: "+source.sourceId);
+            if(source.verifyUiColor) {
+                var graphic=rect.GetComponent<UnityEngine.UI.Graphic>();
+                if(graphic==null)throw new InvalidOperationException("Source UI renderer missing");
+                var c=graphic.color;color=new[]{c.r*255f,c.g*255f,c.b*255f,c.a*255f};
+                if(color.Where((value,index)=>Math.Abs(value-source.color[index])>.001f).Any())throw new InvalidOperationException("Source UI renderer color differs: "+source.sourceId);
+            }
+        }
         return new NodeResult {sourceId=source.sourceId,hierarchy=rect.name,size=new[]{rect.rect.width,rect.rect.height},
             pivot=new[]{rect.pivot.x,rect.pivot.y},position=new[]{rect.localPosition.x,rect.localPosition.y,rect.localPosition.z},
             scale=new[]{rect.localScale.x,rect.localScale.y,rect.localScale.z},
             rotation=new[]{rect.localRotation.x,rect.localRotation.y,rect.localRotation.z,rect.localRotation.w},
-            active=rect.gameObject.activeSelf,componentTypes=rect.GetComponents<Component>().Select(c=>c.GetType().FullName).ToArray()};
+            color=color,opacity=opacity,active=rect.gameObject.activeSelf,componentTypes=rect.GetComponents<Component>().Select(c=>c.GetType().FullName).ToArray()};
     }
     static int SettleNativeLayout(GameObject root) {
         var groups=root.GetComponentsInChildren<UnityEngine.UI.LayoutGroup>(true).Where(g=>g.isActiveAndEnabled).Reverse().ToArray();

@@ -21,6 +21,15 @@ class NativeGeometryTests(unittest.TestCase):
         self.assertTrue(node_geometry_matches(old,source,False))
         self.assertFalse(node_geometry_matches(old,source,True))
 
+    def test_creator3_opacity_and_emitted_renderer_color_are_required(self):
+        from monkey.targets.unity import node_geometry_matches
+        source=dict(size=[100,40],anchor=[.5,.5],position=[12,20,0],scale=[1,1,1],rotation=[0,0,0,1],active=True,sourceGeometryProfile='cocos-3.8.7-node-ui-v1',opacity=128,color=[12,34,56,255],verifyUiColor=True)
+        actual=dict(size=source['size'],pivot=source['anchor'],position=source['position'],scale=source['scale'],rotation=source['rotation'],active=True,opacity=128,color=[12,34,56,255])
+        self.assertTrue(node_geometry_matches(actual,source,True))
+        self.assertFalse(node_geometry_matches(dict(actual,opacity=255),source,True))
+        self.assertFalse(node_geometry_matches(dict(actual,color=[255]*4),source,True))
+        self.assertFalse(node_geometry_matches({k:v for k,v in actual.items()if k!='color'},source,True))
+
     def test_unity_prefab_count_only_receipt_does_not_prove_geometry_or_references(self):
         from fixtures import fixture
         from monkey.sources.bundle import inspect

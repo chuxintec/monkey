@@ -5,12 +5,24 @@
       "caseId": "744e0775fb39ba9ac00c83c4",
       "evidence": [
         {
-          "path": "outputs/cocos38-xiafangle-package-06/conversion-result.json",
-          "sha256": "474106a4c0ddcb116a676d4eddd2f57d0f72c4e35111331ac60c210ce1c54b80"
+          "path": "outputs/cocos38-xiafangle-graphs-07/conversion-result.json",
+          "sha256": "6269ce23efb6c71799faf3d1fa4f53cec5a4697f39fbc635b839e4d8f2e20d8a"
         },
         {
-          "path": "outputs/cocos38-xiafangle-package-06-native/native-orchestration.json",
-          "sha256": "0160cf10b8e2bd85fe932ba8e62d3a4d37a945e1a725269c35d868d02c24d831"
+          "path": "outputs/cocos38-xiafangle-graphs-07-native/native-orchestration.json",
+          "sha256": "39099cc27b09335bf14b5f7dfdc97119c16b18b2f68363d023f5eee4ea21a4cd"
+        },
+        {
+          "path": "outputs/cocos38-xiafangle-graphs-08/conversion-result.json",
+          "sha256": "f778eb177bf79a9664f4cd04f6716eecf3134b043404368e605994f4c4e8ef54"
+        },
+        {
+          "path": "outputs/cocos38-xiafangle-graphs-08-native/native-orchestration.json",
+          "sha256": "12c15c40f1214d728ab654f804e5f1f01e88f65ef1f8348b682d8cb062cb6137"
+        },
+        {
+          "path": "outputs/cocos38-xiafangle-graphs-08-current-policy-audit/audit.json",
+          "sha256": "8fdfdb425d5a863fa416072ae0d6a681383e46e149ac5d7bb35524f4bcec4073"
         }
       ],
       "export": "partial-resource-candidate",
@@ -23,11 +35,13 @@
       },
       "metadataSha256": "2ce51099b7aac666aa4c377ffc46f87ddd30c3acbe7150834725f1f95a221c43",
       "name": "下方了",
-      "native": "resource-subset-both-targets-verified",
+      "native": "83-static-source-graphs-810-nodes-81-prefabs-both-targets-verified; UI-color-opacity-and-Creator-layer-verified",
       "profile": "cocos-3.8.7-bundle",
       "read": "partial",
       "remaining": [
-        "119 source Scene/Prefab graphs",
+        "36 source nested-Prefab/override graphs",
+        "source components outside Sprite/Label/UITransform/UIOpacity subset",
+        "Unity camera/layer mapping, source Scene globals",
         "35 source image edges",
         "sampler behavior and Spine",
         "excel/res.80d2b.zip",

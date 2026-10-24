@@ -73,6 +73,17 @@ class OrchestrationTests(unittest.TestCase):
                 with self.assertRaises(ParseError):orchestration.run(converted,settings)
             self.assertFalse(settings['output'].exists())
 
+    def test_missing_second_target_entrypoint_blocks_first_editor_too(self):
+        from monkey.io import load,read,write_json
+        with tempfile.TemporaryDirectory()as t:
+            root=Path(t).resolve();_,_,settings,converted=self.setup_package(root)
+            project=root/'candidate/CocosProject';entry='extensions/monkey-import/execution.js';(project/entry).unlink()
+            manifest=load(read(project/'manifest.json'));manifest['files']=[r for r in manifest['files']if r['path']!=entry];write_json(project/'manifest.json',manifest)
+            converted['projects'][1]['manifestSha256']=fingerprint(project/'manifest.json')
+            with patch.object(orchestration,'native_import',side_effect=AssertionError('must not launch')):
+                with self.assertRaisesRegex(ParseError,'ENTRYPOINT_MISSING'):orchestration.run(converted,settings)
+            self.assertFalse(settings['output'].exists())
+
     def test_single_cli_invocation_converts_and_then_dispatches_both_editors(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp).resolve()

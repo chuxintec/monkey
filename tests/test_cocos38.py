@@ -31,17 +31,27 @@ class Creator38Tests(unittest.TestCase):
             self.assertTrue(report['completed']);self.assertEqual(report['structuredRecovery']['sourceProfile'],'cocos-3.8.7-bundle')
             self.assertNotEqual(report['structuredRecovery']['status'],'failed',report['structuredRecovery'])
             ir=load(read(root/'out/Structured/normalize/ir.json'))
-            self.assertEqual(len(ir['spriteFrames']),1);self.assertEqual(ir['nodes'],[])
+            self.assertEqual(len(ir['spriteFrames']),1);self.assertEqual(len(ir['nodes']),1);self.assertEqual(ir['nodes'][0]['position'],[17,23,4]);self.assertEqual(ir['nodes'][0]['scale'],[1,1,1])
             frame=ir['spriteFrames'][0]
             self.assertTrue(frame['sourceId'].endswith('@f9941'));self.assertTrue(frame['sourceResourceEvidence']['sourceTexture'].endswith('@6c48a'))
             self.assertEqual(frame['textureRef'],'main:'+TEXTURE)
-            self.assertIn('COCOS3_GRAPH_ADAPTER_PENDING',{d['code']for d in ir['diagnostics']})
+            self.assertEqual(ir['nodes'][0]['sourceGeometryProfile'],'cocos-3.8.7-node-ui-v1')
             for name,plan in [('UnityProject','Assets/Monkey/Editor/import-plan.json'),('CocosProject','extensions/monkey-import/import-plan.json')]:
-                data=load(read(root/'out'/name/plan));self.assertEqual(len(data['nodes']),0)
+                data=load(read(root/'out'/name/plan));self.assertEqual(len(data['nodes']),1)
                 self.assertTrue((root/'out'/name/'manifest.json').exists())
             self.assertEqual(load(read(root/'out/Structured/inspect/source-manifest.json'))['sourceVersion'],'3.8.7')
             declaration=root/'wrong-profile.json';write_json(declaration,dict(schemaVersion=1,sourceProfile='cocos-2.4.15-bundle',inputs=[dict(id='source',path=str(config.parent))]))
             with self.assertRaisesRegex(ParseError,'SOURCE_ENGINE_PROFILE_CONFLICT'):convert_package(None,'both',root/'wrong',input_set_path=declaration)
+
+    def test_unsupported_v3_widget_is_retained_without_breaking_either_target_emission(self):
+        with tempfile.TemporaryDirectory()as t:
+            root=Path(t).resolve();config=fixture38(root/'source')
+            write_json(config.parent/'import'/PREFAB[:2]/(PREFAB+'.a.json'),normal([dict(__type__='cc.Prefab',data={'__id__':1}),dict(__type__='cc.Node',_components=[dict(__type__='cc.Widget',node={'__id__':1},_alignFlags=45)])]))
+            report=convert_package(config.parent,'both',root/'out')
+            self.assertNotEqual(report['structuredRecovery']['status'],'failed',report['structuredRecovery'])
+            plan=load(read(root/'out/Structured/CocosProject-plan/plan.json'))
+            self.assertFalse(plan['components'][0]['convertible']);self.assertIsNone(plan['components'][0]['nativeType'])
+            self.assertTrue((root/'out/CocosProject/extensions/monkey-import/execution.js').is_file())
 
     def test_array_texture_pack_does_not_guess_multi_image_or_strip_subassets(self):
         self.assertNotEqual(asset_key(FRAME+'@f9941'),asset_key(FRAME+'@6c48a'))

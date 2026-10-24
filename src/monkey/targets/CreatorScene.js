@@ -43,7 +43,7 @@ module.exports = {
                 for(const n of plan.nodes) {
                     if(nodeProgress%256===0){jobs.progress('hierarchy',nodeProgress,plan.nodes.length);await new Promise(resolve=>setTimeout(resolve,0));}nodeProgress++;
                     checkTime(plan);
-                    const node=new cc.Node(n.name);node.layer=cc.Layers.Enum.UI_2D;nodes.set(n.sourceId,node);
+                    const node=new cc.Node(n.name);node.layer=n.sourceLayer??cc.Layers.Enum.UI_2D;nodes.set(n.sourceId,node);
                     node.setPosition(...n.position);node.setRotation(new cc.Quat(...n.rotation));node.setScale(...n.scale);
                     const ui=node.addComponent(cc.UITransform);ui.setContentSize(...n.size);ui.setAnchorPoint(...n.anchor);
                     if(n.opacity!==255)node.addComponent(cc.UIOpacity).opacity=n.opacity;
@@ -180,7 +180,7 @@ module.exports = {
             return {sourcePrefabs,jsonAssets,fontPages,animations,numericCodeBindings,nodeCount:saved.length,nodes:[...mapped].map(([sourceId,n])=>({sourceId,nodeUuid:n.uuid,name:n.name,
                 position:[n.position.x,n.position.y,n.position.z],size:[n.getComponent(cc.UITransform).width,n.getComponent(cc.UITransform).height],
                 pivot:[n.getComponent(cc.UITransform).anchorX,n.getComponent(cc.UITransform).anchorY],scale:[n.scale.x,n.scale.y,n.scale.z],
-                rotation:[n.rotation.x,n.rotation.y,n.rotation.z,n.rotation.w],active:n.active})),components:refs,labels,frames};
+                rotation:[n.rotation.x,n.rotation.y,n.rotation.z,n.rotation.w],active:n.active,...prefabs.uiState(n,sourceNodes.get(sourceId))})),components:refs,labels,frames};
         }
     }
 };

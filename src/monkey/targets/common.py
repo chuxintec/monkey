@@ -111,3 +111,9 @@ def native_ink_box(quad):
         fail('INVALID_NATIVE_GLYPH_PADDING','$','Padding exceeds the measured quad')
     return dict(unicode=quad['unicode'],left=fields['left']+padding,top=fields['top']-padding,
                 width=fields['width']-2*padding,height=fields['height']-2*padding)
+
+
+def native_color_nodes(nodes,components):
+    """Only ask for renderer readback when that source renderer is emitted."""
+    colored={c['node']for c in components if c.get('convertible')and c['type']in ('cc.Sprite','cc.Label')}
+    return [dict(n,verifyUiColor=n['sourceId']in colored)if n.get('sourceGeometryProfile')else n for n in nodes]

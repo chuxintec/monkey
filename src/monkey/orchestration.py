@@ -6,7 +6,7 @@ conversion receipts remain frozen; business/visual gaps are never promoted.
 from datetime import timedelta
 from pathlib import Path
 
-from .io import safe, new_output, write_json
+from .io import safe, inside,read,stage_manifest,new_output, write_json
 from .native import native_import, now, stamp
 from .package import TARGETS
 from .sources.compiled import fail
@@ -56,6 +56,16 @@ def run(conversion, settings):
         identity = fingerprint(root / 'manifest.json')
         if identity != row.get('manifestSha256'):
             fail('NATIVE_SOURCE_IDENTITY', str(root), 'Generated candidate manifest differs from conversion receipt')
+        # Check every target entrypoint before launching the first Editor. A file
+        # accounting fallback may be complete even when native emission failed.
+        from .targets.layout import lookup
+        manifest=stage_manifest(root)
+        entry=lookup('Assets/Monkey/Editor/MonkeyImporter.cs',manifest) if profile==unity.PROFILE else 'extensions/monkey-import/execution.js'
+        marker=b'public static void ImportBatchAsync()' if profile==unity.PROFILE else b'MONKEY_NATIVE_EXECUTE'
+        records=[f for f in manifest['files']if f['path']==entry]
+        helper=inside(root,entry)
+        if len(records)!=1 or not helper.is_file() or fingerprint(helper)!=records[0]['sha256'] or marker not in read(helper):
+            fail('NATIVE_ENTRYPOINT_MISSING',str(root),'One requested native target was not emitted; preserve conversion and repair offline before any Editor launch')
         projects.append((profile, name, root, identity))
     out = new_output(settings['output'], [settings['candidate']])
     report = dict(schemaVersion=1, status='running', startedUtc=stamp(now()),

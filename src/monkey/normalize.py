@@ -140,8 +140,10 @@ def normalize(manifest_path, output):
                 result['quarantinedAssets'].append(dict(sourceId=sid,kind=kind,reason='LEGACY_RESOURCE_ONLY'))
                 diagnostics.append(diagnostic('LEGACY_RESOURCE_ONLY',asset.get('importPath',sid),'2.1.2 graph, clip and other semantics require a dedicated adapter',sid));continue
             if cocos38 and kind in ('cc.Prefab','cc.Scene','cc.SceneAsset'):
-                result['quarantinedAssets'].append(dict(sourceId=sid,kind=kind,reason='COCOS3_GRAPH_ADAPTER_PENDING'))
-                diagnostics.append(diagnostic('COCOS3_GRAPH_ADAPTER_PENDING',asset.get('importPath',sid),'3.x UITransform/local transforms differ; preserve graph evidence without emitting guessed identity geometry',sid))
+                from .sources.cocos38_graphs import graph as graph38
+                nodes38,components38,gaps38=graph38(asset)
+                result['nodes'].extend(nodes38);result['components'].extend(components38)
+                diagnostics.extend(diagnostic('COCOS3_SOURCE_SEMANTIC_HANDOFF',asset.get('importPath',sid),g['message'],g['sourceId'])for g in gaps38)
                 continue
             if kind == 'cc.SpriteFrame':
                 resource_evidence={}

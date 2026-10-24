@@ -5,7 +5,7 @@ import uuid
 from .. import __version__
 from ..io import safe, inside, read, load, sha, write_json, new_output, finish, diagnostic, stage_document, stage_bytes,stage_manifest
 from ..sources.compiled import fail
-from .common import input_ir, tasks
+from .common import input_ir, tasks,native_color_nodes
 
 PROFILE='cocos-3.8.8'
 
@@ -68,6 +68,10 @@ def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None):
     node_ids={n['sourceId'] for n in ir['nodes']};source_nodes={n['sourceId']:n for n in ir['nodes']}
     for src in ir['components']:
         c=dict(src);sid=c['sourceId'];c['convertible']=c['type'] in supported and c.get('node') in node_ids
+        if c.get('supported') is False:
+            c['convertible']=False;c['nativeType']=None
+            diagnostics.append(diagnostic('SOURCE_COMPONENT_PROFILE_HANDOFF',c['sourceId'],'Source component semantics are not implemented for this profile',c['sourceId']))
+            components.append(c);continue
         if sid in bindings:c.update(font=bindings[sid]['font'],bold=bindings[sid].get('syntheticBold',False))
         for field in ['font','spriteFrame']:
             if field in c:c[field]=resolve(c[field])
@@ -101,8 +105,8 @@ def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None):
             if c['convertible']:
                 c.update(nativeOverflow=1,sizingPolicy='source-baked-clamp-v1')
                 diagnostics.append(diagnostic('LABEL_AUTOSIZE_SEMANTICS_HANDOFF',sid,
-                    'Native Label uses CLAMP with the baked source rect; 2.4 automatic sizing is not equivalent to 3.8 text measurement',sid))
-            diagnostics.append(diagnostic('CREATOR_TEXT_METRICS_NOT_VERIFIED',sid,'Original font selected; 2.4 vs 3.8 glyph layout needs real comparison',sid))
+                    'Native Label uses CLAMP with the baked source rect; source automatic sizing behavior requires separate comparison',sid))
+            diagnostics.append(diagnostic('CREATOR_TEXT_METRICS_NOT_VERIFIED',sid,'Original font selected; cross-version glyph layout needs real source comparison',sid))
         elif c['type']=='cc.Widget':
             if c['flags'] not in (0,45) or c['target'] is not None or not all(c['absolute']):gap('WIDGET_SUBSET_UNSUPPORTED','Only parent absolute disabled/full stretch')
         elif c['type']=='cc.Mask':
@@ -150,7 +154,7 @@ def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None):
         scopeMode=ir.get('scopeMode','asset-selection'),
         sourceIrSha256=sha(stage_bytes(path)),sourceManifestSha256=ir['sourceManifestSha256'],sourceManifestPath=ir.get('sourceManifestPath'),
         sourceRoots=ir.get('sourceRoots',{}),sourceLocations=ir.get('sourceLocations',{}),bindings=receipt,
-        designSize=[750,1334],assets=assets,copies=copies,animations=animations,sourcePrefabs=prefabs,naming=naming.report(),nodes=ir['nodes'],components=components,
+        designSize=[750,1334],assets=assets,copies=copies,animations=animations,sourcePrefabs=prefabs,naming=naming.report(),nodes=native_color_nodes(ir['nodes'],components),components=components,
         diagnostics=diagnostics,editorValidation='not_run',subresourceValidation='pending-native-import')
     write_json(out/'plan.json',result);return finish(out,result)
 
@@ -259,7 +263,8 @@ def verify(candidate,output,level='static'):
                 from .unity import node_geometry_matches
                 saved_nodes={n['sourceId']:n for n in rb.get('nodes',[])}
                 for spec in plan['nodes']:
-                    if not node_geometry_matches(saved_nodes.get(spec['sourceId']),spec,True):
+                    actual_node=saved_nodes.get(spec['sourceId'])
+                    if not node_geometry_matches(actual_node,spec,True) or ('sourceLayer'in spec and actual_node.get('sourceLayer')!=spec['sourceLayer']):
                         good=False;diagnostics.append(diagnostic('SCENE_GEOMETRY_MISMATCH',spec['sourceId'],'Saved native Scene transform differs from the frozen source plan'))
             def near(actual,expected):
                 return isinstance(actual,list) and len(actual)==len(expected) and all(type(x) in (int,float) and abs(x-y)<.001 for x,y in zip(actual,expected))
