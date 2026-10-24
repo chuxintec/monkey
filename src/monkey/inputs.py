@@ -9,6 +9,13 @@ def input_set(path):
     path=safe(path);raw=read(path);data=load(raw)
     if data.get('schemaVersion')!=1 or data.get('sourceProfile') not in ('cocos-2.4.15-bundle','cocos-2.4.15-project','cocos-3.8.7-bundle','cocos-2.4.11-bundle','cocos-2.1.2-resource','generic-image-resources-v1','egret-custom-resource-plist-v1'):
         fail('INPUT_SET_SCHEMA',str(path),'Expected input-set schema 1 and explicit supported sourceProfile')
+    from .sources.containers import MAX_TOTAL,MAX_EXPLICIT_TOTAL
+    limits=data.get('limits',{})
+    if not isinstance(limits,dict) or set(limits)-{'maxInputBytes'}:
+        fail('INPUT_SET_LIMITS',str(path),'Only limits.maxInputBytes is supported')
+    max_input_bytes=limits.get('maxInputBytes',MAX_TOTAL)
+    if type(max_input_bytes)is not int or not 1<=max_input_bytes<=MAX_EXPLICIT_TOTAL:
+        fail('INPUT_SET_LIMITS',str(path),'maxInputBytes must be an integer in 1..8GiB; default 1GiB')
     inputs=data.get('inputs')
     if not isinstance(inputs,list) or not 1<=len(inputs)<=16:
         fail('INPUT_SET_SCHEMA',str(path),'Expected 1..16 explicit local inputs')
@@ -56,6 +63,6 @@ def input_set(path):
             if safe(prior.get('sourceRoots',{}).get(root['id'],'/nonexistent'))!=root['path']:
                 fail('INPUT_PROVENANCE_MISMATCH',root['id'],'Root absent from declared frozen source relation')
         verified_relation=True
-    return dict(path=path,sha256=sha(raw),sourceProfile=data['sourceProfile'],inputs=roots,identity=known,
+    return dict(path=path,sha256=sha(raw),sourceProfile=data['sourceProfile'],inputs=roots,identity=known,maxInputBytes=max_input_bytes,
                 identityStatus='declared' if known.get('appId') and known.get('version') else 'identity_unknown',
                 frozenRelationVerified=verified_relation)

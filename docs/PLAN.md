@@ -608,3 +608,17 @@ Unity typed值预算新增逐对象250000/全请求4000000强限；超大对象�
 当前灵画师引擎已按最新human要求独立确认Egret5.2.32，而非先前初步Laya：本机wxcbc1fc07fb13d667/166主包2857006B，实际64字符SHA256为2e200f176380470eff845c868d1b96391b93261e375a23997697c6eb29886de1，与Research完全一致；入口bootstrap9a27...8193直接egret.runEgret，原runtime版本literal5.2.32及RenderNode实现。公共精确span/hash见egret5232-source-baseline.json。总监来源材料的主包SHA有误拼接，以上为本聊天实际重算值；不照抄长于64字符的字段。未据此声称Laya已支持，广义Laya仍等待真实样本。
 
 最新取舍已同步AGENTS/方案/支持矩阵与case：不可逆源引擎/方法保留limitations，不强求全游戏；嵌套Prefab/override/动态布局仍必须解决。当前转入天命/机智微信缓存补源：已只读定位目标applet packages/local，机智146/147可见、灵画师165/166可见，未读usrmmkv玩家档。天命需定位AppID；applet元数据库不是明文SQLite，仅探header/只读schema失败，未取凭据或绕解。下一先冻结机智147当前包/资源索引并有据补取，同时以允许标题/AppID元数据定位天命，之后解决下方了36嵌套图及真实动态布局，不等旧归档答复、不新增团队/安装/发布。
+
+事件monkey-output-cleanup-20261024-01：本聊天用户直接要求适当清理monkey输出。清理前outputs约560GiB，其中历史acceptance约294GiB；已删除full-foodstreet01–13及structured-foodstreet01–08的重复输入、派生资源/SourceRecovery和旧工程资产载荷，保留原manifest、Analysis、Docs、日志与独立验收报告，并为23个旧轮次增加CLEANUP-NOTICE（不再是完整可打开候选）。full13失败原生副本保留失败日志/回读，载荷清理；所有可识别生成工程仅另清可重建Unity Library/Temp/obj及Creator library/temp。
+
+实际删除246个目录；macOS大小写路径别名36项按冻结清单去重，首遍遇Assets/assets同目录已删后恢复原计划，没有扩大范围。保留full14及其native、NumberLabel full package、下方了graphs07/08与Parabola10、Egret最新候选、所有远端acquisition和.private来源/开发资料；79份保留manifest及在途源码SHA复核相同。物理可用空间增加428851200000B（399.40GiB），卷可用从约291GiB至690GiB。删除计划、逐目录日志、原候选hash和完成回执在.private/cleanup-20261024-output-01/{plan.json,deleted.jsonl,receipt.json}。仅历史已执行的Editor证据有效，重新打开保留候选会重建缓存；未启动引擎重跑、不改变验收层级、不提交推送。本次维护不代表v0.2完成；嵌套Prefab/override、动态布局与当前补源集成仍按既有授权继续。
+
+清理后du实际分配统计：outputs 166190656KiB，即158.49GiB（清理前约560GiB）；人读回执.private/cleanup-20261024-output-01/README.md。
+
+事件monkey-v02-jizhi147-full-resource-20261024-01：清理后按原授权恢复开发，机智wxc9ca302d7fa972f2/147当前5原包7740297B、解密展开19文件7739181B及原109项缓存冻结。按原Cocos2.1.2 settings/packedAssets/md5AssetsMap及wxDownloader微信生产CDN literal补7676 import+5415 native，全部13091精确文件1201902615B逐SHA核验；metadata和两张图片的URLError各有界重试成功，不扫URL、不读玩家档、不混版本。原TextureUnpacker的5159段格式确认4699PNG/460JPG；MP3/粒子/字体用原_native和MD5Pipe规则，不猜扩展或font目录URL。
+
+新实现支持JSON/TextureUnpacker两个pack、原res/import目录、等字节native aliases、sampler/alpha来源保留；不支持的图/Spine等正文保留在原packed载荷和成员/原文及解码SHA，避免生成约900MB单JSON（04失败冻结）。BitmapFont资源profile被postpass错误消费导致05规范化失败，已加严格source-only跳过及Spine/source映射实质反例，旧失败不改。input-set允许显式严格整数limits.maxInputBytes（默认1GiB、硬上限8GiB），单根1GiB/单文件128MiB/计数/每轮远端1GiB不变，派生输入集保留预算。旧缓存有3个非settings版本项，结构索引拒绝后工程也过滤至SourceRecovery，避免旧PNG进入Assets或与正常资源按SHA去重。
+
+公开06全源步骤成功；07在相同输入/hash及完全相同inspect/normalize算法下复用受验来源/像素，不重解码。07实际13220输入1228708650B、19298声明身份缺0、7343源Frame/每端14686变体、249音频/1字体、956模块草稿/5未知wrapper，6546源图/Spine/动画等继续隔离。Unity manifest93502f5cfd2e0a1ba9a65608221e77621b8cf69e8b11698e81843388d4c3f0d3，Creator872235edc8036c39f824efbceadd47eeabf926f1993c8f1d1d6d121dd3978304。双端static pass/0诊断，35关联检查通过。7343全几何/纹理身份核过、48代表源Frame/96trim-full像素覆盖13组合RGBA相等，双端29372 PNG载荷与源规范化语义相符；Creator正确使用完整图+trim元数据。审计outputs/cocos212-jizhi147-resource-audit-07/audit.json；全07 Editor/视觉/玩法not_run，旧211代表原生证据不追认当前全量。
+
+天命已定位当前wxbdf25cb34ce9bf6e/12并冻结3包13675974B、7展开文件13675688B及336缓存71617967B，原索引无缺项；原game_name天命行者经Acorn8.15 tokenize绑定精确字节，settings.CocosEngine=3.4.1，资源URL版本1.2.67一致。仅1个缺bundle条目按原remoteBundles与完整URL段生成有证派生索引，不改原件；原始缺archives不再是当前阻塞。docs/validation/tianming-source-intake.json记录身份/哈希，3.4.1专用reader/公开导出仍pending，不套3.8.7。下一主优先仍是下方了嵌套Prefab/override及动态布局，已有development-only解析储备，尚未计原生能力；v0.2不结项、不推送发布。

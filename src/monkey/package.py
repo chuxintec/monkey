@@ -98,7 +98,7 @@ def convert_package(source, target, output, namespace='monkey-project',offline=F
                 completed=False,mode='package',namespace=namespace,sourceKind='input-set' if selection else 'directory' if source.is_dir() else source.suffix.lower()[1:],
                 gameIdentity=dict(appId='unknown',appVersion='unknown',validation='not_verified'),
                 inputContainerSha256=None if source.is_dir() else fingerprint(source),
-                inputSet=dict(sha256=selection['sha256'],identityStatus=selection['identityStatus'],frozenRelationVerified=selection['frozenRelationVerified']) if selection else None,
+                inputSet=dict(sha256=selection['sha256'],identityStatus=selection['identityStatus'],frozenRelationVerified=selection['frozenRelationVerified'],maxInputBytes=selection['maxInputBytes']) if selection else None,
                 diagnostics=[],validation=dict(editor='not_run',visual='not_run',business='not_run'),projects=[])
     try:
         cache_summaries=[]
@@ -117,7 +117,7 @@ def convert_package(source, target, output, namespace='monkey-project',offline=F
                           resumeBackup=resume_state['backup'])
         else:
             spool=out/'InputCache';spool.mkdir();tree=out/'InputTree';tree.mkdir()
-            rows=[];configs=[];cocos_evidence=[];script_paths=[];combined=Names()
+            rows=[];configs=[];cocos_evidence=[];script_paths=[];combined=Names(selection['maxInputBytes'] if selection else None)
             for unit in roots:
                 for local_name,raw in _input_entries(unit):
                     name=(unit['id']+'/'+local_name) if selection else local_name
@@ -254,6 +254,14 @@ def convert_package(source, target, output, namespace='monkey-project',offline=F
             fail('PACKAGE_CODE_BINDING_INCOMPLETE','Structured/recovery.json','Declared code projection was not exported for every requested target; retain failure evidence')
         if structured['status'] in ('failed','needs_action'):
             report['diagnostics'].append(diagnostic('STRUCTURED_RECOVERY_PENDING','Structured/recovery.json',structured.get('reason','Unresolved structural recovery')))
+        excluded_names={}
+        inspected_manifest=out/'Structured/inspect/source-manifest.json'
+        if source_profile=='cocos-2.1.2-resource'and (inspected_manifest.parent/'manifest.json').exists():
+            from .io import stage_document
+            inspected_selection=stage_document(inspected_manifest)
+            excluded_names={d['location']:d for d in inspected_selection['diagnostics']if d['code']=='LEGACY_CACHE_VERSION_MISMATCH'}
+        report['sourceInputExclusions']=[dict(path=row['path'],sha256=row['sha256'],reason=excluded_names[Path(row['localPath']).name]['code'])
+                                         for row in rows if Path(row['localPath']).name in excluded_names]
         stage='target-workspaces'
         from .names import Names as OutputNames
         row_by_path={r['path']:r for r in rows};file_metadata={}
@@ -273,15 +281,17 @@ def convert_package(source, target, output, namespace='monkey-project',offline=F
             for row in rows:
                 raw=read(spool/row['sha256'],max_bytes=MAX_FILE);record=dict(row);category=row['category'];digest=row['sha256']
                 if sha(raw)!=digest:fail('SOURCE_CHANGED',row['path'],'Inventory cache changed')
-                direct=row['disposition']=='copied'
+                excluded=excluded_names.get(Path(row['localPath']).name)
+                if excluded:record.update(disposition='filtered',reason=excluded['message'],sourceSelection='excluded-version-mismatch')
+                direct=record['disposition']=='copied'
                 if direct:
                     folder=('Assets/Game/Content/'+category if profile==unity.PROFILE else
                             'assets/fonts' if category=='Fonts' else 'assets/audio' if category=='Audio' else 'assets/art/images')
                     prefix=folder+'/Original'
                 else:
-                    section='SourceCode' if category=='Code' else 'Excluded' if row['disposition']=='filtered' else 'Unconverted'
+                    section='SourceCode' if category=='Code' else 'Excluded' if record['disposition']=='filtered' else 'Unconverted'
                     prefix='SourceRecovery/'+section+'/'+category
-                content_key=(category,digest,row['suffix'])
+                content_key=(category,digest,row['suffix'],'runtime'if direct else 'source')
                 metadata=file_metadata.get(digest) or dict(bundle=row['inputRoot'],logicalPath=row['localPath'],nameProvenance='input-relative-path')
                 if content_key in content_paths:
                     dest=content_paths[content_key]
@@ -418,7 +428,7 @@ Neither target requires monkey, Python, the source tree, the other target or the
                 count=enrich_handoff(project)
                 if count is not None:handoff['aggregateTasks']=count
             inspected_path=out/'Structured/inspect/source-manifest.json'
-            if inspected_path.exists():
+            if inspected_path.exists() and (inspected_path.parent/'manifest.json').exists():
                 from .assets.spine import recover_closures
                 from .io import stage_document
                 previous=None

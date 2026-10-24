@@ -35,7 +35,7 @@ def convert(source,target,output,namespace='monkey-project',offline=False,input_
     def save():write_json(out/'conversion-result.json',report)
     save()
     try:
-        rawroot=out/'InputSnapshot';rawroot.mkdir();rows=[];names=Names();images=[];pixel_count=0
+        rawroot=out/'InputSnapshot';rawroot.mkdir();rows=[];names=Names(selection['maxInputBytes'] if selection else None);images=[];pixel_count=0
         for root in roots:
             for local,raw in entries(root['path']):
                 name=root['id']+'/'+local;names.add(name,len(raw));digest=sha(raw);path=rawroot/name;path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(raw)

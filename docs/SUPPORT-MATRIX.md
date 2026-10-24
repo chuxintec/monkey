@@ -6,7 +6,7 @@
 |---|---|---|---|
 |Cocos Creator2.4.15发布bundle|Unity6 / Cocos3.8.8 / both|partial：full14双端各1694 Prefab/24784节点保存重开与完整几何/引用回读零诊断；Unity资源partial/Creator资源pass，业务/视觉/交互未验收|先收拢肥鹅当前包|
 |Cocos Creator2.4.11发布bundle|Unity6 / Cocos3.8.8 / both|partial：冲关小队881明确输入；451源Frame、91节点图，两端资源/节点/引用保存重载0严格差异，170源码模块仍草稿|持续逐case|
-|Cocos Creator2.1.2旧发布资源|Unity6 / Cocos3.8.8 / both|partial：211原Frame/422变体双端原生0严格差异；81源图隔离，19298声明身份中18955未提供。新授权转读目标微信缓存与精确远端补源|缓存补源后推进结构适配|
+|Cocos Creator2.1.2旧发布资源|Unity6 / Cocos3.8.8 / both|partial：当前147完整13091远端文件可得、19298声明身份缺0；7343Frame/14686变体每端静态通过，3旧版本缓存排除；旧211代表双端原生证据独立保留|当前全包Editor未跑；4406Prefab/3Scene及Spine等旧结构待适配|
 |Cocos Creator2.4.15可编辑工程子集|Unity6 / Cocos3.8.8 / both|supported_static有限子集，非全版本/全组件承诺|按新增真实输入反例扩展|
 |Unity2021.3.30f1 IL2CPP-Wasm|Unity6|partial：显式Bundle及依赖→Unity6候选已实现；代表1 Prefab/16字段/3 Sprite引用保存重载通过。启动4精确纹理已齐；显式冻结类型树池严格读到1567/1603对象，仍36MB缺结构；补充类型树已消费生成2字段类/11字段，但实例值尚未回写Scene，整包及业务未完成|U，用户最新打开《向僵尸开炮》优先|
 |Unity2022.3.16f1 / 2022.3.34f1c1 WebData|Unity6|partial：两实际候选已导出；45/40坏ETC1显式隔离，其余对象hash逐项保持；461/77对象缺结构，原生/方法未恢复|逐case补齐|

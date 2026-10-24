@@ -143,7 +143,8 @@ def acquire(settings,offline=False):
         while any(r['id'].casefold()==name for r in entries):name+='-remote'
         entries.append(dict(id=name,path=str(fetched)))
         derived=out/'input-set.json'
-        write_json(derived,dict(schemaVersion=1,sourceProfile=selected['sourceProfile'],game=selected['identity'],inputs=entries))
+        write_json(derived,dict(schemaVersion=1,sourceProfile=selected['sourceProfile'],game=selected['identity'],inputs=entries,
+                               limits=dict(maxInputBytes=selected['maxInputBytes'])))
         input_set(derived)
     return dict(inputSet=derived,receipt=out/'acquisition.json',summary=summary)
 

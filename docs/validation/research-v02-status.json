@@ -183,11 +183,15 @@
       "caseId": "0db37edb5ce8a25199774ff5",
       "evidence": [
         {
+          "path": "docs/validation/tianming-source-intake.json",
+          "sha256": "f7b4998ecc7bacf1cef95f28a474ad6447e4770af2085df471cd2292d553aacb"
+        },
+        {
           "path": "docs/validation/source-unavailable-tianming.json",
           "sha256": "21267178c2f34bef51da4cdec1b33119099a9beb340de82249306bb6d6e62140"
         }
       ],
-      "export": "blocked-source-unavailable",
+      "export": "blocked-version-specific-reader-pending",
       "metadataHint": {
         "backend": null,
         "confidence": "unknown",
@@ -197,12 +201,20 @@
       "metadataSha256": "fd710e669f350b3ed5097f1a45ecdf747038cec5233376f384a1d0722fa14884",
       "name": "天命行者",
       "native": "not_run",
-      "profile": "unknown-source-unavailable",
-      "read": "blocked-declared-source-path-unavailable",
+      "profile": "cocos-3.4.1-source-acquired-adapter-pending",
+      "read": "current-appid12-source-and336-cache-files-frozen",
       "remaining": [
-        "old archives absence retained as history; new authorized WeChat cache intake now in progress",
-        "current target AppID/revision and original inputs not yet frozen"
+        "Original packages found, decrypted and title/settings verified; old archive absence is history",
+        "3.4.1 dedicated bundle reader and public conversion pending; do not label as3.8.7",
+        "336 indexed resources frozen; remaining declared remote bundle resources require exact config-based acquisition"
       ],
+      "sourceEngineProof": {
+        "appId": "wxbdf25cb34ce9bf6e",
+        "cachePackageRevision": "12",
+        "family": "cocos",
+        "resourceVersion": "1.2.67",
+        "version": "3.4.1"
+      },
       "sourceRevision": "1.2.67",
       "targets": [
         "unity6"
@@ -250,6 +262,22 @@
       "caseId": "f4fc626753dc7a5947717207",
       "evidence": [
         {
+          "path": "outputs/cocos212-jizhi147-package-07/conversion-result.json",
+          "sha256": "423ef5cdc167aae7d491c8370362f36744b7807a3e019d9e8a4a9c3d8e4404ed"
+        },
+        {
+          "path": "outputs/cocos212-jizhi147-resource-audit-07/audit.json",
+          "sha256": "ea3cfbd31bfa76c9a1a5153d3e221d3514dcfc8962bc67da16d1020237ab9f98"
+        },
+        {
+          "path": "outputs/cocos212-jizhi147-package-07-unity-static/verification.json",
+          "sha256": "d76108a97806d71fae8abf6589c1f0406dc69b06bb75bfad66c66e2af0e4f53f"
+        },
+        {
+          "path": "outputs/cocos212-jizhi147-package-07-cocos-static/verification.json",
+          "sha256": "f5cd96f0fe5f89978e4957f883cb38ddc1a120824ce6d257bdcbf2ee2f8d2d45"
+        },
+        {
           "path": "outputs/cocos212-jizhi-package-03/conversion-result.json",
           "sha256": "dc70193a27b08d10240af77a7925af6a9bb79f3449c00cd25ae56b3f1129cc82"
         },
@@ -258,7 +286,7 @@
           "sha256": "da369ac62685562664cd55125a98293f44c76118618a316f614d28f61a341d1e"
         }
       ],
-      "export": "partial-resource-candidate",
+      "export": "partial-resource-candidate-both-targets-static-verified",
       "metadataHint": {
         "backend": null,
         "confidence": "unknown",
@@ -267,15 +295,26 @@
       },
       "metadataSha256": "4c1b74e88510ec2995941f13c77183d0ba5e85904c85080349bdc06eb199c6b5",
       "name": "机智逃脱",
-      "native": "211-source-frame-resource-subset-both-targets-verified; latest-coverage-update-not-rerun",
+      "native": "old211-frame-representative-both-targets-verified; new7343-frame-full-package-native-not_run",
       "profile": "cocos-2.1.2-resource",
-      "read": "partial-original-static-settings-and-version",
+      "read": "current147-original-settings-and-full-declared-resource-closure",
       "remaining": [
-        "old18955 of19298 declarations unprovided; current WeChat cache147 present, source intake in progress",
-        "81 source graphs quarantined",
-        "956 module drafts, 5 unresolved sources",
-        "Spine, source methods, visual and gameplay"
+        "4406 Prefabs +3 SceneAssets retained as original evidence; legacy graph adapter pending",
+        "1553 Spine closures,477 animations,39 BitmapFonts and other source-only types pending",
+        "956 module drafts,5 unresolved source wrappers; native methods/visual/gameplay not_run",
+        "new full7343-frame Editor not_run; source pixels48 representative frames/96 variants and both targets29372 PNG payload hashes verified"
       ],
+      "resourceClosure": {
+        "declaredAssets": 19298,
+        "inputBytes": 1228708650,
+        "inputFiles": 13220,
+        "missingDeclaredAssets": 0,
+        "sourceAudio": 249,
+        "sourceFont": 1,
+        "sourceFrames": 7343,
+        "sourceVersionExcludedInputs": 3,
+        "variantsPerTarget": 14686
+      },
       "sourceRevision": "147",
       "targets": [
         "unity6",

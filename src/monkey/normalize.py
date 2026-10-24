@@ -262,6 +262,7 @@ def normalize(manifest_path, output):
     frames={f['sourceId']:f for f in result['spriteFrames']}
     for asset in m['assets']:
         if asset.get('kind')!='cc.BitmapFont':continue
+        if not asset.get('document'):continue  # Source-only profile already records the quarantined payload.
         value=asset['document']['instances'][asset['document']['root']]
         atlas_ref=resolved(ref(value.get('spriteFrame'),asset['sourceId']))
         frame=frames.get(atlas_ref)
