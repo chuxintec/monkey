@@ -1,12 +1,13 @@
 import tempfile,unittest
 from pathlib import Path
-from fixtures import FRAME,TEXTURE
+from fixtures import FRAME,TEXTURE,normal
 from test_cocos38 import fixture38
 from monkey.io import read,load,write_json
 from monkey.package import convert_package
 from monkey.sources.cocos34 import texture,image_formats
 from monkey.sources.compiled import ParseError
 from monkey.sources.bundle import Bundle
+from monkey.sources.cocos34_graphs import graph
 
 
 def fixture34(root):
@@ -19,16 +20,31 @@ def fixture34(root):
     return config
 
 
+class Graph341LifecycleTests(unittest.TestCase):
+    def test_disabled_ui_transform_keeps_geometry_and_explicit_lifecycle_state(self):
+        a=dict(sourceId='main:disabled',document=dict(root=0,instances=[dict(__type__='cc.Node',_components=[dict(__type__='cc.UITransform',node={'__id__':0},_enabled=False,_contentSize=dict(width=173,height=61),_anchorPoint=dict(x=.2,y=.7))])]))
+        ns,_,_=graph(a);self.assertEqual(ns[0]['size'],[173,61]);self.assertEqual(ns[0]['anchor'],[.2,.7]);self.assertIs(ns[0]['sourceUITransformEnabled'],False)
+
+
 class Creator34Tests(unittest.TestCase):
-    def test_public_both_targets_keep_version_specific_resources_and_do_not_guess_graphs(self):
+    def test_named_font_config_is_parsed_with_original_glyph_metrics(self):
+        with tempfile.TemporaryDirectory()as temp:
+            root=Path(temp).resolve();config=fixture34(root/'source');c=load(read(config));font='55555555-5555-5555-5555-555555555555';index=len(c['uuids']);c['uuids'].append(font);c['types'].append('cc.BitmapFont');c['paths'][str(index)]=['font',len(c['types'])-1];c['versions']['import'] += [index,'a'];write_json(config,c)
+            p=config.parent/'import'/font[:2]/(font+'.a.json');p.parent.mkdir(parents=True,exist_ok=True)
+            write_json(p,normal([dict(__type__='cc.BitmapFont',fontSize=10,spriteFrame={'__uuid__':FRAME+'@f9941'},fntConfig=dict(fontSize=10,commonHeight=12,fontDefDictionary={'65':dict(rect=dict(x=0,y=0,width=1,height=1),xOffset=0,yOffset=1,xAdvance=2)},kerningDict={}))]))
+            report=convert_package(config.parent,'both',root/'out');self.assertNotEqual(report['structuredRecovery']['status'],'failed',report['structuredRecovery'])
+            ir=load(read(root/'out/Structured/normalize/ir.json'));self.assertEqual(len(ir['bitmapFonts']),1);value=ir['bitmapFonts'][0]
+            self.assertEqual(value['pointSize'],10);self.assertEqual(value['glyphs'][0]['metrics'],[1,1,0,9,2]);self.assertEqual(value['kerningConvention'],'source-3.4.1-unscaled-pair-offset')
+
+    def test_public_both_targets_keep_version_specific_resources_and_audited_graph_defaults(self):
         with tempfile.TemporaryDirectory()as temp:
             root=Path(temp).resolve();config=fixture34(root/'source');report=convert_package(config.parent,'both',root/'out')
             self.assertTrue(report['completed']);self.assertNotEqual(report['structuredRecovery']['status'],'failed',report['structuredRecovery'])
             ir=load(read(root/'out/Structured/normalize/ir.json'))
-            self.assertEqual(ir['sourceProfile'],'cocos-3.4.1-bundle');self.assertEqual(len(ir['spriteFrames']),1);self.assertEqual(ir['nodes'],[])
+            self.assertEqual(ir['sourceProfile'],'cocos-3.4.1-bundle');self.assertEqual(len(ir['spriteFrames']),1);self.assertEqual(len(ir['nodes']),1)
+            self.assertEqual(ir['nodes'][0]['sourceGeometryProfile'],'cocos-3.4.1-node-ui-v1');self.assertEqual(ir['nodes'][0]['position'],[17,23,4]);self.assertEqual(ir['nodes'][0]['scale'],[1,1,1])
             self.assertEqual(ir['spriteFrames'][0]['textureRef'],'main:'+TEXTURE)
             self.assertEqual(ir['spriteFrames'][0]['sourceResourceEvidence']['resourceProfile'],'cocos-3.4.1-bundle')
-            self.assertTrue(any(d['code']=='COCOS34_RESOURCE_PROFILE_ONLY'for d in ir['diagnostics']))
             self.assertEqual(load(read(root/'out/Structured/inspect/source-manifest.json'))['sourceVersion'],'3.4.1')
             for target in ('UnityProject','CocosProject'):self.assertTrue((root/'out'/target/'manifest.json').is_file())
 

@@ -23,9 +23,10 @@ def plan_prefabs(ir,components):
     return plans,gaps
 
 
-def native_relationships(ir,prefabs):
+def native_relationships(ir,prefabs,components=None):
     """Validate exact template/node correspondence and order assets before owners."""
     specs={p['sourceId']:p for p in prefabs};nodes={n['sourceId']:n for n in ir['nodes']};instances=[];seen=set()
+    source_components={c['sourceId']:c for c in ir['components']};emitted={c['sourceId']:c for c in components}if components is not None else None
     if len(ir.get('prefabInstances',[]))>4096:fail('PREFAB_NATIVE_INSTANCE_BUDGET','$','At most4096 native instance relations per candidate')
     for link in ir.get('prefabInstances',[]):
         root=link['root'];template=link['template'];owner=root.split('#')[0]
@@ -39,11 +40,33 @@ def native_relationships(ir,prefabs):
             fail('PREFAB_NATIVE_NODE_MAPPING',root,'Every template node needs one isolated instance node')
         mapping={p['templateObject']:p['instanceObject']for p in pairs}
         if mapping[specs[template]['root']]!=root:fail('PREFAB_NATIVE_ROOT_MAPPING',root,'Template root correspondence differs')
+        children=[];mounted_nodes=set();additions=defaultdict(list)
+        for group in link.get('mountedChildren',[]):
+            parent=group['parent'];roots=list(group['roots']);members=[]
+            if parent not in set(targets)|mounted_nodes or len(roots)!=len(set(roots)):fail('PREFAB_MOUNTED_CHILD_MAPPING',root,'Mounted parent/roots differ from the instance')
+            def visit_child(sid):
+                if sid not in nodes or sid in set(targets)|mounted_nodes or sid.split('#')[0]!=owner:fail('PREFAB_MOUNTED_CHILD_MAPPING',root,'Mounted subtree overlaps a template/another subtree or escapes its owner')
+                mounted_nodes.add(sid);members.append(sid)
+                for child in nodes[sid]['children']:
+                    if nodes.get(child,{}).get('parent')!=sid:fail('PREFAB_MOUNTED_CHILD_MAPPING',root,'Mounted child/parent relation differs')
+                    visit_child(child)
+            for child in roots:
+                if nodes.get(child,{}).get('parent')!=parent:fail('PREFAB_MOUNTED_CHILD_MAPPING',root,'Mounted root has another parent')
+                visit_child(child)
+            additions[parent].extend(roots);children.append(dict(parent=parent,roots=roots,nodes=members))
+        mounted_components=[];mounted_ids=set()
+        for item in link.get('mountedComponents',[]):
+            sid=item['component'];component=source_components.get(sid)
+            if sid in mounted_ids or not component or component.get('node')!=item['node']or item['node']not in set(targets)|mounted_nodes:
+                fail('PREFAB_MOUNTED_COMPONENT_MAPPING',root,'Mounted component has no isolated source owner')
+            projected=emitted.get(sid)if emitted is not None else None
+            if emitted is not None and(not projected or not projected.get('convertible')):fail('PREFAB_MOUNTED_COMPONENT_UNSUPPORTED',sid,'Mounted source component needs a real target adapter')
+            mounted_ids.add(sid);mounted_components.append(dict(node=item['node'],component=sid,sourceType=component['type'],nativeType=projected.get('nativeType')if projected else None))
         for p in pairs:
             original=nodes[p['templateObject']];instance=nodes[p['instanceObject']]
-            if instance['children']!=[mapping[c]for c in original['children']]:fail('PREFAB_NATIVE_TOPOLOGY',root,'Mounted/reordered children require a separate native delta adapter')
+            if instance['children']!=[mapping[c]for c in original['children']]+additions[p['instanceObject']]:fail('PREFAB_NATIVE_TOPOLOGY',root,'Instance children differ from the template plus declared appended mounts')
             if original['parent']and instance['parent']!=mapping[original['parent']]:fail('PREFAB_NATIVE_TOPOLOGY',root,'Template parent correspondence differs')
-        instances.append(dict(owner=owner,root=root,template=template,nodes=pairs,sourceInstanceFileId=link['sourceInstanceFileId']))
+        instances.append(dict(owner=owner,root=root,template=template,nodes=pairs,sourceInstanceFileId=link['sourceInstanceFileId'],mountedChildren=children,mountedComponents=mounted_components))
     roots={x['root']for x in instances}
     for item in instances:
         parent=nodes[item['root']]['parent'];item['outermost']=True
@@ -78,4 +101,9 @@ def verify_native_relationships(expected,prefabs,actual,scope,template_guids=Non
             gaps.append(diagnostic('NATIVE_PREFAB_RELATION_NOT_VERIFIED',instance['root'],'Native source correspondence/shared template/save-reopen proof missing in '+scope))
         elif template_guids is not None and row[identity_key]!=template_guids.get(instance['template']):
             gaps.append(diagnostic('NATIVE_PREFAB_TEMPLATE_GUID',instance['root'],'Saved instance template GUID differs from the actual native asset'))
+        mounts=instance.get('mountedChildren',[]);components=instance.get('mountedComponents',[])
+        if mounts and(row.get('mountedChildrenVerified')is not True or row.get('mountedRootCount')!=sum(len(g['roots'])for g in mounts)or row.get('mountedNodeCount')!=sum(len(g['nodes'])for g in mounts)):
+            gaps.append(diagnostic('NATIVE_PREFAB_MOUNTED_CHILDREN_NOT_VERIFIED',instance['root'],'Saved native added-node relationships are missing or differ'))
+        if components and(row.get('mountedComponentsVerified')is not True or row.get('mountedComponentCount')!=len(components)):
+            gaps.append(diagnostic('NATIVE_PREFAB_MOUNTED_COMPONENTS_NOT_VERIFIED',instance['root'],'Saved native added-component relationships are missing or differ'))
     return gaps

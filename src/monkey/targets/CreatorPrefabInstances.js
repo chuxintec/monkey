@@ -9,13 +9,37 @@ const api=()=>{
     if(!u||!p||!u.generateTargetMap||!p.addPrefabInfo||!p.checkAndStripNode)throw Error('Native Prefab SDK unavailable');
     return {u,p};
 };
+const nativeClass=name=>typeof name==='string'&&name.startsWith('cc.')?cc[name.slice(3)]:undefined;
+function markMounted(object,root){
+    // Match the native SDK's applyMountedChildren/applyMountedComponents editor
+    // bookkeeping so checkAndStripNode retains additions to an instance.
+    if(!cc.editorExtrasTag)throw Error('Native editor extras tag unavailable');
+    object[cc.editorExtrasTag]??={};object[cc.editorExtrasTag].mountedRoot=root;
+}
 function serializeNative(root,asset){
     // The SDK strips live object IDs for native instance serialization. They
     // must be restored before destroying our temporary tree: Scheduler cleanup
     // still needs each live Component's actual ID, not its Prefab fileID.
     const ids=[];
     function walk(n){ids.push([n,n._id]);for(const c of n.components)ids.push([c,c._id]);n.children.forEach(walk);}walk(root);
-    try{api().p.checkAndStripNode(root,true);const raw=EditorExtends.serialize(asset);return typeof raw==='string'?raw:JSON.stringify(raw);}
+    function checkMounted(stage){
+        const snapshots=[];
+        const owned=new Set();function gather(n){owned.add(n);n.children.forEach(gather);}gather(root);
+        function visit(n){for(const group of n._prefab?.instance?.mountedComponents||[])for(const c of group.components||[]){
+            if(!c||!cc.isValid(c,true)||!c.node||!owned.has(c.node)||!c.node.components.includes(c))throw Error('Mounted native component invalid '+stage+': '+JSON.stringify({node:n.name,component:c&&cc.js.getClassName(c),flags:c&&c._objFlags,owner:c&&c.node&&c.node.name,owned:!!(c&&owned.has(c.node)),attached:!!(c&&c.node&&c.node.components.includes(c)),prefab:c&&c.__prefab}));
+            snapshots.push({stage,node:n.name,component:cc.js.getClassName(c),flags:c._objFlags,nodeFlags:c.node._objFlags,prefab:c.__prefab,target:group.targetInfo.localID});
+        }n.children.forEach(visit);}visit(root);return snapshots;
+    }
+    try{const before=checkMounted('before strip');api().p.checkAndStripNode(root,true);const after=checkMounted('after strip');
+        // The default SDK parser discards components under a syncable instance
+        // root even when the native mountedComponents table references them.
+        // Use its explicit native retention option for those additions; linked
+        // PrefabInfo/instance records and template hashes remain independently
+        // checked after native expansion, rather than rewriting serialized JSON.
+        const options=after.length?{reserveContentsForSyncablePrefab:true}:undefined;
+        const raw=EditorExtends.serialize(asset,options),text=typeof raw==='string'?raw:JSON.stringify(raw);
+        const records=JSON.parse(text);if(Array.isArray(records)&&records.some(x=>x?.__type__==='cc.MountedComponentsInfo'&&x.components.some(c=>c===null)))throw Error('Native serializer dropped mounted component: '+JSON.stringify({before,after}));
+        return text;}
     finally{for(const [obj,id]of ids){obj._id=id;if(obj instanceof cc.Component&&!obj.uuid)cc.Scheduler.enableForTarget(obj);}}
 }
 function session(id,plan) {
@@ -70,14 +94,32 @@ async function prepare(state,owner,saved,load) {
         if(!info||!info.sha256)throw Error('Native template must be saved first');
         const asset=await load(info.uuid,cc.Prefab),root=cc.instantiate(asset),previous=nodes.get(link.root),parent=previous.parent,index=previous.getSiblingIndex();
         if(!root._prefab||!root._prefab.instance||root._prefab.asset._uuid!==info.uuid)throw Error('SDK did not create a native Prefab instance');
-        const template=mapTree(root,spec,plan),replacements=new Map(),components=[];
+        const template=mapTree(root,spec,plan),replacements=new Map(),components=[],added=[];
+        const ids=targetIds(root),instance=root._prefab.instance,{u}=api();
         for(const pair of link.nodes){const old=nodes.get(pair.instanceObject),node=template.get(pair.templateObject);if(!old||!node)throw Error('Instance node correspondence absent');replacements.set(old,node);
-            const used=new Map();for(const from of old.components){const cls=from.constructor,i=used.get(cls)||0;used.set(cls,i+1);const to=node.getComponents(cls)[i];if(!to)throw Error('Mounted component needs native delta adapter');replacements.set(from,to);components.push([from,to]);}
+            const used=new Map();for(const from of old.components){const cls=from.constructor,i=used.get(cls)||0;used.set(cls,i+1);let to=node.getComponents(cls)[i];
+                if(!to){
+                    const mounted=(link.mountedComponents||[]).find(m=>m.node===pair.instanceObject&&nativeClass(m.nativeType)===cls);
+                    if(!mounted||!u.MountedComponentsInfo)throw Error('Native mounted component has no typed source delta: '+pair.instanceObject+':'+cc.js.getClassName(cls));
+                    const localID=ids.get(node);if(!localID)throw Error('Native mounted component parent has no scoped fileID');
+                    to=node.addComponent(cls);to.__prefab=new u.CompPrefabInfo();to.__prefab.fileId=to.uuid;
+                    if(!to.__prefab.fileId)throw Error('Mounted native component fileID unavailable');
+                    markMounted(to,root);const group=new u.MountedComponentsInfo();group.targetInfo=new u.TargetInfo();group.targetInfo.localID=localID;group.components=[to];instance.mountedComponents.push(group);added.push(to);
+                }
+                replacements.set(from,to);components.push([from,to]);}
             if(node.components.length!==old.components.length)throw Error('Removed component needs native delta adapter');
         }
-        const ids=targetIds(root),instance=root._prefab.instance;
+        for(const mount of link.mountedChildren||[]){
+            const oldParent=nodes.get(mount.parent),parentNode=replacements.get(oldParent)||oldParent,localID=ids.get(parentNode);
+            if(!parentNode||!localID||!u.MountedChildrenInfo)throw Error('Native mounted child parent has no scoped fileID');
+            const group=new u.MountedChildrenInfo();group.targetInfo=new u.TargetInfo();group.targetInfo.localID=localID;group.nodes=[];
+            for(const sid of mount.roots){const child=nodes.get(sid);if(!child)throw Error('Native mounted child absent');child.parent=parentNode;child.setSiblingIndex(parentNode.children.length-1);markMounted(child,root);group.nodes.push(child);}
+            instance.mountedChildren.push(group);
+        }
         for(const pair of link.nodes){const old=nodes.get(pair.instanceObject),node=replacements.get(old);for(const key of ['_name','_active','_layer','_lpos','_lrot','_lscale'])delta(instance,node,key,value(old[key],replacements),ids);}
-        for(const [from,to]of components)for(const key of componentFields(from))delta(instance,to,key,value(from[key],replacements),ids);
+        for(const [from,to]of components)for(const key of componentFields(from)){
+            const next=value(from[key],replacements);if(added.includes(to))to[key]=next;else delta(instance,to,key,next,ids);
+        }
         root.parent=parent;root.setSiblingIndex(index);
         for(const pair of link.nodes)nodes.set(pair.instanceObject,replacements.get(nodes.get(pair.instanceObject)));
         // Known native node references outside this instance must follow replacements.
@@ -122,7 +164,19 @@ function read(plan,mapped,templates,saved,owner=null){
         const actual=root&&root._prefab;if(!actual||!actual.instance||!actual.asset||actual.asset._uuid!==info.uuid)throw Error('Saved native instance template UUID differs: '+link.root);
         const canonical=mapTree(asset.data,spec,plan);
         for(const pair of link.nodes){const n=mapped.get(pair.instanceObject),t=canonical.get(pair.templateObject);if(!n||!t||!n._prefab||!t._prefab||n._prefab.fileId!==t._prefab.fileId||n._prefab.asset._uuid!==t._prefab.asset._uuid)throw Error('Saved native node fileID/asset correspondence differs: '+pair.instanceObject);}
-        rows.push({root:link.root,templateSourceId:link.template,templatePath:spec.path,templateUuid:info.uuid,templateRootFileId:asset.data._prefab.fileId,nodeCount:link.nodes.length,nativeInstance:true,correspondingSourceVerified:true,nodeCorrespondenceVerified:true,templateUnchanged:true,propertyModificationCount:actual.instance.propertyOverrides.length});
+        const nativeMap={};api().u.generateTargetMap(root,nativeMap,true);
+        function destination(group){let value=nativeMap;for(const key of group.targetInfo&&group.targetInfo.localID||[])value=value&&value[key];return value;}
+        let mountedRoots=0,mountedNodes=0,mountedComponents=0;
+        for(const group of link.mountedChildren||[]){
+            const parent=mapped.get(group.parent);
+            for(const sid of group.roots){const child=mapped.get(sid);if(!child||child.parent!==parent||!(actual.instance.mountedChildren||[]).some(g=>destination(g)===parent&&g.nodes.includes(child)))throw Error('Saved native mounted-child relationship differs');mountedRoots++;}
+            for(const sid of group.nodes){if(!mapped.has(sid)||link.nodes.some(p=>p.instanceObject===sid))throw Error('Saved mounted subtree overlaps template correspondence');mountedNodes++;}
+        }
+        for(const mounted of link.mountedComponents||[]){
+            const node=mapped.get(mounted.node),cls=nativeClass(mounted.nativeType),component=node&&cls&&node.getComponent(cls);
+            if(!component||!(actual.instance.mountedComponents||[]).some(g=>destination(g)===node&&g.components.includes(component)))throw Error('Saved native mounted-component relationship differs');mountedComponents++;
+        }
+        rows.push({root:link.root,templateSourceId:link.template,templatePath:spec.path,templateUuid:info.uuid,templateRootFileId:asset.data._prefab.fileId,nodeCount:link.nodes.length,nativeInstance:true,correspondingSourceVerified:true,nodeCorrespondenceVerified:true,templateUnchanged:true,propertyModificationCount:actual.instance.propertyOverrides.length,mountedChildrenVerified:true,mountedComponentsVerified:true,mountedRootCount:mountedRoots,mountedNodeCount:mountedNodes,mountedComponentCount:mountedComponents});
     }
     return rows;
 }

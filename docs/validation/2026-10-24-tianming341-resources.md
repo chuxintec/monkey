@@ -17,3 +17,7 @@
 真实5个源SpriteFrame、10变体覆盖旋转、trim/offset、九宫格、原矩形、奇数尺寸。Unity own82339（05:33:01–05:33:12 UTC）exit0/reaped，Creator own82795（05:33:34–05:33:53 UTC）TERM/reaped；两端严格0诊断/editor pass。机器回执见[tianming341-native-resources.json](tianming341-native-resources.json)。只验证资源，原版UI/玩法/视觉及整包native均not_run。
 
 45项受影响检查通过。来源尚有203内置/外部redirect、162未知native后缀、6独立import形状及部分源脚本解析缺口；738 Spine闭包未恢复。下一必修组为已发现的3.4.1源图和mounted结构：857原图初审848可结构试读，4图实际含mounted（1个Widget组及7个子节点组），不能将其永久改为handoff。SDK/default版本核对和原生实例新增对象关系仍在推进，本组不是v0.2结项。
+
+## 后续结构集成
+
+full04资源候选保持冻结。后续公开同一命令输出full05，新增856份源图/22503节点/24511组件/52实例关系和15位图字库，双端静态0诊断。6Prefab/331节点真实追加结构两端原生闭环见[图与追加关系](2026-10-24-tianming341-graphs.md)；不把资源组早期原图未恢复描述当作当前状态。隔离对象总数包括Spine/自定义资产等，不是1683份失败图；图实际仅1份null旋转值未恢复。

@@ -193,9 +193,25 @@
         {
           "path": "docs/validation/tianming341-native-resources.json",
           "sha256": "6837ed7d530a8f3d063ed69f37380cbd3ed7fe7177faf863fec86f1077ca817e"
+        },
+        {
+          "path": "outputs/tianming341-full-package-05/conversion-result.json",
+          "sha256": "eb116e9c10761b51ebf477e0855577c1a80b0540d390c31c1827518a36090e62"
+        },
+        {
+          "path": "outputs/tianming341-full-package-05-unity-static/verification.json",
+          "sha256": "1866b80e73049bc6db3da64e4a6ff0cd7bc76d77f927b30b19463b4494f088b1"
+        },
+        {
+          "path": "outputs/tianming341-full-package-05-cocos-static/verification.json",
+          "sha256": "79ebbace5428ee59c942f92720175bea2f9c8dd89cb44fcb3c59d4b9aa5e8a3d"
+        },
+        {
+          "path": "docs/validation/tianming341-native-mounted.json",
+          "sha256": "181e44deb3f5b09f870a980e331d8b840b9b364532fcddcc4a349d03cc3d1570"
         }
       ],
-      "export": "partial-resources-both-targets",
+      "export": "partial-resources-and-native-graphs-both-targets",
       "metadataHint": {
         "backend": null,
         "confidence": "unknown",
@@ -204,13 +220,14 @@
       },
       "metadataSha256": "fd710e669f350b3ed5097f1a45ecdf747038cec5233376f384a1d0722fa14884",
       "name": "天命行者",
-      "native": "5-source-frames-10-variants-both-targets-pass",
+      "native": "5-source-frames-and-6-prefabs-331-nodes-8-native-instances-7-mounted-nodes-1-mounted-widget-both-targets-strict-zero",
       "profile": "cocos-3.4.1-bundle",
-      "read": "11962-files-accounted;19960-source-objects;7071-source-frames",
+      "read": "11962-files-accounted;19960-source-objects;7071-source-frames;15-bitmap-fonts;856-source-graphs;22503-nodes;52-instances",
       "remaining": [
-        "3.4.1 source graph/default validation and actual mounted Widget/children structures still required",
+        "1 original graph contains four null quaternion values; no invented transform",
         "162 SpriteAtlas native extension declarations unresolved;203 built-in/external redirects;6 import shapes",
-        "Source scripts,738 Spine closures,full-package native and gameplay not recovered"
+        "Source scripts,738 Spine closures,full-package native and gameplay not recovered",
+        "Disabled UITransform geometry retained; Unity parent-change listener lifecycle needs manual review; removed components and Creator root inheritance unsupported"
       ],
       "sourceEngineProof": {
         "appId": "wxbdf25cb34ce9bf6e",
@@ -508,7 +525,7 @@
   ],
   "discovery": {
     "denominator": 11,
-    "path": "outputs/research-matrix-v02-final-01/cases.json",
+    "path": "outputs/research-matrix-v02-final-02/cases.json",
     "sha256": "64e4d14a90e0a56bd73d927b1f7c6d21b208f8048465f98b605d64d171d67ad2"
   },
   "schemaVersion": 1,

@@ -67,6 +67,7 @@ public static partial class MonkeyImporter
     [Serializable] public class GlyphBounds { public uint unicode; public float left,top,width,height,quadPadding; }
     [Serializable] public class Readback {
         public PrefabInstanceResult[] prefabInstances;
+        public PrefabInstanceResult[] candidatePrefabInstances;
         public string nativeScope,sourceGraphVerification; public GalleryResult[] gallery;
         public MonkeyNumericCode.Result[] numericCodeBindings,numericCodeExercise;
         public string status, unityVersion, prefabGuid, sceneGuid;
@@ -764,6 +765,12 @@ public static partial class MonkeyImporter
         NativeCheckpoint("candidate-save",0,1);
         var prefab = PrefabUtility.SaveAsPrefabAsset(canvas,PrefabPath,out var success);
         if (!success || prefab == null) throw new InvalidOperationException("Native Prefab save failed");
+        var candidatePrefabProofs=new PrefabInstanceResult[0];
+        if((plan.prefabInstances??new PrefabInstanceSpec[0]).Any(p=>(p.mountedChildren??new PrefabMountedChildren[0]).Length>0||(p.mountedComponents??new PrefabMountedComponent[0]).Length>0)) {
+            var candidateContents=PrefabUtility.LoadPrefabContents(PrefabPath);
+            try {candidatePrefabProofs=ReadNativeInstances(plan,SavedNodeMap(plan.nodes,candidateContents),null,PrefabPath,true);}
+            finally {PrefabUtility.UnloadPrefabContents(candidateContents);}
+        }
         UnityEngine.Object.DestroyImmediate(canvas);
         var instance=(GameObject)PrefabUtility.InstantiatePrefab(prefab,scene);
         if (!EditorSceneManager.SaveScene(scene,ScenePath)) throw new InvalidOperationException("Native scene save failed");
@@ -786,7 +793,7 @@ public static partial class MonkeyImporter
         var gallery=plan.galleryOnly?ReadSavedGallery(plan,instance):new GalleryResult[0];
         var savedNodeMap=plan.galleryOnly?new Dictionary<string,RectTransform>():SavedNodeMap(plan.nodes,instance);
         var readback = new Readback {
-            prefabInstances=ReadNativeInstances(plan,savedNodeMap),
+            prefabInstances=ReadNativeInstances(plan,savedNodeMap,null,PrefabPath),candidatePrefabInstances=candidatePrefabProofs,
             nativeScope=plan.galleryOnly?"resources-and-gallery-only":"source-node-subset",sourceGraphVerification=plan.galleryOnly?"not_run":"saved-source-node-subset",gallery=gallery,
             numericCodeExercise=numericCodeExercise,numericCodeBindings=plan.components.Where(c=>c.convertible&&!string.IsNullOrEmpty(c.codeClassName)).Select(c=>MonkeyNumericCode.Read(c,savedNodeMap[c.node].gameObject)).ToArray(),
             sourcePrefabs=sourcePrefabResults.ToArray(),tmpResources=tmpResourceResult,sceneReopened=true,

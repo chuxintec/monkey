@@ -10,13 +10,13 @@ PROFILE='cocos-3.8.7-node-ui-v1'
 BASELINE='https://github.com/cocos/cocos-engine/tree/v3.8.7/cocos'
 
 
-def graph(asset):
-    return _graph(asset,False)
+def graph(asset,*,profile=PROFILE,version='3.8.7'):
+    return _graph(asset,False,profile=profile,version=version)
 
 
-def resolved_graph(asset,resolver):
+def resolved_graph(asset,resolver,*,profile=PROFILE,version='3.8.7'):
     resolved=resolver.resolve(asset)
-    nodes,components,gaps=_graph(resolved,True)
+    nodes,components,gaps=_graph(resolved,True,profile=profile,version=version)
     namespace=asset['sourceId'];identities=resolved['objectIdentities']
     def source_id(value):
         if value is None or not value.startswith(namespace+'#'):return value
@@ -35,7 +35,7 @@ def resolved_graph(asset,resolver):
     return nodes,components,gaps,resolved
 
 
-def _graph(asset,instances_resolved):
+def _graph(asset,instances_resolved,*,profile=PROFILE,version='3.8.7'):
     from ..normalize import expand_nodes,ref,vector,node_ir,component_ir
     namespace=asset['sourceId']
     objects=asset['document']['instances']
@@ -94,7 +94,8 @@ def _graph(asset,instances_resolved):
         size=[0,0];anchor=[.5,.5];alpha=255
         geometry=[]
         for cid,value in ui:
-            if value.get('_enabled',True) is not True:fail('COCOS3_UI_TRANSFORM_DISABLED',namespace,'Disabled source UITransform needs a separate lifecycle profile')
+            if value.get('_enabled',True) is not True and version!='3.4.1':fail('COCOS3_UI_TRANSFORM_DISABLED',namespace,'Disabled source UITransform needs a separate lifecycle profile')
+            if type(value.get('_enabled',True))is not bool:fail('COCOS3_UI_TRANSFORM_DISABLED',namespace,'Expected boolean source UITransform state')
             size=source_vector(value.get('_contentSize'),5,['width','height'],[100,100],'_contentSize');anchor=source_vector(value.get('_anchorPoint'),0,['x','y'],[.5,.5],'_anchorPoint')
             consumed.add(cid);geometry.append(namespace+'#'+cid)
             for key in value:
@@ -116,9 +117,10 @@ def _graph(asset,instances_resolved):
                        _color=dict(zip(['r','g','b','a'],color)),_opacity=alpha,_components=[{'__sourceId__':namespace+'#'+cid}for cid in refs if cid not in consumed])
         node,_=node_ir(namespace,index,projected)
         if obj['__type__']=='cc.Scene':node['sourceType']='cc.Scene';gap(index,'Source Scene globals/cameras remain pending; static hierarchy only')
-        node.update(sourceGeometryProfile=PROFILE,sourceLayer=layer,sourceGeometryComponents=geometry)
+        node.update(sourceGeometryProfile=profile,sourceLayer=layer,sourceGeometryComponents=geometry)
+        if ui and not ui[0][1].get('_enabled',True):node['sourceUITransformEnabled']=False
         nodes.append(node)
-    metadata={'cc.Prefab','cc.SceneAsset','cc.Node','cc.Scene','cc.PrefabInfo','cc.CompPrefabInfo','cc.TargetInfo','cc.PrefabInstance','CCPropertyOverrideInfo','cc.TargetOverrideInfo'}
+    metadata={'cc.Prefab','cc.SceneAsset','cc.Node','cc.Scene','cc.PrefabInfo','cc.CompPrefabInfo','cc.TargetInfo','cc.PrefabInstance','CCPropertyOverrideInfo','cc.TargetOverrideInfo','cc.MountedChildrenInfo','cc.MountedComponentsInfo'}
     for index,obj in entries:
         index=str(index)
         if not isinstance(obj,dict)or obj.get('__type__')in metadata or index in consumed:continue
@@ -127,7 +129,7 @@ def _graph(asset,instances_resolved):
         sid=namespace+'#'+index
         if typ not in ('cc.Sprite','cc.Label','cc.Widget','cc.Layout'):
             components.append(dict(sourceId=sid,type=typ,node=ref(obj.get('node'),namespace),enabled=obj.get('_enabled',True),materials=[],supported=False,sourceData=copy.deepcopy(obj)))
-            gap(index,'Creator 3.8 component requires a separate semantic adapter: '+typ);continue
+            gap(index,'Creator '+version+' component requires a separate semantic adapter: '+typ);continue
         value=copy.deepcopy(obj)
         value.pop('__prefab',None);value.pop('_color',None)
         value['_materials']=[obj['_customMaterial']]if obj.get('_customMaterial')else []
@@ -159,7 +161,7 @@ def _graph(asset,instances_resolved):
             value.setdefault('_resize',0)
             value['_cellSize']=dict(zip(['width','height'],source_vector(value.get('_cellSize'),5,['width','height'],[40,40],'Layout._cellSize')))
         component,missing=component_ir(namespace,index,value)
-        component['sourceGeometryProfile']=PROFILE
+        component['sourceGeometryProfile']=profile
         if obj.get('_enableShadow') or obj.get('_useGrayscale'):component['supported']=False
         components.append(component)
         for message in missing:gap(index,message)

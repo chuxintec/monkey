@@ -27,6 +27,40 @@ def host():
 
 
 class PrefabResolutionTests(unittest.TestCase):
+    def test_341_inline_child_has_stable_identity_and_does_not_mutate_source(self):
+        from monkey.sources.cocos34_graphs import resolved_graph
+        a=prefab('inline',[dict(__type__='cc.Node',_name='Parent',_children=[dict(__type__='cc.Node',_name='Inline',_parent=ref(1),_prefab=info('inline'))])]);before=copy.deepcopy(a)
+        ns,_,_,result=resolved_graph(a,Resolver([a],'cocos-3.4.1-bundle'))
+        child=next(n for n in ns if n['name']=='Inline');self.assertEqual(child['sourceId'],'main:inline#1/children/0');self.assertEqual(child['parent'],'main:inline#1');self.assertEqual(a,before)
+
+    def test_341_duplicate_component_id_uses_source_sdk_last_write_order(self):
+        template=leaf();template['document']['instances'][1]['_components'].append(dict(__type__='DomainState',node=ref(1),__prefab=dict(__type__='cc.CompPrefabInfo',fileId='state'),items=[30,40,50],selected=ref(2)))
+        parent=host();r=Resolver([template,parent],'cocos-3.4.1-bundle').resolve(parent);o=r['document']['instances'];left=o[2];first,second=[o[x['__id__']]for x in left['_components']]
+        self.assertEqual(first['items'],[1,2,3]);self.assertEqual(second['items'],[30,9]);self.assertTrue(r['prefabResolution']['localIdShadowing'])
+        with self.assertRaisesRegex(ParseError,'TARGET_DUPLICATE'):Resolver([template,parent]).resolve(parent)
+
+    def test_mounted_widget_and_child_are_isolated_and_child_override_runs_after_mount(self):
+        from monkey.sources.cocos34_graphs import resolved_graph
+        from monkey.targets.prefabs import plan_prefabs,native_relationships,verify_native_relationships
+        template=leaf();parent=host();child=dict(__type__='cc.Node',_name='Before',_parent=ref(2),_prefab=info('added-child'),_children=[],_components=[])
+        parent['document']['instances'].append(child);record=parent['document']['instances'][2]['_prefab']['instance']
+        record['mountedChildren']=[dict(__type__='cc.MountedChildrenInfo',targetInfo=target('root'),nodes=[ref(4)])]
+        record['mountedComponents']=[dict(__type__='cc.MountedComponentsInfo',targetInfo=target('root'),components=[dict(__type__='cc.Widget',node=ref(2),_alignFlags=33,_right=12,_top=25,__prefab=dict(__type__='cc.CompPrefabInfo',fileId='added-widget'))])]
+        record['propertyOverrides'].append(patch(['_name'],'After mount','added-child'));before=copy.deepcopy([template,parent])
+        resolver=Resolver([template,parent],'cocos-3.4.1-bundle');result=resolver.resolve(parent);objects=result['document']['instances']
+        self.assertEqual(objects[4]['_name'],'After mount');self.assertEqual(objects[4]['_parent'],ref(2));self.assertEqual(len(objects[2]['_children']),2);self.assertEqual(len(objects[3]['_children']),1)
+        self.assertEqual(len(objects[2]['_components']),2);self.assertEqual(len(objects[3]['_components']),1);self.assertEqual([template,parent],before)
+        left=next(x for x in result['prefabInstances']if x['root']=='main:host#2');self.assertEqual(left['mountedChildren'][0]['roots'],['main:host#4']);self.assertEqual(left['mountedComponents'][0]['sourceType'],'cc.Widget')
+        nodes=[];components=[];links=[]
+        for source in [template,parent]:
+            ns,cs,gaps,resolved=resolved_graph(source,resolver);nodes+=ns;components+=cs;links+=resolved['prefabInstances']
+        ir=dict(nodes=nodes,components=components,prefabInstances=links);plans,_=plan_prefabs(ir,components);ordered,instances=native_relationships(ir,plans)
+        mounted=next(x for x in instances if x['root']=='main:host#2');self.assertEqual(mounted['mountedChildren'][0]['nodes'],['main:host#4']);self.assertEqual(len(mounted['mountedComponents']),1)
+        proof=[dict(root=x['root'],templateSourceId=x['template'],templatePath=next(p['path']for p in plans if p['sourceId']==x['template']),templateGuid='g',templateRootFileId=1,nodeCount=len(x['nodes']),nativeInstance=True,correspondingSourceVerified=True,nodeCorrespondenceVerified=True,templateUnchanged=True)for x in instances]
+        self.assertTrue(any(g['code']=='NATIVE_PREFAB_MOUNTED_CHILDREN_NOT_VERIFIED'for g in verify_native_relationships(instances,plans,proof,'saved')))
+        for row in proof:row.update(mountedChildrenVerified=True,mountedComponentsVerified=True,mountedRootCount=int(row['root']=='main:host#2'),mountedNodeCount=int(row['root']=='main:host#2'),mountedComponentCount=int(row['root']=='main:host#2'))
+        self.assertEqual(verify_native_relationships(instances,plans,proof,'saved'),[])
+
     def test_two_instances_keep_template_identity_isolation_and_internal_references(self):
         template=leaf();parent=host();before=copy.deepcopy([template,parent]);resolver=Resolver([template,parent]);result=resolver.resolve(parent)
         links=result['prefabInstances'];self.assertEqual(len(links),2)
@@ -69,7 +103,7 @@ class PrefabResolutionTests(unittest.TestCase):
         b=prefab('cycle',[placeholder(0,'self','cycle',[])])
         with self.assertRaisesRegex(ParseError,'DEPENDENCY_CYCLE'):Resolver([b]).resolve(b)
         a=host();a['document']['instances'][2]['_prefab']['instance']['mountedChildren']=[ref(1)]
-        with self.assertRaisesRegex(ParseError,'MOUNTED_DELTA'):Resolver([leaf(),a]).resolve(a)
+        with self.assertRaisesRegex(ParseError,'PREFAB_OBJECT_TYPE'):Resolver([leaf(),a]).resolve(a)
         a=host();a['document']['instances'][2]['_prefab']['instance']['propertyOverrides']=[patch(['_name'],'Unknown','missing')]
         with self.assertRaisesRegex(ParseError,'TARGET_MISSING'):Resolver([leaf(),a]).resolve(a)
 

@@ -52,6 +52,7 @@ module.exports = {
                     const node=new cc.Node(n.name);node.layer=n.sourceLayer??cc.Layers.Enum.UI_2D;nodes.set(n.sourceId,node);
                     node.setPosition(...n.position);node.setRotation(new cc.Quat(...n.rotation));node.setScale(...n.scale);
                     const ui=node.addComponent(cc.UITransform);ui.setContentSize(...n.size);ui.setAnchorPoint(...n.anchor);
+                    if(n.sourceUITransformEnabled===false)ui.enabled=false;
                     if(n.opacity!==255)node.addComponent(cc.UIOpacity).opacity=n.opacity;
                     node.active=n.active;
                 }
@@ -150,6 +151,7 @@ module.exports = {
                 mapped.set(sid,n);src.children.forEach((id,i)=>match(id,n.children[i]));
             }
             plan.nodes.filter(n=>n.parent===null).forEach((n,i)=>match(n.sourceId,design.children[i]));
+            for(const n of plan.nodes)if(n.sourceUITransformEnabled===false&&mapped.get(n.sourceId).getComponent(cc.UITransform).enabled!==false)throw Error('Saved UITransform enabled state differs');
             const labels=[];const refs=[];const numericCodeBindings=[];
             for(const c of plan.components.filter(c=>c.convertible)) {
                 const n=mapped.get(c.node);const type=c.type==='cc.LabelOutline'?'Label':c.type.slice(3);const comp=n.getComponent(cc[type]);

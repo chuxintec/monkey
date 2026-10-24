@@ -8,15 +8,22 @@ using UnityEngine;
 public static partial class MonkeyImporter
 {
     [Serializable] public class PrefabObjectPair { public string instanceObject,templateObject; }
+    [Serializable] public class PrefabMountedChildren { public string parent; public string[] roots,nodes; }
+    [Serializable] public class PrefabMountedComponent { public string node,component,sourceType,nativeType; }
     [Serializable] public class PrefabInstanceSpec {
         public string owner,root,template,sourceInstanceFileId; public bool outermost; public PrefabObjectPair[] nodes;
+        public PrefabMountedChildren[] mountedChildren; public PrefabMountedComponent[] mountedComponents;
     }
     [Serializable] public class PrefabInstanceResult {
         public string root,templateSourceId,templatePath,templateGuid;
         public bool nativeInstance,correspondingSourceVerified,nodeCorrespondenceVerified,templateUnchanged;
         public int nodeCount,propertyModificationCount; public long templateRootFileId;
+        public bool mountedChildrenVerified,mountedComponentsVerified; public int mountedRootCount,mountedNodeCount,mountedComponentCount;
     }
     static Dictionary<string,string> prefabTemplateHashes;
+    static readonly Dictionary<string,PrefabInstanceResult> savedMountProofs=new Dictionary<string,PrefabInstanceResult>();
+    static readonly Dictionary<string,string> savedMountProofHashes=new Dictionary<string,string>();
+    static readonly Dictionary<string,string> savedMountProofAssets=new Dictionary<string,string>();
     static readonly HashSet<string> PrefabInternalProperties=new HashSet<string> {
         "m_ObjectHideFlags","m_CorrespondingSourceObject","m_PrefabInstance","m_PrefabAsset","m_GameObject","m_Script"
     };
@@ -79,6 +86,15 @@ public static partial class MonkeyImporter
                         if(!pairs.Any(p=>p.Value==component))throw new InvalidOperationException("Native template component has no supported instance counterpart: "+component.GetType().Name);
                     }
                 }
+                foreach(var group in instance.mountedChildren??new PrefabMountedChildren[0]) {
+                    if(!nodes.ContainsKey(group.parent))throw new InvalidOperationException("Mounted parent missing");
+                    var oldParent=nodes[group.parent];var parent=replacements.TryGetValue(oldParent,out var mappedParent)?(GameObject)mappedParent:oldParent;
+                    foreach(var sid in group.roots) {
+                        if(!nodes.ContainsKey(sid))throw new InvalidOperationException("Mounted child missing");
+                        nodes[sid].transform.SetParent(parent.transform,false);
+                        nodes[sid].transform.SetAsLastSibling();
+                    }
+                }
                 foreach(var pair in instance.nodes) {
                     var old=nodes[pair.instanceObject];var target=(GameObject)replacements[old];var from=(RectTransform)old.transform;var to=(RectTransform)target.transform;
                     target.name=old.name;target.layer=old.layer;target.SetActive(old.activeSelf);
@@ -100,7 +116,18 @@ public static partial class MonkeyImporter
             } catch { if(root!=null)UnityEngine.Object.DestroyImmediate(root);throw; }
         }
     }
-    static PrefabInstanceResult[] ReadNativeInstances(Plan plan,Dictionary<string,RectTransform> nodes,string owner=null) {
+    static Type MountedNativeComponentType(string sourceType) {
+        switch(sourceType) {
+            case "cc.Widget":return typeof(NativeRectConstraints);
+            case "cc.Sprite":return typeof(UnityEngine.UI.Image);
+            case "cc.Label":return typeof(TMPro.TextMeshProUGUI);
+            case "cc.Button":return typeof(UnityEngine.UI.Button);
+            case "cc.ScrollView":return typeof(UnityEngine.UI.ScrollRect);
+            case "cc.Mask":return typeof(UnityEngine.UI.RectMask2D);
+            default:throw new InvalidOperationException("Mounted native component proof requires a typed adapter: "+sourceType);
+        }
+    }
+    static PrefabInstanceResult[] ReadNativeInstances(Plan plan,Dictionary<string,RectTransform> nodes,string owner=null,string outerAssetPath=null,bool captureAssetProof=false) {
         var templates=(plan.sourcePrefabs??new SourcePrefabSpec[0]).ToDictionary(p=>p.sourceId);var results=new List<PrefabInstanceResult>();
         foreach(var instance in (plan.prefabInstances??new PrefabInstanceSpec[0]).Where(s=>owner==null||s.owner==owner)) {
             if(!nodes.ContainsKey(instance.root)||!templates.ContainsKey(instance.template))throw new InvalidOperationException("Saved native instance missing");
@@ -118,9 +145,46 @@ public static partial class MonkeyImporter
                     throw new InvalidOperationException("Saved nested node lost its template correspondence");
             }
             var modifications=PrefabUtility.GetPropertyModifications(PrefabUtility.GetNearestPrefabInstanceRoot(root));
-            results.Add(new PrefabInstanceResult {root=instance.root,templateSourceId=instance.template,templatePath=template.path,templateGuid=guid,
+            Dictionary<string,RectTransform> owningAssetNodes=null;
+            bool InheritedMount(UnityEngine.Object current,string sid,Type componentType=null) {
+                // Scene instances inherit mounts from the assembled Candidate
+                // Prefab, so IsAdded*Override is false against that outer asset.
+                // Require its independent native added-override proof, unchanged
+                // bytes and exact object correspondence to that actual asset.
+                if(captureAssetProof||string.IsNullOrEmpty(outerAssetPath)||!savedMountProofs.TryGetValue(instance.root,out var proof)||
+                    proof.templateGuid!=guid||!proof.mountedChildrenVerified||!proof.mountedComponentsVerified||
+                    savedMountProofAssets[instance.root]!=outerAssetPath||Hash(outerAssetPath)!=savedMountProofHashes[instance.root])return false;
+                if(owningAssetNodes==null)owningAssetNodes=SavedNodeMap(plan.nodes,AssetDatabase.LoadAssetAtPath<GameObject>(outerAssetPath));
+                if(!owningAssetNodes.ContainsKey(sid))return false;
+                UnityEngine.Object expected=componentType==null?(UnityEngine.Object)owningAssetNodes[sid].gameObject:owningAssetNodes[sid].GetComponent(componentType);
+                return expected!=null&&PrefabUtility.GetCorrespondingObjectFromSourceAtPath(current,outerAssetPath)==expected;
+            }
+            int mountedRoots=0,mountedNodes=0,mountedComponents=0;
+            foreach(var group in instance.mountedChildren??new PrefabMountedChildren[0]) {
+                foreach(var sid in group.roots) {
+                    if(!nodes.ContainsKey(sid)||nodes[sid].parent!=nodes[group.parent]||
+                        (!PrefabUtility.IsAddedGameObjectOverride(nodes[sid].gameObject)&&!InheritedMount(nodes[sid].gameObject,sid)))
+                        throw new InvalidOperationException("Saved mounted child is not a native added-object override");
+                    mountedRoots++;
+                }
+                foreach(var sid in group.nodes) {
+                    if(!nodes.ContainsKey(sid)||PrefabUtility.GetCorrespondingObjectFromSourceAtPath(nodes[sid].gameObject,template.path)!=null)
+                        throw new InvalidOperationException("Mounted subtree unexpectedly belongs to the shared template");
+                    mountedNodes++;
+                }
+            }
+            foreach(var mounted in instance.mountedComponents??new PrefabMountedComponent[0]) {
+                var component=nodes[mounted.node].GetComponent(MountedNativeComponentType(mounted.sourceType));
+                if(component==null||(!PrefabUtility.IsAddedComponentOverride(component)&&!InheritedMount(component,mounted.node,MountedNativeComponentType(mounted.sourceType)))||PrefabUtility.GetCorrespondingObjectFromSourceAtPath(component,template.path)!=null)
+                    throw new InvalidOperationException("Saved mounted component is not a native added-component override");
+                mountedComponents++;
+            }
+            var row=new PrefabInstanceResult {root=instance.root,templateSourceId=instance.template,templatePath=template.path,templateGuid=guid,
                 templateRootFileId=fileId,nativeInstance=linked,correspondingSourceVerified=matched,nodeCorrespondenceVerified=true,templateUnchanged=unchanged,
-                nodeCount=instance.nodes.Length,propertyModificationCount=modifications==null?0:modifications.Length});
+                nodeCount=instance.nodes.Length,propertyModificationCount=modifications==null?0:modifications.Length,
+                mountedChildrenVerified=true,mountedComponentsVerified=true,mountedRootCount=mountedRoots,mountedNodeCount=mountedNodes,mountedComponentCount=mountedComponents};
+            results.Add(row);
+            if(captureAssetProof){savedMountProofs[instance.root]=row;savedMountProofHashes[instance.root]=Hash(outerAssetPath);savedMountProofAssets[instance.root]=outerAssetPath;}
         }
         return results.ToArray();
     }

@@ -124,9 +124,9 @@ def normalize(manifest_path, output):
                   scopeMode='whole-input' if m.get('packageSelection') else 'asset-selection',
                   coordinateConvention=dict(origin='center anchor', x='right', y='up', units='pixels'))
     prefab_resolver=None
-    if m['sourceProfile']=='cocos-3.8.7-bundle':
+    if m['sourceProfile']in ('cocos-3.8.7-bundle','cocos-3.4.1-bundle'):
         from .sources.cocos38_prefabs import Resolver
-        prefab_resolver=Resolver(m['assets'])
+        prefab_resolver=Resolver(m['assets'],m['sourceProfile'])
     for asset in m['assets']:
         sid = asset['sourceId']
         name = sha(sid.encode())[:24]
@@ -142,14 +142,16 @@ def normalize(manifest_path, output):
             cocos38=m.get('sourceProfile')=='cocos-3.8.7-bundle'
             cocos34=m.get('sourceProfile')=='cocos-3.4.1-bundle'
             cocos3=cocos38 or cocos34
-            if cocos34 and kind not in ('cc.SpriteFrame','cc.Texture2D','cc.ImageAsset','cc.TTFFont','cc.AudioClip','cc.JsonAsset','redirect','native'):
+            if cocos34 and kind not in ('cc.SpriteFrame','cc.Texture2D','cc.ImageAsset','cc.TTFFont','cc.AudioClip','cc.JsonAsset','cc.Prefab','cc.Scene','cc.SceneAsset','cc.BitmapFont','redirect','native'):
                 result['quarantinedAssets'].append(dict(sourceId=sid,kind=kind,reason='COCOS34_RESOURCE_PROFILE_ONLY'))
-                diagnostics.append(diagnostic('COCOS34_RESOURCE_PROFILE_ONLY',asset.get('importPath',sid),'3.4.1 graph/animation/custom semantics need version-specific validation; original retained',sid));continue
+                diagnostics.append(diagnostic('COCOS34_RESOURCE_PROFILE_ONLY',asset.get('importPath',sid),'3.4.1 '+str(kind)+' semantics need a dedicated adapter; original retained',sid));continue
             if m.get('sourceProfile')=='cocos-2.1.2-resource' and kind not in ('cc.SpriteFrame','cc.Texture2D','cc.TTFFont','cc.AudioClip'):
                 result['quarantinedAssets'].append(dict(sourceId=sid,kind=kind,reason='LEGACY_RESOURCE_ONLY'))
                 diagnostics.append(diagnostic('LEGACY_RESOURCE_ONLY',asset.get('importPath',sid),'2.1.2 graph, clip and other semantics require a dedicated adapter',sid));continue
-            if cocos38 and kind in ('cc.Prefab','cc.Scene','cc.SceneAsset'):
+            if cocos3 and kind in ('cc.Prefab','cc.Scene','cc.SceneAsset'):
                 from .sources.cocos38_graphs import resolved_graph
+                if cocos34:
+                    from .sources.cocos34_graphs import resolved_graph
                 nodes38,components38,gaps38,resolved38=resolved_graph(asset,prefab_resolver)
                 result['nodes'].extend(nodes38);result['components'].extend(components38)
                 result['prefabInstances'].extend(resolved38['prefabInstances']);result['prefabOverrideGaps'].extend(resolved38['pendingPrefabOverrides'])
@@ -282,8 +284,12 @@ def normalize(manifest_path, output):
         atlas_ref=resolved(ref(value.get('spriteFrame'),asset['sourceId']))
         frame=frames.get(atlas_ref)
         try:
+            if m['sourceProfile']=='cocos-3.4.1-bundle':
+                if 'fntConfig'in value and '_fntConfig'in value:fail('COCOS34_BITMAP_CONFIG',asset['sourceId'],'Conflicting serialized font config names')
+                value=dict(value,_fntConfig=value.get('fntConfig'))
             if not frame:fail('BITMAP_ATLAS_MISSING',asset['sourceId'],str(atlas_ref))
             font=normalize_font(value,asset['sourceId'],atlas_ref,frame['originalSize'])
+            if m['sourceProfile']=='cocos-3.4.1-bundle':font['kerningConvention']='source-3.4.1-unscaled-pair-offset'
             font['atlasImage']=frame['originalImage']
             result['bitmapFonts'].append(font)
         except (ParseError,KeyError,ValueError) as error:

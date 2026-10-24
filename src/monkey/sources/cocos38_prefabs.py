@@ -1,4 +1,4 @@
-"""Development-time Cocos 3.8.7 Prefab graph resolution with explicit native links.
+"""Development-time Cocos 3.4.1/3.8.7 Prefab graph resolution with native links.
 
 This module never runs in a Player. Expanded documents are validation/planning
 material; native emitters must retain template instances rather than flatten them.
@@ -32,7 +32,9 @@ def root_index(asset,objects):
 
 
 class Resolver:
-    def __init__(self,assets):
+    def __init__(self,assets,source_profile='cocos-3.8.7-bundle'):
+        if source_profile not in ('cocos-3.4.1-bundle','cocos-3.8.7-bundle'):fail('PREFAB_SOURCE_PROFILE',source_profile,'Explicit audited source serialization required')
+        self.source_profile=source_profile
         self.templates={};self.cache={};self.active=[]
         for asset in assets:
             if asset.get('kind')!='cc.Prefab'or not asset.get('document'):continue
@@ -53,14 +55,38 @@ class Resolver:
         objects=copy.deepcopy(asset['document']['instances']);original_count=len(objects)
         if len(objects)>MAX_OBJECTS:fail('PREFAB_OBJECT_BUDGET',asset['sourceId'],'Source object count exceeds limit')
         root=root_index(asset,objects);links=[];pending=[];identities={i:asset['sourceId']+'#'+str(i)for i in range(original_count)};expanded=set()
+        inline_components={};shadowing=[]
+        def intern_component(value,identity,reuse=False):
+            if isinstance(value,dict)and set(value)=={'__id__'}:
+                index=value['__id__']
+                if type(index)is not int or not 0<=index<len(objects):fail('PREFAB_OBJECT_REFERENCE',asset['sourceId'],'Mounted component reference outside source document')
+                return index
+            if not isinstance(value,dict)or not isinstance(value.get('__type__'),str):fail('PREFAB_MOUNTED_COMPONENT',asset['sourceId'],'Expected a typed mounted component')
+            owner=value.get('node');meta=value.get('__prefab');file_id=pointer(meta,objects,'cc.CompPrefabInfo').get('fileId')if meta else None
+            key=(owner.get('__id__'),file_id)if isinstance(owner,dict)and set(owner)=={'__id__'}and file_id else ('inline-object',id(value))
+            if reuse and key in inline_components:
+                matches=[i for i in inline_components[key]if objects[i]==value]
+                if len(matches)!=1:fail('PREFAB_MOUNTED_COMPONENT_CONFLICT',asset['sourceId'],'Mounted component payload does not identify one original component')
+                return matches[0]
+            index=len(objects);objects.append(value);identities[index]=identity;inline_components.setdefault(key,[]).append(index)
+            if len(objects)>MAX_OBJECTS:fail('PREFAB_OBJECT_BUDGET',asset['sourceId'],'Mounted/inline component count exceeds limit')
+            return index
         # Compiled 3.x graphs may embed components directly in _components.
         # Give those development objects stable source identities before cloning.
-        for i in range(original_count):
+        i=-1
+        while i+1<len(objects):
+            i+=1
             obj=objects[i]
             if not isinstance(obj,dict)or obj.get('__type__')not in ('cc.Node','cc.Scene'):continue
+            if self.source_profile=='cocos-3.4.1-bundle':
+                for ordinal,value in enumerate(obj.get('_children',[])):
+                    if isinstance(value,dict)and value.get('__type__')=='cc.Node':
+                        dest=len(objects);objects.append(value);identities[dest]=identities[i]+'/children/'+str(ordinal)
+                        obj['_children'][ordinal]={'__id__':dest}
+                        if len(objects)>MAX_OBJECTS:fail('PREFAB_OBJECT_BUDGET',asset['sourceId'],'Inline child count exceeds limit')
             for ordinal,value in enumerate(obj.get('_components',[])):
                 if isinstance(value,dict)and '__type__'in value:
-                    dest=len(objects);objects.append(value);identities[dest]=asset['sourceId']+'#'+str(i)+'/components/'+str(ordinal)
+                    dest=intern_component(value,asset['sourceId']+'#'+str(i)+'/components/'+str(ordinal))
                     obj['_components'][ordinal]={'__id__':dest}
         if len(objects)>MAX_OBJECTS:fail('PREFAB_OBJECT_BUDGET',asset['sourceId'],'Inline component count exceeds limit')
         def ref_index(value):
@@ -75,6 +101,15 @@ class Resolver:
             return path
         def target_map(node):
             mapping={};seen=set()
+            def store(scope,key,value):
+                if key in scope:
+                    if self.source_profile!='cocos-3.4.1-bundle':fail('PREFAB_TARGET_DUPLICATE',key,'Ambiguous source localID')
+                    # v3.4.1 generateTargetMap assigns in node/component/child
+                    # traversal order. Preserve its last-write semantics while
+                    # retaining every object and recording the collision.
+                    row=dict(localID=key,replacement=identities.get(value)if type(value)is int else 'instance-scope')
+                    if row not in shadowing:shadowing.append(row)
+                scope[key]=value
             def walk(index,scope,is_root):
                 if index in seen:fail('PREFAB_NODE_CYCLE',str(index),'Repeated/cyclic source child')
                 seen.add(index);obj=objects[index];prefab=info(index)
@@ -82,19 +117,17 @@ class Resolver:
                     instance=pointer(prefab['instance'],objects,'cc.PrefabInstance')if prefab.get('instance')else None
                     if not is_root and instance:
                         name=instance.get('fileId')
-                        if not isinstance(name,str)or not name or name in scope:fail('PREFAB_TARGET_DUPLICATE',str(name),'Ambiguous nested instance localID')
-                        scope[name]={};scope=scope[name]
+                        if not isinstance(name,str)or not name:fail('PREFAB_TARGET_DUPLICATE',str(name),'Empty nested instance localID')
+                        store(scope,name,{});scope=scope[name]
                     key=prefab.get('fileId')
                     if key:
-                        if key in scope:fail('PREFAB_TARGET_DUPLICATE',key,'Ambiguous source localID')
-                        scope[key]=index
+                        store(scope,key,index)
                 for value in obj.get('_components',[]):
                     component=ref_index(value);meta=objects[component].get('__prefab')
                     if meta:
                         key=pointer(meta,objects,'cc.CompPrefabInfo').get('fileId')
                         if key:
-                            if key in scope:fail('PREFAB_TARGET_DUPLICATE',key,'Ambiguous component localID')
-                            scope[key]=component
+                            store(scope,key,component)
                 for child in obj.get('_children',[]):walk(ref_index(child),scope,False)
             walk(node,mapping,True);return mapping
         def target(path,mapping):
@@ -140,7 +173,7 @@ class Resolver:
             expanded.add(index);prefab=info(index);obj=objects[index]
             instance=pointer(prefab['instance'],objects,'cc.PrefabInstance')if prefab and prefab.get('instance')else None
             if instance:
-                if any(instance.get(k)for k in ('mountedChildren','mountedComponents','removedComponents')):fail('PREFAB_MOUNTED_DELTA',asset['sourceId'],'Mounted/removed object deltas require a separate evidenced profile')
+                if instance.get('removedComponents'):fail('PREFAB_REMOVED_COMPONENT_DELTA',asset['sourceId'],'Removed components need an evidenced native adapter')
                 template_ref=prefab.get('asset');key=template_ref.get('__uuid__')if isinstance(template_ref,dict)else None
                 if key not in self.templates:fail('PREFAB_TEMPLATE_MISSING',str(key),'Exact original template not supplied')
                 template=self.resolve(self.templates[key]);source=template['document']['instances'];template_root=root_index(template,source)
@@ -171,18 +204,45 @@ class Resolver:
                 # The template was fully expanded first, preserving inner delta order.
                 for i in mapping.values():
                     if isinstance(objects[i],dict)and objects[i].get('__type__')=='cc.Node':expanded.add(i)
-                mapped=target_map(index);applied=[]
+                mapped=target_map(index);mounted_children=[];mounted_components=[]
+                # Match the source SDK's ordering: mounted children (including
+                # their localID scopes), mounted components, then property deltas.
+                for group in instance.get('mountedChildren')or[]:
+                    group=pointer(group,objects,'cc.MountedChildrenInfo');where=local_id(group.get('targetInfo'));dest=target(where,mapped)
+                    if objects[dest].get('__type__')!='cc.Node':fail('PREFAB_MOUNT_PARENT',asset['sourceId'],'Mounted children require a Node target')
+                    children=[]
+                    for child in group.get('nodes')or[]:
+                        child_index=ref_index(child)
+                        if objects[child_index].get('__type__')!='cc.Node'or child_index==dest:fail('PREFAB_MOUNT_CHILD',asset['sourceId'],'Expected a distinct mounted Node')
+                        if child in objects[dest].get('_children',[]):fail('PREFAB_MOUNT_CHILD_DUPLICATE',asset['sourceId'],'Mounted child is already attached')
+                        objects[dest].setdefault('_children',[]).append(dict(__id__=child_index));objects[child_index]['_parent']=dict(__id__=dest)
+                        children.append(identities[child_index]);expand(child_index,depth+1)
+                    mounted_children.append(dict(parent=identities[dest],localID=where,roots=children))
+                    mapped=target_map(index)
+                for group_index,group in enumerate(instance.get('mountedComponents')or[]):
+                    group=pointer(group,objects,'cc.MountedComponentsInfo');where=local_id(group.get('targetInfo'));dest=target(where,mapped)
+                    if objects[dest].get('__type__')!='cc.Node':fail('PREFAB_MOUNT_PARENT',asset['sourceId'],'Mounted components require a Node target')
+                    for ordinal,component in enumerate(group.get('components')or[]):
+                        component_index=intern_component(component,identities[index]+'/mounted-components/'+str(group_index)+'/'+str(ordinal),reuse=True)
+                        if dict(__id__=component_index)in objects[dest].get('_components',[]):fail('PREFAB_MOUNT_COMPONENT_DUPLICATE',asset['sourceId'],'Mounted component is already attached')
+                        objects[component_index]['node']=dict(__id__=dest);objects[dest].setdefault('_components',[]).append(dict(__id__=component_index))
+                        mounted_components.append(dict(node=identities[dest],localID=where,component=identities[component_index],sourceType=objects[component_index]['__type__']))
+                applied=[]
                 for patch in instance.get('propertyOverrides')or[]:
                     override=pointer(patch,objects,'CCPropertyOverrideInfo');where=local_id(override.get('targetInfo'));dest=target(where,mapped);prop=override.get('propertyPath');value=override.get('value')
                     ok=assign(dest,prop,value,'propertyOverrides')
                     applied.append(dict(target=identities[dest],localID=where,propertyPath=prop,value=copy.deepcopy(value),appliedForValidation=ok))
-                links.append(dict(root=identities[index],template=self.templates[key]['sourceId'],sourceInstanceFileId=path,objects=pairs,overrides=applied,nativeRelationship='required_not_emitted'))
+                links.append(dict(root=identities[index],template=self.templates[key]['sourceId'],sourceInstanceFileId=path,objects=pairs,overrides=applied,mountedChildren=mounted_children,mountedComponents=mounted_components,nativeRelationship='required_not_emitted'))
                 inverse={template['objectIdentities'][str(i)]:identities[mapping[i]]for i in range(len(source))}
                 for nested in template['prefabInstances']:
                     cloned=copy.deepcopy(nested);cloned['root']=inverse[cloned['root']]
                     for pair in cloned['objects']:pair['instanceObject']=inverse[pair['instanceObject']]
                     for patch in cloned['overrides']:
                         patch['target']=inverse[patch['target']];patch['value']=remap(patch['value'])
+                    for group in cloned.get('mountedChildren',[]):
+                        group['parent']=inverse[group['parent']];group['roots']=[inverse[x]for x in group['roots']]
+                    for component in cloned.get('mountedComponents',[]):
+                        component['node']=inverse[component['node']];component['component']=inverse[component['component']]
                     links.append(cloned)
                 for gap in template['pendingPrefabOverrides']:
                     pending.append(dict(copy.deepcopy(gap),target=inverse[gap['target']]))
@@ -209,5 +269,5 @@ class Resolver:
                     continue
                 assign(source_index,override.get('propertyPath'),dict(__id__=dest),'targetOverrides')
         result=copy.deepcopy(asset);result['document']=dict(root=asset['document']['root'],instances=objects);result['objectIdentities']={str(i):identity for i,identity in identities.items()};result['prefabInstances']=links;result['pendingPrefabOverrides']=pending
-        result['prefabResolution']=dict(kind='development-time-source-validation-only',sourceObjectCount=original_count,expandedObjectCount=len(objects),nativeInstancesRequired=bool(links),sourceRuntimeExecuted=False)
+        result['prefabResolution']=dict(kind='development-time-source-validation-only',sourceObjectCount=original_count,expandedObjectCount=len(objects),nativeInstancesRequired=bool(links),sourceRuntimeExecuted=False,localIdShadowing=shadowing)
         return result

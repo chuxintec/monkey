@@ -78,6 +78,9 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
     source_files = stage_manifest(ir_path.parent)['files']
     expected = {f['path']: f['sha256'] for f in source_files}
     diagnostics = list(ir['diagnostics'])
+    for node in ir['nodes']:
+        if node.get('sourceUITransformEnabled')is False:
+            diagnostics.append(dict(code='SOURCE_UI_TRANSFORM_LIFECYCLE_UNSUPPORTED',sourceId=node['sourceId'],severity='warning',message='Source disabled UITransform geometry is retained; Unity RectTransform has no enabled state and source parent-change listener lifecycle needs manual review'))
     binding_receipt=None;label_bindings={}
     if bindings_path:
         raw=read(bindings_path);binding=load(raw)
@@ -292,7 +295,7 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
     from .prefabs import plan_prefabs
     source_prefabs,prefab_gaps=plan_prefabs(ir,components)
     from .prefabs import native_relationships
-    source_prefabs,prefab_instances=native_relationships(ir,source_prefabs)
+    source_prefabs,prefab_instances=native_relationships(ir,source_prefabs,components)
     for prefab in source_prefabs:prefab['path']=naming.path(prefab['sourceId'],'.prefab','Assets/Generated/Views/Sources')
     diagnostics.extend(prefab_gaps)
     out = new_output(output,[ir_path.parent])
@@ -510,6 +513,8 @@ def verify(candidate, output, level='static'):
             from .prefabs import verify_native_relationships
             template_guids={sid:row.get('guid')for sid,row in actual_prefabs.items()}
             diagnostics.extend(verify_native_relationships(instruction.get('prefabInstances',[]),instruction.get('sourcePrefabs',[]),rb.get('prefabInstances'),'scene',template_guids))
+            if any(x.get('mountedChildren')or x.get('mountedComponents')for x in instruction.get('prefabInstances',[])):
+                diagnostics.extend(verify_native_relationships(instruction['prefabInstances'],instruction.get('sourcePrefabs',[]),rb.get('candidatePrefabInstances'),'candidate-prefab',template_guids))
             from .dynamic_ui import expectations,verify_probes
             diagnostics.extend(verify_probes(instruction,rb.get('dynamicUiProbes')))
             scene_expected,ui_gaps=expectations(instruction,rb.get('nativeInitialNodes'),'UnityScene');diagnostics.extend(ui_gaps)

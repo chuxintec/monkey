@@ -7,12 +7,13 @@
 v0.1 已发布冻结；当前本地 `codex/v0.2`，未推送/发布。用户持续推进授权及本轮进度核查已原生核验：总监 turn01a16bea-fe5f-7082-9583-f3a7f0292b56 / human01a16beb-0267-79b1-9472-e1ced602d6ba。原生验证仍限自有独立副本与单次≤30分钟；单主开发，不唤醒肥鹅。
 
 - 已实现：公共CLI统一输入/精确远端获取、按资源与版本隔离、具名有据C#/TS/JS数值子集、ProjectModel typed引用与可选none/grea格式、Unity来源受限原生恢复、Cocos2.1.1/2.1.2/3.4.1/3.8.7资源及部分图、Egret5.2.32自定义资源/图集。Research最新重扫仍11例，10例不同范围输出、1例未导出、完整游戏0，详见validation/research-v02-status.json；候选数量不代表完整兼容。
-- 补源：机智147的13091份精确远端文件已取得，19298项声明资源missing0，双端最新07静态零诊断（完整新版Editor/玩法not_run）；天命当前3包336缓存与Cocos3.4.1来源已冻结，旧archives缺源阻塞解除，版本专用reader/export待完成。灵画师核实Egret5.2.32，不记作Laya。
-- 结构在途：Creator3.8.7开发期模板DAG/局部ID/覆盖解析已接公共IR/Unity计划；114/119图可结构解析，5图缺6个精确模板；以Prefab.data闭包修正PveFightUI的3个游离记录后114图父子均闭合，其他图hash不变。Unity真实4Prefab/104节点/5关系及合成双实例/三层嵌套/Variant均完成保存重开、对应节点/模板未污染读回；Creator3.8.8同真实4Prefab/104节点/5关系及合成三层嵌套也已通过原生保存重开/UUID-fileID/模板SHA校验，严格0诊断。尚未恢复源脚本的partial与结构检查分开，详见validation/2026-10-24-native-prefab-relations.md。
+- 补源：机智147的13091份精确远端文件已取得，19298项声明资源missing0，双端最新07静态零诊断（完整新版Editor/玩法not_run）；天命当前3包336缓存与Cocos3.4.1来源已冻结，11618确切下载项齐，版本专用资源/节点/实例reader及公开双目标05导出已完成。灵画师核实Egret5.2.32，不记作Laya。
+- 原生结构已验证：Creator3.8.7开发期模板DAG/局部ID/覆盖解析已接公共IR/Unity计划；114/119图可结构解析，5图缺6个精确模板；以Prefab.data闭包修正PveFightUI的3个游离记录后114图父子均闭合，其他图hash不变。Unity真实4Prefab/104节点/5关系及合成双实例/三层嵌套/Variant均完成保存重开、对应节点/模板未污染读回；Creator3.8.8同真实4Prefab/104节点/5关系及合成三层嵌套也已通过原生保存重开/UUID-fileID/模板SHA校验，严格0诊断。尚未恢复源脚本的partial与结构检查分开，详见validation/2026-10-24-native-prefab-relations.md。
 - 动态UI已落地：同一真实SysDialogPop/StarGroup（16节点/2Prefab），Unity05与Creator05均严格0诊断，NONE/RESIZE_HEIGHT改字与隐藏恢复、Widget父尺寸变化、线性布局子节点增隐显删均通过；跨目标各阶段≤0.05px，TTF高度已对齐。Creator1972帧原生RECT网格也已逐项读回；详见validation/2026-10-24-dynamic-ui.md。
 - 代表集成已过：同源4Prefab/104节点/5关系与新动态组件，Unity01严格0诊断、Creator04严格0诊断/editor pass；两端各2组动态探针。Creator子资源按原生SpriteFrame UUID保存/重导入并核对真实library，修复父meta已改而子资产仍旧；序列化后恢复自有活对象ID，避免Scheduler销毁异常。Creator04全部1972帧读回通过且无该生命周期错误，own75174已回收。01–03失败保留，详见validation/2026-10-24-prefab-dynamic-integration.md。
 - 天命3.4.1资源公共双目标已过：11618已确认远端项齐（含4668备选编码）、11962文件/1011728200字节全入账；7071Frame/每端14142变体、1TTF/13JSON，04双端静态0诊断。真实5Frame/10变体两端原生0诊断，own82339/82795均回收。源码/Spine/未知后缀与原版UI未恢复独立列限，详见validation/2026-10-24-tianming341-resources.md。
-- 当前下一包：天命3.4.1图/default专用验证与已实际出现的mounted结构；初审857图，4图含1个Widget挂载组及7个挂载子节点组，不能降为handoff。Creator仅根继承仍需专用资产合同；普通嵌套已过，其他真实结构缺口按证据处理。之后收口矩阵/CLI本地安装包与版本出口。
+- 天命图/追加结构已过：856/857图、22503节点、24511组件、52实例关系接公共05双目标；15位图字体恢复，1份原图四个null旋转值精确隔离。真实6Prefab/331节点/8关系/7新增节点/1新增Widget，两端原生严格0诊断，Unity04 editor partial（源业务缺口）、Creator10 editor pass；源Prefab及Unity最终Candidate证明独立核对。详见validation/2026-10-24-tianming341-graphs.md。Creator根继承、移除组件与任意新增类型不外推已支持。
+- 当前下一包：已完成A/B/C必修代表，收口逐case矩阵、CLI本地分发/安装与版本出口；不为已有通过小样追加无意义重跑。
 - 版本出口：上述必修结构/动态行为落地，逐case支持矩阵与limitations、CLI本地分发/安装和必要代表验证收口。未知受保护方法/不可支持引擎允许明确限制，不要求全游戏全业务恢复；不得把必修能力降为handoff结项。旧证据及旧未实现状态按下方历史读取。
 
 ## 历史依据与全量候选记录
@@ -637,3 +638,8 @@ event monkey-v02-dynamic-ui-20261024-01：源3.8.7 Widget/Layout别名及模式�
 ## 灵画师EUI事实计数修正（当前事实覆盖历史3026 Skin措辞）
 
 已直接读Manager的LINGHUASHI-UI-EVIDENCE.json并静态核本项目冻结解码值：start22根记录=20类+$skins/$styles，main3004根记录=3004类，共3024编译EUI皮肤类，不是3026独立界面。生产reader现在按$sC类定义与包元数据/未知根记录分别计数；START-HERE沿用兼容的sourceSkins字段但新增明确sourceSkinClasses/sourceUiRootRecords指标，复用旧未分类回执不标作类数。原件、已冻结输出及既有像素/原生证据未改写，也未重跑资源/图集。原生EUI部件树、约束、状态及绑定仍待独立适配；坚持EUI/BinJson，不误用FairyGUI。
+
+
+## 2026-10-24 天命图与实际追加原生闭环
+
+事件monkey-v02-tianming341-mounted-20261024-01：独立3.4.1字段/default/Prefab SDK审计后启用公开图reader；856/857图、22503节点、24511组件、52关系，新增inline子节点、源SDK重复ID最后写入、禁用UITransform状态和fntConfig位图字库。1份真实null quaternion继续隔离，不造值。6Prefab/331节点/8关系/7新增子节点/1Widget，两端源Prefab重开、Scene对应、模板未改及原生追加表均通过。Unity04 own95278 exit0/reaped严格0/editorpartial；Creator10 own3121 TERM/reaped严格0/editorpass。Creator默认SDK过滤追加组件，采用其原生reserveContentsForSyncablePrefab选项并拒绝序列化null；不改序列化JSON。Unity最终Candidate.prefab独立重开证明后，Scene按其实际继承资产对应核验，不把继承组件错误当Scene本地新增。49受影响测试通过；完整230测试亦通过。公开full05使用11962文件/1011728200B同输入生成双端，实际资源/图/位图均入计划，非私有probe-only。视觉/交互/全包原生not_run，正在收口CLI本地分发与安装，不推送/Release。

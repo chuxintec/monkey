@@ -122,7 +122,7 @@ def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None):
     from .prefabs import plan_prefabs,native_relationships
     prefabs,prefab_gaps=plan_prefabs(ir,components)
     diagnostics.extend(prefab_gaps)
-    prefabs,instances=native_relationships(ir,prefabs)
+    prefabs,instances=native_relationships(ir,prefabs,components)
     roots={p['sourceId']:p['root']for p in prefabs}
     for link in instances:
         if roots.get(link['owner'])==link['root']:
