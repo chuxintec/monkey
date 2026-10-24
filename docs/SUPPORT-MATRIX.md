@@ -20,7 +20,7 @@
 |Cocos2d-x及其他Cocos分支原包|Unity6 / Cocos3.8.8 / both|planned，独立识别和适配，不能套Creator序列化|逐来源样本|
 |Unity任意来源|Cocos / both|unsupported，不在本次批准矩阵|明确拒绝，不产假工程|
 |Laya / LayaAir 所有版本原包|Unity6|planned专用adapter；显式图片gallery fallback仅自造反例验证，没有真实Laya案例|持续逐来源|
-|Egret5.2.32/custom binary（灵画师166）|Unity6|partial：当前缓存原件同SHA并核启动/版本；48252声明/53图集1920切片/3026 Skin数据，53精确CDN页闭合、1920切片像素核；132代表源切片Unity原生通过。原生EUI布局/方法/动画未恢复|源UI专用适配与AI接续|
+|Egret5.2.32/custom binary（灵画师166）|Unity6|partial：当前缓存原件同SHA并核启动/版本；48252声明/53图集1920切片/3024 EUI皮肤类（3026包根记录含2元数据键，非界面数），53精确CDN页闭合、1920切片像素核；132代表源切片Unity原生通过。原生EUI布局/方法/动画未恢复|源UI专用适配与AI接续|
 |其他Egret / 自研 / 其他引擎原包|Unity6|planned专用adapter，custom只有自造通用图片反例|持续逐真实来源|
 
 2026-10-24用户新取舍：不可逆方法/缺类型或确实不可支持的引擎可保留limitations，不再以全部游戏完整还原阻断版本；实际嵌套Prefab、override与动态布局仍须解决。天命/机智按微信目标缓存/有据远端补源，灵画师已纠正短暂Laya判断。

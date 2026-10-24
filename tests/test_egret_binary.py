@@ -151,4 +151,14 @@ class EgretBinaryTests(unittest.TestCase):
             self.assertEqual(result['sourceData']['sheetsWithLocalTexture'],1);self.assertTrue((root/'out/UnityProject/Analysis/acquisition.json').exists())
 
 
+class EuiClassRecordTests(unittest.TestCase):
+    def test_metadata_and_unclassified_roots_are_not_counted_as_skin_classes(self):
+        import copy
+        from monkey.egret_recovery import skin_records
+        table={'$skins':{'Button':'ButtonSkin'},'$styles':{},'ButtonSkin':{'$sC':'$eSk','$path':'skins/ButtonSkin.exml'},'unknown':[]}
+        original=copy.deepcopy(table);classes,metadata,unknown=skin_records(table,'supplied.bin')
+        self.assertEqual([r['name']for r in classes],['ButtonSkin']);self.assertEqual(len(metadata),2);self.assertEqual(len(unknown),1)
+        self.assertEqual(classes[0]['baseClass'],'$eSk');self.assertEqual(table,original)
+
+
 if __name__=='__main__':unittest.main()

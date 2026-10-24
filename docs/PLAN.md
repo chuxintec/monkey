@@ -631,3 +631,7 @@ event monkey-v02-native-prefab-creator-20261024-01：Creator3.8.8后端已接公
 event monkey-v02-dynamic-ui-20261024-01：源3.8.7 Widget/Layout别名及模式进入公共IR，Creator保留原生动态Label/Sprite/布局；Unity提供原生uGUI约束/线性布局/TTF行框，正式运行不读IR。仅驱动轴允许原生布局结果不同于缓存，保存前后真实几何、引用、TTF驱动与状态变化严格核验。Unity05 own63064 exit0/reaped、Creator05 own58136 TERM/reaped，均严格0诊断；4代表动态状态跨端最大0.03549px。Creator修复vertices缺失造成Importer留下旧库，1972帧native mesh验证全过；先前02–04失败及Unity03–04的JSON缺省对象/Prefab无Canvas测量差异均保留。
 
 44项定向检查和安装SDK编译通过。119图仅PveFightUI脱离Prefab.data的3个记录被正确移出live树，原件及诊断保留；114可得图父子闭合，缺6模板的5图继续精确缺失，不猜模板。EUI核实已吸收：灵画师走EUI编译EXML/BinJson，非FairyGUI，20+3004皮肤类与2元数据根键不是3026个界面，按既有顺序自然接续。当前继续嵌套+动态必要集成后天命3.4.1，不以本组或清理结项，不推送/Release。
+
+## 灵画师EUI事实计数修正（当前事实覆盖历史3026 Skin措辞）
+
+已直接读Manager的LINGHUASHI-UI-EVIDENCE.json并静态核本项目冻结解码值：start22根记录=20类+$skins/$styles，main3004根记录=3004类，共3024编译EUI皮肤类，不是3026独立界面。生产reader现在按$sC类定义与包元数据/未知根记录分别计数；START-HERE沿用兼容的sourceSkins字段但新增明确sourceSkinClasses/sourceUiRootRecords指标，复用旧未分类回执不标作类数。原件、已冻结输出及既有像素/原生证据未改写，也未重跑资源/图集。原生EUI部件树、约束、状态及绑定仍待独立适配；坚持EUI/BinJson，不误用FairyGUI。

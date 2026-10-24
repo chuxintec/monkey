@@ -449,7 +449,15 @@
       "sourceRevision": "166",
       "targets": [
         "unity6"
-      ]
+      ],
+      "uiFramework": "EUI compiled EXML / custom BinJson; no FairyGUI evidence in examined source",
+      "skinStatistics": {
+        "compiledSkinClasses": 3024,
+        "packageRootRecords": 3026,
+        "packageMetadataRecords": 2,
+        "independentScreenCount": "not_inferred",
+        "nativeUiGraphs": 0
+      }
     },
     {
       "business": "not_run",

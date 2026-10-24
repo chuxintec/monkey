@@ -59,6 +59,19 @@ def source_facts(snapshot,rows):
                 algorithmFiles={p.name:sha(read(p))for p in [Path(__file__),Path(__file__).parent/'sources/egret_binary.py']},sourceExecuted=False)
 
 
+def skin_records(value,source_file):
+    """EUI class definitions and package metadata are different root records."""
+    if not isinstance(value,dict):fail('EGRET_SKIN_ROOT',source_file,'Expected compiled EUI class table')
+    skins=[];metadata=[];unknown=[]
+    for name,definition in value.items():
+        record=dict(name=name,sourceFile=source_file,native='not_restored')
+        if name in('$skins','$styles'):metadata.append(dict(record,kind='eui-package-metadata'))
+        elif isinstance(definition,dict)and isinstance(definition.get('$sC'),str):
+            skins.append(dict(record,sourcePath=definition.get('$path'),baseClass=definition['$sC']))
+        else:unknown.append(dict(record,kind='unclassified-ui-root-record'))
+    return skins,metadata,unknown
+
+
 def inspect(snapshot,rows,output):
     """Decode supplied tables, retaining missing dependencies rather than guessing URLs."""
     snapshot=safe(snapshot);output=new_output(output,[snapshot]);(output/'Decoded').mkdir();proof=source_facts(snapshot,rows);write_json(output/'source-proof.json',proof)
@@ -69,11 +82,11 @@ def inspect(snapshot,rows,output):
         if not url or url.startswith('/')or any(x in url for x in ['\\','?', '#',':'])or '..'in path.parts:fail('EGRET_RESOURCE_PATH',url,'Only explicit relative logical resource paths supported')
         parent=PurePosixPath(manifest['sourceFile'].split('/',1)[1]).parent
         return by_logical.get((parent/path).as_posix(),[])
-    manifests=[];resources=[];decoded=[];sheets=[];skins=[];expanded=0
+    manifests=[];resources=[];decoded=[];sheets=[];skins=[];skin_metadata=[];unknown_ui=[];expanded=0
     def budget(document):
         nonlocal expanded
         expanded+=document['expandedBytes']
-        if expanded>128*1024*1024 or len(resources)>200_000 or sum(len(s['frames'])for s in sheets)>200_000 or len(skins)>50_000:
+        if expanded>128*1024*1024 or len(resources)>200_000 or sum(len(s['frames'])for s in sheets)>200_000 or len(skins)+len(skin_metadata)+len(unknown_ui)>50_000:
             fail('EGRET_AGGREGATE_BUDGET','$','Expanded source, resource, frame or Skin aggregate limit exceeded')
     for row in rows:
         if not re.fullmatch(r'default\.res(?:_[A-Za-z0-9]+)*\.bin',PurePosixPath(row['path']).name):continue
@@ -102,7 +115,8 @@ def inspect(snapshot,rows,output):
                 if item['name'].startswith('gameEui'):
                     value=parsed['value']
                     if not isinstance(value,dict):fail('EGRET_SKIN_ROOT',item['name'],'Expected named source Skin table')
-                    skins.extend(dict(name=name,sourceFile=record['path'],sourcePath=value[name].get('$path')if isinstance(value[name],dict)else None,native='not_restored')for name in value)
+                    classes,metadata,unknown=skin_records(value,record['path'])
+                    skins.extend(classes);skin_metadata.extend(metadata);unknown_ui.extend(unknown)
             if parsed:
                 budget(parsed)
                 dest='Decoded/'+sha(record['path'].encode())[:24]+'.json';write_json(output/dest,parsed);decoded.append(dict(sourceFile=record['path'],kind=parsed['kind'],decoded=dest))
@@ -111,8 +125,9 @@ def inspect(snapshot,rows,output):
     # Manifest duplicates remain independent declarations, never collapsed by basename.
     summary=dict(manifests=len(manifests),declaredResources=len(resources),providedResourceDeclarations=sum(r['availability']=='provided'for r in resources),
                  missingResourceDeclarations=sum(r['availability']=='missing'for r in resources),plistSheets=len(sheets),parsedSourceFrames=sum(len(s['frames'])for s in sheets),
-                 sheetsWithLocalTexture=sum(s['status']=='provided_texture'for s in sheets),sourceSkins=len(skins),nativeSourceGraphs=0,methodsRecovered=0)
-    report=dict(schemaVersion=1,profile=PROFILE,sourceProof='source-proof.json',resources=resources,sheets=sheets,skins=skins,decoded=decoded,summary=summary,sourceExecuted=False)
+                 sheetsWithLocalTexture=sum(s['status']=='provided_texture'for s in sheets),sourceSkins=len(skins),sourceSkinClasses=len(skins),
+                 sourceUiRootRecords=len(skins)+len(skin_metadata)+len(unknown_ui),skinMetadataRecords=len(skin_metadata),unknownUiRootRecords=len(unknown_ui),nativeSourceGraphs=0,methodsRecovered=0)
+    report=dict(schemaVersion=1,profile=PROFILE,sourceProof='source-proof.json',resources=resources,sheets=sheets,skins=skins,skinMetadata=skin_metadata,unknownUiRecords=unknown_ui,decoded=decoded,summary=summary,sourceExecuted=False)
     write_json(output/'recovery.json',report);return report
 
 
