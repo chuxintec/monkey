@@ -26,7 +26,8 @@ function settleOwned(scene,nodes,plan,root=null){
 }
 function settleRoot(root,nodes,plan){
     if(!enabled(plan))return capture(nodes);
-    const scene=new cc.Scene('OwnedPrefabLayoutProbe');root.parent=scene;
+    const scene=new cc.Scene('OwnedPrefabLayoutProbe'),context=new cc.Node('OwnedPrefabUiContext');
+    const ui=context.addComponent(cc.UITransform);ui.setContentSize(...plan.designSize);ui.setAnchorPoint(0,0);context.parent=scene;root.parent=context;
     try{settle(scene,nodes,plan,root);return capture(nodes);}
     finally{root.parent=null;scene._activate(false);scene.destroy();}
 }
@@ -40,14 +41,14 @@ function expected(source,plan,rows){
     return result;
 }
 function release(scene){if(scene&&scene.activeInHierarchy)scene._activate(false);}
-function state(action,node){const ui=node.getComponent(cc.UITransform),label=node.getComponent(cc.Label);return {action,size:[ui.width,ui.height],position:[node.position.x,node.position.y],fontSize:label?label.actualFontSize:0};}
+function state(action,node){const ui=node.getComponent(cc.UITransform),label=node.getComponent(cc.Label);return {action,size:[ui.width,ui.height],position:[node.position.x,node.position.y],fontSize:label?label.actualFontSize:0,children:node.children.map((n,index)=>{const u=n.getComponent(cc.UITransform);return {index,active:n.active,size:[u.width,u.height],position:[n.position.x,n.position.y],scale:[n.scale.x,n.scale.y]};})};}
 function probe(plan,design){
     if(!enabled(plan))return [];
     const selected=new Map();for(const c of plan.components)if(c.convertible&&c.enabled&&((c.type==='cc.Label'&&c.text)||c.type==='cc.Widget'||c.type==='cc.Layout'&&[1,2].includes(c.layoutType)&&c.resize===1)){
         const key=c.type==='cc.Label'?c.type+'/'+c.overflow:c.type;if(!selected.has(key))selected.set(key,c);
     }
     const result=[],source=new Map(plan.nodes.map(n=>[n.sourceId,n]));
-    for(const spec of [...selected.values()].slice(0,6)){
+    for(const spec of (plan.uiStateProbeVersion>=2?(plan.uiProbeSources||[]).map(sid=>plan.components.find(c=>c.sourceId===sid)):[...selected.values()].slice(0,6))){
         const scene=new cc.Scene('OwnedDynamicUiProbe'),root=cc.instantiate(design),nodes=new Map();root.parent=scene;
         function walk(sid,n){nodes.set(sid,n);source.get(sid).children.forEach((child,i)=>walk(child,n.children[i]));}
         plan.nodes.filter(n=>n.parent===null).forEach((n,i)=>walk(n.sourceId,root.children[i]));
@@ -64,6 +65,19 @@ function probe(plan,design){
                 const parent=node.parent&&node.parent.getComponent(cc.UITransform);if(!parent)continue;
                 const size=[parent.width,parent.height];parent.setContentSize(size[0]+40,size[1]+20);settle(scene,nodes,plan,root);states.push(state('parent-resize',node));
                 node.active=false;parent.width=size[0]+80;node.active=true;settle(scene,nodes,plan,root);states.push(state('show-after-resize',node));
+            }else if(plan.uiStateProbeVersion>=2){
+                const first=node.children.find(n=>n.active),firstUi=first&&first.getComponent(cc.UITransform);
+                const child=new cc.Node('OwnedDynamicChild');child.addComponent(cc.UITransform).setContentSize(firstUi?firstUi.width:40,firstUi?firstUi.height:20);if(first)child.setScale(first.scale);child.parent=node;
+                settle(scene,nodes,plan,root);states.push(state('add-child',node));
+                child.active=false;settle(scene,nodes,plan,root);states.push(state('hide-child',node));
+                child.active=true;settle(scene,nodes,plan,root);states.push(state('show-child',node));
+                child.parent=null;child.destroy();settle(scene,nodes,plan,root);states.push(state('remove-child',node));
+                ui.setContentSize(ui.width+60,ui.height+30);settle(scene,nodes,plan,root);states.push(state('container-resize',node));
+                if(first)first.setScale(first.scale.x*1.25,first.scale.y*.75,first.scale.z);
+                settle(scene,nodes,plan,root);states.push(state('scale-child',node));
+                if(firstUi)firstUi.setContentSize(firstUi.width+12,firstUi.height+8);
+                settle(scene,nodes,plan,root);states.push(state('resize-child',node));
+                node.active=false;node.active=true;settle(scene,nodes,plan,root);states.push(state('hide-show-container',node));
             }else{
                 const child=new cc.Node('OwnedDynamicChild');child.addComponent(cc.UITransform).setContentSize(40,20);child.parent=node;
                 settle(scene,nodes,plan,root);states.push(state('add-child',node));const axis=spec.layoutType-1;

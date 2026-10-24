@@ -9,6 +9,16 @@ from monkey.targets.unity import cross_axis_mapping
 
 
 class NativeGeometryTests(unittest.TestCase):
+    def test_scaled_flow_and_child_resize_contract_rejects_undefined_division(self):
+        from monkey.targets.unity import layout_issues
+        layout=dict(layoutType=3,resize=1,startAxis=0,affectedByScale=True,padding=[0]*4,constraint=2,constraintCount=2)
+        children=[dict(scale=[.8,.8,1]),dict(scale=[.8,.8,1])]
+        self.assertEqual(layout_issues(layout,children),[])
+        self.assertEqual(layout_issues(dict(layout,resize=2),children),[])
+        self.assertTrue(any(code=='LAYOUT_ZERO_SCALE_PENDING'for code,_ in layout_issues(dict(layout,resize=2),[dict(scale=[0,1,1])])))
+        self.assertTrue(layout_issues(dict(layout,constraintCount=0),children))
+        self.assertTrue(layout_issues(dict(layout,padding=[.5,0,0,0]),children))
+
     def test_saved_scale_and_rotation_are_required_without_rejecting_quaternion_sign(self):
         from monkey.targets.unity import node_geometry_matches
         source=dict(size=[100,40],anchor=[.5,.5],position=[12,20,0],scale=[1.1,1,1],rotation=[0,0,0,1],active=True)

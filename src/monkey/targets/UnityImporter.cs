@@ -11,6 +11,7 @@ using UnityEngine.SceneManagement;
 public static partial class MonkeyImporter
 {
     [Serializable] public class Plan {
+        public int uiStateProbeVersion; public string[] uiProbeSources;
         public float[] designSize; public float pixelsPerUnit; public string uiGeometryReadback;
         public TextureSpec[] textures; public AssetSpec[] assets; public BitmapSpec[] bitmapFonts; public int sourceDiagnosticCount;
         public NodeSpec[] nodes; public ComponentSpec[] components; public MotionSpec[] animations; public bool galleryOnly; public SourcePrefabSpec[] sourcePrefabs; public PrefabInstanceSpec[] prefabInstances; public TmpResourceSpec tmpResources;
@@ -50,9 +51,9 @@ public static partial class MonkeyImporter
         public string sourceId, type, node, spriteFrame, font, text;
         public int mode, sizeMode, horizontalAlign, verticalAlign, overflow; public float fontSize,lineHeight;
         public bool enabled, convertible, trim, wrap, bold, italic; public float spacing; public BitmapProbe bitmapProbe;
-        public string target,content,nativeId; public int flags,maskType,layoutType,resize,horizontalDirection,verticalDirection,startAxis,transition;
+        public string target,content,nativeId; public int flags,maskType,layoutType,resize,horizontalDirection,verticalDirection,startAxis,constraint,constraintCount,transition;
         public bool inverted,horizontal,vertical,interactable; public float zoomScale,duration,width;
-        public float[] margins,spacingXY,padding,effectiveCellSize,outlineColor;
+        public float[] margins,spacingXY,padding,effectiveCellSize,cellSize,outlineColor;
         public bool crossAxisScale; public float crossAxisAlignment; public bool[] absolute,centerAbsolute; public float[] center; public int alignMode; public bool affectedByScale,alignCross;
     }
     [Serializable] public class BitmapProbe { public float advance,inkRight; }
@@ -607,39 +608,17 @@ public static partial class MonkeyImporter
                 if(go.GetComponent<UnityEngine.UI.LayoutGroup>()!=null || go.GetComponent<UnityEngine.UI.ContentSizeFitter>()!=null)
                     throw new InvalidOperationException("Native layout conflict: "+spec.sourceId);
                 if(spec.layoutType==1||spec.layoutType==2){ConfigureLinearLayout(go,spec);continue;}
-                var padding=new RectOffset((int)spec.padding[0],(int)spec.padding[2],(int)spec.padding[3],(int)spec.padding[1]);
-                var fitter=go.AddComponent<UnityEngine.UI.ContentSizeFitter>();
-                if(spec.layoutType==3) {
-                    var group=go.AddComponent<IntrinsicGridLayoutGroup>();group.enabled=spec.enabled;
-                    group.cellSize=new Vector2(spec.effectiveCellSize[0],spec.effectiveCellSize[1]);
-                    group.spacing=new Vector2(spec.spacingXY[0],spec.spacingXY[1]);group.padding=padding;
-                    group.startAxis=UnityEngine.UI.GridLayoutGroup.Axis.Horizontal;
-                    group.startCorner=spec.verticalDirection==1?(spec.horizontalDirection==0?UnityEngine.UI.GridLayoutGroup.Corner.UpperLeft:UnityEngine.UI.GridLayoutGroup.Corner.UpperRight):
-                        (spec.horizontalDirection==0?UnityEngine.UI.GridLayoutGroup.Corner.LowerLeft:UnityEngine.UI.GridLayoutGroup.Corner.LowerRight);
-                    group.childAlignment=spec.verticalDirection==1?(spec.horizontalDirection==0?TextAnchor.UpperLeft:TextAnchor.UpperRight):
-                        (spec.horizontalDirection==0?TextAnchor.LowerLeft:TextAnchor.LowerRight);
-                    group.constraint=UnityEngine.UI.GridLayoutGroup.Constraint.Flexible;
-                    fitter.verticalFit=UnityEngine.UI.ContentSizeFitter.FitMode.PreferredSize;
+                var group=go.AddComponent<NativeFlowLayoutGroup>();group.enabled=false;
+                group.Axis=spec.startAxis;group.ReverseHorizontal=spec.horizontalDirection==1;group.ReverseVertical=spec.verticalDirection==1;
+                group.ResizeContainer=spec.resize==1;group.ResizeChildren=spec.resize==2;group.IncludeScale=spec.affectedByScale;
+                group.FixedRows=spec.constraint==1?spec.constraintCount:0;group.FixedColumns=spec.constraint==2?spec.constraintCount:0;
+                group.CellSize=new Vector2(spec.cellSize[0],spec.cellSize[1]);group.Spacing=new Vector2(spec.spacingXY[0],spec.spacingXY[1]);
+                group.padding=new RectOffset((int)spec.padding[0],(int)spec.padding[2],(int)spec.padding[3],(int)spec.padding[1]);group.enabled=spec.enabled;
+                if(spec.resize==1){var fitter=go.AddComponent<UnityEngine.UI.ContentSizeFitter>();
+                    if(spec.startAxis==0)fitter.verticalFit=UnityEngine.UI.ContentSizeFitter.FitMode.PreferredSize;
+                    else fitter.horizontalFit=UnityEngine.UI.ContentSizeFitter.FitMode.PreferredSize;
+                    fitter.enabled=spec.enabled;
                 }
-                else {
-                    UnityEngine.UI.HorizontalOrVerticalLayoutGroup group=spec.layoutType==1?
-                        (UnityEngine.UI.HorizontalOrVerticalLayoutGroup)go.AddComponent<UnityEngine.UI.HorizontalLayoutGroup>():go.AddComponent<UnityEngine.UI.VerticalLayoutGroup>();
-                    group.enabled=spec.enabled;group.padding=padding;
-                    group.childControlWidth=false;group.childControlHeight=false;
-                    group.childForceExpandWidth=false;group.childForceExpandHeight=false;
-                    if(spec.layoutType==1) {
-                        group.childScaleHeight=spec.crossAxisScale;
-                        group.childAlignment=spec.crossAxisAlignment==0?TextAnchor.LowerCenter:spec.crossAxisAlignment==1?TextAnchor.UpperCenter:TextAnchor.MiddleCenter;
-                    } else {
-                        group.childScaleWidth=spec.crossAxisScale;
-                        group.childAlignment=spec.crossAxisAlignment==0?TextAnchor.MiddleLeft:spec.crossAxisAlignment==1?TextAnchor.MiddleRight:TextAnchor.MiddleCenter;
-                    }
-                    group.reverseArrangement=spec.layoutType==1?spec.horizontalDirection==1:spec.verticalDirection==0;
-                    group.spacing=spec.layoutType==1?spec.spacingXY[0]:spec.spacingXY[1];
-                    if(spec.layoutType==1)fitter.horizontalFit=UnityEngine.UI.ContentSizeFitter.FitMode.PreferredSize;
-                    else fitter.verticalFit=UnityEngine.UI.ContentSizeFitter.FitMode.PreferredSize;
-                }
-                fitter.enabled=spec.enabled;
             }
             else if(spec.type=="cc.ScrollView") {
                 var scroll=go.AddComponent<UnityEngine.UI.ScrollRect>();scroll.enabled=spec.enabled;

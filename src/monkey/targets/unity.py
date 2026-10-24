@@ -24,6 +24,19 @@ def widget_geometry_matches(widget, node, parent):
             all(abs(a-b)<.001 for a,b in zip(position,node['position'])))
 
 
+def layout_issues(layout,children):
+    issues=[]
+    if layout['layoutType']not in(1,2,3)or layout['resize']not in(0,1,2)or any(v!=int(v)for v in layout['padding']):
+        issues.append(('LAYOUT_SUBSET_UNSUPPORTED','Native linear/flow layout requires known modes and integer padding'))
+    if layout['layoutType']in(1,2)and any(any(v<0 for v in n['scale'][:2])for n in children):
+        issues.append(('LAYOUT_NEGATIVE_SCALE_PENDING','Negative-scale linear pivots need a separate native bounds contract'))
+    if layout['layoutType']==3 and(layout['startAxis']not in(0,1)or layout.get('constraint',0)not in(0,1,2)or type(layout.get('constraintCount',2))is not int or layout.get('constraintCount',2)<1):
+        issues.append(('GRID_SUBSET_UNSUPPORTED','Unknown flow axis or row/column constraint'))
+    if layout['resize']==2 and layout.get('affectedByScale')and any(0 in n['scale'][:2]for n in children):
+        issues.append(('LAYOUT_ZERO_SCALE_PENDING','Child resizing cannot divide by a zero effective scale'))
+    return issues
+
+
 def grid_native_extent(layout,parent,children):
     import math
     children=[n for n in children if n['active']]
@@ -252,20 +265,12 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
                 entry['convertible']=False
                 diagnostics.append(diagnostic('SCROLL_SUBSET_UNSUPPORTED',c['sourceId'],'First subset preserves disabled axes and native content/viewport references',c['sourceId']))
         elif c['type']=='cc.Layout':
-            if c['layoutType']not in(1,2,3)or c['resize']not in(0,1)or any(v!=int(v)for v in c['padding']):
-                entry['convertible']=False
-                diagnostics.append(diagnostic('LAYOUT_SUBSET_UNSUPPORTED',c['sourceId'],'Native container/fixed-size linear and limited grid; child-resize/float padding need another adapter',c['sourceId']))
+            children=[by_node[k]for k in by_node[c['node']]['children']]
+            for code,message in layout_issues(c,children):
+                entry['convertible']=False;diagnostics.append(diagnostic(code,c['sourceId'],message,c['sourceId']))
             entry.setdefault('alignCross',False);entry.setdefault('affectedByScale',False)
-            if c['layoutType']in(1,2):
-                if any(any(v<0 for v in by_node[k]['scale'][:2])for k in by_node[c['node']]['children']):
-                    entry['convertible']=False;diagnostics.append(diagnostic('LAYOUT_NEGATIVE_SCALE_PENDING',c['sourceId'],'Negative-scale pivots need a separate native bounds contract',c['sourceId']))
-                entry['presentationPolicy']='native-linear-layout-v1'
-            elif c['layoutType']==3:
-                children=[by_node[k]for k in by_node[c['node']]['children']if by_node[k]['active']]
-                sizes={tuple(n['size'])for n in children}
-                if len(sizes)>1 or c['startAxis']!=0 or c.get('affectedByScale')or c['resize']!=1 or c.get('constraint',0)!=0:
-                    entry['convertible']=False;diagnostics.append(diagnostic('GRID_SUBSET_UNSUPPORTED',c['sourceId'],'Only horizontal-first uniform unscaled unconstrained container grid currently mapped',c['sourceId']))
-                entry['effectiveCellSize']=list(next(iter(sizes),tuple(c['cellSize'])))
+            entry['presentationPolicy']='native-flow-layout-v1'if c['layoutType']==3 else'native-linear-layout-v1'
+            if c['layoutType']==3:entry['effectiveCellSize']=list(c['cellSize'])
         elif c['type']=='cc.Button':
             if c['transition'] not in (0,3) or c['target'] not in (None,c['node']):
                 entry['convertible']=False
@@ -363,7 +368,7 @@ def export(plan_path, output):
     instances_path=out/'Assets/Monkey/Editor/MonkeyPrefabInstances.cs'
     instances_path.write_bytes(files('monkey.targets').joinpath('UnityPrefabInstances.cs').read_bytes())
     Path(str(instances_path)+'.meta').write_text('fileFormatVersion: 2\nguid: '+guid(p['namespace'],'prefab-instances-editor')+'\n')
-    for filename,relative in [('NativeLinearLayoutGroup.cs','Assets/Generated/Views/'),('NativeRectConstraints.cs','Assets/Generated/Views/'),('NativeTextLineBox.cs','Assets/Generated/Views/'),('UnityDynamicUi.cs','Assets/Monkey/Editor/')]:
+    for filename,relative in [('NativeFlowLayoutGroup.cs','Assets/Generated/Views/'),('NativeLinearLayoutGroup.cs','Assets/Generated/Views/'),('NativeRectConstraints.cs','Assets/Generated/Views/'),('NativeTextLineBox.cs','Assets/Generated/Views/'),('UnityDynamicUi.cs','Assets/Monkey/Editor/')]:
         dest=out/relative/filename;dest.write_bytes(files('monkey.targets').joinpath(filename).read_bytes())
         Path(str(dest)+'.meta').write_text('fileFormatVersion: 2\nguid: '+guid(p['namespace'],'native-ui/'+filename)+'\n')
     adapter=files('monkey.targets').joinpath('UnityImporter.cs').read_bytes()
@@ -380,6 +385,8 @@ def export(plan_path, output):
     instruction['prefabGuid']=guid(p['namespace'],'native-prefab')
     instruction['prefabRelationshipReadback']='native-source-correspondence-v1'
     instruction['uiGeometryReadback']='native-ui-layout-roundtrip-v1'
+    from .dynamic_ui import probe_sources
+    instruction['uiStateProbeVersion']=2;instruction['uiProbeSources']=probe_sources(instruction)
     instruction['textLineBoxReadback']='native-cocos-ttf-line-box-v1'
     instruction['sceneGuid']=guid(p['namespace'],'native-scene')
     if p['galleryOnly']:

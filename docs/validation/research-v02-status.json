@@ -47,6 +47,14 @@
         {
           "path": "docs/validation/2026-10-24-prefab-dynamic-integration.md",
           "sha256": "22f6a87863d02249ebe8da594a56c71fa3f3a48707fb1ddb62ac56ede44e73e9"
+        },
+        {
+          "path": "docs/validation/layout-dynamic-native.json",
+          "sha256": "0bbfb795c7e77ac41df6590686317f115ee3a5ba011394ff60537f2040df2717"
+        },
+        {
+          "path": "docs/validation/layout-dynamic-source-audit.json",
+          "sha256": "9ca91b9fd1fff383cae4964fc53f7b2f139baf0d007727ddc9abebbf49df0f43"
         }
       ],
       "export": "partial-resource-candidate",
@@ -59,7 +67,7 @@
       },
       "metadataSha256": "2ce51099b7aac666aa4c377ffc46f87ddd30c3acbe7150834725f1f95a221c43",
       "name": "下方了",
-      "native": "83-static-source-graphs-810-nodes-81-prefabs-both-targets-verified; UI-color-opacity-and-Creator-layer-verified;4-prefabs-5-template-relations-plus-16-node-dynamic-ui-both-targets-verified",
+      "native": "83-static-source-graphs-810-nodes-81-prefabs-both-targets-verified; UI-color-opacity-and-Creator-layer-verified;4-prefabs-5-template-relations-plus-16-node-dynamic-ui-both-targets-verified;bounded-native-layout-scale-or-child-resize-v2-verified",
       "profile": "cocos-3.8.7-bundle",
       "read": "partial",
       "remaining": [
@@ -508,6 +516,14 @@
         {
           "path": "outputs/number-label-full-package-audit-01/meta-audit.json",
           "sha256": "18cdb760b1b998f9bc9573ca3a9049907f52a569927c105af64873d03fdd2884"
+        },
+        {
+          "path": "docs/validation/layout-dynamic-native.json",
+          "sha256": "0bbfb795c7e77ac41df6590686317f115ee3a5ba011394ff60537f2040df2717"
+        },
+        {
+          "path": "docs/validation/layout-dynamic-source-audit.json",
+          "sha256": "9ca91b9fd1fff383cae4964fc53f7b2f139baf0d007727ddc9abebbf49df0f43"
         }
       ],
       "export": "partial-full-resources-and-five-code-bindings",
@@ -519,7 +535,7 @@
       },
       "metadataSha256": "a0ec61ae050cf1b60237296eda7c2165001b77d31b7d7467a14114baf78f3edf",
       "name": "肥鹅美食街",
-      "native": "earlier-full-resource-and-five-code-subsets-verified; latest-full-export-not-run",
+      "native": "earlier-full-resource-and-five-code-subsets-verified; latest-full-export-not-run;bounded-native-layout-scale-or-child-resize-v2-verified",
       "profile": "cocos-2.4.15-bundle",
       "read": "partial-full-declared-input",
       "remaining": [

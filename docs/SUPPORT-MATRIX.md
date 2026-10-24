@@ -29,3 +29,6 @@
 上述范围是支持目标，未知UnityTypeTree/压缩/未来格式/团结等分支单列provider或诊断，不因有版本字符串就近套解析器。资源、元数据、Mono实现、IL2CPP/Wasm方法体、DummyDLL/签名桩、编译、原生保存重开、视觉、可玩分别报告。
 
 人类依据已原生核验：总监turn01a167c9-388f-7920-80b6-961ab237c0d7，message01a167c9-38cf-7a21-8ae8-83a8bf19d8c0及01a167cb-ba50-73a3-8dbf-4a8bd7f56115。产品路线见ENGINE-ROADMAP.md；仅选择转换样本，不在projects立项复刻游戏。
+
+
+2026-10-24动态布局有限续修：19个缩放Grid、13个child-resize配置解除旧guard；实际6组/54态两端Editor保存重开与子节点几何通过，最大差0.000074px，详见validation/2026-10-24-layout-followup.md。该代表覆盖不替代全量原生/Player或所有组合；负缩放线性、NONE及浮点padding等guard继续列限。

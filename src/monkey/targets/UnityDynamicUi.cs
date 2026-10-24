@@ -12,17 +12,20 @@ public static partial class MonkeyImporter
         contents.transform.SetParent(rect,false);
         return context;
     }
-    [Serializable] public class DynamicUiState { public string action;public float[] size,position;public float fontSize; }
+    [Serializable] public class DynamicUiChild {public int index;public bool active;public float[] size,position,scale;}
+    [Serializable] public class DynamicUiState { public string action;public float[] size,position;public float fontSize;public DynamicUiChild[] children; }
     [Serializable] public class DynamicUiResult { public string sourceId,type,status;public DynamicUiState[] states; }
     static DynamicUiState UiState(string action,RectTransform rect) {
         var label=rect.GetComponent<TMPro.TextMeshProUGUI>();
-        return new DynamicUiState {action=action,size=new[]{rect.rect.width,rect.rect.height},position=new[]{rect.localPosition.x,rect.localPosition.y},fontSize=label!=null?label.fontSize:0};
+        return new DynamicUiState {action=action,size=new[]{rect.rect.width,rect.rect.height},position=new[]{rect.localPosition.x,rect.localPosition.y},fontSize=label!=null?label.fontSize:0,
+            children=Enumerable.Range(0,rect.childCount).Select(i=>{var c=(RectTransform)rect.GetChild(i);return new DynamicUiChild{index=i,active=c.gameObject.activeSelf,size=new[]{c.rect.width,c.rect.height},position=new[]{c.localPosition.x,c.localPosition.y},scale=new[]{c.localScale.x,c.localScale.y}};}).ToArray()};
     }
     static DynamicUiResult[] ProbeDynamicUi(Plan plan,GameObject instance) {
         var results=new System.Collections.Generic.List<DynamicUiResult>();
         var selected=plan.components.Where(c=>c.convertible&&c.enabled&&
             ((c.type=="cc.Label"&&!string.IsNullOrEmpty(c.text))||c.type=="cc.Widget"||c.type=="cc.Layout"&&(c.layoutType==1||c.layoutType==2)&&c.resize==1))
             .GroupBy(c=>c.type=="cc.Label"?c.type+"/"+c.overflow:c.type).Select(g=>g.First()).Take(6);
+        if(plan.uiStateProbeVersion>=2)selected=(plan.uiProbeSources??new string[0]).Select(sid=>plan.components.Single(c=>c.sourceId==sid));
         foreach(var spec in selected) {
             var clone=UnityEngine.Object.Instantiate(instance);clone.name="OwnedDynamicUiProbe";
             try {
@@ -44,6 +47,21 @@ public static partial class MonkeyImporter
                     SettleNativeLayout(clone);states.Add(UiState("parent-resize",rect));
                     rect.gameObject.SetActive(false);parent.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal,size.x+80);
                     rect.gameObject.SetActive(true);SettleNativeLayout(clone);states.Add(UiState("show-after-resize",rect));
+                } else if(plan.uiStateProbeVersion>=2) {
+                    var first=rect.Cast<Transform>().Select(t=>t as RectTransform).FirstOrDefault(t=>t!=null&&t.gameObject.activeSelf);
+                    var child=new GameObject("OwnedDynamicChild",typeof(RectTransform));var added=(RectTransform)child.transform;added.SetParent(rect,false);
+                    added.sizeDelta=first!=null?first.rect.size:new Vector2(40,20);added.localScale=first!=null?first.localScale:Vector3.one;
+                    SettleNativeLayout(clone);states.Add(UiState("add-child",rect));
+                    child.SetActive(false);SettleNativeLayout(clone);states.Add(UiState("hide-child",rect));
+                    child.SetActive(true);SettleNativeLayout(clone);states.Add(UiState("show-child",rect));
+                    UnityEngine.Object.DestroyImmediate(child);SettleNativeLayout(clone);states.Add(UiState("remove-child",rect));
+                    rect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal,rect.rect.width+60);rect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical,rect.rect.height+30);
+                    SettleNativeLayout(clone);states.Add(UiState("container-resize",rect));
+                    if(first!=null)first.localScale=Vector3.Scale(first.localScale,new Vector3(1.25f,.75f,1));
+                    SettleNativeLayout(clone);states.Add(UiState("scale-child",rect));
+                    if(first!=null){first.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal,first.rect.width+12);first.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical,first.rect.height+8);}
+                    SettleNativeLayout(clone);states.Add(UiState("resize-child",rect));
+                    rect.gameObject.SetActive(false);rect.gameObject.SetActive(true);SettleNativeLayout(clone);states.Add(UiState("hide-show-container",rect));
                 } else {
                     var group=rect.GetComponent<NativeLinearLayoutGroup>();if(group==null)continue;
                     var child=new GameObject("OwnedDynamicChild",typeof(RectTransform));var added=(RectTransform)child.transform;
@@ -94,7 +112,7 @@ public static partial class MonkeyImporter
     static void ConfigureLinearLayout(GameObject go,ComponentSpec spec) {
         var group=go.AddComponent<NativeLinearLayoutGroup>();group.enabled=false;
         group.Axis=spec.layoutType-1;group.Reverse=spec.layoutType==1?spec.horizontalDirection==1:spec.verticalDirection==1;
-        group.ResizeContainer=spec.resize==1;group.IncludeScale=spec.affectedByScale;group.AlignCrossAxis=spec.alignCross;
+        group.ResizeChildren=spec.resize==2;group.ResizeContainer=spec.resize==1;group.IncludeScale=spec.affectedByScale;group.AlignCrossAxis=spec.alignCross;
         group.Spacing=spec.spacingXY[group.Axis];group.padding=new RectOffset((int)spec.padding[0],(int)spec.padding[2],(int)spec.padding[3],(int)spec.padding[1]);
         group.enabled=spec.enabled;
         if(spec.resize==1){var fitter=go.AddComponent<UnityEngine.UI.ContentSizeFitter>();

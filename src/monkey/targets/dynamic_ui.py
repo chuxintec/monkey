@@ -8,6 +8,19 @@ from ..io import diagnostic
 
 POLICY='native-ui-layout-roundtrip-v1'
 
+def probe_sources(plan):
+    selected={}
+    for c in plan['components']:
+        if not c.get('convertible')or not c.get('enabled'):continue
+        typ=c['type']
+        if typ=='cc.Label'and c.get('text'):key=typ+'/'+str(c['overflow']);priority=2
+        elif typ=='cc.Widget':key=typ;priority=3
+        elif typ=='cc.Layout'and c['layoutType']in(1,2,3):
+            key=typ+'/'+str(c['layoutType'])+'/'+str(c['resize'])+'/'+str(bool(c.get('affectedByScale')));priority=0 if c['layoutType']==3 else 1 if c['resize']==2 else 4
+        else:continue
+        selected.setdefault(key,(priority,c['sourceId']))
+    return [sid for _,sid in sorted(selected.values(),key=lambda x:x[0])[:8]]
+
 def driven_fields(plan):
     nodes={n['sourceId']:n for n in plan['nodes']};result={}
     def allow(sid,key,axes):result.setdefault(sid,{}).setdefault(key,set()).update(axes)
@@ -62,14 +75,21 @@ def verify_probes(plan,rows):
         typ=c['type']
         if not(typ=='cc.Label'and c.get('text')or typ=='cc.Widget'or typ=='cc.Layout'and c['layoutType']in(1,2)and c['resize']==1):continue
         selected.setdefault(typ+'/'+str(c['overflow'])if typ=='cc.Label'else typ,c)
-    expected=list(selected.values())[:6];rows=rows if isinstance(rows,list)else[];by_id={r.get('sourceId'):r for r in rows};gaps=[]
+    v2=plan.get('uiStateProbeVersion',0)>=2
+    expected=([c for sid in probe_sources(plan)for c in plan['components']if c['sourceId']==sid]if v2 else list(selected.values())[:6]);rows=rows if isinstance(rows,list)else[];by_id={r.get('sourceId'):r for r in rows};gaps=[]
     if len(by_id)!=len(rows)or set(by_id)!={c['sourceId']for c in expected}:
         gaps.append(diagnostic('DYNAMIC_UI_PROBE_SET','native-ui','Native state change probe identity set differs'))
     for c in expected:
         row=by_id.get(c['sourceId'],{});states=row.get('states',[])
         actions={'baseline','text-change','show-original-text'}if c['type']=='cc.Label'else{'baseline','parent-resize','show-after-resize'}if c['type']=='cc.Widget'else{'baseline','add-child','hide-child','show-child','remove-child'}
+        if v2 and c['type']=='cc.Layout':actions|={'container-resize','scale-child','resize-child','hide-show-container'}
         valid=row.get('type')==c['type']and row.get('status')=='native-state-changes-passed'and isinstance(states,list)and {s.get('action')for s in states}==actions and len(states)==len(actions)
         if valid:
             valid=all(isinstance(s.get(k),list)and len(s[k])==2 and all(type(v)in(int,float)and math.isfinite(v)for v in s[k])for s in states for k in('size','position'))
+        if valid and v2 and c['type']=='cc.Layout':
+            for state in states:
+                children=state.get('children');valid=valid and isinstance(children,list)
+                if not valid:break
+                valid=valid and all(x.get('index')==i and type(x.get('active'))is bool and all(isinstance(x.get(k),list)and len(x[k])==2 and all(type(v)in(int,float)and math.isfinite(v)for v in x[k])for k in('size','position','scale'))for i,x in enumerate(children))
         if not valid:gaps.append(diagnostic('DYNAMIC_UI_STATE_CHANGE_NOT_VERIFIED',c['sourceId'],'Missing/invalid text, parent resize or child visibility/rebuild evidence'))
     return gaps

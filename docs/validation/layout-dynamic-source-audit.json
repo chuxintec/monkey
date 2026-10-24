@@ -1,0 +1,587 @@
+{
+  "schemaVersion": 1,
+  "scope": "normalized actual inputs only; cached multiple rows are not a runtime assertion",
+  "auditSha256": "d2f41f713a98e05dc95eec2487515ae4b5f56e2801e477acf5e6958ccab8a3a1",
+  "cases": [
+    {
+      "case": "foodstreet",
+      "nodes": 24784,
+      "layouts": 964,
+      "distribution": [
+        {
+          "layoutType": 0,
+          "resize": 0,
+          "affectedByScale": false,
+          "count": 4
+        },
+        {
+          "layoutType": 1,
+          "resize": 0,
+          "affectedByScale": false,
+          "count": 4
+        },
+        {
+          "layoutType": 1,
+          "resize": 1,
+          "affectedByScale": false,
+          "count": 590
+        },
+        {
+          "layoutType": 2,
+          "resize": 0,
+          "affectedByScale": false,
+          "count": 3
+        },
+        {
+          "layoutType": 2,
+          "resize": 1,
+          "affectedByScale": false,
+          "count": 293
+        },
+        {
+          "layoutType": 2,
+          "resize": 2,
+          "affectedByScale": false,
+          "count": 7
+        },
+        {
+          "layoutType": 3,
+          "resize": 1,
+          "affectedByScale": false,
+          "count": 59
+        },
+        {
+          "layoutType": 3,
+          "resize": 2,
+          "affectedByScale": false,
+          "count": 4
+        }
+      ],
+      "gridMultiline": 7,
+      "gridActualScale": 3
+    },
+    {
+      "case": "chongguan",
+      "nodes": 1550,
+      "layouts": 43,
+      "distribution": [
+        {
+          "layoutType": 1,
+          "resize": 0,
+          "affectedByScale": false,
+          "count": 2
+        },
+        {
+          "layoutType": 1,
+          "resize": 1,
+          "affectedByScale": false,
+          "count": 20
+        },
+        {
+          "layoutType": 2,
+          "resize": 1,
+          "affectedByScale": false,
+          "count": 9
+        },
+        {
+          "layoutType": 3,
+          "resize": 1,
+          "affectedByScale": false,
+          "count": 12
+        }
+      ],
+      "gridMultiline": 0,
+      "gridActualScale": 0
+    },
+    {
+      "case": "tianming",
+      "nodes": 22503,
+      "layouts": 1400,
+      "distribution": [
+        {
+          "layoutType": 0,
+          "resize": 0,
+          "affectedByScale": false,
+          "count": 12
+        },
+        {
+          "layoutType": 0,
+          "resize": 0,
+          "affectedByScale": true,
+          "count": 1
+        },
+        {
+          "layoutType": 0,
+          "resize": 1,
+          "affectedByScale": false,
+          "count": 2
+        },
+        {
+          "layoutType": 1,
+          "resize": 0,
+          "affectedByScale": false,
+          "count": 97
+        },
+        {
+          "layoutType": 1,
+          "resize": 0,
+          "affectedByScale": true,
+          "count": 23
+        },
+        {
+          "layoutType": 1,
+          "resize": 1,
+          "affectedByScale": false,
+          "count": 626
+        },
+        {
+          "layoutType": 1,
+          "resize": 1,
+          "affectedByScale": true,
+          "count": 306
+        },
+        {
+          "layoutType": 1,
+          "resize": 2,
+          "affectedByScale": false,
+          "count": 2
+        },
+        {
+          "layoutType": 2,
+          "resize": 0,
+          "affectedByScale": false,
+          "count": 10
+        },
+        {
+          "layoutType": 2,
+          "resize": 0,
+          "affectedByScale": true,
+          "count": 3
+        },
+        {
+          "layoutType": 2,
+          "resize": 1,
+          "affectedByScale": false,
+          "count": 203
+        },
+        {
+          "layoutType": 2,
+          "resize": 1,
+          "affectedByScale": true,
+          "count": 46
+        },
+        {
+          "layoutType": 3,
+          "resize": 0,
+          "affectedByScale": false,
+          "count": 6
+        },
+        {
+          "layoutType": 3,
+          "resize": 0,
+          "affectedByScale": true,
+          "count": 6
+        },
+        {
+          "layoutType": 3,
+          "resize": 1,
+          "affectedByScale": false,
+          "count": 45
+        },
+        {
+          "layoutType": 3,
+          "resize": 1,
+          "affectedByScale": true,
+          "count": 12
+        }
+      ],
+      "gridMultiline": 7,
+      "gridActualScale": 3
+    },
+    {
+      "case": "xiafangle-current-resolver",
+      "nodes": 2221,
+      "layouts": 93,
+      "distribution": [
+        {
+          "layoutType": 1,
+          "resize": 0,
+          "affectedByScale": false,
+          "count": 1
+        },
+        {
+          "layoutType": 1,
+          "resize": 1,
+          "affectedByScale": false,
+          "count": 75
+        },
+        {
+          "layoutType": 1,
+          "resize": 1,
+          "affectedByScale": true,
+          "count": 9
+        },
+        {
+          "layoutType": 2,
+          "resize": 1,
+          "affectedByScale": false,
+          "count": 3
+        },
+        {
+          "layoutType": 3,
+          "resize": 0,
+          "affectedByScale": false,
+          "count": 1
+        },
+        {
+          "layoutType": 3,
+          "resize": 1,
+          "affectedByScale": false,
+          "count": 3
+        },
+        {
+          "layoutType": 3,
+          "resize": 1,
+          "affectedByScale": true,
+          "count": 1
+        }
+      ],
+      "gridMultiline": 2,
+      "gridActualScale": 1
+    }
+  ],
+  "totalLayouts": 2500,
+  "scaledGridCount": 19,
+  "childResizeCount": 13,
+  "cachedMultilineGridCount": 16,
+  "requiredPolicyIssues": 0,
+  "sourceUnsupportedInRequired": 0,
+  "required": [
+    {
+      "case": "foodstreet",
+      "sourceId": "gameAsset:2dfe40be-c857-445e-9609-c7c3d18ad6ea#14/components/2",
+      "layoutType": 2,
+      "resize": 2,
+      "affectedByScale": false,
+      "children": 1,
+      "scaledChildren": 1,
+      "unityLayoutIssues": []
+    },
+    {
+      "case": "foodstreet",
+      "sourceId": "gameAsset:2dfe40be-c857-445e-9609-c7c3d18ad6ea#16/components/2",
+      "layoutType": 2,
+      "resize": 2,
+      "affectedByScale": false,
+      "children": 1,
+      "scaledChildren": 1,
+      "unityLayoutIssues": []
+    },
+    {
+      "case": "foodstreet",
+      "sourceId": "gameAsset:2dfe40be-c857-445e-9609-c7c3d18ad6ea#19/components/2",
+      "layoutType": 2,
+      "resize": 2,
+      "affectedByScale": false,
+      "children": 1,
+      "scaledChildren": 1,
+      "unityLayoutIssues": []
+    },
+    {
+      "case": "foodstreet",
+      "sourceId": "gameAsset:3261ede3-07da-42ad-9ef8-c37cf00dd80d#13/components/2",
+      "layoutType": 2,
+      "resize": 2,
+      "affectedByScale": false,
+      "children": 1,
+      "scaledChildren": 1,
+      "unityLayoutIssues": []
+    },
+    {
+      "case": "foodstreet",
+      "sourceId": "gameAsset:3261ede3-07da-42ad-9ef8-c37cf00dd80d#14/components/2",
+      "layoutType": 2,
+      "resize": 2,
+      "affectedByScale": false,
+      "children": 1,
+      "scaledChildren": 1,
+      "unityLayoutIssues": []
+    },
+    {
+      "case": "foodstreet",
+      "sourceId": "gameAsset:3261ede3-07da-42ad-9ef8-c37cf00dd80d#16/components/2",
+      "layoutType": 2,
+      "resize": 2,
+      "affectedByScale": false,
+      "children": 1,
+      "scaledChildren": 1,
+      "unityLayoutIssues": []
+    },
+    {
+      "case": "foodstreet",
+      "sourceId": "gameAsset:bbf17cf0-3123-4527-af6f-944d63b25410#272/components/0",
+      "layoutType": 3,
+      "resize": 2,
+      "affectedByScale": false,
+      "children": 0,
+      "scaledChildren": 0,
+      "unityLayoutIssues": []
+    },
+    {
+      "case": "foodstreet",
+      "sourceId": "gameAsset:c681906b-e0be-4b53-8c2a-4006b4d5fc20#31/components/0",
+      "layoutType": 3,
+      "resize": 2,
+      "affectedByScale": false,
+      "children": 1,
+      "scaledChildren": 0,
+      "unityLayoutIssues": []
+    },
+    {
+      "case": "foodstreet",
+      "sourceId": "gameAsset:c681906b-e0be-4b53-8c2a-4006b4d5fc20#49/components/0",
+      "layoutType": 3,
+      "resize": 2,
+      "affectedByScale": false,
+      "children": 1,
+      "scaledChildren": 0,
+      "unityLayoutIssues": []
+    },
+    {
+      "case": "foodstreet",
+      "sourceId": "gameAsset:d21656c4-b96d-44b4-a63f-e79fd62d395d#89/components/0",
+      "layoutType": 2,
+      "resize": 2,
+      "affectedByScale": false,
+      "children": 1,
+      "scaledChildren": 0,
+      "unityLayoutIssues": []
+    },
+    {
+      "case": "foodstreet",
+      "sourceId": "gameAsset:dfd14b7e-0738-4d3e-a54d-26a020cc2502#9/components/0",
+      "layoutType": 3,
+      "resize": 2,
+      "affectedByScale": false,
+      "children": 0,
+      "scaledChildren": 0,
+      "unityLayoutIssues": []
+    },
+    {
+      "case": "tianming",
+      "sourceId": "xyres:0191c629-4b51-4113-9ddf-f7417415257b#5/components/1",
+      "layoutType": 3,
+      "resize": 0,
+      "affectedByScale": true,
+      "children": 0,
+      "scaledChildren": 0,
+      "unityLayoutIssues": []
+    },
+    {
+      "case": "tianming",
+      "sourceId": "xyres:0191c629-4b51-4113-9ddf-f7417415257b#6/components/1",
+      "layoutType": 3,
+      "resize": 0,
+      "affectedByScale": true,
+      "children": 0,
+      "scaledChildren": 0,
+      "unityLayoutIssues": []
+    },
+    {
+      "case": "tianming",
+      "sourceId": "xyres:1664397e-6374-464f-a855-f40f1d09b3d8#15/components/1",
+      "layoutType": 3,
+      "resize": 0,
+      "affectedByScale": true,
+      "children": 0,
+      "scaledChildren": 0,
+      "unityLayoutIssues": []
+    },
+    {
+      "case": "tianming",
+      "sourceId": "xyres:1708639d-0c07-44a7-baa6-08316df8c36c#30/components/1",
+      "layoutType": 3,
+      "resize": 1,
+      "affectedByScale": true,
+      "children": 0,
+      "scaledChildren": 0,
+      "unityLayoutIssues": []
+    },
+    {
+      "case": "tianming",
+      "sourceId": "xyres:198ab99d-fe3a-45c4-91bd-046a151c1b49#16/components/1",
+      "layoutType": 1,
+      "resize": 2,
+      "affectedByScale": false,
+      "children": 0,
+      "scaledChildren": 0,
+      "unityLayoutIssues": []
+    },
+    {
+      "case": "tianming",
+      "sourceId": "xyres:203b6c0c-6a33-4167-89bd-83912b4c9c87#28/components/2",
+      "layoutType": 3,
+      "resize": 0,
+      "affectedByScale": true,
+      "children": 0,
+      "scaledChildren": 0,
+      "unityLayoutIssues": []
+    },
+    {
+      "case": "tianming",
+      "sourceId": "xyres:2c6f4513-df07-4962-89bb-2cb61aacf1e4#2/components/1",
+      "layoutType": 3,
+      "resize": 1,
+      "affectedByScale": true,
+      "children": 1,
+      "scaledChildren": 0,
+      "unityLayoutIssues": []
+    },
+    {
+      "case": "tianming",
+      "sourceId": "xyres:37e6adb6-3c36-446e-b01a-cc8235a5091b#6/components/1",
+      "layoutType": 3,
+      "resize": 1,
+      "affectedByScale": true,
+      "children": 0,
+      "scaledChildren": 0,
+      "unityLayoutIssues": []
+    },
+    {
+      "case": "tianming",
+      "sourceId": "xyres:37e6adb6-3c36-446e-b01a-cc8235a5091b#7/components/1",
+      "layoutType": 3,
+      "resize": 1,
+      "affectedByScale": true,
+      "children": 0,
+      "scaledChildren": 0,
+      "unityLayoutIssues": []
+    },
+    {
+      "case": "tianming",
+      "sourceId": "xyres:3d576422-a4b4-4768-8089-853a5e220014#15/components/1",
+      "layoutType": 1,
+      "resize": 2,
+      "affectedByScale": false,
+      "children": 0,
+      "scaledChildren": 0,
+      "unityLayoutIssues": []
+    },
+    {
+      "case": "tianming",
+      "sourceId": "xyres:443cdb32-1c89-4ef6-8214-2bf97f89f5fb#3/components/1",
+      "layoutType": 3,
+      "resize": 1,
+      "affectedByScale": true,
+      "children": 5,
+      "scaledChildren": 0,
+      "unityLayoutIssues": []
+    },
+    {
+      "case": "tianming",
+      "sourceId": "xyres:443cdb32-1c89-4ef6-8214-2bf97f89f5fb#17/components/1",
+      "layoutType": 3,
+      "resize": 1,
+      "affectedByScale": true,
+      "children": 0,
+      "scaledChildren": 0,
+      "unityLayoutIssues": []
+    },
+    {
+      "case": "tianming",
+      "sourceId": "xyres:98822a5f-063b-43fa-a271-fa1fbb97b670#7/components/1",
+      "layoutType": 3,
+      "resize": 1,
+      "affectedByScale": true,
+      "children": 2,
+      "scaledChildren": 0,
+      "unityLayoutIssues": []
+    },
+    {
+      "case": "tianming",
+      "sourceId": "xyres:ad7fed8b-367f-41d4-a908-0d25faf78d02#5/components/1",
+      "layoutType": 3,
+      "resize": 0,
+      "affectedByScale": true,
+      "children": 0,
+      "scaledChildren": 0,
+      "unityLayoutIssues": []
+    },
+    {
+      "case": "tianming",
+      "sourceId": "xyres:ad7fed8b-367f-41d4-a908-0d25faf78d02#6/components/1",
+      "layoutType": 3,
+      "resize": 0,
+      "affectedByScale": true,
+      "children": 0,
+      "scaledChildren": 0,
+      "unityLayoutIssues": []
+    },
+    {
+      "case": "tianming",
+      "sourceId": "xyres:be815700-a5ca-4c66-ab29-ab4d36a82bd2#4/components/1",
+      "layoutType": 3,
+      "resize": 1,
+      "affectedByScale": true,
+      "children": 8,
+      "scaledChildren": 8,
+      "unityLayoutIssues": []
+    },
+    {
+      "case": "tianming",
+      "sourceId": "xyres:c3c179d2-abd9-4ce8-914b-16b3ba03f29f#2/components/1",
+      "layoutType": 3,
+      "resize": 1,
+      "affectedByScale": true,
+      "children": 6,
+      "scaledChildren": 6,
+      "unityLayoutIssues": []
+    },
+    {
+      "case": "tianming",
+      "sourceId": "xyres:e89d9426-d7d2-4191-8cc7-55c3f0024b60#6/components/1",
+      "layoutType": 3,
+      "resize": 1,
+      "affectedByScale": true,
+      "children": 0,
+      "scaledChildren": 0,
+      "unityLayoutIssues": []
+    },
+    {
+      "case": "tianming",
+      "sourceId": "xyres:ead68641-c115-49bf-8c7f-1be88fca009a#53/components/1",
+      "layoutType": 3,
+      "resize": 1,
+      "affectedByScale": true,
+      "children": 0,
+      "scaledChildren": 0,
+      "unityLayoutIssues": []
+    },
+    {
+      "case": "tianming",
+      "sourceId": "xyres:ead68641-c115-49bf-8c7f-1be88fca009a#57/components/1",
+      "layoutType": 3,
+      "resize": 1,
+      "affectedByScale": true,
+      "children": 0,
+      "scaledChildren": 0,
+      "unityLayoutIssues": []
+    },
+    {
+      "case": "xiafangle-current-resolver",
+      "sourceId": "resources:0503adfb-0c51-4c70-80a7-35ac91f2c9a2#2/components/1",
+      "layoutType": 3,
+      "resize": 1,
+      "affectedByScale": true,
+      "children": 8,
+      "scaledChildren": 8,
+      "unityLayoutIssues": []
+    }
+  ],
+  "remainingPolicyIssues": {
+    "LAYOUT_NEGATIVE_SCALE_PENDING": 27,
+    "LAYOUT_SUBSET_UNSUPPORTED": 20
+  },
+  "native": "see layout-dynamic-native.json",
+  "sourceRuntimeExecuted": false
+}

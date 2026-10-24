@@ -1,8 +1,20 @@
 import copy,unittest,shutil,subprocess
 from pathlib import Path
-from monkey.targets.dynamic_ui import POLICY,expectations,verify_probes
+from monkey.targets.dynamic_ui import POLICY,expectations,verify_probes,probe_sources
 
 class DynamicUiEvidenceTests(unittest.TestCase):
+    def test_v2_grid_and_child_resize_cannot_pass_with_only_container_snapshots(self):
+        components=[dict(sourceId='grid',node='root',type='cc.Layout',layoutType=3,resize=1,affectedByScale=True,enabled=True,convertible=True),dict(sourceId='fill',node='column',type='cc.Layout',layoutType=2,resize=2,enabled=True,convertible=True)]
+        plan=dict(uiGeometryReadback=POLICY,uiStateProbeVersion=2,nodes=[],components=components)
+        self.assertEqual(probe_sources(plan),['grid','fill']);self.assertTrue(verify_probes(plan,[]))
+        actions=['baseline','add-child','hide-child','show-child','remove-child','container-resize','scale-child','resize-child','hide-show-container']
+        rows=[dict(sourceId=c['sourceId'],type=c['type'],status='native-state-changes-passed',states=[dict(action=a,size=[100,50],position=[0,0])for a in actions])for c in components]
+        self.assertTrue(verify_probes(plan,rows))
+        for row in rows:
+            for state in row['states']:state['children']=[dict(index=0,active=True,size=[40,20],position=[1,2],scale=[.8,.8])]
+        self.assertEqual(verify_probes(plan,rows),[])
+        rows[0]['states'][0]['children'][0]['scale'][0]=float('nan');self.assertTrue(verify_probes(plan,rows))
+
     @unittest.skipUnless(shutil.which('node'),'Node unavailable')
     def test_creator_editor_alignment_context_is_restored_on_success_and_failure(self):
         script=r'''

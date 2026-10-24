@@ -2,7 +2,7 @@
 
 完工/阻塞/交付与续推按[DIRECTOR-CONTINUATION](/Users/wangmeng/Documents/Manager/standards/DIRECTOR-CONTINUATION.md)执行；本聊天已原生核验人类授权`01a166b4-5c18-78f3-8cc2-c0d07dd46a20`，总监路由`01a14c8c-6402-7d03-bab8-ec7ea8051abf`。更新本PLAN后以稳定事件ID报告，已批准就绪下一包连续推进，不因报告或普通ACK停下。
 
-## 当前：v0.2 本地候选完成，待总监验收（2026-10-24）
+## 当前：v0.2 总监验收后续修 Grid/child-resize 有限缺口（2026-10-24）
 
 v0.1 已发布冻结；当前本地 `codex/v0.2`，未推送/发布。用户持续推进授权及本轮进度核查已原生核验：总监 turn01a16bea-fe5f-7082-9583-f3a7f0292b56 / human01a16beb-0267-79b1-9472-e1ced602d6ba。原生验证仍限自有独立副本与单次≤30分钟；单主开发，不唤醒肥鹅。
 
@@ -13,8 +13,8 @@ v0.1 已发布冻结；当前本地 `codex/v0.2`，未推送/发布。用户持�
 - 代表集成已过：同源4Prefab/104节点/5关系与新动态组件，Unity01严格0诊断、Creator04严格0诊断/editor pass；两端各2组动态探针。Creator子资源按原生SpriteFrame UUID保存/重导入并核对真实library，修复父meta已改而子资产仍旧；序列化后恢复自有活对象ID，避免Scheduler销毁异常。Creator04全部1972帧读回通过且无该生命周期错误，own75174已回收。01–03失败保留，详见validation/2026-10-24-prefab-dynamic-integration.md。
 - 天命3.4.1资源公共双目标已过：11618已确认远端项齐（含4668备选编码）、11962文件/1011728200字节全入账；7071Frame/每端14142变体、1TTF/13JSON，04双端静态0诊断。真实5Frame/10变体两端原生0诊断，own82339/82795均回收。源码/Spine/未知后缀与原版UI未恢复独立列限，详见validation/2026-10-24-tianming341-resources.md。
 - 天命图/追加结构已过：856/857图、22503节点、24511组件、52实例关系接公共05双目标；15位图字体恢复，1份原图四个null旋转值精确隔离。真实6Prefab/331节点/8关系/7新增节点/1新增Widget，两端原生严格0诊断，Unity04 editor partial（源业务缺口）、Creator10 editor pass；源Prefab及Unity最终Candidate证明独立核对。详见validation/2026-10-24-tianming341-graphs.md。Creator根继承、移除组件与任意新增类型不外推已支持。
-- 当前完成：A/B/C必修代表、逐case矩阵、CLI本地分发/隔离安装与版本出口已收口。源码6deb03e构建的wheel/sdist均审计通过，安装后从独立cwd执行8条CLI，none/grea双端4份静态verify通过；230完整测试通过。详见LOCAL-v0.2.md。
-- 版本出口：本轮开发与本地候选检查完成，提交总监验收；没有自行推送、tag或Release。逐case原方法/格式/全包native/玩法限制仍列明，完整游戏0不冒充全引擎或业务兼容。没有新的已批准实现包；后续按总监验收或用户新要求接续。旧证据及旧未实现状态按下方历史读取。
+- 已验分发层：既有wheel/sdist及安装证据获总监独立认可，整体暂不关项。原本A/B/C代表未覆盖真实Grid缩放/约束和child-resize；正在按event monkey-v02-local-exit-review-20261024-01补有限共因并更新最后分发证据。源码6deb03e构建的wheel/sdist均审计通过，安装后从独立cwd执行8条CLI，none/grea双端4份静态verify通过；230完整测试通过。详见LOCAL-v0.2.md。
+- 版本出口：总监分发层已认可，有限动态缺口现已补齐并验证，正在最后更新受影响分发包后再交总监定整体出口；没有自行推送、tag或Release。逐case原方法/格式/全包native/玩法限制仍列明，完整游戏0不冒充全引擎或业务兼容。本轮不新增其他组合/业务/引擎实现包；后续按总监验收或用户新要求接续。旧证据及旧未实现状态按下方历史读取。
 
 ## 历史依据与全量候选记录
 
@@ -648,3 +648,8 @@ event monkey-v02-dynamic-ui-20261024-01：源3.8.7 Widget/Layout别名及模式�
 ## 2026-10-24 v0.2 本地候选出口
 
 事件monkey-v02-local-exit-20261024-01：本轮A/B/C及本地出口已完成，详见LOCAL-v0.2.md与validation/v02-local-delivery.json。源码6deb03e的228文件独立快照构建wheel393326B与sdist598875B；104个包文件和源码一致，sdist重建wheel载荷一致，无游戏/outputs/private原件。全新私有venv实际安装，Pillow12.2.0离线缓存缺失后从官方PyPI取得同一固定依赖；没有全局安装或更换依赖版本。独立cwd8条安装后CLI包含none/grea双目标及4份静态verify，输入哈希不变、仓库src不在sys.path。230完整测试、49受影响测试、25最终定向测试均过。Research仍11/10输出/1团结blocked/0完整游戏；旧36嵌套待恢复条目已按已验证114图/实际5缺模板纠正，原有缺口保留。原生helpers与通过候选字节一致，没有因打包重复开Editor。当前仅本地0.2.0.dev1候选交总监验收，不发布/推送；正式v0.1冻结，肥鹅/GREA/其他工程及服务未修改。
+
+
+## 2026-10-24 总监有限动态布局复核续修
+
+事件monkey-v02-layout-followup-20261024-01：按monkey-v02-local-exit-review-20261024-01只读核4来源2500布局；精确19缩放Grid/13child-resize/16缓存多行Grid/387缩放线性。原先线性缩放已实现未实证，Grid与resize2为真实guard遗漏；补原生Flow和线性子尺寸，32配置不再拒绝（不冒充32全native）。6真实布局组/54态/1242数值，两端严格0，最大差0.00007325px；Grid44节点、child148节点、linear74节点，源模板保存重开通过。Grid01跨目标差额已按版本行高/隐藏锚点修复；Creator child01根上下文1280x720已改声明750x1334临时UI父上下文，原件不动。最终Unity grid02/child04/linear01，Creator grid01/child02/linear01；均自有child回收，证据见validation/2026-10-24-layout-followup.md。232测试及SDK编译通过。旧分发01及候选保留，最后更新本地包/安装证据再向总监回报；整体待复核，不推送发布。
