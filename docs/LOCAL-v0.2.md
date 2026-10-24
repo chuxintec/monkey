@@ -1,6 +1,6 @@
 # v0.2 本地候选与分发验收
 
-第一轮分发01已获总监独立认可；整体仍待有限动态布局续修及新分发回执复核。Grid/child-resize/线性缩放的续修已通过，见[有限续修](validation/2026-10-24-layout-followup.md)。本页下方包SHA属于保留的分发01，最新续修包将另列回执，不覆盖01。版本仍为 `0.2.0.dev1`，未推送、未创建tag或Release。正式远端v0.1保持冻结。完成的是工具的声明子集及交接出口，各游戏仍有明确partial/blocked，不能宣称所有引擎版本或完整游戏自动转换。
+第一轮分发01已获总监独立认可；整体仍待有限动态布局续修及新分发回执复核。Grid/child-resize/线性缩放的续修已通过，见[有限续修](validation/2026-10-24-layout-followup.md)。本页下方包SHA属于保留的分发01，最新续修包02见[本地续修分发回执](validation/v02-local-delivery-followup.json)，不覆盖01。版本仍为 `0.2.0.dev1`，未推送、未创建tag或Release。正式远端v0.1保持冻结。完成的是工具的声明子集及交接出口，各游戏仍有明确partial/blocked，不能宣称所有引擎版本或完整游戏自动转换。
 
 ## 一条命令
 
@@ -34,3 +34,10 @@ Cocos目标可选unity/cocos/both，其他源引擎统一unity6；默认格式no
 在全新私有venv实际安装wheel及原固定Pillow12.2.0；离线缓存未命中后仅从官方PyPI获取该固定版本，没有全局安装。Python3.14.7，仓库src不在sys.path；从独立cwd运行安装后的8条CLI，none/grea各双目标，四份静态verify均通过，输入哈希不变。最低声明Python3.11未另装解释器验证。ASTC extra和Unity provider没有纳入本次最小安装smoke。
 
 完整230项工具检查通过，受影响49项通过，另25项最终接口定向检查通过。已通过的真实Editor helpers与包内代码字节相同；未为打包重复启动引擎。Research重新发现仍11例、10例不同范围输出、1例团结blocked、完整游戏0。原版视觉/真实交互/存档/业务、未覆盖格式和方法各按机器状态保留，不能用这些测试数替代游戏验收。
+
+
+## 有限动态续修后的分发02
+
+源码快照 `0a523d5`（实现df68c59），235个登记文件；wheel 398326B，SHA `e1bec49ee36c8bed5519c37955c045b38a69c0a805f3ee11406da3828efb950e`；sdist 609147B，SHA `d00575b17075381b72597a1da10910098e7db19e0d8c1b3e53853a0f83800640`。在 `.private/v02-delivery-02/dist/`，旧01不覆盖。106份包载荷逐字节匹配源码，sdist重建wheel载荷相同，无原包/游戏图片/outputs/引擎二进制。
+
+新私有venv从项目缓存离线安装本地wheel与固定Pillow12.2.0，独立cwd8条安装后CLI包含缩放Grid+child-resize合成输入，none/grea各双目标、4份静态验证通过，原输入SHA不变、仓库src不在sys.path；新Flow组件及完整MIT许可已确认随包和生成工程保留。实际原生6组/54态和232工具测试通过。布局helpers与实际最终代表字节相同，Grid02仅后增许可头、源码体一致。整体仍交总监复核，不自行关项/推送/发布；Player时序/视觉/玩法和其他组合保留限制。

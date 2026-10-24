@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "version": "0.2.0.dev1",
+  "distribution": "02-layout-followup",
+  "sourceCommit": "0a523d5b279afadb1960a40d29a48705e5d1056c",
+  "implementationCommit": "df68c59",
+  "priorDistribution": "v02-local-delivery.json",
+  "overallAcceptance": "pending-director-review",
+  "localOnly": true,
+  "remotePush": false,
+  "release": false,
+  "artifacts": [
+    {
+      "name": "monkey_native-0.2.0.dev1.tar.gz",
+      "bytes": 609147,
+      "sha256": "d00575b17075381b72597a1da10910098e7db19e0d8c1b3e53853a0f83800640",
+      "entries": 230,
+      "forbiddenEntries": []
+    },
+    {
+      "name": "monkey_native-0.2.0.dev1-py3-none-any.whl",
+      "bytes": 398326,
+      "sha256": "e1bec49ee36c8bed5519c37955c045b38a69c0a805f3ee11406da3828efb950e",
+      "entries": 111,
+      "forbiddenEntries": []
+    }
+  ],
+  "wheelPayloadFiles": 106,
+  "wheelPayloadMatchesSource": true,
+  "sdistWheelPayloadMatchesWheel": true,
+  "install": {
+    "status": "pass",
+    "python": "3.14.7",
+    "pillow": "12.2.0",
+    "dependencies": "offline reuse of fixed previously verified project cache; private environment only",
+    "repositorySrcOnSysPath": false,
+    "installedCommands": 8,
+    "bothTargetFormats": [
+      "none",
+      "grea"
+    ],
+    "staticChecks": 4,
+    "sourceUnchanged": true,
+    "fixture": "synthetic 3.4.1 scaled grid with child-resize",
+    "probeVersion": 2,
+    "scaledGridChildResizeConvertible": true
+  },
+  "tests": {
+    "full": 232,
+    "finalTargeted": 18,
+    "csharpInstalledSdkCompile": "pass",
+    "creatorSyntax": "pass"
+  },
+  "native": {
+    "layoutGroups": 6,
+    "states": 54,
+    "geometryScalars": 1242,
+    "maxDelta": 7.324218734083843e-05,
+    "tolerance": 0.05,
+    "strictDiagnostics": 0,
+    "timing": "native Editor forced-update and save/reopen; Player not_run"
+  },
+  "remaining": "layout-dynamic-source-audit.json and research-v02-status.json; no arbitrary combination/full-game claim",
+  "evidence": [
+    {
+      "path": ".private/v02-delivery-02/artifact-audit.json",
+      "sha256": "47ee4ee105b56f3db1fab9d44c8dddfc7a91beab400b8a41f383e195ddc3d9f1"
+    },
+    {
+      "path": ".private/v02-delivery-02/installed-cli-receipt.json",
+      "sha256": "ca79fac55313cbd16f667a861f18bec198996868d058c83a980a4afc32cf9286"
+    },
+    {
+      "path": ".private/v02-delivery-02/source-manifest.json",
+      "sha256": "0f2abfb9a81c280ddb8c223e62529a4fd87643ef5472da067e5df8b64c4cf8e1"
+    },
+    {
+      "path": ".private/v02-delivery-02/native-helper-source-check.json",
+      "sha256": "475b77568a1da961d35fb2d92c2a9d512fbdd95d5cd4d95c398b705ccc0b03e0"
+    }
+  ]
+}
