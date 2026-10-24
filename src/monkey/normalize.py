@@ -86,7 +86,7 @@ def sprite(atlas, frame):
 def normalize(manifest_path, output):
     manifest_path = safe(manifest_path)
     m = stage_document(manifest_path)
-    if m.get('sourceProfile') not in ('cocos-2.4.15-bundle','cocos-2.4.15-project') or m.get('schemaVersion') != 1:
+    if m.get('sourceProfile') not in ('cocos-2.4.15-bundle','cocos-2.4.15-project','cocos-3.8.7-bundle','cocos-3.4.1-bundle','cocos-2.4.11-bundle','cocos-2.1.2-resource') or m.get('schemaVersion') != 1:
         fail('UNSUPPORTED_MANIFEST', '$', 'Expected inspect schema 1')
     roots = {name:safe(path) for name,path in m.get('sourceRoots',{m['bundle']:m['sourceRoot']}).items()}
     expected = {(i.get('bundle',m['bundle']),i['path']):i for i in m['inputs']}
@@ -120,9 +120,13 @@ def normalize(manifest_path, output):
     result = dict(schemaVersion=1, toolVersion=__version__, sourceProfile=m['sourceProfile'],
                   sourceManifestSha256=sha(stage_bytes(manifest_path)),sourceManifestPath=str(manifest_path),sourceRoots=m.get('sourceRoots',{m['bundle']:m['sourceRoot']}),
                   sourceNames=source_names(m),sourceLocations={a['sourceId']:dict(bundle=a.get('bundle',m['bundle']),importPath=a.get('importPath'),nativePath=a.get('native')) for a in m['assets']}, evidenceFiles=m.get('evidenceFiles',[]),aliases=aliases, assets=[], spriteFrames=[], bitmapFonts=[],materials=[], nodes=[],
-                  components=[], quarantinedAssets=[], animationSchemaVersion=1,animationClips=[],diagnostics=diagnostics,
+                  components=[], quarantinedAssets=[],prefabInstances=[],prefabOverrideGaps=[],animationSchemaVersion=1,animationClips=[],diagnostics=diagnostics,
                   scopeMode='whole-input' if m.get('packageSelection') else 'asset-selection',
                   coordinateConvention=dict(origin='center anchor', x='right', y='up', units='pixels'))
+    prefab_resolver=None
+    if m['sourceProfile']in ('cocos-3.8.7-bundle','cocos-3.4.1-bundle'):
+        from .sources.cocos38_prefabs import Resolver
+        prefab_resolver=Resolver(m['assets'],m['sourceProfile'])
     for asset in m['assets']:
         sid = asset['sourceId']
         name = sha(sid.encode())[:24]
@@ -135,13 +139,40 @@ def normalize(manifest_path, output):
             objects, value, kind = [], {}, asset.get('kind')
         lengths={k:len(result[k]) for k in ('assets','spriteFrames','bitmapFonts','materials','nodes','components','animationClips')}
         try:
+            cocos38=m.get('sourceProfile')=='cocos-3.8.7-bundle'
+            cocos34=m.get('sourceProfile')=='cocos-3.4.1-bundle'
+            cocos3=cocos38 or cocos34
+            if cocos34 and kind not in ('cc.SpriteFrame','cc.Texture2D','cc.ImageAsset','cc.TTFFont','cc.AudioClip','cc.JsonAsset','cc.Prefab','cc.Scene','cc.SceneAsset','cc.BitmapFont','redirect','native'):
+                result['quarantinedAssets'].append(dict(sourceId=sid,kind=kind,reason='COCOS34_RESOURCE_PROFILE_ONLY'))
+                diagnostics.append(diagnostic('COCOS34_RESOURCE_PROFILE_ONLY',asset.get('importPath',sid),'3.4.1 '+str(kind)+' semantics need a dedicated adapter; original retained',sid));continue
+            if m.get('sourceProfile')=='cocos-2.1.2-resource' and kind not in ('cc.SpriteFrame','cc.Texture2D','cc.TTFFont','cc.AudioClip'):
+                result['quarantinedAssets'].append(dict(sourceId=sid,kind=kind,reason='LEGACY_RESOURCE_ONLY'))
+                diagnostics.append(diagnostic('LEGACY_RESOURCE_ONLY',asset.get('importPath',sid),'2.1.2 graph, clip and other semantics require a dedicated adapter',sid));continue
+            if cocos3 and kind in ('cc.Prefab','cc.Scene','cc.SceneAsset'):
+                from .sources.cocos38_graphs import resolved_graph
+                if cocos34:
+                    from .sources.cocos34_graphs import resolved_graph
+                nodes38,components38,gaps38,resolved38=resolved_graph(asset,prefab_resolver)
+                result['nodes'].extend(nodes38);result['components'].extend(components38)
+                result['prefabInstances'].extend(resolved38['prefabInstances']);result['prefabOverrideGaps'].extend(resolved38['pendingPrefabOverrides'])
+                diagnostics.extend(diagnostic('COCOS3_PREFAB_OVERRIDE_HANDOFF',asset.get('importPath',sid),g['kind']+': '+'.'.join(g.get('propertyPath')or[]),g['target'])for g in resolved38['pendingPrefabOverrides'])
+                diagnostics.extend(diagnostic('COCOS3_SOURCE_SEMANTIC_HANDOFF',asset.get('importPath',sid),g['message'],g['sourceId'])for g in gaps38)
+                continue
             if kind == 'cc.SpriteFrame':
-                frame = value.get('data', {})
-                texture = frame.get('texture')
-                texture_key = texture.get('__uuid__') if isinstance(texture, dict) else texture
-                if texture_key is None and len(asset['references']) == 1:
-                    texture_key = asset['references'][0]
-                source = by_id.get(resolved(asset.get('bundle',m['bundle'])+':'+str(texture_key)), {})
+                resource_evidence={}
+                if cocos3:
+                    from .sources.cocos38 import frame as frame38
+                    if cocos34:
+                        from .sources.cocos34 import frame as frame38
+                    frame,source,resource_evidence=frame38(asset,by_id,resolved)
+                    texture_key=resource_evidence['sourceTexture']
+                else:
+                    frame = value.get('data', {})
+                    texture = frame.get('texture')
+                    texture_key = texture.get('__uuid__') if isinstance(texture, dict) else texture
+                    if texture_key is None and len(asset['references']) == 1:
+                        texture_key = asset['references'][0]
+                    source = by_id.get(resolved(asset.get('bundle',m['bundle'])+':'+str(texture_key)), {})
                 path = source.get('native')
                 try:
                     if not path:
@@ -157,13 +188,15 @@ def normalize(manifest_path, output):
                     trimmed.save(out / trimmed_path)
                     full.save(out / full_path)
                     result['spriteFrames'].append(dict(sourceId=sid, textureRef=source['sourceId'],
-                        image=trimmed_path, originalImage=full_path, **semantic))
+                        image=trimmed_path, originalImage=full_path, **semantic,**(dict(sourceResourceEvidence=resource_evidence)if resource_evidence else {})))
                 except (ParseError, OSError, Image.DecompressionBombError) as error:
                     diagnostics.append(diagnostic(getattr(error, 'code', 'IMAGE_ERROR'),
                         getattr(error, 'location', sid), str(error), sid))
-            elif kind in ('cc.Texture2D', 'cc.TTFFont', 'cc.AudioClip', 'native'):
+            elif cocos3 and kind=='cc.Texture2D':
+                diagnostics.append(diagnostic('COCOS3_SAMPLER_HANDOFF',sid,'Source sampler preserved in typed texture metadata; target sampler behavior is pending',sid))
+            elif kind in ('cc.Texture2D', 'cc.ImageAsset', 'cc.TTFFont', 'cc.AudioClip', 'native'):
                 path = asset.get('native')
-                if path and kind != 'cc.Texture2D':
+                if path and kind not in ('cc.Texture2D','cc.ImageAsset'):
                     suffix = Path(path).suffix.lower()
                     if suffix in ('.ttf', '.mp3', '.wav', '.ogg', '.png', '.jpg', '.jpeg'):
                         target = 'assets/' + name + suffix
@@ -242,14 +275,21 @@ def normalize(manifest_path, output):
             result['quarantinedAssets'].append(dict(sourceId=sid,kind=kind,reason=getattr(error,'code','UNSUPPORTED_ASSET_SEMANTIC')))
             diagnostics.append(diagnostic('UNSUPPORTED_ASSET_SEMANTIC',asset.get('importPath',sid),str(error),sid))
     frames={f['sourceId']:f for f in result['spriteFrames']}
+    quarantined={a['sourceId']for a in result['quarantinedAssets']}
     for asset in m['assets']:
         if asset.get('kind')!='cc.BitmapFont':continue
+        if asset['sourceId']in quarantined:continue
+        if not asset.get('document'):continue  # Source-only profile already records the quarantined payload.
         value=asset['document']['instances'][asset['document']['root']]
         atlas_ref=resolved(ref(value.get('spriteFrame'),asset['sourceId']))
         frame=frames.get(atlas_ref)
         try:
+            if m['sourceProfile']=='cocos-3.4.1-bundle':
+                if 'fntConfig'in value and '_fntConfig'in value:fail('COCOS34_BITMAP_CONFIG',asset['sourceId'],'Conflicting serialized font config names')
+                value=dict(value,_fntConfig=value.get('fntConfig'))
             if not frame:fail('BITMAP_ATLAS_MISSING',asset['sourceId'],str(atlas_ref))
             font=normalize_font(value,asset['sourceId'],atlas_ref,frame['originalSize'])
+            if m['sourceProfile']=='cocos-3.4.1-bundle':font['kerningConvention']='source-3.4.1-unscaled-pair-offset'
             font['atlasImage']=frame['originalImage']
             result['bitmapFonts'].append(font)
         except (ParseError,KeyError,ValueError) as error:
@@ -299,6 +339,7 @@ def quarantine_graphs(ir):
     if bad:
         ir['nodes']=[n for n in ir['nodes'] if n['sourceId'].split('#')[0] not in bad]
         ir['components']=[c for c in ir['components'] if c['sourceId'].split('#')[0] not in bad]
+        ir['prefabInstances']=[x for x in ir.get('prefabInstances',[])if x['root'].split('#')[0]not in bad]
         for source,reason in sorted(bad.items()):
             ir.setdefault('quarantinedAssets',[]).append(dict(sourceId=source,reason='INVALID_NODE_GRAPH',detail=reason))
             ir['diagnostics'].append(diagnostic('UNSUPPORTED_NODE_GRAPH',source,reason+'; original decoded object retained',source))
@@ -369,21 +410,24 @@ def component_ir(namespace, index, obj):
         if base['mode'] not in (0,1,2): gaps.append('sprite mode '+str(base['mode']))
         known = {'_materials','_spriteFrame','_type','_sizeMode','_isTrimmedMode','_fillType','_fillCenter','_fillStart','_fillRange','_atlas'}
     elif typ == 'cc.Label':
+        if '_overflow' in obj and '_N$overflow' in obj and obj['_overflow'] != obj['_N$overflow']:
+            fail('LABEL_OVERFLOW_ALIAS_CONFLICT',base['sourceId'],'Conflicting serialized Label overflow aliases')
         base.update(text=obj.get('_string',obj.get('_N$string','')),font=ref(obj.get('_N$file'),namespace),
                     fontSize=obj.get('_fontSize',40),lineHeight=obj.get('_lineHeight',40),
                     horizontalAlign=obj.get('_N$horizontalAlign',obj.get('_horizontalAlign',0)),verticalAlign=obj.get('_N$verticalAlign',obj.get('_verticalAlign',0)),
                     bold=bool(obj.get('_styleFlags',0)&1),italic=bool(obj.get('_styleFlags',0)&2),underline=bool(obj.get('_styleFlags',0)&4),
                     spacing=obj.get('_spacingX',0),systemFont=obj.get('_isSystemFontUsed',True),
-                    overflow=obj.get('_overflow',0),wrap=obj.get('_enableWrapText',True))
+                    overflow=obj.get('_overflow',obj.get('_N$overflow',0)),wrap=obj.get('_enableWrapText',True))
         known = {'_string','_N$string','_N$file','_fontSize','_lineHeight','_horizontalAlign','_verticalAlign',
-                 '_N$horizontalAlign','_N$verticalAlign','_materials','_overflow','_enableWrapText','_isSystemFontUsed','_fontFamily','_N$fontFamily','_cacheMode','_styleFlags','_spacingX'}
+                 '_N$horizontalAlign','_N$verticalAlign','_materials','_overflow','_N$overflow','_enableWrapText','_isSystemFontUsed','_fontFamily','_N$fontFamily','_cacheMode','_styleFlags','_spacingX'}
         if not base['font']: gaps.append('system font requires source-backed explicit matching font binding')
-        if base['overflow'] != 0: gaps.append('label overflow mode requires native mapping')
+        if base['overflow'] not in (0,1,2,3): gaps.append('unknown label overflow mode')
     elif typ == 'cc.Widget':
         base.update(flags=obj.get('_alignFlags',0),target=ref(obj.get('_target'),namespace),
                     margins=[obj.get(k,0) for k in ('_left','_bottom','_right','_top')],
-                    absolute=[obj.get(k,True) for k in ('_isAbsLeft','_isAbsBottom','_isAbsRight','_isAbsTop')],alignMode=obj.get('alignMode',1))
-        known={'_alignFlags','_target','_left','_bottom','_right','_top','_isAbsLeft','_isAbsBottom','_isAbsRight','_isAbsTop','_originalWidth','_originalHeight','alignMode'}
+                    absolute=[obj.get(k,True) for k in ('_isAbsLeft','_isAbsBottom','_isAbsRight','_isAbsTop')],alignMode=obj.get('alignMode',1),
+                    center=[obj.get('_horizontalCenter',0),obj.get('_verticalCenter',0)],centerAbsolute=[obj.get('_isAbsHorizontalCenter',True),obj.get('_isAbsVerticalCenter',True)])
+        known={'_alignFlags','_target','_left','_bottom','_right','_top','_isAbsLeft','_isAbsBottom','_isAbsRight','_isAbsTop','_originalWidth','_originalHeight','alignMode','_horizontalCenter','_verticalCenter','_isAbsHorizontalCenter','_isAbsVerticalCenter'}
     elif typ == 'cc.Mask':
         base.update(maskType=obj.get('_type',obj.get('_N$type',0)),inverted=obj.get('_inverted',obj.get('_N$inverted',False)))
         known={'_type','_N$type','_inverted','_N$inverted','_alphaThreshold','_N$alphaThreshold','_spriteFrame','_materials','_segments'}
@@ -397,8 +441,8 @@ def component_ir(namespace, index, obj):
                     padding=[obj.get('_N$paddingLeft',0),obj.get('_N$paddingBottom',0),obj.get('_N$paddingRight',0),obj.get('_N$paddingTop',0)],
                     horizontalDirection=obj.get('_N$horizontalDirection',0),verticalDirection=obj.get('_N$verticalDirection',1),
                     startAxis=obj.get('_N$startAxis',0),cellSize=vector(obj.get('_cellSize'),['width','height'],[40,40]),
-                    affectedByScale=obj.get('_affectedByScale',False))
-        known={'_N$layoutType','_resize','_N$spacingX','_N$spacingY','_N$paddingLeft','_N$paddingRight','_N$paddingTop','_N$paddingBottom','_N$horizontalDirection','_N$verticalDirection','_N$startAxis','_cellSize','_layoutSize','_affectedByScale'}
+                    affectedByScale=obj.get('_affectedByScale',False),alignCross=obj.get('_isAlign',False),constraint=obj.get('_constraint',0),constraintCount=obj.get('_constraintNum',2))
+        known={'_N$layoutType','_resize','_N$spacingX','_N$spacingY','_N$paddingLeft','_N$paddingRight','_N$paddingTop','_N$paddingBottom','_N$horizontalDirection','_N$verticalDirection','_N$startAxis','_cellSize','_layoutSize','_affectedByScale','_isAlign','_constraint','_constraintNum'}
     elif typ == 'cc.Button':
         events=[]
         for ordinal,event in enumerate(obj.get('clickEvents',[]) or []):

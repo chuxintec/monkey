@@ -65,6 +65,31 @@ class CreatorNativeTests(unittest.TestCase):
                 result=native.native_import(output=root/'native',execute=True,**options)
             self.assertTrue(child.terminated);self.assertTrue(result['processExited']);self.assertEqual(result['reason'],'NATIVE_HOST_FAILED')
 
+    def test_scheduler_cleanup_error_cannot_be_hidden_by_completed_readback(self):
+        # Completion may already be on disk before the host observes an SDK
+        # destruction error; successful field verification must not mask it.
+        for completed in (False,True):
+            with self.subTest(completed=completed),tempfile.TemporaryDirectory() as temp:
+                root=Path(temp).resolve();options=self.prepare(root)
+                class Child:
+                    pid=4125;returncode=None
+                    def poll(self):return self.returncode
+                    def terminate(self):self.returncode=-15
+                    def wait(self,timeout):return self.returncode
+                child=Child()
+                def launch(args,**kwargs):
+                    kwargs['stdout'].write("Error: cc.Scheduler: Illegal target which doesn't have id\n");kwargs['stdout'].flush()
+                    if completed:
+                        plan_hash=fingerprint(root/'native/CocosProject/extensions/monkey-import/import-plan.json')
+                        native_creator.write_json(root/'native/CocosProject/Analysis/native-progress.json',dict(
+                            schemaVersion=1,status='completed',sourceManifestSha256=options['expected_manifest'],
+                            planSha256=plan_hash,phase='complete',processed=1,total=1,elapsedSeconds=1,nativeResumeSupported=False))
+                    return child
+                with patch.object(native_creator.subprocess,'Popen',side_effect=launch),patch.object(native_creator.cocos,'verify',return_value=dict(editorValidation='pass',diagnostics=[])):
+                    result=native.native_import(output=root/'native',execute=True,**options)
+                self.assertTrue(result['processExited']);self.assertEqual(child.returncode,-15)
+                self.assertEqual(result['status'],'partial');self.assertEqual(result['reason'],'NATIVE_CREATOR_LIFECYCLE_ERROR')
+
     def test_extension_requires_explicit_binding_and_records_failures(self):
         node=shutil.which('node')
         if not node:self.skipTest('Node is required for extension boundary checks')

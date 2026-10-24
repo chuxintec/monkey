@@ -8,12 +8,13 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-public static class MonkeyImporter
+public static partial class MonkeyImporter
 {
     [Serializable] public class Plan {
-        public float[] designSize; public float pixelsPerUnit;
+        public int uiStateProbeVersion; public string[] uiProbeSources;
+        public float[] designSize; public float pixelsPerUnit; public string uiGeometryReadback;
         public TextureSpec[] textures; public AssetSpec[] assets; public BitmapSpec[] bitmapFonts; public int sourceDiagnosticCount;
-        public NodeSpec[] nodes; public ComponentSpec[] components; public MotionSpec[] animations; public bool galleryOnly; public SourcePrefabSpec[] sourcePrefabs; public TmpResourceSpec tmpResources;
+        public NodeSpec[] nodes; public ComponentSpec[] components; public MotionSpec[] animations; public bool galleryOnly; public SourcePrefabSpec[] sourcePrefabs; public PrefabInstanceSpec[] prefabInstances; public TmpResourceSpec tmpResources;
     }
     [Serializable] public class TmpResourceSpec { public string packageName,packageVersion,resource,importMode; }
     [Serializable] public class TmpResourceResult {
@@ -24,8 +25,10 @@ public static class MonkeyImporter
     static TmpResourceResult tmpResourceResult;
     [Serializable] public class SourcePrefabSpec { public string sourceId,root,path; public string[] nodes; public int nodeCount; }
     [Serializable] public class SourcePrefabResult {
-        public string sourceId,path,guid,geometryPhase; public int nodeCount,missingScripts,layoutSettlePasses;
-        public bool savedReloaded,referencesVerified; public NodeResult[] nodes; public string[] referenceFailures;
+        public PrefabInstanceResult[] prefabInstances;
+        public MonkeyNumericCode.Result[] numericCodeBindings;
+        public string sourceId,path,guid,geometryPhase,nativePrefabType; public int nodeCount,missingScripts,layoutSettlePasses;
+        public bool savedReloaded,referencesVerified; public NodeResult[] nodes,nativeInitialNodes; public string[] referenceFailures;
     }
     [Serializable] public class MotionKey { public float time,value; public string interpolation; }
     [Serializable] public class MotionProbe { public float time,value; }
@@ -34,22 +37,24 @@ public static class MonkeyImporter
     [Serializable] public class MotionTrackResult { public string path,property,nativeType; public float[] times,values,probeTimes,probeValues; public string[] interpolations; }
     [Serializable] public class MotionResult { public string id,path,guid,wrap; public float duration; public int eventCount,curveCount; public MotionTrackResult[] tracks; }
     [Serializable] public class TextureSpec {
-        public string id, path; public float[] border, size, originalSize, offset;
+        public string id, path, guid; public float[] border, size, originalSize, offset;
     }
     [Serializable] public class AssetSpec { public string id, kind, path, fontAssetPath; }
     [Serializable] public class NodeSpec {
-        public string sourceId, name, parent; public string[] children, components;
+        public string sourceId, name, parent,sourceGeometryProfile; public bool verifyUiColor; public string[] children, components;
         public float[] position, rotation, scale, size, anchor, color;
         public float opacity; public bool active;
     }
+    [Serializable] public class NumericMethodsSpec { public string setter,getter; }
     [Serializable] public class ComponentSpec {
+        public string codeClassName,codeScriptGuid,sourceScriptIdentity; public NumericMethodsSpec numericMethods;
         public string sourceId, type, node, spriteFrame, font, text;
         public int mode, sizeMode, horizontalAlign, verticalAlign, overflow; public float fontSize,lineHeight;
         public bool enabled, convertible, trim, wrap, bold, italic; public float spacing; public BitmapProbe bitmapProbe;
-        public string target,content,nativeId; public int flags,maskType,layoutType,resize,horizontalDirection,verticalDirection,startAxis,transition;
+        public string target,content,nativeId; public int flags,maskType,layoutType,resize,horizontalDirection,verticalDirection,startAxis,constraint,constraintCount,transition;
         public bool inverted,horizontal,vertical,interactable; public float zoomScale,duration,width;
-        public float[] margins,spacingXY,padding,effectiveCellSize,outlineColor;
-        public bool crossAxisScale; public float crossAxisAlignment;
+        public float[] margins,spacingXY,padding,effectiveCellSize,cellSize,outlineColor;
+        public bool crossAxisScale; public float crossAxisAlignment; public bool[] absolute,centerAbsolute; public float[] center; public int alignMode; public bool affectedByScale,alignCross;
     }
     [Serializable] public class BitmapProbe { public float advance,inkRight; }
     [Serializable] public class BitmapSpec {
@@ -59,27 +64,52 @@ public static class MonkeyImporter
     [Serializable] public class GlyphSpec { public uint unicode, index; public int[] rect; public float[] metrics; }
     [Serializable] public class KerningSpec { public uint first, second; public float advance; }
     [Serializable] public class FontResult { public string id, guid, atlasGuid, materialAtlasGuid; public int glyphCount, characterCount; public float pointSize, lineHeight; }
-    [Serializable] public class LabelResult { public string sourceId, text, fontGuid, geometryProbe; public float fontSize; public int characterCount; public bool allCharactersPresent; public GlyphBounds[] glyphBounds; }
+    [Serializable] public class LabelResult { public string sourceId, text, fontGuid, geometryProbe; public float fontSize,lineBoxHeight,lineBoxLineHeight,lineBoxExtra; public int characterCount,lineCount; public bool lineBoxPresent,lineBoxActive; public bool allCharactersPresent; public GlyphBounds[] glyphBounds; }
     [Serializable] public class GlyphBounds { public uint unicode; public float left,top,width,height,quadPadding; }
     [Serializable] public class Readback {
+        public PrefabInstanceResult[] prefabInstances;
+        public PrefabInstanceResult[] candidatePrefabInstances;
+        public string nativeScope,sourceGraphVerification; public GalleryResult[] gallery;
+        public MonkeyNumericCode.Result[] numericCodeBindings,numericCodeExercise;
         public string status, unityVersion, prefabGuid, sceneGuid;
         public int spriteCount, nodeCount, missingScripts; public bool editableRoundtrip,sceneReopened; public string previewPath,previewSha256,previewError,colorSpace;
-        public MotionResult[] animations; public string[] diagnostics; public NodeResult[] nodes; public SpriteResult[] sprites; public FileResult[] nativeFiles; public FontResult[] fonts; public LabelResult[] labels; public ViewReference[] viewReferences; public JsonResult[] jsonAssets; public SourcePrefabResult[] sourcePrefabs; public TmpResourceResult tmpResources;
+        public DynamicUiResult[] dynamicUiProbes; public MotionResult[] animations; public string[] diagnostics; public NodeResult[] nodes,nativeInitialNodes; public SpriteResult[] sprites; public FileResult[] nativeFiles; public FontResult[] fonts; public LabelResult[] labels; public ViewReference[] viewReferences; public JsonResult[] jsonAssets; public SourcePrefabResult[] sourcePrefabs; public TmpResourceResult tmpResources;
     }
+    [Serializable] public class GalleryResult { public string id,spriteGuid; public bool geometryVerified; }
     [Serializable] public class JsonResult { public string id,guid,textSha256; }
     [Serializable] public class ViewReference { public string sourceId,field; public int index; public long prefabFileId; public bool bound; }
     [Serializable] public class FileResult { public string path, sha256; }
     [Serializable] public class NodeResult {
-        public string sourceId, hierarchy; public float[] size, pivot, position,scale,rotation;
+        public string sourceId, hierarchy; public float[] size, pivot, position,scale,rotation,color; public float opacity;
         public bool active; public string[] componentTypes;
     }
     [Serializable] public class SpriteResult {
         public string id, guid; public float[] size, border;
         public long fileId;
     }
-    const string PrefabPath = "Assets/Generated/Views/Candidate.prefab";
-    const string ScenePath = "Assets/Generated/Scenes/Candidate.unity";
-    const string BootstrapPath = "Assets/Generated/Scenes/ImportBootstrap.unity";
+    // Editor-only typed output locations. Original game source and text are never rewritten.
+    [Serializable] public class OutputPaths {
+        public string plan="Assets/Monkey/Editor/import-plan.json";
+        public string prefab="Assets/Generated/Views/Candidate.prefab",scene="Assets/Generated/Scenes/Candidate.unity",bootstrap="Assets/Generated/Scenes/ImportBootstrap.unity";
+        public string artRoot="Assets/Generated/Art",controllersRoot="Assets/Generated/Controllers",materialsRoot="Assets/Generated/Art",animationsRoot="Assets/Generated/Animations",sourcePrefabsRoot="Assets/Generated/Views/Sources";
+        public string editableProbe="Assets/Generated/Views/EditableProbe.prefab";
+        public string[] nativeRoots={"Assets/Generated","Assets/TextMesh Pro"},metaRoots={"Assets/Monkey"};
+    }
+    static OutputPaths outputPaths;
+    static OutputPaths Paths {
+        get {
+            if(outputPaths!=null)return outputPaths;
+            const string config="Analysis/output-paths.json";
+            var data=File.Exists(config)?JsonUtility.FromJson<OutputPaths>(File.ReadAllText(config)):new OutputPaths();
+            if(data==null||data.nativeRoots==null||data.metaRoots==null||data.nativeRoots.Length<1||data.nativeRoots.Length>8||data.metaRoots.Length<1||data.metaRoots.Length>8)throw new InvalidOperationException("Invalid typed output roots");
+            foreach(var path in new[]{data.plan,data.prefab,data.scene,data.bootstrap,data.artRoot,data.controllersRoot,data.materialsRoot,data.animationsRoot,data.sourcePrefabsRoot,data.editableProbe}.Concat(data.nativeRoots).Concat(data.metaRoots))
+                if(string.IsNullOrEmpty(path)||!path.StartsWith("Assets/",StringComparison.Ordinal)||path.Contains("..")||path.Contains("\\")||path.Contains(":")||path.Contains("\0"))throw new InvalidOperationException("Unsafe typed output location");
+            outputPaths=data;return data;
+        }
+    }
+    static string PrefabPath {get{return Paths.prefab;}}
+    static string ScenePath {get{return Paths.scene;}}
+    static string BootstrapPath {get{return Paths.bootstrap;}}
 
     [MenuItem("Tools/Monkey/Import Candidate")]
     public static void ImportCandidate() { BeginAsync(Application.isBatchMode); }
@@ -121,7 +151,7 @@ public static class MonkeyImporter
         Application.logMessageReceived-=CaptureEngineError;firstEngineError=null;handlingFailure=false;
         ownedScene=default(Scene);priorScene=default(Scene);nativeProgress=null;
         nativeClock=System.Diagnostics.Stopwatch.StartNew();
-        nativeProgress=new NativeProgress {status="running",phase="preflight",planSha256=Hash("Assets/Monkey/Editor/import-plan.json")};
+        nativeProgress=new NativeProgress {status="running",phase="preflight",planSha256=Hash(Paths.plan)};
         nativeDeadline=DateTime.MaxValue;nativeBudget=0;ownedScene=default(Scene);priorScene=default(Scene);tmpBitmapShader=null;tmpDistanceShader=null;tmpResourceResult=null;
             var budget=Environment.GetEnvironmentVariable("MONKEY_NATIVE_BUDGET_SECONDS");
             if(!string.IsNullOrEmpty(budget) && (!double.TryParse(budget,System.Globalization.NumberStyles.Float,System.Globalization.CultureInfo.InvariantCulture,out nativeBudget) || double.IsNaN(nativeBudget) || double.IsInfinity(nativeBudget) || nativeBudget<1 || nativeBudget>3600))
@@ -149,7 +179,7 @@ public static class MonkeyImporter
                 throw new InvalidOperationException("ASYNC_ENTRYPOINT_REQUIRES_BATCH_WITHOUT_QUIT: use monkey native-import");
             NativeCheckpoint("preflight",0,1);
             EditorApplication.update+=CheckAsyncBudget;
-            var plan=JsonUtility.FromJson<Plan>(File.ReadAllText("Assets/Monkey/Editor/import-plan.json"));
+            var plan=JsonUtility.FromJson<Plan>(File.ReadAllText(Paths.plan));
             if(NeedsTmp(plan) && !TmpFilesPresent()) {
                 NativeCheckpoint("tmp-resources",0,1);
                 var archive=ResolveTmpArchive(plan.tmpResources);
@@ -198,7 +228,7 @@ public static class MonkeyImporter
         if(!asyncRunning || packagePending)return;
         try {
             NativeCheckpoint("tmp-resources",tmpImportCompleted?1:0,1);
-            if(Hash("Assets/Monkey/Editor/import-plan.json")!=nativeProgress.planSha256)
+            if(Hash(Paths.plan)!=nativeProgress.planSha256)
                 throw new InvalidOperationException("IMPORT_PLAN_CHANGED_WHILE_PENDING");
             Run();FinishAsync(0);
         } catch(Exception error) {FailAsync(error);}
@@ -358,9 +388,9 @@ public static class MonkeyImporter
     static void Run()
     {
         ValidateEditorContext();
-        var plan = JsonUtility.FromJson<Plan>(File.ReadAllText("Assets/Monkey/Editor/import-plan.json"));
+        var plan = JsonUtility.FromJson<Plan>(File.ReadAllText(Paths.plan));
         var diagnostics = new List<string>();
-        foreach(var directory in new[]{Path.GetDirectoryName(PrefabPath),Path.GetDirectoryName(ScenePath),"Assets/Generated/Art","Assets/Generated/Controllers","Analysis"})
+        foreach(var directory in new[]{Path.GetDirectoryName(PrefabPath),Path.GetDirectoryName(ScenePath),Paths.artRoot,Paths.controllersRoot,Paths.materialsRoot,"Analysis"})
             Directory.CreateDirectory(directory);
         foreach(var font in plan.bitmapFonts)Directory.CreateDirectory(Path.GetDirectoryName(font.fontPath));
         foreach(var animation in plan.animations.Where(a=>a.convertible))Directory.CreateDirectory(Path.GetDirectoryName(animation.path));
@@ -379,10 +409,17 @@ public static class MonkeyImporter
             if (tmpDistanceShader == null) {
                 diagnostics.Add("TMP_SHADER_RESOURCES_MISSING: " + item.id); continue;
             }
-            var font = TMPro.TMP_FontAsset.CreateFontAsset(source,90,16,UnityEngine.TextCore.LowLevel.GlyphRenderMode.SDFAA,1024,1024,TMPro.AtlasPopulationMode.Dynamic,false);
+            var needed = string.Concat(plan.components.Where(c=>c.type=="cc.Label" && c.convertible && c.font==item.id).Select(c=>c.text));
+            // Reserve bounded atlas space for the complete declared text set. A
+            // 1024 atlas can overflow even when every glyph exists in the TTF.
+            // 128 pixels conservatively covers the fixed 90 point / 16 padding
+            // import cell; TryAddCharacters remains the strict capacity proof.
+            var cellCount = needed.Where(c=>!char.IsControl(c)).Distinct().Count();
+            int atlasSize=1024;
+            while(atlasSize<4096 && (atlasSize/128)*(atlasSize/128)<cellCount)atlasSize*=2;
+            var font = TMPro.TMP_FontAsset.CreateFontAsset(source,90,16,UnityEngine.TextCore.LowLevel.GlyphRenderMode.SDFAA,atlasSize,atlasSize,TMPro.AtlasPopulationMode.Dynamic,false);
             CheckEngineErrors();
             if (font == null) { diagnostics.Add("TMP_FONT_CREATION_FAILED: " + item.id); continue; }
-            var needed = string.Concat(plan.components.Where(c=>c.type=="cc.Label" && c.convertible && c.font==item.id).Select(c=>c.text));
             // An unused original font has no requested glyphs. TMP returns false for
             // an empty request; retain a native dynamic asset backed by that source.
             if (!string.IsNullOrEmpty(needed) && !font.TryAddCharacters(needed,out string missing)) {diagnostics.Add("TTF_GLYPHS_MISSING: " + missing);UnityEngine.Object.DestroyImmediate(font);continue;}
@@ -556,55 +593,32 @@ public static class MonkeyImporter
                 var vertical = new [] { TMPro.VerticalAlignmentOptions.Top, TMPro.VerticalAlignmentOptions.Middle, TMPro.VerticalAlignmentOptions.Bottom };
                 label.horizontalAlignment = horizontal[Mathf.Clamp(spec.horizontalAlign,0,2)];
                 label.verticalAlignment = vertical[Mathf.Clamp(spec.verticalAlign,0,2)];
+                ConfigureLabel(go,label,spec,plan.bitmapFonts.Any(f=>f.id==spec.font));
+                if(!string.IsNullOrEmpty(spec.codeClassName))MonkeyNumericCode.Bind(spec,label);
                 diagnostics.Add("LABEL_LINE_METRICS_REQUIRE_REFERENCE: " + spec.sourceId);
             }
         }
         foreach(var spec in plan.components.Where(c=>c.convertible)) {
             var go=nodeMap[spec.node];var rect=(RectTransform)go.transform;
-            if(spec.type=="cc.Widget" && spec.enabled && spec.flags==45) {
-                rect.anchorMin=Vector2.zero;rect.anchorMax=Vector2.one;
-                rect.offsetMin=new Vector2(spec.margins[0],spec.margins[1]);
-                rect.offsetMax=new Vector2(-spec.margins[2],-spec.margins[3]);
-            }
+            if(spec.type=="cc.Widget")ConfigureWidget(go,spec);
             else if(spec.type=="cc.Mask") {
                 var mask=go.AddComponent<UnityEngine.UI.RectMask2D>();mask.enabled=spec.enabled;
             }
             else if(spec.type=="cc.Layout") {
                 if(go.GetComponent<UnityEngine.UI.LayoutGroup>()!=null || go.GetComponent<UnityEngine.UI.ContentSizeFitter>()!=null)
                     throw new InvalidOperationException("Native layout conflict: "+spec.sourceId);
-                var padding=new RectOffset((int)spec.padding[0],(int)spec.padding[2],(int)spec.padding[3],(int)spec.padding[1]);
-                var fitter=go.AddComponent<UnityEngine.UI.ContentSizeFitter>();
-                if(spec.layoutType==3) {
-                    var group=go.AddComponent<IntrinsicGridLayoutGroup>();group.enabled=spec.enabled;
-                    group.cellSize=new Vector2(spec.effectiveCellSize[0],spec.effectiveCellSize[1]);
-                    group.spacing=new Vector2(spec.spacingXY[0],spec.spacingXY[1]);group.padding=padding;
-                    group.startAxis=UnityEngine.UI.GridLayoutGroup.Axis.Horizontal;
-                    group.startCorner=spec.verticalDirection==1?(spec.horizontalDirection==0?UnityEngine.UI.GridLayoutGroup.Corner.UpperLeft:UnityEngine.UI.GridLayoutGroup.Corner.UpperRight):
-                        (spec.horizontalDirection==0?UnityEngine.UI.GridLayoutGroup.Corner.LowerLeft:UnityEngine.UI.GridLayoutGroup.Corner.LowerRight);
-                    group.childAlignment=spec.verticalDirection==1?(spec.horizontalDirection==0?TextAnchor.UpperLeft:TextAnchor.UpperRight):
-                        (spec.horizontalDirection==0?TextAnchor.LowerLeft:TextAnchor.LowerRight);
-                    group.constraint=UnityEngine.UI.GridLayoutGroup.Constraint.Flexible;
-                    fitter.verticalFit=UnityEngine.UI.ContentSizeFitter.FitMode.PreferredSize;
+                if(spec.layoutType==1||spec.layoutType==2){ConfigureLinearLayout(go,spec);continue;}
+                var group=go.AddComponent<NativeFlowLayoutGroup>();group.enabled=false;
+                group.Axis=spec.startAxis;group.ReverseHorizontal=spec.horizontalDirection==1;group.ReverseVertical=spec.verticalDirection==1;
+                group.ResizeContainer=spec.resize==1;group.ResizeChildren=spec.resize==2;group.IncludeScale=spec.affectedByScale;
+                group.FixedRows=spec.constraint==1?spec.constraintCount:0;group.FixedColumns=spec.constraint==2?spec.constraintCount:0;
+                group.CellSize=new Vector2(spec.cellSize[0],spec.cellSize[1]);group.Spacing=new Vector2(spec.spacingXY[0],spec.spacingXY[1]);
+                group.padding=new RectOffset((int)spec.padding[0],(int)spec.padding[2],(int)spec.padding[3],(int)spec.padding[1]);group.enabled=spec.enabled;
+                if(spec.resize==1){var fitter=go.AddComponent<UnityEngine.UI.ContentSizeFitter>();
+                    if(spec.startAxis==0)fitter.verticalFit=UnityEngine.UI.ContentSizeFitter.FitMode.PreferredSize;
+                    else fitter.horizontalFit=UnityEngine.UI.ContentSizeFitter.FitMode.PreferredSize;
+                    fitter.enabled=spec.enabled;
                 }
-                else {
-                    UnityEngine.UI.HorizontalOrVerticalLayoutGroup group=spec.layoutType==1?
-                        (UnityEngine.UI.HorizontalOrVerticalLayoutGroup)go.AddComponent<UnityEngine.UI.HorizontalLayoutGroup>():go.AddComponent<UnityEngine.UI.VerticalLayoutGroup>();
-                    group.enabled=spec.enabled;group.padding=padding;
-                    group.childControlWidth=false;group.childControlHeight=false;
-                    group.childForceExpandWidth=false;group.childForceExpandHeight=false;
-                    if(spec.layoutType==1) {
-                        group.childScaleHeight=spec.crossAxisScale;
-                        group.childAlignment=spec.crossAxisAlignment==0?TextAnchor.LowerCenter:spec.crossAxisAlignment==1?TextAnchor.UpperCenter:TextAnchor.MiddleCenter;
-                    } else {
-                        group.childScaleWidth=spec.crossAxisScale;
-                        group.childAlignment=spec.crossAxisAlignment==0?TextAnchor.MiddleLeft:spec.crossAxisAlignment==1?TextAnchor.MiddleRight:TextAnchor.MiddleCenter;
-                    }
-                    group.reverseArrangement=spec.layoutType==1?spec.horizontalDirection==1:spec.verticalDirection==0;
-                    group.spacing=spec.layoutType==1?spec.spacingXY[0]:spec.spacingXY[1];
-                    if(spec.layoutType==1)fitter.horizontalFit=UnityEngine.UI.ContentSizeFitter.FitMode.PreferredSize;
-                    else fitter.verticalFit=UnityEngine.UI.ContentSizeFitter.FitMode.PreferredSize;
-                }
-                fitter.enabled=spec.enabled;
             }
             else if(spec.type=="cc.ScrollView") {
                 var scroll=go.AddComponent<UnityEngine.UI.ScrollRect>();scroll.enabled=spec.enabled;
@@ -628,7 +642,7 @@ public static class MonkeyImporter
                 var width=spec.width*label.font.faceInfo.pointSize/Mathf.Max(label.fontSize,1)/Mathf.Max(gradient,1);
                 material.SetFloat("_OutlineWidth",Mathf.Clamp01(width));
                 material.SetColor("_OutlineColor",new Color(spec.outlineColor[0]/255f,spec.outlineColor[1]/255f,spec.outlineColor[2]/255f,spec.outlineColor[3]/255f));
-                var path="Assets/Generated/Art/"+spec.nativeId+".mat";AssetDatabase.CreateAsset(material,path);
+                var path=Paths.materialsRoot+"/"+spec.nativeId+".mat";AssetDatabase.CreateAsset(material,path);
                 label.fontSharedMaterial=material;
                 label.margin=new Vector4(spec.width,spec.width,spec.width,spec.width);
                 label.UpdateMeshPadding();
@@ -649,32 +663,41 @@ public static class MonkeyImporter
                 image.preserveAspect=image.type==UnityEngine.UI.Image.Type.Simple;image.raycastTarget=false;i++;
             }
         }
+        var numericCodeExercise=MonkeyNumericCode.Exercise(plan.components,nodeMap);
         NativeCheckpoint("animations",0,plan.animations.Length);
         var motionReadback=BuildMotions(plan,nodeMap);
-        var view = canvas.AddComponent<MonkeyCandidateView>();
-        view.Images = canvas.GetComponentsInChildren<UnityEngine.UI.Image>(true);
-        view.Labels = canvas.GetComponentsInChildren<TMPro.TextMeshProUGUI>(true);
-        view.Buttons = canvas.GetComponentsInChildren<UnityEngine.UI.Button>(true);
         var events=new GameObject("EventSystem",typeof(UnityEngine.EventSystems.EventSystem),typeof(UnityEngine.EventSystems.StandaloneInputModule));
         SceneManager.MoveGameObjectToScene(events,scene);
         var sourcePrefabResults=new List<SourcePrefabResult>();
+        prefabTemplateHashes=new Dictionary<string,string>();
         foreach(var spec in plan.sourcePrefabs ?? new SourcePrefabSpec[0]) {
-            if(string.IsNullOrEmpty(spec.path) || !spec.path.StartsWith("Assets/Generated/Views/Sources/",StringComparison.Ordinal) || spec.path.Contains(".."))
+            if(string.IsNullOrEmpty(spec.path) || !spec.path.StartsWith(Paths.sourcePrefabsRoot+"/",StringComparison.Ordinal) || spec.path.Contains(".."))
                 throw new InvalidOperationException("Invalid source prefab path");
             Directory.CreateDirectory(Path.GetDirectoryName(spec.path));
         }
         AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
         foreach(var spec in plan.sourcePrefabs ?? new SourcePrefabSpec[0]) {
             if(sourcePrefabResults.Count%16==0)NativeCheckpoint("source-prefabs",sourcePrefabResults.Count,plan.sourcePrefabs.Length);
-            if(!spec.path.StartsWith("Assets/Generated/Views/Sources/",StringComparison.Ordinal) || spec.path.Contains("..") || File.Exists(spec.path))
+            if(!spec.path.StartsWith(Paths.sourcePrefabsRoot+"/",StringComparison.Ordinal) || spec.path.Contains("..") || File.Exists(spec.path))
                 throw new InvalidOperationException("Invalid or existing source prefab path: "+spec.path);
+            PrepareNativeInstances(plan,spec.sourceId,nodeMap,nodeSpecs);
+            SettleNativeLayout(canvas);
+            var initialPrefabNodes=spec.nodes.Select(id=>DescribeNode(nodeSpecs[id],(RectTransform)nodeMap[id].transform)).ToArray();
             // SaveAsPrefabAsset serializes this subtree without modifying it.
             // A managed active Instantiate can run layout lifecycle callbacks
             // while the cloned hierarchy is still initializing.
             var sourcePrefab=PrefabUtility.SaveAsPrefabAsset(nodeMap[spec.root],spec.path,out bool saved);
             if(!saved || sourcePrefab==null)throw new InvalidOperationException("Source prefab save failed: "+spec.sourceId);
-            var contents=PrefabUtility.LoadPrefabContents(spec.path);
+            var nativePrefabType=PrefabUtility.GetPrefabAssetType(sourcePrefab);
+            bool rootVariant=(plan.prefabInstances??new PrefabInstanceSpec[0]).Any(p=>p.owner==spec.sourceId&&p.root==spec.root);
+            if(nativePrefabType!=(rootVariant?PrefabAssetType.Variant:PrefabAssetType.Regular))throw new InvalidOperationException("Native Prefab/Variant type differs from source relationship");
+            prefabTemplateHashes.Add(spec.sourceId,Hash(spec.path));
+            var contents=PrefabUtility.LoadPrefabContents(spec.path);GameObject uiContext=null;
             try {
+                // A UI Prefab has no Canvas in LoadPrefabContents. Supply the
+                // same declared preview context before measuring wrapped TMP
+                // lines, without saving or changing the shared asset.
+                uiContext=CreatePrefabUiContext(contents,plan);
                 int passes=SettleNativeLayout(contents);
                 var transforms=contents.GetComponentsInChildren<Transform>(true);
                 int missing=transforms.Sum(t=>GameObjectUtility.GetMonoBehavioursWithMissingScriptCount(t.gameObject));
@@ -697,16 +720,36 @@ public static class MonkeyImporter
                     else if(c.type=="cc.Layout")valid=go.GetComponent<UnityEngine.UI.LayoutGroup>()!=null;
                     if(!valid)referenceFailures.Add(c.sourceId);
                 }
-                sourcePrefabResults.Add(new SourcePrefabResult {sourceId=spec.sourceId,path=spec.path,
+                var persistentMap=SavedNodeMap(plan.nodes,sourcePrefab,spec,nodeSpecs);
+                var numericBindings=plan.components.Where(c=>c.convertible&&!string.IsNullOrEmpty(c.codeClassName)&&persistentMap.ContainsKey(c.node)).Select(c=>MonkeyNumericCode.Read(c,persistentMap[c.node].gameObject)).ToArray();
+                sourcePrefabResults.Add(new SourcePrefabResult {prefabInstances=ReadNativeInstances(plan,mapped,spec.sourceId),numericCodeBindings=numericBindings,sourceId=spec.sourceId,path=spec.path,
+                    nativePrefabType=nativePrefabType.ToString(),nativeInitialNodes=initialPrefabNodes,
                     guid=AssetDatabase.AssetPathToGUID(spec.path),nodeCount=transforms.Length,missingScripts=missing,
                     savedReloaded=true,geometryPhase="native-layout-settled-v1",layoutSettlePasses=passes,
                     nodes=spec.nodes.Select(id=>DescribeNode(nodeSpecs[id],mapped[id])).ToArray(),
                     referencesVerified=referenceFailures.Count==0,referenceFailures=referenceFailures.ToArray()});
-            } finally { PrefabUtility.UnloadPrefabContents(contents); }
+            } finally {
+                if(uiContext!=null){contents.transform.SetParent(null,false);UnityEngine.Object.DestroyImmediate(uiContext);}
+                PrefabUtility.UnloadPrefabContents(contents);
+            }
         }
+        foreach(var owner in (plan.prefabInstances??new PrefabInstanceSpec[0]).Select(p=>p.owner).Distinct().Where(s=>!prefabTemplateHashes.ContainsKey(s)))
+            PrepareNativeInstances(plan,owner,nodeMap,nodeSpecs);
+        var view = canvas.AddComponent<MonkeyCandidateView>();
+        view.Images = canvas.GetComponentsInChildren<UnityEngine.UI.Image>(true);
+        view.Labels = canvas.GetComponentsInChildren<TMPro.TextMeshProUGUI>(true);
+        view.Buttons = canvas.GetComponentsInChildren<UnityEngine.UI.Button>(true);
+        SettleNativeLayout(canvas);
+        var initialSceneNodes=plan.nodes.Select(n=>DescribeNode(n,(RectTransform)nodeMap[n.sourceId].transform)).ToArray();
         NativeCheckpoint("candidate-save",0,1);
         var prefab = PrefabUtility.SaveAsPrefabAsset(canvas,PrefabPath,out var success);
         if (!success || prefab == null) throw new InvalidOperationException("Native Prefab save failed");
+        var candidatePrefabProofs=new PrefabInstanceResult[0];
+        if((plan.prefabInstances??new PrefabInstanceSpec[0]).Any(p=>(p.mountedChildren??new PrefabMountedChildren[0]).Length>0||(p.mountedComponents??new PrefabMountedComponent[0]).Length>0)) {
+            var candidateContents=PrefabUtility.LoadPrefabContents(PrefabPath);
+            try {candidatePrefabProofs=ReadNativeInstances(plan,SavedNodeMap(plan.nodes,candidateContents),null,PrefabPath,true);}
+            finally {PrefabUtility.UnloadPrefabContents(candidateContents);}
+        }
         UnityEngine.Object.DestroyImmediate(canvas);
         var instance=(GameObject)PrefabUtility.InstantiatePrefab(prefab,scene);
         if (!EditorSceneManager.SaveScene(scene,ScenePath)) throw new InvalidOperationException("Native scene save failed");
@@ -726,8 +769,12 @@ public static class MonkeyImporter
         if(!EditorSceneManager.SaveScene(scene,ScenePath))throw new InvalidOperationException("Settled native scene save failed");
         NativeCheckpoint("scene-reopen",1,1);
         NativeCheckpoint("native-readback",0,1);
-        var savedNodeMap=SavedNodeMap(plan.nodes,instance);
+        var gallery=plan.galleryOnly?ReadSavedGallery(plan,instance):new GalleryResult[0];
+        var savedNodeMap=plan.galleryOnly?new Dictionary<string,RectTransform>():SavedNodeMap(plan.nodes,instance);
         var readback = new Readback {
+            prefabInstances=ReadNativeInstances(plan,savedNodeMap,null,PrefabPath),candidatePrefabInstances=candidatePrefabProofs,
+            nativeScope=plan.galleryOnly?"resources-and-gallery-only":"source-node-subset",sourceGraphVerification=plan.galleryOnly?"not_run":"saved-source-node-subset",gallery=gallery,
+            numericCodeExercise=numericCodeExercise,numericCodeBindings=plan.components.Where(c=>c.convertible&&!string.IsNullOrEmpty(c.codeClassName)).Select(c=>MonkeyNumericCode.Read(c,savedNodeMap[c.node].gameObject)).ToArray(),
             sourcePrefabs=sourcePrefabResults.ToArray(),tmpResources=tmpResourceResult,sceneReopened=true,
             jsonAssets=plan.assets.Where(a=>a.kind=="cc.JsonAsset").Select(a=> {
                 var text=AssetDatabase.LoadAssetAtPath<TextAsset>(a.path);
@@ -735,7 +782,7 @@ public static class MonkeyImporter
                 using(var hash=System.Security.Cryptography.SHA256.Create())return new JsonResult {id=a.id,guid=AssetDatabase.AssetPathToGUID(a.path),
                     textSha256=BitConverter.ToString(hash.ComputeHash(System.Text.Encoding.UTF8.GetBytes(text.text))).Replace("-","").ToLowerInvariant()};
             }).ToArray(),
-            status=diagnostics.Count==0?"imported":"partial",unityVersion=Application.unityVersion,
+            dynamicUiProbes=ProbeDynamicUi(plan,instance),nativeInitialNodes=initialSceneNodes,status=diagnostics.Count==0?"imported":"partial",unityVersion=Application.unityVersion,
             prefabGuid=AssetDatabase.AssetPathToGUID(PrefabPath),sceneGuid=AssetDatabase.AssetPathToGUID(ScenePath),
             animations=motionReadback,spriteCount=spriteMap.Count,nodeCount=nodeMap.Count,
             missingScripts=instance.GetComponentsInChildren<Transform>(true).Sum(t=>GameObjectUtility.GetMonoBehavioursWithMissingScriptCount(t.gameObject)),
@@ -778,8 +825,8 @@ public static class MonkeyImporter
         }
         catch(Exception exception) {readback.previewError=exception.Message;}
         if (!EditorSceneManager.SaveScene(scene,ScenePath)) throw new InvalidOperationException("Scene save after native preview failed");
-        readback.nativeFiles = new[]{"Assets/Generated","Assets/TextMesh Pro"}.Where(Directory.Exists).SelectMany(folder=>Directory.GetFiles(folder,"*",SearchOption.AllDirectories))
-            .Concat(Directory.GetFiles("Assets/Monkey","*.meta",SearchOption.AllDirectories))
+        readback.nativeFiles = Paths.nativeRoots.Where(Directory.Exists).SelectMany(folder=>Directory.GetFiles(folder,"*",SearchOption.AllDirectories))
+            .Concat(Paths.metaRoots.Where(Directory.Exists).SelectMany(folder=>Directory.GetFiles(folder,"*.meta",SearchOption.AllDirectories)))
             .OrderBy(path=>path,StringComparer.Ordinal).Select(path=>new FileResult {
                 path=path.Replace('\\','/'), sha256=Hash(path)
             }).ToArray();
@@ -791,7 +838,7 @@ public static class MonkeyImporter
         // Keep the candidate scene open for editing; no global SaveAssets, no other scenes saved.
     }
     static bool CheckEditableClone() {
-        const string path="Assets/Generated/Views/EditableProbe.prefab";
+        var path=Paths.editableProbe;
         if(!AssetDatabase.CopyAsset(PrefabPath,path))throw new InvalidOperationException("Native editable probe copy failed");
         var contents=PrefabUtility.LoadPrefabContents(path);var original=contents.transform.GetChild(0).name;
         try {
@@ -834,7 +881,7 @@ public static class MonkeyImporter
         }
     }
     static void ConfigureScaleButton(GameObject go,UnityEngine.UI.Button button,ComponentSpec spec) {
-        var path="Assets/Generated/Controllers/"+spec.nativeId;
+        var path=Paths.controllersRoot+"/"+spec.nativeId;
         var controller=UnityEditor.Animations.AnimatorController.CreateAnimatorControllerAtPath(path+".controller");
         var normal=new AnimationClip {name="Normal"};var pressed=new AnimationClip {name="Pressed"};
         var scale=go.transform.localScale;
@@ -857,15 +904,29 @@ public static class MonkeyImporter
         EditorUtility.SetDirty(controller);AssetDatabase.SaveAssetIfDirty(controller);
     }
     static NodeResult DescribeNode(NodeSpec source,RectTransform rect) {
+        float opacity=255f;float[] color=null;
+        if(!string.IsNullOrEmpty(source.sourceGeometryProfile)) {
+            var group=rect.GetComponent<CanvasGroup>();opacity=(group!=null&&group.enabled?group.alpha:1f)*255f;
+            if(Math.Abs(opacity-source.opacity)>.001f)throw new InvalidOperationException("Source UI opacity differs: "+source.sourceId);
+            if(source.verifyUiColor) {
+                var graphic=rect.GetComponent<UnityEngine.UI.Graphic>();
+                if(graphic==null)throw new InvalidOperationException("Source UI renderer missing");
+                var c=graphic.color;color=new[]{c.r*255f,c.g*255f,c.b*255f,c.a*255f};
+                if(color.Where((value,index)=>Math.Abs(value-source.color[index])>.001f).Any())throw new InvalidOperationException("Source UI renderer color differs: "+source.sourceId);
+            }
+        }
         return new NodeResult {sourceId=source.sourceId,hierarchy=rect.name,size=new[]{rect.rect.width,rect.rect.height},
             pivot=new[]{rect.pivot.x,rect.pivot.y},position=new[]{rect.localPosition.x,rect.localPosition.y,rect.localPosition.z},
             scale=new[]{rect.localScale.x,rect.localScale.y,rect.localScale.z},
             rotation=new[]{rect.localRotation.x,rect.localRotation.y,rect.localRotation.z,rect.localRotation.w},
-            active=rect.gameObject.activeSelf,componentTypes=rect.GetComponents<Component>().Select(c=>c.GetType().FullName).ToArray()};
+            color=color,opacity=opacity,active=rect.gameObject.activeSelf,componentTypes=rect.GetComponents<Component>().Select(c=>c.GetType().FullName).ToArray()};
     }
     static int SettleNativeLayout(GameObject root) {
         var groups=root.GetComponentsInChildren<UnityEngine.UI.LayoutGroup>(true).Where(g=>g.isActiveAndEnabled).Reverse().ToArray();
-        if(groups.Length==0)return 0;
+        var fitters=root.GetComponentsInChildren<UnityEngine.UI.ContentSizeFitter>(true).Where(f=>f.isActiveAndEnabled).ToArray();
+        var constraints=root.GetComponentsInChildren<NativeRectConstraints>(true).Where(f=>f.isActiveAndEnabled).ToArray();
+        if(groups.Length==0&&fitters.Length==0&&constraints.Length==0)return 0;
+        var controllers=groups.Select(g=>(RectTransform)g.transform).Concat(fitters.Select(f=>(RectTransform)f.transform)).Distinct().ToArray();
         var rects=root.GetComponentsInChildren<RectTransform>(true);
         Func<RectTransform,Vector4> value=r=>new Vector4(r.rect.width,r.rect.height,r.localPosition.x,r.localPosition.y);
         for(int pass=0;pass<8;pass++) {
@@ -873,11 +934,31 @@ public static class MonkeyImporter
             var before=rects.Select(value).ToArray();
             // DesignRoot is not an ILayoutController: forcing only that root is
             // a no-op. Resolve actual native groups, children before parents.
-            foreach(var group in groups)UnityEngine.UI.LayoutRebuilder.ForceRebuildLayoutImmediate((RectTransform)group.transform);
+            foreach(var constraint in constraints)constraint.Refresh();
+            foreach(var label in root.GetComponentsInChildren<TMPro.TextMeshProUGUI>(true).Where(l=>l.isActiveAndEnabled))label.ForceMeshUpdate();
+            foreach(var controller in controllers)UnityEngine.UI.LayoutRebuilder.ForceRebuildLayoutImmediate(controller);
             Canvas.ForceUpdateCanvases();
             if(rects.Select((r,i)=>(value(r)-before[i]).sqrMagnitude).All(d=>d<1e-10f))return pass+1;
         }
         throw new InvalidOperationException("NATIVE_LAYOUT_DID_NOT_SETTLE");
+    }
+    static GalleryResult[] ReadSavedGallery(Plan plan,GameObject instance) {
+        if(plan.nodes.Length!=0 || plan.components.Length!=0 || plan.sourcePrefabs.Length!=0)throw new InvalidOperationException("Gallery cannot stand in for a source graph");
+        var expected=plan.textures.Where(t=>!t.id.EndsWith("@original")).ToArray();var design=instance.transform.Find("DesignRoot");
+        if(design==null || design.childCount!=expected.Length)throw new InvalidOperationException("Saved gallery boundary differs");
+        var result=new GalleryResult[expected.Length];
+        for(int i=0;i<expected.Length;i++) {
+            var rect=design.GetChild(i)as RectTransform;var image=rect!=null?rect.GetComponent<UnityEngine.UI.Image>():null;var spec=expected[i];
+            var type=spec.border.Any(v=>v>0)?UnityEngine.UI.Image.Type.Sliced:UnityEngine.UI.Image.Type.Simple;
+            if(rect==null || rect.name!="AssetPreview_"+i || rect.childCount!=0 || image==null || image.sprite==null || image.type!=type || image.raycastTarget || image.preserveAspect!=(type==UnityEngine.UI.Image.Type.Simple) ||
+               AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(image.sprite))!=spec.guid ||
+               (rect.anchorMin-Vector2.zero).sqrMagnitude>1e-10f || (rect.anchorMax-Vector2.zero).sqrMagnitude>1e-10f ||
+               (rect.pivot-new Vector2(.5f,.5f)).sqrMagnitude>1e-10f || (rect.sizeDelta-new Vector2(180,180)).sqrMagnitude>1e-10f ||
+               (rect.anchoredPosition-new Vector2(120+(i%3)*230,1130-(i/3)*230)).sqrMagnitude>1e-10f)
+                throw new InvalidOperationException("Saved gallery sprite/rect differs: "+spec.id);
+            result[i]=new GalleryResult{id=spec.id,spriteGuid=spec.guid,geometryVerified=true};
+        }
+        return result;
     }
     static Dictionary<string,RectTransform> SavedNodeMap(NodeSpec[] nodes,GameObject instance,SourcePrefabSpec prefab=null,Dictionary<string,NodeSpec> byId=null) {
         byId=byId??nodes.ToDictionary(n=>n.sourceId);
@@ -919,7 +1000,10 @@ public static class MonkeyImporter
                 measured.ForceMeshUpdate(true,true);
             }
             float padding=bitmap?TMPro.ShaderUtilities.GetPadding(measured.fontSharedMaterial,measured.extraPadding,(measured.fontStyle&TMPro.FontStyles.Bold)!=0):0;
-            return new LabelResult {sourceId=spec.sourceId,text=measured.text,fontGuid=AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(measured.font)),
+            var lineBox=label.GetComponent<NativeTextLineBox>();
+            return new LabelResult {lineBoxPresent=lineBox!=null,lineBoxActive=lineBox!=null&&lineBox.isActiveAndEnabled,
+                lineBoxHeight=lineBox!=null?lineBox.preferredHeight:0,lineBoxLineHeight=lineBox!=null?lineBox.LineHeight:0,lineBoxExtra=lineBox!=null?lineBox.ExtraLineFraction:0,
+                lineCount=measured.textInfo.lineCount,sourceId=spec.sourceId,text=measured.text,fontGuid=AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(measured.font)),
                 fontSize=measured.fontSize,characterCount=measured.textInfo.characterCount,geometryProbe=geometryProbe,
                 glyphBounds=measured.textInfo.characterInfo.Take(measured.textInfo.characterCount).Where(info=>info.isVisible).Select(info=>new GlyphBounds {
                     unicode=info.character,left=info.bottomLeft.x,top=info.topLeft.y,width=info.topRight.x-info.topLeft.x,height=info.topLeft.y-info.bottomLeft.y,
@@ -937,9 +1021,9 @@ public static class MonkeyImporter
         var results=new List<MotionResult>();
         foreach(var spec in plan.animations ?? Array.Empty<MotionSpec>()) {
             if(!spec.convertible)continue;
-            if(!spec.path.StartsWith("Assets/Generated/Animations/") || spec.path.Contains("..") || File.Exists(spec.path))
+            if(!spec.path.StartsWith(Paths.animationsRoot+"/",StringComparison.Ordinal) || spec.path.Contains("..") || File.Exists(spec.path))
                 throw new InvalidOperationException("Unsafe/existing animation output: "+spec.path);
-            Directory.CreateDirectory("Assets/Generated/Animations");
+            Directory.CreateDirectory(Paths.animationsRoot);
             var clip=new AnimationClip {name=spec.name,frameRate=spec.sample};
             foreach(var track in spec.tracks) {
                 if(AnimationUtility.CalculateTransformPath(nodes[track.node].transform,nodes[spec.root].transform)!=track.path)

@@ -20,6 +20,17 @@ def main(argv=None):
     cap.add_argument('--json', action='store_true')
     p = sub.add_parser('convert', help='Convert a source project into an isolated native project candidate')
     p.add_argument('--source', help='Local wxapkg/APK, resource/project directory, project.json or bundle config.json')
+    p.add_argument('--format',choices=['none','grea'],default=None,help='Optional post-export layout; default none. Fresh package conversion only.')
+    p.add_argument('--source-family', choices=['auto','cocos','unity','laya','layaair','egret','eraget','custom','other'], default='auto')
+    p.add_argument('--provider-python', help='Existing Python with UnityPy 1.25.3 for Unity source conversion')
+    p.add_argument('--asset-ripper', help='Existing exact AssetRipper 2.0.0 provider executable')
+    p.add_argument('--provider-budget-seconds', type=int, default=600)
+    p.add_argument('--unity-texture-cache',help='Explicit local ASTC cache pool for supported Unity texture-key hydration')
+    p.add_argument('--unity-quarantine-invalid-textures',action='store_true',help='Explicit partial export excluding exact invalid ETC1 objects; originals and unresolved references retained')
+    p.add_argument('--unity-dependency-manifest',help='Frozen Unity bundle lookup pool; export only exact reachable serialized-file closure')
+    p.add_argument('--unity-schema-manifest',help='Frozen bundle pool for exact missing TypeTree lookup during Unity conversion')
+    p.add_argument('--numeric-code-contract',help='Explicit source identity and numeric Label-field or reviewed static Number-method contract; fresh package conversion only')
+    p.add_argument('--cocos-code-language',choices=['ts','js'],default='ts',help='Cocos code output; TypeScript first; JS uses an explicit ESM package boundary')
     p.add_argument('--reuse-source-stages',help='Fresh package output using verified source stages; supports names-v1 metadata migration')
     p.add_argument('--input-set', help='Explicit local roots and identity/provenance manifest (schema 1)')
     p.add_argument('--target', choices=['unity','cocos','unity6','cocos38','both',UNITY_PROFILE,cocos.PROFILE])
@@ -29,7 +40,7 @@ def main(argv=None):
     p.add_argument('--recipe', help='Reusable JSON input/selection options; combine with --out')
     p.add_argument('--offline', action='store_true', help='Explicitly generate and verify an offline candidate only')
     p.add_argument('--namespace')
-    p.add_argument('--source-profile', choices=[PROFILE,PROJECT_PROFILE])
+    p.add_argument('--source-profile', choices=[PROFILE,PROJECT_PROFILE,'generic-image-resources-v1','egret-custom-resource-plist-v1'])
     pick = p.add_mutually_exclusive_group()
     pick.add_argument('--asset-index', type=int, action='append')
     pick.add_argument('--all-assets', action='store_true', help='Explicitly select every bundle entry (project default)')
@@ -42,10 +53,59 @@ def main(argv=None):
     p.add_argument('--unity-editor', help='Exact installed Unity executable for --native')
     p.add_argument('--creator-editor', help='Exact installed CocosCreator executable for --native')
     p.add_argument('--native-budget-seconds', type=int, default=1200, help='Method budget per Editor, 1..1200; each window is at most 30 minutes')
-    p.add_argument('--remote-manifest', help='Explicit URL/path/SHA/byte download manifest; requires --input-set')
+    p.add_argument('--remote-manifest', help='Explicit URL/path/SHA/byte downloads; Cocos requires --input-set, Unity accepts an explicit source container')
     p.add_argument('--remote-cache-root', help='Read-only root for paths in the remote manifest')
     p.add_argument('--acquisition-out', help='Fresh acquired-files workspace; default OUTPUT-acquired')
     p.add_argument('--remote-budget-seconds', type=int, default=900, help='Acquisition budget, 30..3600 seconds')
+    p = sub.add_parser('hydrate-unity', help='Resolve explicit WeChat texture keys against a pinned local ASTC cache pool')
+    p.add_argument('--source',required=True)
+    p.add_argument('--texture-cache',required=True)
+    p.add_argument('--provider-python',required=True)
+    p.add_argument('--out',required=True)
+    p.add_argument('--budget-seconds',type=int,default=120)
+    p = sub.add_parser('index-unity', help='Index exact serialized files and PPtr IDs from an explicit frozen bundle list')
+    p.add_argument('--manifest', required=True)
+    p.add_argument('--provider-python', required=True)
+    p.add_argument('--out', required=True)
+    p.add_argument('--budget-seconds',type=int,default=600)
+    p = sub.add_parser('unity-code-model', help='Recover named C# data fields from embedded Unity TypeTree evidence')
+    p.add_argument('--inspection', required=True)
+    p.add_argument('--out', required=True)
+    p = sub.add_parser('export-unity', help='Export a Unity bundle through an existing fixed AssetRipper in an isolated copy')
+    p.add_argument('--source', required=True)
+    p.add_argument('--asset-ripper', required=True)
+    p.add_argument('--out', required=True)
+    p.add_argument('--budget-seconds', type=int, default=600)
+    p = sub.add_parser('inspect-unity', help='Strict typed inspection of an explicit Unity serialized file or AssetBundle')
+    p.add_argument('--source', required=True)
+    p.add_argument('--schema-manifest', help='Explicit frozen bundle pool; borrow only identical version/platform/script/type hashes')
+    p.add_argument('--provider-python', required=True, help='Existing Python with UnityPy 1.25.3; never installed automatically')
+    p.add_argument('--out', required=True)
+    p.add_argument('--budget-seconds', type=int, default=120)
+    p = sub.add_parser('format-project',help='Preview or apply a typed GREA layout into a fresh unimported Unity/Creator candidate')
+    p.add_argument('--project',required=True)
+    p.add_argument('--profile',choices=['grea'],default='grea')
+    pick=p.add_mutually_exclusive_group(required=True)
+    pick.add_argument('--preview',action='store_true')
+    pick.add_argument('--plan')
+    p.add_argument('--out',required=True)
+    p = sub.add_parser('project-model', help='Inspect explicit target asset path slots and identity without moving files')
+    p.add_argument('--candidate', required=True)
+    p.add_argument('--out', required=True)
+    p = sub.add_parser('code-emit', help='Emit source-proven numeric field methods as C# and default TypeScript; unknown methods stay pending')
+    p.add_argument('--source',required=True)
+    p.add_argument('--code-model',required=True)
+    p.add_argument('--namespace',default='monkey-project')
+    p.add_argument('--numeric-field',action='append',required=True,help='Explicit numeric call-subdomain contract; not a global JS type inference')
+    p.add_argument('--cocos-code-language',choices=['ts','js'],default='ts')
+    p.add_argument('--out',required=True)
+    p = sub.add_parser('code-model', help='Inspect named methods and evidenced semantic candidates without executing JavaScript')
+    p.add_argument('--source', required=True)
+    p.add_argument('--module-name', required=True)
+    p.add_argument('--out', required=True)
+    p = sub.add_parser('research-matrix', help='Discover every Research game without converting or following external sources')
+    p.add_argument('--root', required=True)
+    p.add_argument('--out', required=True)
     p = sub.add_parser('native-import',help='Plan or explicitly execute a bounded Unity/Creator import in a fresh copy')
     p.add_argument('--candidate',required=True);p.add_argument('--out',required=True)
     p.add_argument('--editor-path',required=True);p.add_argument('--expected-manifest',required=True)
@@ -95,17 +155,165 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         if args.command == 'capabilities':
-            print(json.dumps(dict(version=__version__, profiles=[PROFILE,PROJECT_PROFILE], targetProfiles=[UNITY_PROFILE,cocos.PROFILE],
-                schemaVersion=1, implemented=['convert','catalog','inspect','normalize','plan','export','verify','handoff','diff','register','apply','preflight','native-import'], planned=[],
+            print(json.dumps(dict(version=__version__, profiles=[PROFILE,PROJECT_PROFILE,'cocos-2.4.11-bundle','cocos-3.8.7-bundle','cocos-3.4.1-bundle','cocos-2.1.2-resource','generic-image-resources-v1','egret-custom-resource-plist-v1'], targetProfiles=[UNITY_PROFILE,cocos.PROFILE],
+                additionalPackageProfiles={'cocos-3.4.1-bundle':dict(scope='version-proven-node-ui-prefab-and-resource-subset',graphs='856-of-857-source-graphs;22503-nodes;52-instances;one-null-quaternion-rejected',native='5-source-frames-plus-6-prefabs-331-nodes-8-instances-7-mounted-nodes-1-mounted-widget-both-targets-verified',operations=['package-convert']), 'egret-custom-resource-plist-v1':dict(scope='reviewed-custom-resource-manifest-plist-binjson-v2',targets=['unity6'],sourceSkins='typed-data-only-native-layout-pending',remoteAcquisition='explicit-manifest-cache-and-bounded-fetch',native='132-source-frames-verified; expanded-atlas-set-pending',operations=['package-convert']), 'cocos-2.1.2-resource':dict(scope='version-proven-resource-subset',native='211-source-frames-both-targets-verified',graphs='pending',operations=['package-convert']), 'generic-image-resources-v1':dict(scope='derived-original-image-gallery-only',families=['laya','layaair','egret','eraget','custom','other'],targets=['unity6'],native='Egret-16-derived-images-verified',sourceGraphs='not-restored',operations=['package-convert']), 'cocos-2.4.11-bundle':dict(scope='version-proven-published-bundle-subset',native='91-source-graphs-both-targets-verified',operations=['package-convert']), 'cocos-3.8.7-bundle':dict(scope='version-proven-node-ui-template-and-resource-subset',native='83-static-graphs-plus-4-prefab-5-native-relations-and-16-node-dynamic-ui-representatives-both-targets-verified',graphs='114-root-closures-static;5-graphs-missing-6-exact-templates;not-all-native-validated',operations=['package-convert'])},
+                schemaVersion=1, dynamicUi=dict(probeVersion=2,verifiedLayoutGroups=6,verifiedLayoutStates=54,native='bounded-grid-scale-constraints-child-resize-and-linear-scale-representatives',timing='Editor-native-forced-update;Player-not_run'), formatting=dict(implemented=['unity-creator-unimported-owned-grea-v1','fresh-package-convert-none-grea'],pending=['unity-general-scene-native-format','unity-source-positive-native-move-sample'],rejected=['materialized-native-assets-require-a-future-native-move-adapter']), unitySourceProfile=dict(name='unityfs-unitypy-1.25.3-assetripper-2.0.0',status='partial',inputs='explicit-unity-bundle-or-webdata-files-and-exact-local-texture-cache',additionalContainers=['UnityWebData1.0'],invalidTexturePolicy='block-default-explicit-quarantine-retains-original',dependencyClosure='explicit-frozen-pool-exact-serialized-file-closure',editor='one-prefab-schema-reference-save-reload-verified',publicNative=True,nativeProfile='unity-leaf-prefab-sprite-array-v1',nativeFormatting='typed-resource-moves-with-dynamic-path-pins; real sample pinned all 134 assets',methodsRecovered=0), implemented=['convert','catalog','inspect','normalize','plan','export','verify','handoff','diff','register','apply','preflight','native-import','research-matrix','code-model','code-emit','format-project','project-model','inspect-unity','export-unity','unity-code-model','index-unity','hydrate-unity'], planned=[],
                 targetValidation={UNITY_PROFILE:dict(static='implemented',editor='representative-subset-verified',visual='not_run'),cocos.PROFILE:dict(static='implemented',editor='representative-subset-verified',visual='not_run')},
                 compiledFormats=['compiled-v1','pack-v1','texture-pack-v1'],
                 containerFormats=['plain-wxapkg','APK-ZIP','Cocos-resource-directory'],
                 packageWorkflow=dict(fileAccounting='implemented',staticModuleRecovery='partial',codeDrafts='source-linked-contracts',
-                                     nativeObjectRecovery='shared-ir-supported-subset',packageResume='hash-checked',inputSets='explicit-local-roots',editorOrchestration='manifest-bound-native-import-command',remoteAcquisition='explicit-manifest-bounded-fetch'),
+                                     nativeObjectRecovery='shared-ir-supported-subset',packageResume='hash-checked',inputSets='explicit-local-roots',editorOrchestration='manifest-bound-native-import-command',remoteAcquisition='explicit-manifest-bounded-fetch',cocosCodeLanguages=['ts','js'],defaultCocosCodeLanguage='ts',numericCodeContracts=['numeric-call-subdomain-v1','static-number-methods-v1'],staticNumericScope='reviewed-Creator3-descriptor-helper-and-lexical-dependency; no component binding'),
                 imageFormats=['PNG','JPEG','ASTC (optional pinned decoder)'],animationSchemaVersion=1,
                 animationSubset=['local-position','local-scale','opacity','linear','constant-step','Normal','Loop'],animationEvents='manual-contract-only', targetEditorValidation='representative-subsets-only'), ensure_ascii=False))
             return 0
+        if args.command == 'code-emit':
+            from .code_emit import emit
+            result=emit(args.source,args.code_model,args.out,args.numeric_field,args.cocos_code_language,args.namespace)
+            print(json.dumps(result,ensure_ascii=False));return 1
+        if args.command == 'hydrate-unity':
+            from .unity_textures import hydrate
+            result=hydrate(args.source,args.texture_cache,args.provider_python,args.out,args.budget_seconds)
+            print(json.dumps(result,ensure_ascii=False))
+            return 0 if result['status']=='hydrated' else 1
+        if args.command == 'index-unity':
+            from .unity_index import catalog as index_unity
+            result=index_unity(args.manifest,args.provider_python,args.out,args.budget_seconds)
+            print(json.dumps(result,ensure_ascii=False))
+            return 0 if result['status']=='indexed' else 1
+        if args.command == 'unity-code-model':
+            from .unity_code_model import model as unity_code_model
+            print(json.dumps(unity_code_model(args.inspection,args.out),ensure_ascii=False))
+            return 1
+        if args.command == 'export-unity':
+            from .providers.assetripper import export as export_unity
+            result=export_unity(args.source,args.asset_ripper,args.out,args.budget_seconds)
+            print(json.dumps(result,ensure_ascii=False))
+            return 1
+        if args.command == 'inspect-unity':
+            from .sources.unity_serialized import inspect as inspect_unity
+            result = inspect_unity(args.source,args.provider_python,args.out,args.budget_seconds,schema_manifest=args.schema_manifest)
+            print(json.dumps(result,ensure_ascii=False))
+            return 0 if result['status']=='inspected' else 1
+        if args.command == 'format-project':
+            from .formatting import preview as format_preview,apply as format_apply
+            result=format_preview(args.project,args.out)if args.preview else format_apply(args.project,args.plan,args.out)
+            print(json.dumps(result,ensure_ascii=False));return 0 if args.preview else 1
+        if args.command == 'project-model':
+            from .project_model import inspect as project_model
+            print(json.dumps(project_model(args.candidate,args.out),ensure_ascii=False))
+            return 0
+        if args.command == 'code-model':
+            from .code_model import inspect as code_model
+            print(json.dumps(code_model(args.source,args.out,args.module_name),ensure_ascii=False))
+            return 1
+        if args.command == 'research-matrix':
+            from .research_cases import discover
+            print(json.dumps(discover(args.root,args.out),ensure_ascii=False))
+            return 0
         if args.command == 'convert':
+            if args.numeric_code_contract and any((args.resume,args.recipe,args.reuse_source_stages,args.asset_index,args.bindings,args.animation)):
+                parser.error('--numeric-code-contract requires fresh package source stages')
+            if args.cocos_code_language!='ts' and not args.numeric_code_contract:parser.error('--cocos-code-language requires --numeric-code-contract')
+            if args.format is not None and (args.resume or args.recipe):parser.error('--format requires a fresh package conversion; resume/recipe retain their declared contract')
+            generic_selection=None
+            generic_family=args.source_family if args.source_family in ('laya','layaair','egret','eraget','custom','other')else None
+            if args.source_family=='auto' and args.source_profile in ('generic-image-resources-v1','egret-custom-resource-plist-v1'):
+                generic_family='egret'if args.source_profile=='egret-custom-resource-plist-v1'else'other'
+            if args.input_set and args.source_family=='auto':
+                from .inputs import input_set
+                generic_selection=input_set(args.input_set)
+                if generic_selection['sourceProfile']=='generic-image-resources-v1':generic_family='other'
+                elif generic_selection['sourceProfile']=='egret-custom-resource-plist-v1':generic_family='egret'
+            if generic_family:
+                if args.target not in ('unity','unity6',UNITY_PROFILE):parser.error('Non-Cocos sources target Unity 6 only')
+                if not all((args.source or args.input_set,args.target,args.out))or args.source and args.input_set:parser.error('Image-resource conversion requires --source or --input-set, --target unity6 and --out')
+                if args.source_profile and args.source_profile not in ('generic-image-resources-v1','egret-custom-resource-plist-v1'):parser.error('Resource sources require a supported explicit resource profile')
+                if any((args.resume,args.recipe,args.reuse_source_stages,args.numeric_code_contract,args.provider_python,args.asset_ripper,args.unity_texture_cache,args.unity_schema_manifest,args.unity_dependency_manifest,args.unity_quarantine_invalid_textures,args.asset_index,args.all_assets,args.bindings,args.animation,args.dependency_source,args.evidence_source,args.cocos_code_language!='ts',args.provider_budget_seconds!=600)):
+                    parser.error('Initial generic image profile supports explicit local roots; source adapters, remote manifests and source code binding are pending')
+                if not args.remote_manifest and any((args.remote_cache_root,args.acquisition_out,args.remote_budget_seconds!=900)):parser.error('Remote options require --remote-manifest')
+                acquired=None;remote_settings=None;conversion_input_set=args.input_set
+                if args.remote_manifest:
+                    if not args.input_set:parser.error('Egret remote acquisition requires an explicit --input-set')
+                    from .inputs import input_set
+                    generic_selection=generic_selection or input_set(args.input_set)
+                    if generic_selection['sourceProfile']!='egret-custom-resource-plist-v1':parser.error('Generic family image acquisition is pending; remote resource roots require the reviewed Egret profile')
+                    from .acquisition import prepare
+                    acquisition_out=Path(args.acquisition_out).resolve()if args.acquisition_out else Path(args.out).resolve().with_name(Path(args.out).resolve().name+'-acquired')
+                    remote_settings=prepare(args.remote_manifest,acquisition_out,generic_selection,args.remote_cache_root,args.remote_budget_seconds,[Path(args.out).resolve()])
+                if args.native and args.offline:parser.error('--native cannot combine with --offline')
+                if not args.native and any((args.native_out,args.unity_editor,args.creator_editor,args.native_budget_seconds!=1200)):parser.error('native options require --native')
+                settings=None
+                if args.native:
+                    from .orchestration import options
+                    from .inputs import input_set
+                    generic_selection=generic_selection or (input_set(args.input_set)if args.input_set else None)
+                    roots=[r['path']for r in generic_selection['inputs']]if generic_selection else [args.source]
+                    if remote_settings:roots.append(acquisition_out)
+                    settings=options(args.out,args.target,args.native_out,args.unity_editor,args.creator_editor,args.native_budget_seconds,roots)
+                if remote_settings:
+                    from .acquisition import acquire
+                    acquired=acquire(remote_settings,args.offline);conversion_input_set=str(acquired['inputSet'])
+                from .resource_package import convert as convert_images
+                result=convert_images(args.source,args.target,args.out,args.namespace or 'monkey-project',args.offline,conversion_input_set,args.format or 'none',generic_family,args.source_profile)
+                if acquired:
+                    from .acquisition import attach
+                    attach(result,args.out,acquired)
+                summary=dict(status=result['workflowStatus'],completed=result['completed'],resultKind=result['resultKind'],sourceFamily=result['sourceFamily'],sourceProfile=result['sourceProfile'],completionScope=result['completionScope'],sourceSpriteFrames=result['sourceSpriteFrames'],derivedFullImageFrames=result.get('derivedFullImageFrames',0),sourceData=result.get('sourceData'),projects=result['projects'],diagnostics=result['diagnostics'],report=str(Path(args.out).resolve()/'conversion-result.json'))
+                if settings:
+                    from .orchestration import run
+                    summary['nativeExecution']=run(result,settings)
+                print(json.dumps(summary,ensure_ascii=False));return 1
+            source_file=Path(args.source) if args.source else None
+            unity_source=args.source_family=='unity'
+            if args.source_family=='auto' and source_file and source_file.is_file():
+                from .io import safe as safe_source
+                from .sources.unity_serialized import container_kind
+                with safe_source(source_file).open('rb') as stream:unity_source=container_kind(stream.read(16)) is not None
+            if unity_source:
+                if args.numeric_code_contract or args.cocos_code_language!='ts':parser.error('Numeric JS code contracts/language selection require Cocos package sources')
+                if args.format=='grea' and not args.native:parser.error('Unity source --format grea requires --native for typed AssetDatabase moves')
+                if args.native and args.offline:parser.error('--native cannot combine with --offline')
+                if args.native and (not args.unity_editor or args.creator_editor):parser.error('Unity source --native requires only --unity-editor')
+                if not args.native and any((args.native_out,args.unity_editor,args.creator_editor,args.native_budget_seconds!=1200)):parser.error('native options require --native')
+                if args.target not in ('unity','unity6',UNITY_PROFILE):parser.error('Unity sources target Unity 6 only')
+                if not all((args.source,args.out,args.provider_python,args.asset_ripper)):parser.error('Unity source requires --source --out --provider-python --asset-ripper')
+                if any((args.input_set,args.resume,args.recipe,args.reuse_source_stages,args.asset_index,args.all_assets,args.bindings,args.animation,args.evidence_source,args.source_profile,args.namespace)):
+                    parser.error('Unity source profile accepts explicit bundle/dependency/texture inputs; input sets/slice options are not implemented')
+                if not args.remote_manifest and any((args.remote_cache_root,args.acquisition_out,args.remote_budget_seconds!=900)):parser.error('remote options require --remote-manifest')
+                if args.unity_dependency_manifest and args.dependency_source:parser.error('Choose --unity-dependency-manifest or explicit --dependency-source')
+                native_settings=None;remote_settings=None;acquired=None
+                protected=[]
+                if args.native or args.remote_manifest:
+                    from .unity_acquisition import protected_inputs
+                    protected=protected_inputs(args.source,args.dependency_source,args.unity_texture_cache,args.unity_schema_manifest,args.unity_dependency_manifest,args.provider_python,args.asset_ripper)
+                if args.remote_manifest:
+                    from .unity_acquisition import prepare
+                    from .io import safe
+                    if safe(args.out).exists():parser.error('Choose a fresh conversion output before acquisition')
+                    acquisition_out=safe(args.acquisition_out or str(args.out)+'-acquired')
+                    remote_settings=prepare(args.source,acquisition_out,args.remote_manifest,args.remote_cache_root,args.remote_budget_seconds,[*protected,safe(args.out)])
+                    protected.extend([acquisition_out,remote_settings['manifest']])
+                    if remote_settings['cache']:protected.append(remote_settings['cache'])
+                if args.native:
+                    from .orchestration import options
+                    native_settings=options(args.out,args.target,args.native_out,args.unity_editor,args.creator_editor,args.native_budget_seconds,protected)
+                inputs=dict(dependencies=args.dependency_source,texture_cache=args.unity_texture_cache,dependency_manifest=args.unity_dependency_manifest)
+                if remote_settings:
+                    from .acquisition import acquire
+                    from .unity_acquisition import merge
+                    acquired=acquire(remote_settings,args.offline)
+                    inputs=merge(acquired,**{k:inputs[k]for k in ('texture_cache','dependency_manifest','dependencies')})
+                from .recover_unity import convert as convert_unity
+                result=convert_unity(args.source,args.out,args.provider_python,args.asset_ripper,args.provider_budget_seconds,schema_manifest=args.unity_schema_manifest,quarantine_invalid_textures=args.unity_quarantine_invalid_textures,**inputs)
+                if acquired:
+                    from .unity_acquisition import attach
+                    attach(result,args.out,acquired)
+                if native_settings:
+                    from .unity_native import finish_conversion
+                    result=finish_conversion(result,native_settings,args.format or 'none')
+                print(json.dumps(dict(status=result['status'],completed=result['completed'],resultKind=result['resultKind'],sourceFamily='unity',projects=result['projects'],diagnostics=result['diagnostics'],nativeExecution=result.get('nativeExecution'),remoteAcquisition=result.get('acquisition'),format=result['format'],report=str(Path(args.out).resolve()/'conversion-result.json')),ensure_ascii=False))
+                return 1
+            if args.provider_python or args.asset_ripper or args.unity_texture_cache or args.unity_schema_manifest or args.unity_dependency_manifest or args.unity_quarantine_invalid_textures or args.provider_budget_seconds!=600:parser.error('Unity provider options require a Unity source')
             from .convert import convert, resume, recipe
             if not args.remote_manifest and any((args.remote_cache_root,args.acquisition_out,args.remote_budget_seconds!=900)):
                 parser.error('remote options require --remote-manifest')
@@ -128,6 +336,7 @@ def main(argv=None):
             source_path=Path(args.source) if args.source else None
             package_mode=args.input_set or args.package or args.target in ('both','unity6','cocos38') or (source_path is not None and
                 (source_path.suffix.lower() in ('.apk','.wxapkg') or source_path.is_dir() and not args.asset_index and not args.recipe))
+            if args.numeric_code_contract and not package_mode:parser.error('--numeric-code-contract requires package conversion')
             if package_mode:
                 if not all((args.source or args.input_set,args.target,args.out)) or args.source and args.input_set or any((args.resume,args.recipe,args.asset_index,
                         args.dependency_source,args.evidence_source,args.bindings,args.animation,args.source_profile)):
@@ -156,12 +365,12 @@ def main(argv=None):
                     acquired=acquire(remote_settings,args.offline);conversion_input_set=str(acquired['inputSet'])
                     if args.reuse_source_stages and Path(conversion_input_set).resolve()!=Path(args.input_set).resolve():
                         raise ValueError('New acquired files require fresh source stages; acquired evidence is preserved')
-                result=convert_package(args.source,args.target,args.out,args.namespace or 'monkey-project',args.offline,conversion_input_set,reuse_source_stages=args.reuse_source_stages)
+                result=convert_package(args.source,args.target,args.out,args.namespace or 'monkey-project',args.offline,conversion_input_set,reuse_source_stages=args.reuse_source_stages,format_profile=args.format or 'none',code_contract=args.numeric_code_contract,cocos_code_language=args.cocos_code_language)
                 if acquired:
                     from .acquisition import attach
                     attach(result,args.out,acquired)
                 summary=dict(status=result['workflowStatus'],resultKind=result['resultKind'],
-                     completed=result['completed'],projects=result['projects'],inputFiles=result['inputFiles'],
+                     completed=result['completed'],projects=result['projects'],format=result.get('format'),inputFiles=result['inputFiles'],
                      inputBytes=result['inputBytes'],diagnostics=len(result['diagnostics']),nextAction=result['nextAction'],
                      report=str(Path(args.out).resolve()/'conversion-result.json'))
                 if acquired:summary['remoteAcquisition']=dict(acquired['summary'],receipt=str(acquired['receipt']))
@@ -172,6 +381,7 @@ def main(argv=None):
                         summary['nextAction']=dict(code='REVIEW_NATIVE_AND_SOURCE_GAPS',message='Review native receipt; source/visual/business gaps remain separate')
                 print(json.dumps(summary,ensure_ascii=False))
                 return 1
+            if args.format=='grea':parser.error('--format grea requires a fresh package conversion')
             if args.native:parser.error('--native requires package conversion (use --target unity6/cocos38/both or --package)')
             if args.resume:
                 if any((args.source,args.target,args.out,args.source_profile,args.asset_index,args.all_assets,
@@ -236,8 +446,8 @@ def main(argv=None):
             result = (cocos.verify if profile==cocos.PROFILE else verify)(args.candidate,args.out,args.level)
         else:
             result = handoff(args.candidate,args.out)
-        print(json.dumps(dict(status=result['status'], assets=len(result.get('assets',[])),
-                              spriteFrames=len(result.get('spriteFrames',[])),
+        print(json.dumps(dict(status=result['status'], assets=result.get('counts',{}).get('assets',len(result.get('assets',[]))),
+                              spriteFrames=result.get('counts',{}).get('spriteFrames',len(result.get('spriteFrames',[]))),
                               diagnostics=len(result['diagnostics']), report=str(args.out)+'/manifest.json'), ensure_ascii=False))
         return 1 if result['status'] == 'partial' else 0
     except (ParseError, OSError, ValueError, KeyError, TypeError, IndexError, RecursionError) as error:

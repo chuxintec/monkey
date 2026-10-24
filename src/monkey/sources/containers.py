@@ -14,6 +14,7 @@ from .compiled import fail
 MAX_FILES = 50000
 MAX_FILE = 128 * 1024 * 1024
 MAX_TOTAL = 1024 * 1024 * 1024  # Bounded whole-input inventory, including provided CDN bundles.
+MAX_EXPLICIT_TOTAL = 8 * 1024 * 1024 * 1024
 MAX_CONTAINER = 1024 * 1024 * 1024
 
 
@@ -35,7 +36,10 @@ def relative(name, wx=False):
 
 
 class Names:
-    def __init__(self):
+    def __init__(self, max_total=None):
+        self.max_total = MAX_TOTAL if max_total is None else max_total
+        if type(self.max_total) is not int or not 1 <= self.max_total <= MAX_EXPLICIT_TOTAL:
+            fail('ARCHIVE_BUDGET',str(self.max_total),'Explicit byte budget must be an integer in 1..8GiB')
         self.files = set(); self.parents = set(); self.total = 0
 
     def add(self, name, size):
@@ -44,7 +48,7 @@ class Names:
         if key in self.files or key in self.parents or any(p in self.files for p in parents):
             fail('ARCHIVE_COLLISION',name,'Duplicate/case-folded/path-prefix collision')
         self.files.add(key); self.parents.update(parents); self.total += size
-        if size > MAX_FILE or self.total > MAX_TOTAL or len(self.files) > MAX_FILES:
+        if size > MAX_FILE or self.total > self.max_total or len(self.files) > MAX_FILES:
             fail('ARCHIVE_BUDGET',name,'Input file/count/expanded-byte budget exceeded')
 
 

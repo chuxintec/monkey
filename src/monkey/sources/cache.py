@@ -12,6 +12,16 @@ from .compiled import fail
 
 def plan(root,manifest,kind):
     root=safe(root);manifest=safe(manifest)
+    if kind=='legacy-flat':
+        raw=read(manifest);data=load(raw)
+        if not isinstance(data,dict)or len(data)>50000:fail('CACHE_SCHEMA',str(manifest),'Expected bounded legacy filename/timestamp map')
+        records=[];missing=[]
+        for name,stamp in sorted(data.items()):
+            if not isinstance(name,str)or not re.fullmatch(r'res-(?:import|raw-assets)-[A-Za-z0-9_.-]{1,240}',name)or type(stamp)is not int:fail('CACHE_SCHEMA',str(name),'Expected exact legacy filename/timestamp')
+            disk=inside(root,name);logical='LegacyCache/'+name
+            if disk.is_file():records.append(dict(path=logical,disk=disk,sourceKeys=[sha(name.encode())]))
+            else:missing.append(dict(sourceKey=sha(name.encode()),path=logical,reason='input_not_provided'))
+        return dict(records=records,missing=missing,version='unknown',manifestSha256=sha(raw),manifest=manifest,declaredEntries=len(data),availableMappings=len(records))
     if kind not in ('cache','temp'):fail('CACHE_SCHEMA',str(kind),'Expected cache or temp')
     raw=read(manifest);data=load(raw);files=data.get('files')
     if not isinstance(files,dict) or len(files)>50000:fail('CACHE_SCHEMA',str(manifest),'Expected bounded files object')

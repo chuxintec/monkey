@@ -26,7 +26,7 @@ def origin(url):
     return p.scheme+'://'+p.netloc.lower()
 
 
-def prepare(manifest,output,selection,cache_root=None,budget_seconds=900,protected_roots=()):
+def prepare(manifest,output,selection,cache_root=None,budget_seconds=900,protected_roots=(),derive_input_set=True):
     if type(budget_seconds) is not int or not 30<=budget_seconds<=3600:
         fail('REMOTE_BUDGET','remote manifest','Expected a 30..3600 second acquisition window')
     manifest=safe(manifest);raw=read(manifest);data=load(raw)
@@ -54,7 +54,7 @@ def prepare(manifest,output,selection,cache_root=None,budget_seconds=900,protect
     if destination.exists() or any(destination==r or destination.is_relative_to(r) or r.is_relative_to(destination) for r in protected):
         fail('REMOTE_OUTPUT_CONFLICT',str(destination),'Choose a fresh acquisition directory outside source roots')
     return dict(manifest=manifest,manifestSha256=sha(raw),output=destination,selection=selection,cache=cache,
-                entries=entries,origins=origins,budget=budget_seconds)
+                entries=entries,origins=origins,budget=budget_seconds,deriveInputSet=derive_input_set)
 
 
 def acquire(settings,offline=False):
@@ -124,6 +124,11 @@ def acquire(settings,offline=False):
                  status='complete' if summary['allDeclaredAvailable'] else 'partial',summary=summary,files=rows)
     write_json(out/'acquisition.json',receipt)
     selected=settings['selection'];derived=selected['path']
+    if not settings.get('deriveInputSet',True):
+        receipt.pop('sourceInputSetSha256')
+        receipt.update(sourceSelectionSha256=selected['sha256'],sourceSelectionKind='unity-container')
+        write_json(out/'acquisition.json',receipt)
+        return dict(receipt=out/'acquisition.json',summary=summary,filesRoot=fetched)
     materialized=[r for r in available if not r['includedByOriginalRoot']]
     if materialized:
         entries=[]
@@ -138,7 +143,8 @@ def acquire(settings,offline=False):
         while any(r['id'].casefold()==name for r in entries):name+='-remote'
         entries.append(dict(id=name,path=str(fetched)))
         derived=out/'input-set.json'
-        write_json(derived,dict(schemaVersion=1,sourceProfile=selected['sourceProfile'],game=selected['identity'],inputs=entries))
+        write_json(derived,dict(schemaVersion=1,sourceProfile=selected['sourceProfile'],game=selected['identity'],inputs=entries,
+                               limits=dict(maxInputBytes=selected['maxInputBytes'])))
         input_set(derived)
     return dict(inputSet=derived,receipt=out/'acquisition.json',summary=summary)
 

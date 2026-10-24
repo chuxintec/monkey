@@ -65,6 +65,10 @@ def recover_closures(manifest,destination,previous=None):
     for asset in manifest['assets']:
         if asset.get('kind')!='sp.SkeletonData':continue
         row=dict(sourceId=asset['sourceId'],status='needs_action',nativeValidation='not_run',runtime='not_installed',files=[])
+        if asset.get('sourceDocument') and asset.get('document')is None:
+            row.update(reason='SPINE_SOURCE_DOCUMENT_DEFERRED',sourceDocument=asset['sourceDocument'],
+                       message='Source-only profile preserves original packed payload; no native skeleton closure is claimed')
+            results.append(row);continue
         try:
             obj=next(o for o in asset.get('document',{}).get('instances',[]) if isinstance(o,dict) and o.get('__type__')=='sp.SkeletonData')
             atlas=obj.get('_atlasText');names=obj.get('textureNames');textures=obj.get('textures')

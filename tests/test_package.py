@@ -12,6 +12,8 @@ from PIL import Image
 from monkey.cli import main
 from monkey.io import read,load,sha
 from monkey.sources.containers import entries
+from monkey.inputs import input_set
+from unittest.mock import patch
 from monkey.sources.compiled import ParseError
 from monkey.package import convert_package
 from monkey.sources.code import modules
@@ -45,6 +47,24 @@ def wxpackage(items):
 
 
 class PackageTests(unittest.TestCase):
+    def test_explicit_combined_budget_keeps_default_and_single_file_guards(self):
+        from monkey.sources import containers
+        with patch.object(containers,'MAX_TOTAL',5):
+            default=containers.Names();default.add('first',3)
+            with self.assertRaisesRegex(ParseError,'ARCHIVE_BUDGET'):default.add('second',3)
+            expanded=containers.Names(8);expanded.add('first',3);expanded.add('second',3)
+            with self.assertRaisesRegex(ParseError,'ARCHIVE_BUDGET'):expanded.add('third',3)
+            with patch.object(containers,'MAX_FILE',2):
+                with self.assertRaisesRegex(ParseError,'ARCHIVE_BUDGET'):containers.Names(8).add('large',3)
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp).resolve();source=root/'source';source.mkdir();path=root/'inputs.json'
+            data=dict(schemaVersion=1,sourceProfile='cocos-2.1.2-resource',inputs=[dict(id='source',path=str(source))])
+            for limits in (dict(maxInputBytes=True),dict(maxInputBytes=0),dict(maxInputBytes=8*1024**3+1),dict(maxInputBytes='2147483648'),dict(other=1)):
+                path.write_text(json.dumps(dict(data,limits=limits)))
+                with self.assertRaisesRegex(ParseError,'INPUT_SET_LIMITS'):input_set(path)
+            path.write_text(json.dumps(dict(data,limits=dict(maxInputBytes=2*1024**3))))
+            self.assertEqual(input_set(path)['maxInputBytes'],2*1024**3)
+
     def test_editable_project_default_accounts_unknown_code_and_data(self):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp).resolve();source=root/'project';source.mkdir()

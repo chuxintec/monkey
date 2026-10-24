@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "sourceProfile": "cocos-3.4.1-bundle",
+  "sourceVersion": "1.2.67",
+  "sourceFrames": 5,
+  "targetVariants": 10,
+  "scope": "resources-only; source UI graph not restored",
+  "criteria": [
+    "rotation",
+    "trim-offset",
+    "nine-slice",
+    "original-rect",
+    "odd-dimensions"
+  ],
+  "native": [
+    {
+      "target": "unity",
+      "receipt": "outputs/tianming341-native-resource-01-unity-native/execution-result.json",
+      "receiptSha256": "aa34ed54446db9c78883ded511a55c4ecdc1df71c65da4548022147c516759c1",
+      "pid": 82339,
+      "startedUtc": "2026-10-24T05:33:01.404123Z",
+      "endedUtc": "2026-10-24T05:33:12.118426Z",
+      "status": "candidate",
+      "processExited": true,
+      "processExitCode": 0,
+      "verification": {
+        "diagnostics": 0,
+        "editor": "pass"
+      }
+    },
+    {
+      "target": "cocos",
+      "receipt": "outputs/tianming341-native-resource-01-cocos-native/execution-result.json",
+      "receiptSha256": "354cb056786303624c5804f4f4741457b624de984682ceba40fe83ec040d466e",
+      "pid": 82795,
+      "startedUtc": "2026-10-24T05:33:34.323595Z",
+      "endedUtc": "2026-10-24T05:33:53.194053Z",
+      "status": "candidate",
+      "processExited": true,
+      "processExitCode": -15,
+      "verification": {
+        "diagnostics": 0,
+        "editor": "pass"
+      }
+    }
+  ],
+  "fullPackageNative": "not_run",
+  "sourceGameplay": "not_run",
+  "visual": "not_run"
+}

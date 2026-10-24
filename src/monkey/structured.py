@@ -5,7 +5,6 @@ from .io import read,load,write_json,sha,stage_document,stage_bytes,stage_manife
 from .sources import bundle,project
 from .normalize import normalize,quarantine_graphs
 from .targets import unity,cocos
-from .targets.layout import standardize
 
 
 def validated_ir(stage):
@@ -29,7 +28,7 @@ def validated_ir(stage):
     return derived,ir
 
 
-def recover(tree, roots, configs, source_profile, out, profiles, namespace):
+def recover(tree, roots, configs, source_profile, out, profiles, namespace, code_emission=None):
     from . import __version__
     stage=out/'Structured';stage.mkdir(exist_ok=True)
     result=dict(schemaVersion=1,status='pending',sourceProfile=source_profile,stages=[],projects={})
@@ -59,6 +58,9 @@ def recover(tree, roots, configs, source_profile, out, profiles, namespace):
             for name,root in inspected['sourceRoots'].items():
                 if not Path(root).is_relative_to(tree):raise ValueError('Source stage escaped the immutable input snapshot')
             result.setdefault('reused',[]).append(dict(stage='inspect',sha256=sha(stage_bytes(existing))))
+        elif source_profile=='cocos-2.1.2-resource':
+            from .sources.cocos_legacy import inspect as inspect_legacy
+            inspected=inspect_legacy(tree,stage/'inspect')
         elif source_profile==project.PROFILE:
             root=tree/roots[0]['id'];parsed=project.Project(root)
             inspected=project.inspect(root,list(range(len(parsed.keys))),stage/'inspect',max_assets=50000,whole_input=True)
@@ -85,9 +87,10 @@ def recover(tree, roots, configs, source_profile, out, profiles, namespace):
                             configSha256=sha(encoded(selected['data'])),reason='equivalent index; prefer supplied import/native payload tree'))
             if not paths:
                 result.update(status='needs_action',reason='BUNDLE_CONFIG_NOT_PROVIDED');write_json(stage/'recovery.json',result);return result
-            primary=bundle.Bundle(paths[0])
+            primary=bundle.Bundle(paths[0],source_profile)
+            supplied=dict(source_tree=tree,provided_roots=[tree/r['id']for r in roots])if source_profile=='cocos-3.4.1-bundle'else{}
             inspected=bundle.inspect(paths[0],list(range(len(primary.keys))),stage/'inspect',paths[1:],
-                    include_all_bundles=True,max_assets=50000,max_bytes=1024*1024*1024,resolve_provided=True)
+                    include_all_bundles=True,max_assets=50000,max_bytes=1024*1024*1024,resolve_provided=True,source_profile=source_profile,**supplied)
         result['stages'].append(dict(stage='inspect',status=stage_manifest(stage/'inspect')['status'],assets=len(inspected['assets'])))
         if (stage/'normalize/manifest.json').exists():
             check_signature('normalize')
@@ -97,7 +100,11 @@ def recover(tree, roots, configs, source_profile, out, profiles, namespace):
             result.setdefault('reused',[]).append(dict(stage='normalize',sha256=sha(stage_bytes(stage/'normalize/ir.json'))))
         else:ir=normalize(stage/'inspect/source-manifest.json',stage/'normalize')
         ir_path,ir=validated_ir(stage)
+        if code_emission:
+            from .package_code import project_ir
+            ir_path,ir=project_ir(ir_path,inspected,code_emission,stage/'code-ir')
         result['stages'].append(dict(stage='normalize',status=stage_manifest(ir_path)['status'],nodes=len(ir['nodes']),components=len(ir['components'])))
+        if 'missingDeclaredAssets'in inspected:result['declaredAssetsNotProvided']=len(inspected['missingDeclaredAssets']);result['declaredAssets']=inspected.get('declaredAssets')
         result['objectTypes']=dict(Counter(a.get('kind') or 'unknown' for a in inspected['assets']))
         result['normalized']=dict(spriteFrames=len(ir['spriteFrames']),fonts=sum(a['kind']=='cc.TTFFont' for a in ir['assets']),
                                   jsonAssets=sum(a['kind']=='cc.JsonAsset' for a in ir['assets']),nodes=len(ir['nodes']),components=len(ir['components']))
@@ -121,12 +128,16 @@ def recover(tree, roots, configs, source_profile, out, profiles, namespace):
                 import uuid
                 temporary=stage/'Emitted'/(key+'-'+str(uuid.uuid4()))
             manifest=adapter.export(stage/(key+'-plan')/'plan.json',temporary)
-            standardize(temporary,profile,plan,inspected['sourceRoots'])
+            if code_emission:
+                from .package_code import install
+                install(code_emission,temporary,profile,manifest,plan)
+            manifest['format']=dict(profile='none',applied=False)
+            finish(temporary,manifest)
             temporary.rename(out/key)
             result['projects'][profile]=dict(path=key,plan=str((stage/(key+'-plan')/'plan.json').relative_to(out)),
                        sourceObjects=len(inspected['assets']),nodes=len(ir['nodes']),components=len(plan['components']),
                        convertibleComponents=sum(c['convertible'] for c in plan['components']),
-                       nativeValidation='not_run',layout='game-standard-v1',namespace=namespace)
+                       nativeValidation='not_run',layout='native-export-v1',formatProfile='none',namespace=namespace)
         result['status']='partial'
     except (ValueError,OSError,KeyError,TypeError,IndexError) as error:
         result.update(status='failed',reason=getattr(error,'code','STRUCTURED_RECOVERY_FAILED'),message=str(error))

@@ -5,19 +5,30 @@
 |来源|目标|当前实际状态|后续批准顺序|
 |---|---|---|---|
 |Cocos Creator2.4.15发布bundle|Unity6 / Cocos3.8.8 / both|partial：full14双端各1694 Prefab/24784节点保存重开与完整几何/引用回读零诊断；Unity资源partial/Creator资源pass，业务/视觉/交互未验收|先收拢肥鹅当前包|
+|Cocos Creator2.4.11发布bundle|Unity6 / Cocos3.8.8 / both|partial：冲关小队881明确输入；451源Frame、91节点图，两端资源/节点/引用保存重载0严格差异，170源码模块仍草稿|持续逐case|
+|Cocos Creator2.1.2旧发布资源|Unity6 / Cocos3.8.8 / both|partial：当前147完整13091远端文件可得、19298声明身份缺0；7343Frame/14686变体每端静态通过，3旧版本缓存排除；旧211代表双端原生证据独立保留|当前全包Editor未跑；4406Prefab/3Scene及Spine等旧结构待适配|
 |Cocos Creator2.4.15可编辑工程子集|Unity6 / Cocos3.8.8 / both|supported_static有限子集，非全版本/全组件承诺|按新增真实输入反例扩展|
-|Unity2021.3.30f1 IL2CPP-Wasm|Unity6|planned：当前273包SHA/2021.3.30f1正文已核，1603对象枚举/1326所选typed读数；106 MonoBehaviour类型不足，通用reader/Unity6输出未实现|U，用户最新打开《向僵尸开炮》优先|
+|Unity2021.3.30f1 IL2CPP-Wasm|Unity6|partial：显式Bundle及依赖→Unity6候选已实现；代表1 Prefab/16字段/3 Sprite引用保存重载通过。启动4精确纹理已齐；显式冻结类型树池严格读到1567/1603对象，仍36MB缺结构；补充类型树已消费生成2字段类/11字段，但实例值尚未回写Scene，整包及业务未完成|U，用户最新打开《向僵尸开炮》优先|
+|Unity2022.3.16f1 / 2022.3.34f1c1 WebData|Unity6|partial：两实际候选已导出；45/40坏ETC1显式隔离，其余对象hash逐项保持；461/77对象缺结构，原生/方法未恢复|逐case补齐|
+|Unity2021.3.18f1|Unity6|partial：SpriteSaveInfo配置Prefab/一个Sprite[]字段、131引用公开native保存重开已验；grea固定134动态寻址资源，实际移动0。启动6纹理已齐并导出44原生资源；91对象/原方法及整包原生待补|按独立分支补闭包|
+|团结2022.3.61t9|Unity6|blocked：typed2888/3042读取，固定Provider仅3042不可读证据、0原生资源；未晋升候选|专用来源adapter待实现|
 |Unity任意版本其他Mono/IL2CPP来源|Unity6|planned，逐serializedFile/AssetBundle/provider/profile增加|U|
 |Unity6来源|Unity6|planned，需明确版本真实样本|U|
-|Cocos Creator3.8.7发布资源|Unity6 / Cocos3.8.8 / both|planned，《下方了》真实app-config插件声明3.8.7已读，资源正文待核|C，U后|
+|Cocos Creator3.8.7发布资源|Unity6 / Cocos3.8.8 / both|partial：下方了496明确输入/38081754B，4804对象正文；986源Frame→1972变体，83源图/810节点/81 Prefab双端原生0严格差异。ParabolaUtils的3个静态Number方法生成C#/TS/JS并各13边界调用通过，无组件绑定；真实4Prefab/5原生嵌套关系双端已验证，动态16节点代表双端状态≤0.05px；114图静态闭合（5图缺6模板），其余5向量方法/未覆盖布局/采样/Spine/业务待补，两zip缺失|C，持续逐case|
 |Cocos Creator3.x其他格式|Unity6 / Cocos3.8.8 / both|planned，不能套2.4 reader|C|
+|Cocos Creator3.4.1发布资源|Unity6 / Cocos3.8.8 / both|partial：天命11962输入/约1.01GB入账，11618确切下载齐；7071Frame/15位图字体/856源图/22503节点/52实例关系公共双目标输出。5Frame资源及6Prefab/331节点/8关系/7新增节点/1Widget双端原生严格0；Unity业务partial、Creator结构pass|1份null旋转图隔离；162未知native后缀、redirect/源码/Spine与全包原生/玩法明确列限|
 |Cocos Creator2.4.x以下/1.x旧格式|Unity6 / Cocos3.8.8 / both|planned，逐格式/版本反例，不能笼统已支持|C|
 |Cocos2d-x及其他Cocos分支原包|Unity6 / Cocos3.8.8 / both|planned，独立识别和适配，不能套Creator序列化|逐来源样本|
 |Unity任意来源|Cocos / both|unsupported，不在本次批准矩阵|明确拒绝，不产假工程|
+|Laya / LayaAir 所有版本原包|Unity6|planned专用adapter；显式图片gallery fallback仅自造反例验证，没有真实Laya案例|持续逐来源|
+|Egret5.2.32/custom binary（灵画师166）|Unity6|partial：当前缓存原件同SHA并核启动/版本；48252声明/53图集1920切片/3024 EUI皮肤类（3026包根记录含2元数据键，非界面数），53精确CDN页闭合、1920切片像素核；132代表源切片Unity原生通过。原生EUI布局/方法/动画未恢复|源UI专用适配与AI接续|
+|其他Egret / 自研 / 其他引擎原包|Unity6|planned专用adapter，custom只有自造通用图片反例|持续逐真实来源|
 
-|Laya / LayaAir 所有版本原包|Unity6|planned，需真实样本和独立来源profile|当前肥鹅及U/C收拢后|
-|Egret / 自研 / 其他引擎原包|Unity6|planned，逐引擎识别，未知格式明确拒绝或隔离|同上|
+2026-10-24用户新取舍：不可逆方法/缺类型或确实不可支持的引擎可保留limitations，不再以全部游戏完整还原阻断版本；实际嵌套Prefab、override与动态布局仍须解决。天命/机智按微信目标缓存/有据远端补源，灵画师已纠正短暂Laya判断。
 
 上述范围是支持目标，未知UnityTypeTree/压缩/未来格式/团结等分支单列provider或诊断，不因有版本字符串就近套解析器。资源、元数据、Mono实现、IL2CPP/Wasm方法体、DummyDLL/签名桩、编译、原生保存重开、视觉、可玩分别报告。
 
 人类依据已原生核验：总监turn01a167c9-388f-7920-80b6-961ab237c0d7，message01a167c9-38cf-7a21-8ae8-83a8bf19d8c0及01a167cb-ba50-73a3-8dbf-4a8bd7f56115。产品路线见ENGINE-ROADMAP.md；仅选择转换样本，不在projects立项复刻游戏。
+
+
+2026-10-24动态布局有限续修：19个缩放Grid、13个child-resize配置解除旧guard；实际6组/54态两端Editor保存重开与子节点几何通过，最大差0.000074px，详见validation/2026-10-24-layout-followup.md。该代表覆盖不替代全量原生/Player或所有组合；负缩放线性、NONE及浮点padding等guard继续列限。

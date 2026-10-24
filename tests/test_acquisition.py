@@ -87,6 +87,18 @@ class AcquisitionTests(unittest.TestCase):
             self.assertFalse((root/'acquired/files/x.bin').exists())
             row=json.loads(result['receipt'].read_text())['files'][0];self.assertEqual(row['errorCode'],'REMOTE_TOTAL_BYTE_BUDGET')
 
+    def test_acquired_input_set_preserves_explicit_combined_budget(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp).resolve();_,selected=self.setup_source(root)
+            data=json.loads(selected['path'].read_text());data['limits']=dict(maxInputBytes=2*1024**3)
+            selected['path'].write_text(json.dumps(data));selection=input_set(selected['path'])
+            manifest=root/'downloads.json';write_json(manifest,[dict(path='new.bin',url='https://cdn.example/new')])
+            class Opener:
+                def open(self,*args,**kwargs):return Response(b'new original')
+            with patch.object(acquisition,'build_opener',return_value=Opener()):
+                result=acquisition.acquire(acquisition.prepare(manifest,root/'acquired',selection))
+            self.assertEqual(input_set(result['inputSet'])['maxInputBytes'],2*1024**3)
+
     def test_one_command_acquires_then_freezes_candidate_and_dispatches_native(self):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp).resolve();source,selection=self.setup_source(root);raw=b'new remote payload';manifest=root/'downloads.json'

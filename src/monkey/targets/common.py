@@ -5,7 +5,7 @@ from ..sources.compiled import fail
 
 def input_ir(path, bindings_path=None):
     path=safe(path);ir=stage_document(path)
-    if ir.get('schemaVersion')!=1 or ir.get('sourceProfile') not in ('cocos-2.4.15-bundle','cocos-2.4.15-project'):
+    if ir.get('schemaVersion')!=1 or ir.get('sourceProfile') not in ('cocos-2.4.15-bundle','cocos-2.4.15-project','cocos-3.8.7-bundle','cocos-3.4.1-bundle','cocos-2.4.11-bundle','cocos-2.1.2-resource','generic-image-resources-v1','egret-custom-resource-plist-v1'):
         fail('UNSUPPORTED_IR',str(path),'Expected supported normalize schema 1')
     expected={f['path']:f['sha256'] for f in stage_manifest(path.parent)['files']}
     bindings={};receipt=None
@@ -111,3 +111,9 @@ def native_ink_box(quad):
         fail('INVALID_NATIVE_GLYPH_PADDING','$','Padding exceeds the measured quad')
     return dict(unicode=quad['unicode'],left=fields['left']+padding,top=fields['top']-padding,
                 width=fields['width']-2*padding,height=fields['height']-2*padding)
+
+
+def native_color_nodes(nodes,components):
+    """Only ask for renderer readback when that source renderer is emitted."""
+    colored={c['node']for c in components if c.get('convertible')and c['type']in ('cc.Sprite','cc.Label')}
+    return [dict(n,verifyUiColor=n['sourceId']in colored)if n.get('sourceGeometryProfile')else n for n in nodes]

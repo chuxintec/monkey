@@ -5,6 +5,7 @@ const path = require('path');
 const crypto = require('crypto');
 const execution=require('./execution.js');
 const batch=require('./batch.js');
+const spriteMetadata=require('./sprite-metadata.js');
 const hash = data => crypto.createHash('sha256').update(data).digest('hex');
 const req = (message, ...args) => Editor.Message.request('asset-db', message, ...args);
 function within(root, relative) {
@@ -44,9 +45,15 @@ module.exports = {
             const manifest = JSON.parse(manifestRaw);
             const planRaw = fs.readFileSync(path.join(__dirname, 'import-plan.json'));
             const plan = JSON.parse(planRaw);
+            const outputPaths=plan.outputPaths||{scene:'assets/generated/views/Candidate.scene',prefabs:'assets/generated/prefabs',animations:'assets/generated/animations',nativeRoots:['assets']};
+            if(!Array.isArray(outputPaths.nativeRoots)||outputPaths.nativeRoots.length<1||outputPaths.nativeRoots.length>8)throw Error('Invalid native output roots');
+            for(const value of [outputPaths.scene,outputPaths.prefabs,outputPaths.animations,...outputPaths.nativeRoots]) {
+                if(typeof value!=='string'||!(value==='assets'||value.startsWith('assets/')))throw Error('Invalid typed output path');within(root,value);
+            }
+
             const project = JSON.parse(fs.readFileSync(within(root, 'package.json'), 'utf8'));
             if (manifest.targetProfile !== 'cocos-3.8.8' || project.creator.version !== '3.8.8' || Editor.App.version !== '3.8.8' || project.uuid !== plan.projectUuid || manifest.projectUuid !== project.uuid) throw Error('Wrong Creator/project');
-            if (fs.existsSync(within(root, 'assets/generated/views/Candidate.scene')) || fs.existsSync(within(root, 'Analysis/editor-readback.json'))) throw Error('Native output exists; use a fresh candidate');
+            if (fs.existsSync(within(root, outputPaths.scene)) || fs.existsSync(within(root, 'Analysis/editor-readback.json'))) throw Error('Native output exists; use a fresh candidate');
             // Creator import legitimately edits metas; all original content and glue must still match.
             for (const f of manifest.files) {
                 if (f.path.startsWith('assets/') && f.path.endsWith('.meta')) continue;
@@ -54,10 +61,19 @@ module.exports = {
             }
             for(const a of plan.animations||[])if(a.convertible&&fs.existsSync(within(root,a.path)))throw Error('Animation output exists; use fresh candidate');
             for(const p of plan.sourcePrefabs||[]) {
-                if(!p.path.startsWith('assets/generated/prefabs/')||!p.path.endsWith('.prefab'))throw Error('Unsafe prefab path');
+                if(!p.path.startsWith(outputPaths.prefabs+'/')||!p.path.endsWith('.prefab'))throw Error('Unsafe prefab path');
                 if(fs.existsSync(within(root,p.path)))throw Error('Prefab output exists; use fresh candidate');
             }
             if (!(await req('query-ready'))) throw Error('Asset database not ready');
+            let codeEmission=null;
+            if(manifest.codeEmission) {
+                const spec=manifest.codeEmission;
+                if(typeof spec.scriptPath!=='string'||!spec.scriptPath.startsWith('assets/'))throw Error('Typed script path required');
+                within(root,spec.scriptPath);
+                const info=await req('query-asset-info','db://'+spec.scriptPath);
+                if(!info||info.invalid||info.uuid!==spec.scriptUuid)throw Error('Native code script identity differs');
+                codeEmission={scriptPath:spec.scriptPath,scriptUuid:info.uuid,language:spec.language};
+            }
             const apiTiming={};
             const timedReq=async(message,...args)=>{
                 const start=Date.now();
@@ -73,7 +89,11 @@ module.exports = {
                 const info = await timedReq('query-asset-info', url);
                 if (!info || info.invalid || info.uuid !== a.uuid) throw Error('Native asset import/identity mismatch: ' + a.path);
                 if (a.kind === 'sprite') {
-                    const m = await timedReq('query-asset-meta', a.uuid);
+                    // Query the parent to discover the native subasset identity.
+                    // Save/reimport the SpriteFrame itself: updating a parent
+                    // image meta can persist subMetas without invalidating the
+                    // already-imported SpriteFrame payload in library.
+                    const m = JSON.parse(JSON.stringify(await timedReq('query-asset-meta', a.uuid)));
                     const spriteEntries = Object.values(m.subMetas || {}).filter(s => s.importer === 'sprite-frame');
                     if (spriteEntries.length !== 1) throw Error('Expected exactly one native sprite-frame');
                     const sm = spriteEntries[0]; const u = sm.userData;
@@ -84,15 +104,18 @@ module.exports = {
                         width: a.size[0], height: a.size[1], rawWidth: a.originalSize[0], rawHeight: a.originalSize[1],
                         offsetX: a.offset[0], offsetY: a.offset[1], borderLeft: left, borderTop: top, borderRight: right, borderBottom: bottom};
                     // Subresource IDs are assigned by the native importer and retained, never synthesized.
-                    if(Object.entries(desired).some(([key,value])=>u[key]!==value)) {
-                        Object.assign(u,desired);
-                        // Auto-trim mesh data belongs to the old rect; let the
-                        // native importer recompute it from custom metadata.
-                        delete u.vertices;
-                        await timedReq('save-asset-meta', a.uuid, JSON.stringify(m));
-                        // A folder refresh does not reimport changed subresource
-                        // metadata. Await the public per-asset reimport barrier.
-                        await timedReq('reimport-asset',a.uuid);
+                    const vertices=spriteMetadata.rectVertices(a);
+                    if(Object.entries(desired).some(([key,value])=>u[key]!==value)||JSON.stringify(u.vertices)!==JSON.stringify(vertices)) {
+                        Object.assign(u,desired,{vertices,meshType:0});
+                        const saved=await timedReq('save-asset-meta', sm.uuid, JSON.stringify(sm));
+                        if(saved&&saved.invalid)throw Error('Native SpriteFrame metadata save failed: '+a.sourceId);
+                        const persisted=await timedReq('query-asset-meta',sm.uuid);
+                        if(!persisted||persisted.uuid!==sm.uuid||!persisted.userData||
+                            Object.entries(desired).some(([key,value])=>persisted.userData[key]!==value)||
+                            JSON.stringify(persisted.userData.vertices)!==JSON.stringify(vertices))throw Error('Native SpriteFrame metadata did not persist: '+a.sourceId);
+                        // Public reimport returns void; its library output is
+                        // checked below before the scene worker loads the frame.
+                        await timedReq('reimport-asset',sm.uuid);
                     }
                 }
                 prepared++;
@@ -107,6 +130,19 @@ module.exports = {
                     const sf = await timedReq('query-asset-info', url + '/spriteFrame');
                     const texture = await timedReq('query-asset-info', url + '/texture');
                     if (!sf || !texture || sf.invalid || texture.invalid) throw Error('Native subresource missing: ' + url);
+                    if(!/^[a-f0-9-]{36}@[a-f0-9]+$/.test(sf.uuid))throw Error('Native SpriteFrame storage identity unsupported');
+                    // Profile-bound Creator library readiness, not a retry or
+                    // another metadata write. Observe this one import until its
+                    // actual generated payload matches the requested meta.
+                    const library=within(root,'library/'+sf.uuid.slice(0,2)+'/'+sf.uuid+'.json');
+                    const readyEnd=Math.min(Date.now()+10000,execution.deadlineMs());
+                    while(true){
+                        let data=null;try{data=JSON.parse(fs.readFileSync(library,'utf8'));}catch(error){if(error.code&&error.code!=='ENOENT')throw error;}
+                        if(spriteMetadata.libraryMatches(a,data))break;
+                        if(Date.now()>=readyEnd)throw Error('Native SpriteFrame import did not settle: '+a.sourceId);
+                        execution.checkpoint('textures',resolved,plan.assets.length);
+                        await new Promise(resolve=>setTimeout(resolve,100));
+                    }
                     return {...a, spriteFrameUuid: sf.uuid, textureUuid: texture.uuid};
                 }
                 return {...a};
@@ -115,20 +151,36 @@ module.exports = {
             execution.checkpoint('hierarchy',0,plan.nodes.length);
             const nativeDeadlineMs=execution.deadlineMs();
             const nativePlan={...plan,assets,nativeDeadlineMs,components:plan.components.filter(c=>c.convertible),animations:(plan.animations||[]).filter(a=>a.convertible)};
-            const result = await sceneJob('assemble',[nativePlan],'hierarchy');
-            if (!result || typeof result.serialized !== 'string') throw Error('No native scene serialization');
+            let result = await sceneJob('assemble',[nativePlan],'hierarchy');
+            if (!result || (typeof result.serialized !== 'string'&&!result.assemblyId)) throw Error('No native scene serialization');
+            const assemblyId=result.assemblyId;const savedPrefabs=[];
+            if(assemblyId) {
+                try {
+                    for(const spec of plan.sourcePrefabs||[]) {
+                        const dest=within(root,spec.path);fs.mkdirSync(path.dirname(dest),{recursive:true});
+                        await timedReq('refresh-asset','db://'+outputPaths.prefabs);
+                        const p=await sceneJob('serializePrefab',[assemblyId,spec.sourceId,savedPrefabs,nativePlan],'source-prefabs');
+                        if(!p||p.path!==spec.path||p.sourceId!==spec.sourceId||typeof p.serialized!=='string')throw Error('Native prefab serialization differs');
+                        const info=await timedReq('create-asset','db://'+p.path,p.serialized,{overwrite:false,rename:false});
+                        if(!info||info.invalid)throw Error('Native prefab save failed');
+                        savedPrefabs.push({sourceId:p.sourceId,path:p.path,uuid:info.uuid,nativeInitialNodes:p.nativeInitialNodes,sha256:hash(fs.readFileSync(dest))});
+                    }
+                    result=await sceneJob('finishAssembly',[assemblyId,savedPrefabs,nativePlan],'candidate-save');
+                }finally{
+                    await Editor.Message.request('scene','execute-scene-script',{name:'monkey-import',method:'releaseAssembly',args:[assemblyId]});
+                }
+            }
             const animationAssets=[];
             for(const a of result.animationAssets||[]) {
-                if(!a.path.startsWith('assets/generated/animations/')||!a.path.endsWith('.anim'))throw Error('Unsafe animation path');
+                if(!a.path.startsWith(outputPaths.animations+'/')||!a.path.endsWith('.anim'))throw Error('Unsafe animation path');
                 within(root,a.path);
                 const info=await req('create-asset','db://'+a.path,a.serialized,{overwrite:false,rename:false});
                 if(!info||info.invalid)throw Error('Native animation save failed');
                 animationAssets.push({id:a.id,uuid:info.uuid,path:a.path});
             }
-            const savedPrefabs=[];
             const expectedPrefabs=new Map((plan.sourcePrefabs||[]).map(p=>[p.sourceId,p]));
             const serializedIds=new Set();
-            if((result.sourcePrefabs||[]).length!==expectedPrefabs.size)throw Error('Prefab serialization count mismatch');
+            if(!assemblyId&&(result.sourcePrefabs||[]).length!==expectedPrefabs.size)throw Error('Prefab serialization count mismatch');
             for(const p of result.sourcePrefabs||[]) {
                 const spec=expectedPrefabs.get(p.sourceId);
                 if(!spec||serializedIds.has(p.sourceId)||p.path!==spec.path||typeof p.serialized!=='string')throw Error('Unexpected prefab serialization');
@@ -136,19 +188,20 @@ module.exports = {
                 const dest=within(root,p.path);
                 fs.mkdirSync(path.dirname(dest),{recursive:true});
             }
-            if(expectedPrefabs.size)await timedReq('refresh-asset','db://assets/generated/prefabs');
+            if(expectedPrefabs.size)await timedReq('refresh-asset','db://'+outputPaths.prefabs);
             await batch.map(result.sourcePrefabs||[],8,async p=>{
                 execution.checkpoint('source-prefabs',savedPrefabs.length,(plan.sourcePrefabs||[]).length);
                 const info=await timedReq('create-asset','db://'+p.path,p.serialized,{overwrite:false,rename:false});
                 if(!info||info.invalid)throw Error('Native prefab save failed: '+p.sourceId);
-                savedPrefabs.push({sourceId:p.sourceId,path:p.path,uuid:info.uuid});expectedPrefabs.delete(p.sourceId);
+                savedPrefabs.push({sourceId:p.sourceId,path:p.path,uuid:info.uuid,nativeInitialNodes:p.nativeInitialNodes});expectedPrefabs.delete(p.sourceId);
             });
             execution.checkpoint('candidate-save');
-            const scene = await req('create-asset', 'db://assets/generated/views/Candidate.scene', result.serialized, {overwrite: false, rename: false});
+            const scene = await req('create-asset', 'db://'+outputPaths.scene, result.serialized, {overwrite: false, rename: false});
             if (!scene || scene.invalid) throw Error('Native scene save failed');
             // Re-load saved/imported scene through the engine asset manager, not the in-memory tree.
             execution.checkpoint('native-readback');
-            const saved = await sceneJob('readSaved',[scene.uuid,{...nativePlan,animationAssets,savedPrefabs}],'native-readback');
+            const saved = await sceneJob('readSaved',[scene.uuid,{...nativePlan,animationAssets,savedPrefabs,nativeInitialNodes:result.nativeInitialNodes}],'native-readback');
+            for(const p of savedPrefabs)if(p.sha256&&hash(fs.readFileSync(within(root,p.path)))!==p.sha256)throw Error('Shared native template changed: '+p.sourceId);
             const nativeFiles = [];
             function collect(relative) {
                 const folder = within(root, relative);
@@ -158,9 +211,9 @@ module.exports = {
                     else nativeFiles.push({path: rel, sha256: hash(fs.readFileSync(full))});
                 }
             }
-            collect('assets/generated');
+            for(const folder of outputPaths.nativeRoots)if(fs.existsSync(within(root,folder)))collect(folder);
             const rb = {...saved, assets, sceneUuid:scene.uuid, creatorVersion:Editor.App.version, projectUuid:project.uuid,
-                manifestSha256:hash(manifestRaw), nativeFiles,apiTiming};
+                manifestSha256:hash(manifestRaw), nativeFiles,apiTiming,codeEmission,numericCodeExercise:result.numericCodeExercise||[]};
             fs.writeFileSync(within(root,'Analysis/editor-readback.json'),JSON.stringify(rb,null,2)+'\n',{flag:'wx'});
             return {sceneUuid:scene.uuid,nodeCount:rb.nodeCount,editorValidation:'readback-recorded'};
         }

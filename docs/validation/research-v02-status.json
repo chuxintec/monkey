@@ -1,0 +1,570 @@
+{
+  "cases": [
+    {
+      "business": "not_run",
+      "caseId": "744e0775fb39ba9ac00c83c4",
+      "evidence": [
+        {
+          "path": "outputs/cocos38-xiafangle-graphs-07/conversion-result.json",
+          "sha256": "6269ce23efb6c71799faf3d1fa4f53cec5a4697f39fbc635b839e4d8f2e20d8a"
+        },
+        {
+          "path": "outputs/cocos38-xiafangle-graphs-07-native/native-orchestration.json",
+          "sha256": "39099cc27b09335bf14b5f7dfdc97119c16b18b2f68363d023f5eee4ea21a4cd"
+        },
+        {
+          "path": "outputs/cocos38-xiafangle-graphs-08/conversion-result.json",
+          "sha256": "f778eb177bf79a9664f4cd04f6716eecf3134b043404368e605994f4c4e8ef54"
+        },
+        {
+          "path": "outputs/cocos38-xiafangle-graphs-08-native/native-orchestration.json",
+          "sha256": "12c15c40f1214d728ab654f804e5f1f01e88f65ef1f8348b682d8cb062cb6137"
+        },
+        {
+          "path": "outputs/cocos38-xiafangle-graphs-08-current-policy-audit/audit.json",
+          "sha256": "8fdfdb425d5a863fa416072ae0d6a681383e46e149ac5d7bb35524f4bcec4073"
+        },
+        {
+          "path": "outputs/cocos38-parabola-package-10/conversion-result.json",
+          "sha256": "ba5b8870e2a8417e439ac2e5f884e94161cc8c4c6c2e7c29bbac3ffcf5446bbb"
+        },
+        {
+          "path": "outputs/parabola-math-audit-10/audit.json",
+          "sha256": "de40dd5bd54cb98999b2ab4ef900eab2026c6ae65b2e757501de617afbe023e8"
+        },
+        {
+          "path": "outputs/parabola-math-audit-10/runtime-receipt.json",
+          "sha256": "3766e4fa2b0b3448554b2aa934e0c7bce20ac9effcc546f96930bcf69755d37a"
+        },
+        {
+          "path": "docs/validation/2026-10-24-native-prefab-relations.md",
+          "sha256": "0e74f13432b9605fbbb00305d670106e667e0e827dd571d8f57b0a253a6307dc"
+        },
+        {
+          "path": "docs/validation/2026-10-24-dynamic-ui.md",
+          "sha256": "da619531dc0b99e95b2d354d735dce0baabd84dbc8e5e7185d2935ad033adfaa"
+        },
+        {
+          "path": "docs/validation/2026-10-24-prefab-dynamic-integration.md",
+          "sha256": "22f6a87863d02249ebe8da594a56c71fa3f3a48707fb1ddb62ac56ede44e73e9"
+        },
+        {
+          "path": "docs/validation/layout-dynamic-native.json",
+          "sha256": "0bbfb795c7e77ac41df6590686317f115ee3a5ba011394ff60537f2040df2717"
+        },
+        {
+          "path": "docs/validation/layout-dynamic-source-audit.json",
+          "sha256": "9ca91b9fd1fff383cae4964fc53f7b2f139baf0d007727ddc9abebbf49df0f43"
+        }
+      ],
+      "export": "partial-resource-candidate",
+      "metadataHint": {
+        "backend": null,
+        "confidence": "metadata_hint_only",
+        "family": "cocos",
+        "lua": false,
+        "version": "3.8.7"
+      },
+      "metadataSha256": "2ce51099b7aac666aa4c377ffc46f87ddd30c3acbe7150834725f1f95a221c43",
+      "name": "下方了",
+      "native": "83-static-source-graphs-810-nodes-81-prefabs-both-targets-verified; UI-color-opacity-and-Creator-layer-verified;4-prefabs-5-template-relations-plus-16-node-dynamic-ui-both-targets-verified;bounded-native-layout-scale-or-child-resize-v2-verified",
+      "profile": "cocos-3.8.7-bundle",
+      "read": "partial",
+      "remaining": [
+        "5 source graphs still lack 6 exact templates;114/119 graph closures available; not all graphs native-tested",
+        "source components outside audited Sprite/Label/Widget/Layout/UITransform/UIOpacity subset and untested dynamic modes",
+        "Unity camera/layer mapping, source Scene globals",
+        "35 source image edges",
+        "sampler behavior and Spine",
+        "excel/res.80d2b.zip",
+        "proto/res.ba762.zip",
+        "ParabolaUtils 3 static Number methods compiled/exercised in C#/TS/JS, 5 vector methods and remaining source/gameplay pending"
+      ],
+      "sourceRevision": "70",
+      "targets": [
+        "unity6",
+        "cocos38"
+      ]
+    },
+    {
+      "business": "not_run",
+      "caseId": "fc16d145f6e4b65b7fbeb94f",
+      "evidence": [
+        {
+          "path": "outputs/cocos2411-chongguan-package-03/conversion-result.json",
+          "sha256": "c4d576c3d772b75dd3ce165b2fe1397a764a574662c5694eb54d8eabcb276afd"
+        },
+        {
+          "path": "outputs/cocos2411-chongguan-package-03-native/native-orchestration.json",
+          "sha256": "f9c3ae48d1dff8544c085c0a797c9bddc6d757c64faf803ac8397e826c7695c0"
+        }
+      ],
+      "export": "partial-resource-candidate",
+      "metadataHint": {
+        "backend": null,
+        "confidence": "metadata_hint_only",
+        "family": "cocos",
+        "lua": false,
+        "version": "2.4.11"
+      },
+      "metadataSha256": "7a7b8f90c139e84cfc81ac7850b824abe4ed785d270c1ef33ced029b9c93254b",
+      "name": "冲关小队",
+      "native": "resource-node-reference-subset-both-targets-verified",
+      "profile": "cocos-2.4.11-bundle",
+      "read": "partial-full-declared-input",
+      "remaining": [
+        "20 source references",
+        "170 source modules are drafts",
+        "Spine playback, visual and gameplay"
+      ],
+      "sourceRevision": "lv1.0.3_1.0.3_A",
+      "targets": [
+        "unity6",
+        "cocos38"
+      ]
+    },
+    {
+      "business": "not_run",
+      "caseId": "6d72a3a9a8240ffa16b02ec8",
+      "evidence": [
+        {
+          "path": "outputs/unity2022-yongzhe-package-02/conversion-result.json",
+          "sha256": "a861978dddf9b02d1ba852630837fa4243db3cf81637f72d4145414a85fe2238"
+        },
+        {
+          "path": "outputs/unity2022-yongzhe-package-02/InvalidTextureQuarantine-0/quarantine.json",
+          "sha256": "e6ba8dcc1749af1e1a7e46e3c89fc5790508657b8a1282859ad6ed945b0e1e90"
+        }
+      ],
+      "export": "partial-resource-candidate-with-explicit-invalid-texture-quarantine",
+      "metadataHint": {
+        "backend": "wasm",
+        "confidence": "metadata_hint_only",
+        "family": "unity",
+        "lua": false,
+        "version": "2022.3.16f1"
+      },
+      "metadataSha256": "a6114b491e4bded58901e97c3e9f6ff8b4c83aedc2e9a26f9befad74316d9019",
+      "name": "勇者乱斗",
+      "native": "not_run",
+      "profile": "unitywebdata-unitypy-1.25.3-assetripper-2.0.0",
+      "read": "partial-3338-of-3799-objects",
+      "remaining": [
+        "461 unparsed objects",
+        "45 invalid original ETC1 textures quarantined",
+        "7 unresolved provider references",
+        "original methods and native/visual/gameplay"
+      ],
+      "sourceRevision": "101",
+      "targets": [
+        "unity6"
+      ]
+    },
+    {
+      "business": "not_run",
+      "caseId": "64469a689b633ce2e7362d3e",
+      "evidence": [
+        {
+          "path": "outputs/unity-startup-schema-convert-03/conversion-result.json",
+          "sha256": "fb3d97be2117b22212df7f02555f6bbb1389b4bacc6314085aa11daa3c63753d"
+        },
+        {
+          "path": "outputs/unity-source-with-dependency-02/conversion-result.json",
+          "sha256": "fa7e340af70aaa483f9f3c31134149c3fb408987b22fd372d6f46c09e12b7766"
+        }
+      ],
+      "export": "partial-resource-and-schema-candidate",
+      "metadataHint": {
+        "backend": "wasm",
+        "confidence": "metadata_hint_only",
+        "family": "unity",
+        "lua": false,
+        "version": "2021.3.30f1"
+      },
+      "metadataSha256": "a44f5ac8490c55b6d79b2e74ef84e18e5cef9274f5173772b3a65792fd66ccf2",
+      "name": "向僵尸开炮",
+      "native": "representative-prefab-sprite-reference-subset-verified; latest-startup-not-run",
+      "profile": "unityfs-unitypy-1.25.3-assetripper-2.0.0",
+      "read": "partial-1567-of-1603-startup-objects",
+      "remaining": [
+        "36 startup objects without exact schema",
+        "borrowed field instance values in Scene",
+        "CODEPHPY and unavailable methods",
+        "public native profile does not yet cover startup scenes/borrowed instance values",
+        "visual and gameplay"
+      ],
+      "sourceRevision": "273",
+      "targets": [
+        "unity6"
+      ]
+    },
+    {
+      "business": "not_run",
+      "caseId": "0db37edb5ce8a25199774ff5",
+      "evidence": [
+        {
+          "path": "docs/validation/tianming-source-intake.json",
+          "sha256": "f7b4998ecc7bacf1cef95f28a474ad6447e4770af2085df471cd2292d553aacb"
+        },
+        {
+          "path": "docs/validation/source-unavailable-tianming.json",
+          "sha256": "21267178c2f34bef51da4cdec1b33119099a9beb340de82249306bb6d6e62140"
+        },
+        {
+          "path": "docs/validation/tianming341-native-resources.json",
+          "sha256": "6837ed7d530a8f3d063ed69f37380cbd3ed7fe7177faf863fec86f1077ca817e"
+        },
+        {
+          "path": "outputs/tianming341-full-package-05/conversion-result.json",
+          "sha256": "eb116e9c10761b51ebf477e0855577c1a80b0540d390c31c1827518a36090e62"
+        },
+        {
+          "path": "outputs/tianming341-full-package-05-unity-static/verification.json",
+          "sha256": "1866b80e73049bc6db3da64e4a6ff0cd7bc76d77f927b30b19463b4494f088b1"
+        },
+        {
+          "path": "outputs/tianming341-full-package-05-cocos-static/verification.json",
+          "sha256": "79ebbace5428ee59c942f92720175bea2f9c8dd89cb44fcb3c59d4b9aa5e8a3d"
+        },
+        {
+          "path": "docs/validation/tianming341-native-mounted.json",
+          "sha256": "181e44deb3f5b09f870a980e331d8b840b9b364532fcddcc4a349d03cc3d1570"
+        }
+      ],
+      "export": "partial-resources-and-native-graphs-both-targets",
+      "metadataHint": {
+        "backend": null,
+        "confidence": "unknown",
+        "family": "unknown",
+        "version": null
+      },
+      "metadataSha256": "fd710e669f350b3ed5097f1a45ecdf747038cec5233376f384a1d0722fa14884",
+      "name": "天命行者",
+      "native": "5-source-frames-and-6-prefabs-331-nodes-8-native-instances-7-mounted-nodes-1-mounted-widget-both-targets-strict-zero",
+      "profile": "cocos-3.4.1-bundle",
+      "read": "11962-files-accounted;19960-source-objects;7071-source-frames;15-bitmap-fonts;856-source-graphs;22503-nodes;52-instances",
+      "remaining": [
+        "1 original graph contains four null quaternion values; no invented transform",
+        "162 SpriteAtlas native extension declarations unresolved;203 built-in/external redirects;6 import shapes",
+        "Source scripts,738 Spine closures,full-package native and gameplay not recovered",
+        "Disabled UITransform geometry retained; Unity parent-change listener lifecycle needs manual review; removed components and Creator root inheritance unsupported"
+      ],
+      "sourceEngineProof": {
+        "appId": "wxbdf25cb34ce9bf6e",
+        "cachePackageRevision": "12",
+        "family": "cocos",
+        "resourceVersion": "1.2.67",
+        "version": "3.4.1"
+      },
+      "sourceRevision": "1.2.67",
+      "targets": [
+        "unity6",
+        "cocos38"
+      ]
+    },
+    {
+      "business": "not_run",
+      "caseId": "c68403ce71926365d1a4aba5",
+      "evidence": [
+        {
+          "path": "outputs/unity2022-counterterror-package-01/conversion-result.json",
+          "sha256": "4728515ed553b59899bc802a46e5057bf1f9f1b2e58d15d2be2487e671f39fcd"
+        },
+        {
+          "path": "outputs/unity2022-counterterror-package-01/InvalidTextureQuarantine-0/quarantine.json",
+          "sha256": "069de4fd2262e07d2b7ceeae3499b73427a4559d7e9cbf8f4080278cd7d3f4e2"
+        }
+      ],
+      "export": "partial-resource-candidate-with-explicit-invalid-texture-quarantine",
+      "metadataHint": {
+        "backend": "wasm",
+        "confidence": "metadata_hint_only",
+        "family": "unity",
+        "lua": false,
+        "version": "2022.3.34f1c1"
+      },
+      "metadataSha256": "fcf888f4eb3f9524a9cfe9870a7a34a8124c4b4cbc02c21366ccd8e57b667fa9",
+      "name": "手机反恐特别行动",
+      "native": "not_run",
+      "profile": "unitywebdata-unitypy-1.25.3-assetripper-2.0.0",
+      "read": "partial-9598-of-9675-objects",
+      "remaining": [
+        "77 unparsed objects",
+        "40 invalid original ETC1 textures quarantined",
+        "4 unresolved provider references",
+        "original methods and native/visual/gameplay"
+      ],
+      "sourceRevision": "60",
+      "targets": [
+        "unity6"
+      ]
+    },
+    {
+      "business": "not_run",
+      "caseId": "f4fc626753dc7a5947717207",
+      "evidence": [
+        {
+          "path": "outputs/cocos212-jizhi147-package-07/conversion-result.json",
+          "sha256": "423ef5cdc167aae7d491c8370362f36744b7807a3e019d9e8a4a9c3d8e4404ed"
+        },
+        {
+          "path": "outputs/cocos212-jizhi147-resource-audit-07/audit.json",
+          "sha256": "ea3cfbd31bfa76c9a1a5153d3e221d3514dcfc8962bc67da16d1020237ab9f98"
+        },
+        {
+          "path": "outputs/cocos212-jizhi147-package-07-unity-static/verification.json",
+          "sha256": "d76108a97806d71fae8abf6589c1f0406dc69b06bb75bfad66c66e2af0e4f53f"
+        },
+        {
+          "path": "outputs/cocos212-jizhi147-package-07-cocos-static/verification.json",
+          "sha256": "f5cd96f0fe5f89978e4957f883cb38ddc1a120824ce6d257bdcbf2ee2f8d2d45"
+        },
+        {
+          "path": "outputs/cocos212-jizhi-package-03/conversion-result.json",
+          "sha256": "dc70193a27b08d10240af77a7925af6a9bb79f3449c00cd25ae56b3f1129cc82"
+        },
+        {
+          "path": "outputs/cocos212-jizhi-package-02-native/native-orchestration.json",
+          "sha256": "da369ac62685562664cd55125a98293f44c76118618a316f614d28f61a341d1e"
+        }
+      ],
+      "export": "partial-resource-candidate-both-targets-static-verified",
+      "metadataHint": {
+        "backend": null,
+        "confidence": "unknown",
+        "family": "unknown",
+        "version": null
+      },
+      "metadataSha256": "4c1b74e88510ec2995941f13c77183d0ba5e85904c85080349bdc06eb199c6b5",
+      "name": "机智逃脱",
+      "native": "old211-frame-representative-both-targets-verified; new7343-frame-full-package-native-not_run",
+      "profile": "cocos-2.1.2-resource",
+      "read": "current147-original-settings-and-full-declared-resource-closure",
+      "remaining": [
+        "4406 Prefabs +3 SceneAssets retained as original evidence; legacy graph adapter pending",
+        "1553 Spine closures,477 animations,39 BitmapFonts and other source-only types pending",
+        "956 module drafts,5 unresolved source wrappers; native methods/visual/gameplay not_run",
+        "new full7343-frame Editor not_run; source pixels48 representative frames/96 variants and both targets29372 PNG payload hashes verified"
+      ],
+      "resourceClosure": {
+        "declaredAssets": 19298,
+        "inputBytes": 1228708650,
+        "inputFiles": 13220,
+        "missingDeclaredAssets": 0,
+        "sourceAudio": 249,
+        "sourceFont": 1,
+        "sourceFrames": 7343,
+        "sourceVersionExcludedInputs": 3,
+        "variantsPerTarget": 14686
+      },
+      "sourceRevision": "147",
+      "targets": [
+        "unity6",
+        "cocos38"
+      ]
+    },
+    {
+      "business": "not_run",
+      "caseId": "ffeb5de0b10fdd29022e2114",
+      "evidence": [
+        {
+          "path": "outputs/unity2021-wuxia-native-package-02/conversion-result.json",
+          "sha256": "e9a732f70173c3c856b7a6cbd32f7e30f6b825aa6626e8adffeb4b0d72085ebb"
+        },
+        {
+          "path": "outputs/unity2021-wuxia-native-package-02-native/execution-result.json",
+          "sha256": "b07a0191ecdee862331603e3f64ddb7c43bfc48fbbbde0ab82114f45af22cd48"
+        },
+        {
+          "path": "outputs/unity2021-wuxia-acquisition-package-04/conversion-result.json",
+          "sha256": "e6ce9846134c244703a04e0ccaa1cea017151bec2aaf81bc8a03148630f250bd"
+        }
+      ],
+      "export": "partial-dependency-closed-config-and-startup-resource-candidates",
+      "metadataHint": {
+        "backend": "wasm",
+        "confidence": "metadata_hint_only",
+        "family": "unity",
+        "lua": false,
+        "version": "2021.3.18f1"
+      },
+      "metadataSha256": "c166ac44fc02beb3d885e63b87aa0df606977d579d914ad2bc0398c25575894a",
+      "name": "武侠大明星",
+      "native": "public-131-Sprite-reference-leaf-Prefab-save-reload-verified; startup-not-run",
+      "profile": "unityfs-unitypy-1.25.3-assetripper-2.0.0",
+      "read": "partial-1468-of-1559-startup-objects; exact-config-bundle",
+      "remaining": [
+        "91 startup objects without schema; 1142 quarantined source code files",
+        "startup native and source methods/visual/gameplay",
+        "native format pinned all 134 resources; no real positive moves verified"
+      ],
+      "sourceRevision": "124",
+      "targets": [
+        "unity6"
+      ]
+    },
+    {
+      "business": "not_run",
+      "caseId": "b5be2333922651f1fb6366b7",
+      "evidence": [
+        {
+          "path": "outputs/tuanjie-eternal-package-02/conversion-result.json",
+          "sha256": "5f6ef51d2c1619a75b7cafc24e8e7a25bfabe454f36c2b5d7ac7e4bee40b2224"
+        },
+        {
+          "path": "outputs/tuanjie-eternal-package-02/SourceInspection/inspection.json",
+          "sha256": "f8590abe44bd804fc58fbdb38ff42d9942098ce9572f09cd8d894595b1335dee"
+        }
+      ],
+      "export": "blocked-provider-evidence-only",
+      "metadataHint": {
+        "backend": "wasm",
+        "confidence": "metadata_hint_only",
+        "family": "tuanjie",
+        "lua": true,
+        "version": "2022.3.61t9"
+      },
+      "metadataSha256": "c682739c4640cea21557acace071d01ff7ec7dbfa9e4596fb8c5cc3c16ba1fcb",
+      "name": "永远的蔚蓝星球",
+      "native": "not_run",
+      "profile": "tuanjie-2022.3.61t9-provider-evidence-only",
+      "read": "partial-2888-of-3042-objects",
+      "remaining": [
+        "fixed AssetRipper exports 3042 unreadable objects and zero native resources",
+        "154 unknown or budgeted objects",
+        "Tuanjie source profile and Lua methods",
+        "native/visual/gameplay"
+      ],
+      "sourceRevision": "100",
+      "targets": [
+        "unity6"
+      ]
+    },
+    {
+      "business": "not_run",
+      "caseId": "05908d5361a2b4971c92a338",
+      "evidence": [
+        {
+          "path": "docs/validation/egret5232-source-baseline.json",
+          "sha256": "90369c4ab14769e66d28e07a8f1455510a6f3b4aac6c30bfe47af1043650036b"
+        },
+        {
+          "path": "outputs/egret-linghuashi-atlas-package-09/conversion-result.json",
+          "sha256": "051ad6cae704f7573da48eaf4f1405ea78db709ea53f352a422e93dd63e2584d"
+        },
+        {
+          "path": "outputs/egret-linghuashi-atlas-package-09-native/native-orchestration.json",
+          "sha256": "d6d35e276fb77fcb9cb305b6372e46602e55ecb642bcea883594906d90433555"
+        },
+        {
+          "path": "outputs/egret-linghuashi-atlas-package-10/conversion-result.json",
+          "sha256": "fcc6a2272fab2d4ccc262ac1377c5cbc902211dba5fd8aa55b575a44b62cadde"
+        },
+        {
+          "path": "outputs/egret-linghuashi-atlas-pixel-audit-10/audit.json",
+          "sha256": "98e1e91208e8ec70d17b81fb581d4e18e11368a01f2c4ec7c9ba1c05978612ac"
+        },
+        {
+          "path": "outputs/egret-atlas-acquisition-02/acquisition.json",
+          "sha256": "8efb9d2e9f2506a3805bb2dc705b750b8fdd156398418b3d61b4f91e19c0f13a"
+        }
+      ],
+      "export": "partial-source-atlas-and-typed-skin-data",
+      "metadataHint": {
+        "backend": null,
+        "confidence": "unknown",
+        "family": "unknown",
+        "version": null
+      },
+      "metadataSha256": "631e55b75abcf34acd873accee2ec77cf27021ca0a27ef30fd4b10ed2dbcb4f1",
+      "name": "灵画师",
+      "native": "132-source-frames-verified; all1920-offline-pixels-verified; source-UI-not-restored",
+      "profile": "egret-custom-resource-plist-v1",
+      "read": "Egret5.2.32-current-cache166-matches-Research; reviewed-binary-resource-Plist-Skin-data",
+      "remaining": [
+        "native EUI Skin graph/layout/animation/font adaptation",
+        "all1920 latest native not_run; representative132 verified",
+        "48171 declared resource payloads not supplied beyond53 atlas pages",
+        "protected/unknown source methods and config encoding",
+        "visual and gameplay"
+      ],
+      "sourceRevision": "166",
+      "targets": [
+        "unity6"
+      ],
+      "uiFramework": "EUI compiled EXML / custom BinJson; no FairyGUI evidence in examined source",
+      "skinStatistics": {
+        "compiledSkinClasses": 3024,
+        "packageRootRecords": 3026,
+        "packageMetadataRecords": 2,
+        "independentScreenCount": "not_inferred",
+        "nativeUiGraphs": 0
+      }
+    },
+    {
+      "business": "not_run",
+      "caseId": "dc9b8e63a5036ec5d941631b",
+      "evidence": [
+        {
+          "path": "outputs/number-label-full-package-01/conversion-result.json",
+          "sha256": "906b1a5543e9fb01cb4f69877b3fab9a98e559e6cebd6fdf3f978074008ee817"
+        },
+        {
+          "path": "outputs/number-label-full-package-audit-01/audit.json",
+          "sha256": "f0fe77a0391cfd66b324bfcc80b425bbfa12ae98bee1ef06d42477c04b7b1156"
+        },
+        {
+          "path": "outputs/number-label-full-package-audit-01/meta-audit.json",
+          "sha256": "18cdb760b1b998f9bc9573ca3a9049907f52a569927c105af64873d03fdd2884"
+        },
+        {
+          "path": "docs/validation/layout-dynamic-native.json",
+          "sha256": "0bbfb795c7e77ac41df6590686317f115ee3a5ba011394ff60537f2040df2717"
+        },
+        {
+          "path": "docs/validation/layout-dynamic-source-audit.json",
+          "sha256": "9ca91b9fd1fff383cae4964fc53f7b2f139baf0d007727ddc9abebbf49df0f43"
+        }
+      ],
+      "export": "partial-full-resources-and-five-code-bindings",
+      "metadataHint": {
+        "backend": null,
+        "confidence": "unknown",
+        "family": "unknown",
+        "version": null
+      },
+      "metadataSha256": "a0ec61ae050cf1b60237296eda7c2165001b77d31b7d7467a14114baf78f3edf",
+      "name": "肥鹅美食街",
+      "native": "earlier-full-resource-and-five-code-subsets-verified; latest-full-export-not-run;bounded-native-layout-scale-or-child-resize-v2-verified",
+      "profile": "cocos-2.4.15-bundle",
+      "read": "partial-full-declared-input",
+      "remaining": [
+        "unknown source methods and four NumberLabel methods",
+        "1521 source references",
+        "dynamic overflow and Spine",
+        "visual input and gameplay"
+      ],
+      "sourceRevision": "1.9.1",
+      "targets": [
+        "unity6",
+        "cocos38"
+      ]
+    }
+  ],
+  "discovery": {
+    "denominator": 11,
+    "path": "outputs/research-matrix-v02-final-02/cases.json",
+    "sha256": "64e4d14a90e0a56bd73d927b1f7c6d21b208f8048465f98b605d64d171d67ad2"
+  },
+  "schemaVersion": 1,
+  "scope": "actual per-case evidence; metadata hints are not conversion success; native labels name their verified subset",
+  "summary": {
+    "casesAttempted": 11,
+    "casesWithActualExports": 10,
+    "casesWithBlockedExport": 1,
+    "completeGames": 0,
+    "denominator": 11,
+    "fullCompatibilityComplete": false,
+    "remainingCasesNotExported": 1
+  }
+}

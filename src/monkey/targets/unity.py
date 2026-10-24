@@ -24,6 +24,19 @@ def widget_geometry_matches(widget, node, parent):
             all(abs(a-b)<.001 for a,b in zip(position,node['position'])))
 
 
+def layout_issues(layout,children):
+    issues=[]
+    if layout['layoutType']not in(1,2,3)or layout['resize']not in(0,1,2)or any(v!=int(v)for v in layout['padding']):
+        issues.append(('LAYOUT_SUBSET_UNSUPPORTED','Native linear/flow layout requires known modes and integer padding'))
+    if layout['layoutType']in(1,2)and any(any(v<0 for v in n['scale'][:2])for n in children):
+        issues.append(('LAYOUT_NEGATIVE_SCALE_PENDING','Negative-scale linear pivots need a separate native bounds contract'))
+    if layout['layoutType']==3 and(layout['startAxis']not in(0,1)or layout.get('constraint',0)not in(0,1,2)or type(layout.get('constraintCount',2))is not int or layout.get('constraintCount',2)<1):
+        issues.append(('GRID_SUBSET_UNSUPPORTED','Unknown flow axis or row/column constraint'))
+    if layout['resize']==2 and layout.get('affectedByScale')and any(0 in n['scale'][:2]for n in children):
+        issues.append(('LAYOUT_ZERO_SCALE_PENDING','Child resizing cannot divide by a zero effective scale'))
+    return issues
+
+
 def grid_native_extent(layout,parent,children):
     import math
     children=[n for n in children if n['active']]
@@ -73,11 +86,14 @@ def cross_axis_mapping(layout, parent, children):
 def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None):
     ir_path = safe(ir_path)
     ir = stage_document(ir_path)
-    if ir.get('schemaVersion') != 1 or ir.get('sourceProfile') not in ('cocos-2.4.15-bundle','cocos-2.4.15-project'):
+    if ir.get('schemaVersion') != 1 or ir.get('sourceProfile') not in ('cocos-2.4.15-bundle','cocos-2.4.15-project','cocos-3.8.7-bundle','cocos-3.4.1-bundle','cocos-2.4.11-bundle','cocos-2.1.2-resource','generic-image-resources-v1','egret-custom-resource-plist-v1'):
         fail('UNSUPPORTED_IR', '$', 'Expected normalize schema 1')
     source_files = stage_manifest(ir_path.parent)['files']
     expected = {f['path']: f['sha256'] for f in source_files}
     diagnostics = list(ir['diagnostics'])
+    for node in ir['nodes']:
+        if node.get('sourceUITransformEnabled')is False:
+            diagnostics.append(dict(code='SOURCE_UI_TRANSFORM_LIFECYCLE_UNSUPPORTED',sourceId=node['sourceId'],severity='warning',message='Source disabled UITransform geometry is retained; Unity RectTransform has no enabled state and source parent-change listener lifecycle needs manual review'))
     binding_receipt=None;label_bindings={}
     if bindings_path:
         raw=read(bindings_path);binding=load(raw)
@@ -179,6 +195,11 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
         c=entry
         entry['convertible']=c['type'] in native_types and c['node'] in node_ids
         entry['nativeId']=guid(namespace,c['sourceId'])
+        if c.get('supported') is False:
+            entry['convertible']=False
+            diagnostics.append(diagnostic('SOURCE_COMPONENT_PROFILE_HANDOFF',c['sourceId'],'Source component semantics are not implemented for this profile',c['sourceId']))
+            components.append(entry);continue
+
         if any(resolve_id(mat) not in native_materials for mat in c.get('materials',[])):
             entry['convertible']=False
             diagnostics.append(diagnostic('CUSTOM_MATERIAL_HANDOFF',c['sourceId'],'Material is not recognized standard UI texture',c['sourceId']))
@@ -220,21 +241,21 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
                 except ValueError as error:
                     entry['convertible']=False
                     diagnostics.append(diagnostic(getattr(error,'code','BITMAP_LAYOUT_UNSUPPORTED'),c['sourceId'],str(error),c['sourceId']))
-            if c.get('overflow') != 0:
-                entry['convertible']=False
+            if c.get('overflow')not in(0,1,2,3):entry['convertible']=False
+            entry['presentationPolicy']='native-tmp-sizing-v1'
             diagnostics.append(diagnostic('LABEL_METRICS_NOT_VERIFIED',c['sourceId'],'TMP line metrics need engine/reference comparison',c['sourceId']))
         elif c['type']=='cc.Widget':
             node=by_node.get(c['node'],{})
-            if c['flags'] not in (0,45) or c['target'] or not all(c['absolute']) or node.get('scale',[1,1])[:2]!=[1,1] or node.get('rotation')!=[0,0,0,1]:
+            entry.setdefault('center',[0,0]);entry.setdefault('centerAbsolute',[True,True])
+            flags=c['flags'];horizontal=flags&56;vertical=flags&7
+            invalid=(flags&~63 or horizontal in(24,48,56)or vertical in(3,6,7)or c.get('alignMode',1)not in(0,1,2))
+            if invalid or c.get('target')not in(None,node.get('parent'))or node.get('scale',[1,1])[:2]!=[1,1]or node.get('rotation')!=[0,0,0,1]:
                 entry['convertible']=False
-                diagnostics.append(diagnostic('WIDGET_SUBSET_UNSUPPORTED',c['sourceId'],'Only parent-relative absolute full-stretch or disabled flags supported',c['sourceId']))
-            elif c['enabled'] and c['flags']==45:
-                parent=by_node.get(node.get('parent'))
-                if not widget_geometry_matches(c,node,parent):
-                    entry['convertible']=False
-                    code='WIDGET_PARENT_CONTEXT_REQUIRED' if parent is None else 'WIDGET_CACHED_GEOMETRY_HANDOFF'
-                    diagnostics.append(diagnostic(code,c['sourceId'],
-                        'Preserve source geometry: missing source parent or cached inactive/stretch geometry requires lifecycle/reference evidence',c['sourceId']))
+                diagnostics.append(diagnostic('WIDGET_CONTEXT_UNSUPPORTED',c['sourceId'],'Requires parent-relative target, valid edge/center flags and unrotated unit-scale node',c['sourceId']))
+            if flags and node.get('parent')not in by_node:
+                entry['externalParentContext']='candidate-design-root'
+                diagnostics.append(diagnostic('WIDGET_EXTERNAL_PARENT_CONTEXT',c['sourceId'],'Prefab root keeps native constraints for its future parent; the candidate Scene uses its declared design root, not a recovered original game viewport',c['sourceId']))
+            entry['presentationPolicy']='native-rect-constraints-v1'
         elif c['type']=='cc.Mask':
             if c['maskType']!=0 or c['inverted']:
                 entry['convertible']=False
@@ -244,40 +265,12 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
                 entry['convertible']=False
                 diagnostics.append(diagnostic('SCROLL_SUBSET_UNSUPPORTED',c['sourceId'],'First subset preserves disabled axes and native content/viewport references',c['sourceId']))
         elif c['type']=='cc.Layout':
-            if c['layoutType'] not in (1,2,3) or c['resize']!=1 or c['affectedByScale'] or any(v!=int(v) for v in c['padding']):
-                entry['convertible']=False
-                diagnostics.append(diagnostic('LAYOUT_SUBSET_UNSUPPORTED',c['sourceId'],'Only container-resize simple/grid layout without scale expansion supported',c['sourceId']))
-            if c['layoutType']==3:
-                children=[by_node[k] for k in by_node[c['node']]['children'] if by_node[k]['active']]
-                sizes={tuple(child['size']) for child in children}
-                if len(sizes)>1 or c['startAxis']!=0:
-                    entry['convertible']=False
-                    diagnostics.append(diagnostic('GRID_SUBSET_UNSUPPORTED',c['sourceId'],'Only horizontal-first uniform child sizes supported',c['sourceId']))
-                entry['effectiveCellSize']=list(next(iter(sizes),tuple(c['cellSize'])))
-                if entry['convertible'] and c['enabled']:
-                    _,reason=grid_native_extent(c,by_node[c['node']],children)
-                    if reason:
-                        entry['convertible']=False
-                        diagnostics.append(diagnostic(reason,c['sourceId'],
-                            'Source child scale/cached extent requires a separate native grid adapter; preserve baked geometry',c['sourceId']))
-            elif c['layoutType'] in (1,2) and entry['convertible'] and c['enabled']:
-                parent=by_node[c['node']]
-                mapping=cross_axis_mapping(c,parent,[by_node[k] for k in parent['children']])
-                if mapping is None:
-                    entry['convertible']=False
-                    diagnostics.append(diagnostic('LAYOUT_CROSS_AXIS_HANDOFF',c['sourceId'],
-                        'Source child cross-axis positions cannot be retained by one native uGUI alignment',c['sourceId']))
-                else:entry.update(mapping)
-            if entry['convertible'] and c['enabled'] and not any(by_node[k]['active'] for k in by_node[c['node']]['children']):
-                entry['convertible']=False
-                diagnostics.append(diagnostic('EMPTY_LAYOUT_HANDOFF',c['sourceId'],
-                    'Empty source container size/negative spacing differs from uGUI empty fitter; preserve source geometry pending dynamic-content adapter',c['sourceId']))
-            elif entry['convertible'] and c['enabled'] and c['layoutType'] in (1,2):
-                parent=by_node[c['node']]
-                if not linear_container_matches(c,parent,[by_node[k] for k in parent['children']]):
-                    entry['convertible']=False
-                    diagnostics.append(diagnostic('LAYOUT_CACHED_CONTAINER_HANDOFF',c['sourceId'],
-                        'Cached source extent differs from declared active child sizes; preserve geometry pending dynamic-content/lifecycle evidence',c['sourceId']))
+            children=[by_node[k]for k in by_node[c['node']]['children']]
+            for code,message in layout_issues(c,children):
+                entry['convertible']=False;diagnostics.append(diagnostic(code,c['sourceId'],message,c['sourceId']))
+            entry.setdefault('alignCross',False);entry.setdefault('affectedByScale',False)
+            entry['presentationPolicy']='native-flow-layout-v1'if c['layoutType']==3 else'native-linear-layout-v1'
+            if c['layoutType']==3:entry['effectiveCellSize']=list(c['cellSize'])
         elif c['type']=='cc.Button':
             if c['transition'] not in (0,3) or c['target'] not in (None,c['node']):
                 entry['convertible']=False
@@ -306,6 +299,8 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
     diagnostics.extend(animation_gaps)
     from .prefabs import plan_prefabs
     source_prefabs,prefab_gaps=plan_prefabs(ir,components)
+    from .prefabs import native_relationships
+    source_prefabs,prefab_instances=native_relationships(ir,source_prefabs,components)
     for prefab in source_prefabs:prefab['path']=naming.path(prefab['sourceId'],'.prefab','Assets/Generated/Views/Sources')
     diagnostics.extend(prefab_gaps)
     out = new_output(output,[ir_path.parent])
@@ -314,8 +309,13 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
         target = out/'resources'/(sha(copy['target'].encode())[:24]+Path(copy['target']).suffix)
         target.write_bytes(read(inside(ir_path.parent,copy['source'])))
         copy['source']='resources/'+target.name
+    from .common import native_color_nodes
+    nodes=native_color_nodes(nodes,components)
+    for node in nodes:
+        if node.get('sourceGeometryProfile'):
+            diagnostics.append(diagnostic('COCOS3_UNITY_LAYER_HANDOFF',node['sourceId'],'Original layer bits retained as provenance; native uGUI uses target UI layer 5, source camera visibility is pending',node['sourceId']))
     result=dict(schemaVersion=1,toolVersion=__version__,targetProfile=PROFILE,namespace=namespace,
-                sourcePrefabs=source_prefabs,naming=naming.report(),
+                sourcePrefabs=source_prefabs,prefabInstances=prefab_instances,naming=naming.report(),
                 scopeMode=ir.get('scopeMode','asset-selection'),
                 sourceIrSha256=sha(stage_bytes(ir_path)),sourceManifestPath=ir.get('sourceManifestPath'),sourceManifestSha256=ir['sourceManifestSha256'],
                 sourceRoots=ir.get('sourceRoots',{}),sourceLocations=ir.get('sourceLocations',{}),designSize=[750,1334],pixelsPerUnit=100,
@@ -326,7 +326,12 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
 
 
 def export(plan_path, output):
-    plan_path=safe(plan_path);p=stage_document(plan_path)
+    plan_path=safe(plan_path)
+    from ..sources.compiled import ParseError
+    try:p=stage_document(plan_path)
+    except ParseError as error:
+        if error.code=='STAGE_DOCUMENT_CHANGED':fail('PLAN_CHANGED',str(plan_path),'Plan differs from manifest')
+        raise
     if p.get('targetProfile')!=PROFILE or p.get('schemaVersion')!=1:
         fail('UNSUPPORTED_PLAN','$','Expected Unity plan schema 1')
     # Plan JSON itself must match its create-only manifest, not just copied images.
@@ -357,11 +362,20 @@ def export(plan_path, output):
     grid_path=out/'Assets/Generated/Views/IntrinsicGridLayoutGroup.cs'
     grid_path.write_bytes(files('monkey.targets').joinpath('IntrinsicGridLayoutGroup.cs').read_bytes())
     Path(str(grid_path)+'.meta').write_text('fileFormatVersion: 2\nguid: '+guid(p['namespace'],'intrinsic-grid-script')+'\n')
+    numeric_path=out/'Assets/Monkey/Editor/MonkeyNumericCode.cs'
+    numeric_path.write_bytes(files('monkey.targets').joinpath('UnityNumericCode.cs').read_bytes())
+    Path(str(numeric_path)+'.meta').write_text('fileFormatVersion: 2\nguid: '+guid(p['namespace'],'numeric-code-editor')+'\n')
+    instances_path=out/'Assets/Monkey/Editor/MonkeyPrefabInstances.cs'
+    instances_path.write_bytes(files('monkey.targets').joinpath('UnityPrefabInstances.cs').read_bytes())
+    Path(str(instances_path)+'.meta').write_text('fileFormatVersion: 2\nguid: '+guid(p['namespace'],'prefab-instances-editor')+'\n')
+    for filename,relative in [('NativeFlowLayoutGroup.cs','Assets/Generated/Views/'),('NativeLinearLayoutGroup.cs','Assets/Generated/Views/'),('NativeRectConstraints.cs','Assets/Generated/Views/'),('NativeTextLineBox.cs','Assets/Generated/Views/'),('UnityDynamicUi.cs','Assets/Monkey/Editor/')]:
+        dest=out/relative/filename;dest.write_bytes(files('monkey.targets').joinpath(filename).read_bytes())
+        Path(str(dest)+'.meta').write_text('fileFormatVersion: 2\nguid: '+guid(p['namespace'],'native-ui/'+filename)+'\n')
     adapter=files('monkey.targets').joinpath('UnityImporter.cs').read_bytes()
     adapter_path=out/'Assets/Monkey/Editor/MonkeyImporter.cs';adapter_path.write_bytes(adapter)
     Path(str(adapter_path)+'.meta').write_text('fileFormatVersion: 2\nguid: '+guid(p['namespace'],'editor-adapter')+'\n')
     # Only the typed, finite import instruction subset is sent to the Editor.
-    instruction={key:p.get(key,[]) for key in ('designSize','pixelsPerUnit','textures','assets','bitmapFonts','nodes','components','galleryOnly','animations','sourcePrefabs')}
+    instruction={key:p.get(key,[]) for key in ('designSize','pixelsPerUnit','textures','assets','bitmapFonts','nodes','components','galleryOnly','animations','sourcePrefabs','prefabInstances')}
     instruction['tmpResources']=dict(packageName='com.unity.ugui',packageVersion='2.6.0',resource='Package Resources/TMP Essential Resources.unitypackage',importMode='package-completion-callback')
     instruction['glyphReadback']='native-quad-padding-v1'
     instruction['sceneRoundtrip']=True
@@ -369,7 +383,15 @@ def export(plan_path, output):
     instruction['transformReadback']='full-local-v1'
     instruction['sourceDiagnosticCount']=len(p['diagnostics'])
     instruction['prefabGuid']=guid(p['namespace'],'native-prefab')
+    instruction['prefabRelationshipReadback']='native-source-correspondence-v1'
+    instruction['uiGeometryReadback']='native-ui-layout-roundtrip-v1'
+    from .dynamic_ui import probe_sources
+    instruction['uiStateProbeVersion']=2;instruction['uiProbeSources']=probe_sources(instruction)
+    instruction['textLineBoxReadback']='native-cocos-ttf-line-box-v1'
     instruction['sceneGuid']=guid(p['namespace'],'native-scene')
+    if p['galleryOnly']:
+        instruction['galleryReadback']='exact-sprite-and-rect-v1'
+        instruction['textures']=[dict(t,guid=guid(p['namespace'],t['id']))for t in instruction['textures']]
     write_json(out/'Assets/Monkey/Editor/import-plan.json',instruction)
     write_json(out/'Packages/manifest.json',dict(dependencies={'com.unity.ugui':'2.6.0',
                'com.unity.modules.ui':'1.0.0','com.unity.modules.imgui':'1.0.0','com.unity.modules.animation':'1.0.0'}))
@@ -441,6 +463,9 @@ def node_geometry_matches(actual,source,full=False):
         return False
     if any(not close(actual.get(key),source[field]) for key,field in [('size','size'),('pivot','anchor'),('position','position')]):
         return False
+    if source.get('sourceGeometryProfile'):
+        if not close(actual.get('opacity'),source['opacity']):return False
+        if source.get('verifyUiColor') and not close(actual.get('color'),source['color']):return False
     if full:
         rotation=actual.get('rotation');expected=source['rotation']
         # q and -q describe the same native rotation. No angular tolerance change.
@@ -449,11 +474,22 @@ def node_geometry_matches(actual,source,full=False):
     return True
 
 
+def gallery_readback(instruction,readback):
+    if instruction.get('galleryReadback')!='exact-sprite-and-rect-v1':return []
+    expected={t['id']:t for t in instruction['textures']if not t['id'].endswith('@original')}
+    rows=readback.get('gallery')
+    actual={r.get('id'):r for r in rows}if isinstance(rows,list)and all(isinstance(r,dict)for r in rows)else{}
+    valid=instruction.get('galleryOnly')is True and not instruction.get('nodes')and not instruction.get('components')and not instruction.get('sourcePrefabs')and readback.get('nativeScope')=='resources-and-gallery-only'and readback.get('sourceGraphVerification')=='not_run'
+    valid=valid and isinstance(rows,list)and len(actual)==len(rows)and set(actual)==set(expected)
+    if valid:valid=all(actual[key].get('spriteGuid')==spec['guid']and actual[key].get('geometryVerified')is True for key,spec in expected.items())
+    return []if valid else[diagnostic('NATIVE_GALLERY_READBACK','Analysis/editor-readback.json','Resource-only preview must prove exact sprite identities/rects without claiming source graph restoration')]
+
+
 def verify(candidate, output, level='static'):
     root=safe(candidate);m=stage_manifest(root);diagnostics=[]
-    from .layout import translate
+    from .layout import lookup
     from ..sources.containers import fingerprint
-    path_for=lambda p:translate(p,m.get('pathMap',{}))
+    path_for=lambda p:lookup(p,m)
     native={};editor='not_run'
     if level=='editor':
         readback_path=root/'Analysis/editor-readback.json'
@@ -469,6 +505,9 @@ def verify(candidate, output, level='static'):
                 if not file.is_file() or fingerprint(file)!=expected:
                     diagnostics.append(diagnostic('NATIVE_FILE_CHANGED',relative,'Native file differs from saved readback'))
             instruction=load(read(root/path_for('Assets/Monkey/Editor/import-plan.json'),max_bytes=128*1024*1024),max_nodes=8_000_000)
+            diagnostics.extend(gallery_readback(instruction,rb))
+            from ..code_validation import numeric as verify_numeric
+            diagnostics.extend(verify_numeric(instruction['components'],rb.get('numericCodeBindings'),'unity','scene',rb.get('numericCodeExercise',[])))
             if instruction.get('bitmapFonts') or any(a['path'].lower().endswith('.ttf') for a in instruction['assets']):
                 resources=rb.get('tmpResources') or {}
                 expected_resources=instruction.get('tmpResources',{})
@@ -478,22 +517,40 @@ def verify(candidate, output, level='static'):
                 diagnostics.append(diagnostic('SCENE_ROUNDTRIP_NOT_VERIFIED','Candidate.unity','Saved scene was not normally closed/reopened before native readback'))
             json_assets={a['id']:a for a in rb.get('jsonAssets',[])}
             actual_prefabs={a['sourceId']:a for a in rb.get('sourcePrefabs',[])}
+            from .prefabs import verify_native_relationships
+            template_guids={sid:row.get('guid')for sid,row in actual_prefabs.items()}
+            diagnostics.extend(verify_native_relationships(instruction.get('prefabInstances',[]),instruction.get('sourcePrefabs',[]),rb.get('prefabInstances'),'scene',template_guids))
+            if any(x.get('mountedChildren')or x.get('mountedComponents')for x in instruction.get('prefabInstances',[])):
+                diagnostics.extend(verify_native_relationships(instruction['prefabInstances'],instruction.get('sourcePrefabs',[]),rb.get('candidatePrefabInstances'),'candidate-prefab',template_guids))
+            from .dynamic_ui import expectations,verify_probes
+            diagnostics.extend(verify_probes(instruction,rb.get('dynamicUiProbes')))
+            scene_expected,ui_gaps=expectations(instruction,rb.get('nativeInitialNodes'),'UnityScene');diagnostics.extend(ui_gaps)
             expected_nodes={n['sourceId']:n for n in instruction['nodes']}
             for spec in instruction.get('sourcePrefabs',[]):
                 actual=actual_prefabs.get(spec['sourceId'],{})
+                diagnostics.extend(verify_native_relationships([x for x in instruction.get('prefabInstances',[])if x['owner']==spec['sourceId']],instruction.get('sourcePrefabs',[]),actual.get('prefabInstances'),spec['sourceId'],template_guids))
                 target=spec['path']
                 if not actual.get('guid') or actual.get('nodeCount')!=spec['nodeCount'] or actual.get('missingScripts')!=0 or actual.get('path')!=target or target not in native:
                     diagnostics.append(diagnostic('SOURCE_PREFAB_NOT_VERIFIED',spec['sourceId'],'Independent native prefab save/reopen evidence is absent or inconsistent'))
+                if instruction.get('prefabRelationshipReadback')=='native-source-correspondence-v1':
+                    root_variant=any(x['owner']==spec['sourceId']and x['root']==spec['root']for x in instruction.get('prefabInstances',[]))
+                    if actual.get('nativePrefabType')!=('Variant'if root_variant else'Regular'):
+                        diagnostics.append(diagnostic('NATIVE_PREFAB_ASSET_TYPE',spec['sourceId'],'Native Prefab/Variant asset type differs from the source relation'))
                 if instruction.get('sourcePrefabReadback')=='native-layout-settled-v1':
                     saved_nodes={n['sourceId']:n for n in actual.get('nodes',[])}
                     if actual.get('savedReloaded') is not True or actual.get('geometryPhase')!='native-layout-settled-v1' or set(saved_nodes)!=set(spec['nodes']):
                         diagnostics.append(diagnostic('SOURCE_PREFAB_GEOMETRY_NOT_VERIFIED',spec['sourceId'],'Saved native hierarchy geometry evidence is absent'))
+                    prefab_expected,ui_gaps=expectations(instruction,actual.get('nativeInitialNodes'),spec['sourceId'],[expected_nodes[sid]for sid in spec['nodes']]);diagnostics.extend(ui_gaps)
+                    prefab_expected={n['sourceId']:n for n in prefab_expected}
                     for sid in spec['nodes']:
-                        source=expected_nodes[sid];saved=saved_nodes.get(sid,{})
+                        source=prefab_expected[sid];saved=saved_nodes.get(sid,{})
                         if not node_geometry_matches(saved,source,instruction.get('transformReadback')=='full-local-v1'):
                             diagnostics.append(diagnostic('SOURCE_PREFAB_GEOMETRY_MISMATCH',sid,'Independent saved prefab differs: '+target))
                     if actual.get('referencesVerified') is not True or actual.get('referenceFailures'):
                         diagnostics.append(diagnostic('SOURCE_PREFAB_REFERENCE_MISMATCH',spec['sourceId'],'Saved component references differ: '+str(actual.get('referenceFailures'))))
+            for prefab in instruction.get('sourcePrefabs',[]):
+                source_nodes=set(prefab['nodes']);specs=[c for c in instruction['components']if c.get('node')in source_nodes]
+                diagnostics.extend(verify_numeric(specs,actual_prefabs.get(prefab['sourceId'],{}).get('numericCodeBindings'),'unity',prefab['sourceId']))
             for spec in instruction['assets']:
                 if spec['kind']=='cc.JsonAsset':
                     actual=json_assets.get(spec['id'],{})
@@ -506,7 +563,7 @@ def verify(candidate, output, level='static'):
                 if not actual or actual.get('size')!=spec['size'] or actual.get('border')!=spec['border'] or actual.get('guid','') not in meta or not actual.get('fileId'):
                     diagnostics.append(diagnostic('SPRITE_READBACK_MISMATCH',spec['path'],'Native sprite size/border/GUID/fileID mismatch'))
             by_node={n['sourceId']:n for n in rb.get('nodes',[])}
-            for spec in instruction['nodes']:
+            for spec in scene_expected:
                 actual=by_node.get(spec['sourceId'])
                 if not node_geometry_matches(actual,spec,instruction.get('transformReadback')=='full-local-v1'):
                     diagnostics.append(diagnostic('NODE_READBACK_MISMATCH',spec['sourceId'],'Saved RectTransform differs from plan'))
@@ -550,6 +607,19 @@ def verify(candidate, output, level='static'):
                         if actual_glyph.get('unicode')!=box['unicode'] or any(not close(actual_glyph.get(key),value,.03) for key,value in intended.items()):
                             diagnostics.append(diagnostic('BITMAP_QUAD_READBACK_MISMATCH',spec['sourceId'],'Glyph origin/size differs from source metric probe'))
                             break
+            if instruction.get('textLineBoxReadback')=='native-cocos-ttf-line-box-v1':
+                label_rows={r['sourceId']:r for r in rb.get('labels',[])};bitmap_ids={f['id']for f in instruction.get('bitmapFonts',[])}
+                for c in instruction['components']:
+                    if not(c.get('convertible')and c['type']=='cc.Label'and c['overflow']in(0,3)and c['font']not in bitmap_ids):continue
+                    row=label_rows.get(c['sourceId'],{});node=by_node.get(c['node'],{});line_height=c['lineHeight']or c['fontSize']
+                    if (row.get('lineBoxPresent')is not True or 'NativeTextLineBox'not in node.get('componentTypes',[])or
+                        not close(row.get('lineBoxLineHeight'),line_height)or not close(row.get('lineBoxExtra'),.26)):
+                        diagnostics.append(diagnostic('NATIVE_TTF_LINEBOX_MISSING',c['sourceId'],'Saved native TTF line box/leading differs'))
+                    current=c['node'];active=c['enabled']
+                    while current is not None:
+                        n=expected_nodes[current];active=active and n['active'];current=n['parent']
+                    if active and(row.get('lineBoxActive')is not True or not close((node.get('size')or[0,0])[1],row.get('lineBoxHeight'),.05)):
+                        diagnostics.append(diagnostic('NATIVE_TTF_LINEBOX_HEIGHT',c['sourceId'],'Active native text height differs from its measured typographic line box'))
             view_refs={v['sourceId']:v for v in rb.get('viewReferences',[])}
             for spec in instruction['components']:
                 if spec['convertible'] and spec['type'] in ('cc.Sprite','cc.Label','cc.Button'):
@@ -574,6 +644,9 @@ def verify(candidate, output, level='static'):
             changed=not normalized_unity_version(read(path),'6000.6.2f1')
         if changed:
             diagnostics.append(diagnostic('GENERATED_FILE_CHANGED',item['path'],'Missing or modified generated file'))
+    from ..identities import verify as verify_assigned
+    identity_gaps=verify_assigned(root,m);diagnostics.extend(identity_gaps)
+    if identity_gaps and editor in ('pass','partial'):editor='fail'
     guids={}
     for path in (root/'Assets').rglob('*.meta'):
         for line in path.read_text(encoding='utf-8').splitlines():
@@ -591,7 +664,7 @@ def verify(candidate, output, level='static'):
         diagnostics.append(diagnostic('TARGET_LAYOUT_INVALID','Assets','Missing Editor adapter or runtime IR found'))
     out=new_output(output,[root])
     result=dict(schemaVersion=1,toolVersion=__version__,candidateManifestSha256=fingerprint(root/'manifest.json'),
-                diagnostics=diagnostics,staticValidation='conflict' if any(d['code'] in ('GENERATED_FILE_CHANGED','DUPLICATE_TARGET_GUID','TARGET_REFERENCE_MISSING','TARGET_LAYOUT_INVALID','NATIVE_FILE_CHANGED') for d in diagnostics) else 'pass',
+                diagnostics=diagnostics,staticValidation='conflict' if any(d['code'] in ('GENERATED_FILE_CHANGED','DUPLICATE_TARGET_GUID','TARGET_REFERENCE_MISSING','TARGET_LAYOUT_INVALID','NATIVE_FILE_CHANGED','ASSIGNED_NATIVE_IDENTITY_CHANGED') for d in diagnostics) else 'pass',
                 editorValidation=editor,visualValidation='not_run',businessValidation='not_run')
     write_json(out/'verification.json',result)
     return finish(out,result)

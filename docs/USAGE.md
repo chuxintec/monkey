@@ -1,3 +1,23 @@
+# v0.2 开发增量（尚未发布）
+
+本地开发版本0.2.0.dev1；v0.1发行包/标签保持0.1.0不变。
+
+```sh
+monkey research-matrix --root /path/to/Research/games --out /path/to/new-matrix
+```
+
+只读动态发现所有非点号/下划线游戏目录，缺RESEARCH.json、未知引擎、缺源及符号链接均保留在case分母并列原因。只记录来源元数据/显式清单和已知Analysis目录；不跟随外部来源指针，不执行转换。输出cases.json/discovery.json/coverage.md；metadata_hint_only不等于版本正文已解析或游戏导出成功。
+
+Cocos代码按用户最新要求默认TS优先，JS次选；具体CLI/实现状态见V0.2-PLAN/V0.2-EXAMPLES，尚未宣称代码生成与格式化已完成。
+
+```sh
+monkey code-model --source /path/to/source-module.js --module-name NumberLabel --out /path/to/new-code-model
+```
+
+静态具名方法和源字节范围/hash；当前只把实例字段读/写标为语义候选，其余方法明确unsupported。该命令不执行源JS、不生成可用业务代码，partial/exit1；实际代码生成仍在后续实现。
+
+Unity来源首个明确本地bundle的单命令候选转换已接入`convert`，严格依赖版本/隔离/限制及实际证据见[Unity来源Provider](providers/UNITY-SOURCE.md)。这还不是全Unity原包转换或原生通过，启动包外置纹理未闭合时会先blocked。
+
 # v0.1 命令说明
 
 正式工具版本v0.1，Python包0.1.0；`monkey --version`和`monkey capabilities --json`可核对。旧0.3.0.dev1为内部开发候选编号，旧证据不改写；跨toolVersion的resume/reuse按原身份合同拒绝，需明确新输出，不静默改旧候选。
@@ -238,7 +258,7 @@ bin/monkey convert --source /path/to/obtained-resources --target cocos38 --out o
 
 支持明文wxapkg的BE/ED头、索引和连续不重叠payload，APK ZIP及明确Cocos资源目录。资源目录默认全文件，保留`--package`强制全文件入口；旧asset-index/recipe只用于切片诊断。全量指本次明确输入内的全部可枚举文件；多输入根通过schema 1 input-set校验身份并合并。存在同名不同配置bundle时拒绝混拼。源Cocos版本无法确定时记录unknown，不伪称对象reader支持。非Cocos或未知加密容器明确报错。
 
-边界：最多50,000文件/目录、每文件32MiB、展开512MiB、容器1GiB、目录深64。拒绝穿越、绝对路径、反斜线、symlink/特殊项、大小/哈希变化、同名及Unicode/casefold路径别名、wxapkg重叠或漏计payload。仅一层枚举，不递归解包内部容器；嵌套包原样待转。APK内动态库/dex及平台文件保留证据并排除目标运行时，不执行、不安装。
+边界：最多50,000文件/目录、每文件128MiB、每个容器/目录展开1GiB、容器1GiB、目录深64。多输入合并默认仍为1GiB；显式input-set可用 `"limits":{"maxInputBytes":2147483648}` 声明2GiB的合并预算，严格整数、硬上限8GiB，不改变单文件、单根和数量限制。远端获取每轮仍固定1GiB；派生输入集保留显式合并预算。拒绝穿越、绝对路径、反斜线、symlink/特殊项、大小/哈希变化、同名及Unicode/casefold路径别名、wxapkg重叠或漏计payload。仅一层枚举，不递归解包内部容器；嵌套包原样待转。APK内动态库/dex及平台文件保留证据并排除目标运行时，不执行、不安装。
 
 输出分别为UnityProject/CocosProject；移走其中一个工程不依赖另一个或InputCache。每个工程包含resource-ledger、cocos-assets、code-index、dynamic-keys、agent-work、生成文件hash/所有权，以及AGENTS、START-HERE、PROJECT-STRUCTURE和DEPENDENCIES。已识别PNG/JPEG、TTF/OTF、Ogg/MP3/WAV复制到规范内容目录（仍需引擎导入）；所有未知原件/序列化对象/配置/Spine等留SourceRecovery。数值未判明前不假造正式配置；JSON不是一律当数值表。
 

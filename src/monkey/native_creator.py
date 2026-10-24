@@ -75,6 +75,7 @@ def native_import(candidate,output,editor,expected_manifest,budget_seconds,deadl
                 if console.exists():
                     with console.open(errors='replace') as log:
                         log.seek(max(0,console.stat().st_size-8192));tail=log.read()
+                    if 'cc.Scheduler: Illegal target which doesn' in tail:stopped='native_lifecycle_error';break
                     if 'MONKEY_NATIVE_BOOTSTRAP_FAILED:' in tail:stopped='bootstrap_failed';break
                 time.sleep(.5)
             terminate_owned()
@@ -93,6 +94,13 @@ def native_import(candidate,output,editor,expected_manifest,budget_seconds,deadl
             else:result['reason']='NATIVE_ACCEPTANCE_PARTIAL'
         except (ValueError,OSError,KeyError,TypeError) as error:result.update(reason='NATIVE_VERIFICATION_FAILED',error=str(error)[:4096])
     else:result.setdefault('reason','NATIVE_IMPORT_FAILED')
+    # This specific SDK lifecycle failure must not be hidden by an otherwise
+    # successful field readback. The log is owned and bounded by this run.
+    if console.exists():
+        with console.open(errors='replace')as stream:
+            lifecycle_error=any('cc.Scheduler: Illegal target which doesn' in line for line in stream)
+        if lifecycle_error:
+            result.update(status='partial',reason='NATIVE_CREATOR_LIFECYCLE_ERROR')
     failure=project/'Analysis/native-error.json'
     if failure.exists():
         data=load(read(failure,max_bytes=65536));result['nativeError']=str(data.get('message',''))[:4096]

@@ -33,7 +33,7 @@ class StructuredTests(unittest.TestCase):
             write_json(declaration,dict(schemaVersion=1,sourceProfile='cocos-2.4.15-bundle',game=dict(gameId='synthetic'),
                  inputs=[dict(id='main',path='main',config='config.json'),dict(id='textures',path='external',config='config.json')]))
             before={p:p.read_bytes() for folder in (main.parent,external) for p in folder.rglob('*') if p.is_file()}
-            result=convert_package(None,'both',root/'out',input_set_path=declaration)
+            result=convert_package(None,'both',root/'out',input_set_path=declaration,format_profile='grea')
             recovery=result['structuredRecovery'];self.assertNotEqual(recovery['status'],'failed',recovery)
             self.assertEqual(recovery['normalized']['spriteFrames'],1)
             self.assertEqual(recovery['normalized']['jsonAssets'],1)
@@ -43,7 +43,7 @@ class StructuredTests(unittest.TestCase):
             self.assertEqual(alias['redirectTarget'],'textures:'+TEXTURE)
             for name in ('UnityProject','CocosProject'):
                 project=root/'out'/name;m=load(read(project/'manifest.json'))
-                self.assertEqual(m['layout'],'game-standard-v1')
+                self.assertEqual(m['layout'],'grea-typed-v1')
                 self.assertEqual(m['validation']['editor'],'not_run')
                 if name=='UnityProject':
                     plan=load(read(project/'Assets/Game/Editor/Conversion/import-plan.json'))

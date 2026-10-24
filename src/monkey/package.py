@@ -3,6 +3,7 @@
 Object/behavior recovery is reported separately from complete file accounting.
 """
 import json
+import re
 import zipfile
 from collections import Counter
 from io import BytesIO
@@ -81,18 +82,24 @@ def _input_entries(unit):
     return entries(unit['path'])
 
 
-def convert_package(source, target, output, namespace='monkey-project',offline=False,input_set_path=None,resume_state=None,reuse_source_stages=None):
+def convert_package(source, target, output, namespace='monkey-project',offline=False,input_set_path=None,resume_state=None,reuse_source_stages=None,format_profile='none',code_contract=None,cocos_code_language='ts'):
+    if format_profile not in ('none','grea'):fail('FORMAT_PROFILE',str(format_profile),'Expected none or grea')
     from .inputs import input_set
+    code_spec=None
+    if code_contract:
+        from .package_code import declaration
+        code_spec=declaration(code_contract,cocos_code_language)
+        if resume_state or reuse_source_stages:fail('PACKAGE_CODE_FRESH_ONLY',str(code_contract),'Code projection currently requires fresh source stages')
     selection=input_set(input_set_path) if input_set_path else None
     source=safe(input_set_path or source)
     roots=selection['inputs'] if selection else [dict(id='source',path=source,config=None)]
     profiles=[unity.PROFILE,cocos.PROFILE] if target=='both' else [TARGETS[target]]
-    out=safe(output) if resume_state else new_output(output,[source,*[r['path'] for r in roots]]);stage='inventory'
+    out=safe(output) if resume_state else new_output(output,[source,*[r['path'] for r in roots],*([safe(code_contract)]if code_spec else [])]);stage='inventory'
     report=dict(schemaVersion=1,toolVersion=__version__,status='partial',workflowStatus='partial' if offline else 'needs_action',resultKind='candidate',
                 completed=False,mode='package',namespace=namespace,sourceKind='input-set' if selection else 'directory' if source.is_dir() else source.suffix.lower()[1:],
                 gameIdentity=dict(appId='unknown',appVersion='unknown',validation='not_verified'),
                 inputContainerSha256=None if source.is_dir() else fingerprint(source),
-                inputSet=dict(sha256=selection['sha256'],identityStatus=selection['identityStatus'],frozenRelationVerified=selection['frozenRelationVerified']) if selection else None,
+                inputSet=dict(sha256=selection['sha256'],identityStatus=selection['identityStatus'],frozenRelationVerified=selection['frozenRelationVerified'],maxInputBytes=selection['maxInputBytes']) if selection else None,
                 diagnostics=[],validation=dict(editor='not_run',visual='not_run',business='not_run'),projects=[])
     try:
         cache_summaries=[]
@@ -111,7 +118,7 @@ def convert_package(source, target, output, namespace='monkey-project',offline=F
                           resumeBackup=resume_state['backup'])
         else:
             spool=out/'InputCache';spool.mkdir();tree=out/'InputTree';tree.mkdir()
-            rows=[];configs=[];cocos_evidence=[];script_paths=[];combined=Names()
+            rows=[];configs=[];cocos_evidence=[];script_paths=[];combined=Names(selection['maxInputBytes'] if selection else None)
             for unit in roots:
                 for local_name,raw in _input_entries(unit):
                     name=(unit['id']+'/'+local_name) if selection else local_name
@@ -129,6 +136,12 @@ def convert_package(source, target, output, namespace='monkey-project',offline=F
                             if isinstance(project_data,dict) and project_data.get('version')=='2.4.15':
                                 cocos_evidence.append(dict(path=name,kind='editable-cocos-project',version='2.4.15'))
                         except (ValueError,UnicodeError,RecursionError): pass
+                    if Path(name).name.startswith('settings.')and suffix=='.json':
+                        try:
+                            settings_data=json.loads(raw)
+                            if isinstance(settings_data,dict)and settings_data.get('CocosEngine')in ('3.8.7','3.4.1'):
+                                cocos_evidence.append(dict(path=name,kind='creator-published-settings',version=settings_data['CocosEngine'],sha256=digest))
+                        except (ValueError,UnicodeError,RecursionError):pass
                     if category=='Bundle':
                         config=json.loads(raw)
                         configs.append(dict(path=unit['id']+'/'+local_name,ledgerPath=name,data=config))
@@ -138,6 +151,13 @@ def convert_package(source, target, output, namespace='monkey-project',offline=F
                     if Path(name).name in ('libcocos2djs.so','cocos2d-js.js','cocos2d-js-min.js'):
                         cocos_evidence.append(dict(path=name,kind='cocos-engine-name',version='unknown'))
                     if category=='Code': script_paths.append(row)
+                    if category=='Code'and suffix=='.js'and b'ENGINE_VERSION'in raw :
+                        from .sources.engine_facts import inspect as engine_facts
+                        try:
+                            facts=engine_facts(spool/digest)
+                            cocos_evidence.extend(dict(path=name,kind='creator-engine-literal',version=fact['version'],sha256=digest,fact=fact)for fact in facts['facts'])
+                            report['sourceCodeParserExecuted']=True;report['engineVersionParserExecuted']=True
+                        except ValueError as error:report['diagnostics'].append(diagnostic('SOURCE_ENGINE_EVIDENCE_PENDING',name,str(error)))
             if not cocos_evidence: fail('NON_COCOS_INPUT',str(source),'No supported Cocos identity evidence in this input')
             for unit in roots:
                 after={name:sha(raw) for name,raw in _input_entries(unit)}
@@ -151,7 +171,7 @@ def convert_package(source, target, output, namespace='monkey-project',offline=F
                 from .replan import reused_code
                 recovered,code_diagnostics=reused_code(reuse_source_stages,selection,namespace,rows)
                 report['diagnostics'].extend(code_diagnostics)
-                report['sourceCodeParserExecuted']=False
+                report.setdefault('sourceCodeParserExecuted',False)
             else:
                 for row in script_paths:
                     raw=read(spool/row['sha256'],max_bytes=MAX_FILE)
@@ -164,16 +184,26 @@ def convert_package(source, target, output, namespace='monkey-project',offline=F
                         report['diagnostics'].append(diagnostic(error['code'],row['path'],error.get('message','Unresolved source module wrapper'),row['sourceId']))
                         recovered.append(dict(sourceId=row['sourceId'],sourcePath=row['path'],entryType='unresolved_source',status='unresolved',reason=error))
                     for mod in found:
-                        mod['entryType']='module_candidate';mod['sourceFile']=row['path'];mod['sourceId']=row['sourceId']+'#'+str(mod['name'] or mod['candidate_id'])+'@'+str(mod['source_bytes']['start'])
+                        mod['entryType']='module_candidate';mod['sourceFile']=row['path'];mod['sourceSnapshotPath']=row['inputRoot']+'/'+row['localPath'];mod['sourceId']=row['sourceId']+'#'+str(mod['name'] or mod['candidate_id'])+'@'+str(mod['source_bytes']['start'])
                         recovered.append(mod)
+        code_emission=None
+        if code_spec:
+            stage='source-code-emission'
+            from .package_code import prepare
+            code_emission=prepare(recovered,code_spec,namespace,out/'CodeEmission')
+            report['codeEmission']=load(read(code_emission/'package-code.json'))
         # Resolve physical source records for each literal UUID/logical resource key.
         stage='asset-index';asset_index=[];bundles={};by_stem={}
         for row in rows: by_stem.setdefault(Path(row['path']).name.split('.')[0],[]).append(row['path'])
         for item in configs:
             c=item['data'];bundle=c['name']
+            string_indices=(selection and selection['sourceProfile']=='cocos-3.4.1-bundle')or any(e.get('version')=='3.4.1'for e in cocos_evidence)
+            def pack_index(value):
+                if string_indices and isinstance(value,str)and re.fullmatch(r'0|[1-9][0-9]{0,5}',value):return int(value)
+                return value
             if (not isinstance(c.get('paths',{}),dict) or not isinstance(c.get('types',[]),list)
                     or not isinstance(c.get('packs',{}),dict) or len(c['uuids'])>50000
-                    or any(not isinstance(v,list) or any(type(i) is not int for i in v) for v in c.get('packs',{}).values())):
+                    or any(not isinstance(v,list) or any(type(pack_index(i)) is not int for i in v) for v in c.get('packs',{}).values())):
                 report['diagnostics'].append(diagnostic('INVALID_BUNDLE_TABLE',item['path'],'Malformed/oversized UUID/path/type/pack tables; original config retained'))
                 continue
             previous=bundles.get(bundle)
@@ -187,7 +217,7 @@ def convert_package(source, target, output, namespace='monkey-project',offline=F
                 prefix=Path(item['ledgerPath']).parent.as_posix()
                 prefix='' if prefix=='.' else prefix+'/'
                 matches=[p for p in by_stem.get(canonical,[]) if p.startswith(prefix)]
-                pack_keys=[str(pack) for pack,indices in c.get('packs',{}).items() if index in indices]
+                pack_keys=[str(pack) for pack,indices in c.get('packs',{}).items() if index in [pack_index(value)for value in indices]]
                 if pack_keys:
                     matches += [p for pack in pack_keys for p in by_stem.get(pack,[]) if p.startswith(prefix)]
                 logical=c.get('paths',{}).get(str(index))
@@ -207,15 +237,38 @@ def convert_package(source, target, output, namespace='monkey-project',offline=F
         asset_index=list(unique_assets.values())
         stage='structured-recovery'
         source_profile=selection['sourceProfile'] if selection else ('cocos-2.4.15-project' if any(e['kind']=='editable-cocos-project' for e in cocos_evidence) else
+                        'cocos-2.1.2-resource'if any(e.get('version')=='2.1.2'for e in cocos_evidence)else
+                        'cocos-3.8.7-bundle'if any(e.get('version')=='3.8.7'for e in cocos_evidence)else
+                        'cocos-3.4.1-bundle'if any(e.get('version')=='3.4.1'for e in cocos_evidence)else
+                        'cocos-2.4.11-bundle'if any(e.get('version')=='2.4.11'for e in cocos_evidence)else
                         'cocos-2.4.15-bundle' if any(e.get('version')=='2.4.15' for e in cocos_evidence) else None)
+        if source_profile=='cocos-2.4.11-bundle'and not any(e.get('version')=='2.4.11'and e['kind']in ('creator-engine-literal','cocos-bundle-config')for e in cocos_evidence):
+            fail('SOURCE_VERSION_EVIDENCE_REQUIRED','2.4.11','Include original engine version assignment or explicit source bundle engineVersion')
+        cocos3_version={'cocos-3.8.7-bundle':'3.8.7','cocos-3.4.1-bundle':'3.4.1'}.get(source_profile)
+        if cocos3_version and not any(e['kind']=='creator-published-settings'and e['version']==cocos3_version for e in cocos_evidence):
+            fail('COCOS3_VERSION_EVIDENCE_REQUIRED','settings','Published settings.CocosEngine='+cocos3_version+' must be included in explicit inputs')
+        expected_version={'cocos-3.8.7-bundle':'3.8.7','cocos-3.4.1-bundle':'3.4.1','cocos-2.4.11-bundle':'2.4.11','cocos-2.4.15-bundle':'2.4.15','cocos-2.4.15-project':'2.4.15','cocos-2.1.2-resource':'2.1.2'}.get(source_profile)
+        versions={e['version']for e in cocos_evidence if e.get('version')and e['version']!='unknown'}
+        if expected_version and versions-{expected_version}:
+            fail('SOURCE_ENGINE_PROFILE_CONFLICT','engine','Conflicting source engine versions cannot share a profile')
         if reuse_source_stages:
             from .replan import reuse_source_stages as reuse_stages
             report['sourceStageReuse']=reuse_stages(reuse_source_stages,out,selection,namespace)
         from .structured import recover
-        structured=recover(tree,roots,configs,source_profile,out,profiles,namespace)
+        structured=recover(tree,roots,configs,source_profile,out,profiles,namespace,code_emission=code_emission)
         report['structuredRecovery']=structured
+        if code_spec and (structured['status']=='failed' or set(structured.get('projects',{}))!=set(profiles)):
+            fail('PACKAGE_CODE_BINDING_INCOMPLETE','Structured/recovery.json','Declared code projection was not exported for every requested target; retain failure evidence')
         if structured['status'] in ('failed','needs_action'):
             report['diagnostics'].append(diagnostic('STRUCTURED_RECOVERY_PENDING','Structured/recovery.json',structured.get('reason','Unresolved structural recovery')))
+        excluded_names={}
+        inspected_manifest=out/'Structured/inspect/source-manifest.json'
+        if source_profile=='cocos-2.1.2-resource'and (inspected_manifest.parent/'manifest.json').exists():
+            from .io import stage_document
+            inspected_selection=stage_document(inspected_manifest)
+            excluded_names={d['location']:d for d in inspected_selection['diagnostics']if d['code']=='LEGACY_CACHE_VERSION_MISMATCH'}
+        report['sourceInputExclusions']=[dict(path=row['path'],sha256=row['sha256'],reason=excluded_names[Path(row['localPath']).name]['code'])
+                                         for row in rows if Path(row['localPath']).name in excluded_names]
         stage='target-workspaces'
         from .names import Names as OutputNames
         row_by_path={r['path']:r for r in rows};file_metadata={}
@@ -235,15 +288,17 @@ def convert_package(source, target, output, namespace='monkey-project',offline=F
             for row in rows:
                 raw=read(spool/row['sha256'],max_bytes=MAX_FILE);record=dict(row);category=row['category'];digest=row['sha256']
                 if sha(raw)!=digest:fail('SOURCE_CHANGED',row['path'],'Inventory cache changed')
-                direct=row['disposition']=='copied'
+                excluded=excluded_names.get(Path(row['localPath']).name)
+                if excluded:record.update(disposition='filtered',reason=excluded['message'],sourceSelection='excluded-version-mismatch')
+                direct=record['disposition']=='copied'
                 if direct:
                     folder=('Assets/Game/Content/'+category if profile==unity.PROFILE else
                             'assets/fonts' if category=='Fonts' else 'assets/audio' if category=='Audio' else 'assets/art/images')
                     prefix=folder+'/Original'
                 else:
-                    section='SourceCode' if category=='Code' else 'Excluded' if row['disposition']=='filtered' else 'Unconverted'
+                    section='SourceCode' if category=='Code' else 'Excluded' if record['disposition']=='filtered' else 'Unconverted'
                     prefix='SourceRecovery/'+section+'/'+category
-                content_key=(category,digest,row['suffix'])
+                content_key=(category,digest,row['suffix'],'runtime'if direct else 'source')
                 metadata=file_metadata.get(digest) or dict(bundle=row['inputRoot'],logicalPath=row['localPath'],nameProvenance='input-relative-path')
                 if content_key in content_paths:
                     dest=content_paths[content_key]
@@ -271,6 +326,8 @@ def convert_package(source, target, output, namespace='monkey-project',offline=F
             code_index=[];tasks=[]
             for mod in recovered:
                 record={k:v for k,v in mod.items() if k!='source'}
+                if code_emission and mod['sourceId']==report['codeEmission']['sourceModule']:
+                    record['codeEmission']=dict(report['codeEmission'],scriptPath=native_manifest.get('codeEmission',{}).get('scriptPath'),status='static_numeric_utility_no_component_binding'if report['codeEmission'].get('kind')=='static-number-methods-v1'else'numeric_subdomain_planned_native_import')
                 if 'source' in mod:
                     token,cs,ts=drafts(mod,mod['sourceId'])
                     meta=dict(bundle=mod.get('sourceFile','source').split('/')[0],sourceName=mod.get('name'))
@@ -373,8 +430,12 @@ Neither target requires monkey, Python, the source tree, the other target or the
 ''').encode())
             from .handoff_package import enrich
             handoff=enrich(project,out,rows,code_index,tasks)
+            if code_emission:
+                from .package_code import enrich_handoff
+                count=enrich_handoff(project)
+                if count is not None:handoff['aggregateTasks']=count
             inspected_path=out/'Structured/inspect/source-manifest.json'
-            if inspected_path.exists():
+            if inspected_path.exists() and (inspected_path.parent/'manifest.json').exists():
                 from .assets.spine import recover_closures
                 from .io import stage_document
                 previous=None
@@ -398,20 +459,23 @@ Neither target requires monkey, Python, the source tree, the other target or the
             coverage['dispositions']=dict(Counter(r['disposition'] for r in dispositions))
             coverage['nativeObjects']='planned_native_import' if profile in structured.get('projects',{}) else 'pending_adapter'
             coverage['structuredObjects']=dict(Counter(a['state'] for a in objects))
+            if 'declaredAssetsNotProvided'in structured:coverage['declaredAssetsNotProvided']=structured['declaredAssetsNotProvided'];coverage['declaredAssets']=structured.get('declaredAssets')
             write_json(project/'Analysis/resource-ledger.json',dict(schemaVersion=1,coverage=coverage,files=dispositions))
             files=[dict(path=p.relative_to(project).as_posix(),sha256=fingerprint(p),bytes=p.stat().st_size,owner='generated')
                    for p in sorted(project.rglob('*')) if p.is_file() and p!=project/'manifest.json']
-            write_json(project/'manifest.json',dict(native_manifest, schemaVersion=1,toolVersion=__version__,targetProfile=profile,
+            from .identities import assigned
+            candidate_manifest=dict(native_manifest, schemaVersion=1,toolVersion=__version__,targetProfile=profile,
                        status='partial',resultKind='candidate',files=files,coverage=coverage,
-                       validation=dict(editor='not_run',compiled='not_run',behavior='not_run')))
+                       validation=dict(editor='not_run',compiled='not_run',behavior='not_run'))
+            assigned(project,candidate_manifest);write_json(project/'manifest.json',candidate_manifest)
             report['projects'].append(dict(path=project.name,targetProfile=profile,coverage=coverage,
                                            codeModules=draft_count,unresolvedSources=sum(r.get('entryType')=='unresolved_source' for r in code_index),
                                            drafts=draft_count,agentTasks=handoff['aggregateTasks'],handoff=handoff,manifestSha256=fingerprint(project/'manifest.json')))
         report.update(completed=True,nextAction=dict(code='NATIVE_OBJECT_AND_IMPORT_PENDING',
                       message='Files/modules retained; native Scene/Prefab/Spine/config restoration and editor orchestration remain pending'))
         report['diagnostics'].append(diagnostic('NATIVE_OBJECT_RECOVERY_PENDING','projects','Complete file accounting is not native object conversion'))
-        write_json(out/'conversion-result.json',report)
-        return report
+        from .post_format import run as post_format
+        return post_format(report,out,format_profile)
     except Exception as error:
         report.update(status='failed',workflowStatus='failed',failedStage=stage,
                       error=dict(code=getattr(error,'code','PACKAGE_FAILED'),message=str(error)))
@@ -427,6 +491,8 @@ def resume_package(output,input_set_path,offline=False):
     from .inputs import input_set
     from .io import stage_document,stage_bytes
     out=safe(output);raw_receipt=read(out/'conversion-result.json');prior=load(raw_receipt)
+    if prior.get('codeEmission'):fail('PACKAGE_CODE_FRESH_ONLY',str(out),'Code-projected packages currently require a fresh conversion; preserve existing candidates')
+    if prior.get('format',{}).get('profile','none')!='none':fail('RESUME_FORMAT_PROFILE_UNSUPPORTED',str(out),'Use a fresh output for a formatted package; existing formatted and unformatted projects are retained')
     declaration=input_set(input_set_path)
     candidate_base=out
     interrupted=[]

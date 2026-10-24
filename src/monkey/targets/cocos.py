@@ -5,7 +5,7 @@ import uuid
 from .. import __version__
 from ..io import safe, inside, read, load, sha, write_json, new_output, finish, diagnostic, stage_document, stage_bytes,stage_manifest
 from ..sources.compiled import fail
-from .common import input_ir, tasks
+from .common import input_ir, tasks,native_color_nodes
 
 PROFILE='cocos-3.8.8'
 
@@ -33,6 +33,7 @@ def bitmap_text(font,atlas_name,face="MonkeySourceBitmap"):
 
 def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None):
     path,ir,bindings,receipt,resource,resolve=input_ir(ir_path,bindings_path)
+    if ir.get('sourceProfile')in ('generic-image-resources-v1','egret-custom-resource-plist-v1'):fail('SOURCE_TARGET_UNSUPPORTED',str(ir_path),'Non-Cocos sources target Unity 6 only')
     from ..names import Names
     naming=Names(ir.get('sourceNames'))
     diagnostics=list(ir['diagnostics']);assets=[];copies=[]
@@ -67,6 +68,10 @@ def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None):
     node_ids={n['sourceId'] for n in ir['nodes']};source_nodes={n['sourceId']:n for n in ir['nodes']}
     for src in ir['components']:
         c=dict(src);sid=c['sourceId'];c['convertible']=c['type'] in supported and c.get('node') in node_ids
+        if c.get('supported') is False:
+            c['convertible']=False;c['nativeType']=None
+            diagnostics.append(diagnostic('SOURCE_COMPONENT_PROFILE_HANDOFF',c['sourceId'],'Source component semantics are not implemented for this profile',c['sourceId']))
+            components.append(c);continue
         if sid in bindings:c.update(font=bindings[sid]['font'],bold=bindings[sid].get('syntheticBold',False))
         for field in ['font','spriteFrame']:
             if field in c:c[field]=resolve(c[field])
@@ -79,12 +84,7 @@ def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None):
             if c.get('spriteFrame') is None:
                 c['needsSpriteBinding']=True;diagnostics.append(diagnostic('SOURCE_SPRITE_UNBOUND',sid,'Keep native Sprite disabled pending real binding',sid))
             frame=asset_by_id.get(c.get('spriteFrame'))
-            if c['convertible'] and frame and c['sizeMode'] in (1,2):
-                intrinsic=frame['size'] if c['sizeMode']==1 else frame['originalSize']
-                if any(abs(a-b)>.001 for a,b in zip(intrinsic,source_nodes[c['node']]['size'])):
-                    c.update(nativeSizeMode=0,sizingPolicy='source-baked-custom-v1')
-                    diagnostics.append(diagnostic('SPRITE_CACHED_SIZE_HANDOFF',sid,
-                        'Native Sprite uses CUSTOM to retain the baked source rect; source automatic resize behavior remains unverified',sid))
+            if c['convertible']:c.update(nativeSizeMode=c['sizeMode'],sizingPolicy='native-sprite-sizing-v1')
         elif c['type']=='cc.Label':
             font=asset_by_id.get(c.get('font'))
             if not font or font['kind'] not in ('ttf','bitmap'):gap('FONT_NOT_CONVERTIBLE','No matching original font; no system fallback')
@@ -95,14 +95,12 @@ def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None):
                 available={g['unicode'] for g in font_by_id[c['font']]['glyphs']}
                 if any(ord(ch) not in available for ch in c['text'] if ch not in '\r\n'):gap('SOURCE_FONT_GLYPHS_MISSING','Bitmap lacks glyphs')
                 c['bold']=False
-            if c['overflow']!=0 or c.get('italic') or c.get('underline'):gap('LABEL_SUBSET_UNSUPPORTED','First subset: no overflow/style synthesis')
-            if c['convertible']:
-                c.update(nativeOverflow=1,sizingPolicy='source-baked-clamp-v1')
-                diagnostics.append(diagnostic('LABEL_AUTOSIZE_SEMANTICS_HANDOFF',sid,
-                    'Native Label uses CLAMP with the baked source rect; 2.4 automatic sizing is not equivalent to 3.8 text measurement',sid))
-            diagnostics.append(diagnostic('CREATOR_TEXT_METRICS_NOT_VERIFIED',sid,'Original font selected; 2.4 vs 3.8 glyph layout needs real comparison',sid))
+            if c['overflow']not in(0,1,2,3):gap('LABEL_SUBSET_UNSUPPORTED','Unknown overflow mode')
+            if c['convertible']:c.update(nativeOverflow=c['overflow'],sizingPolicy='native-label-sizing-v1')
+            diagnostics.append(diagnostic('CREATOR_TEXT_METRICS_NOT_VERIFIED',sid,'Original font selected; cross-version glyph layout needs real source comparison',sid))
         elif c['type']=='cc.Widget':
-            if c['flags'] not in (0,45) or c['target'] is not None or not all(c['absolute']):gap('WIDGET_SUBSET_UNSUPPORTED','Only parent absolute disabled/full stretch')
+            if c['flags']&~63 or c.get('alignMode',1)not in(0,1,2):gap('WIDGET_SUBSET_UNSUPPORTED','Unknown flags or align policy')
+            c.setdefault('center',[0,0]);c.setdefault('centerAbsolute',[True,True])
         elif c['type']=='cc.Mask':
             if c['maskType']!=0 or c['inverted']:gap('MASK_SUBSET_UNSUPPORTED','Only plain rectangle')
         elif c['type']=='cc.ScrollView':
@@ -114,16 +112,21 @@ def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None):
         elif c['type']=='cc.LabelOutline':
             if not any(x['type']=='cc.Label' and x['node']==c['node'] for x in ir['components']):gap('MISSING_OUTLINE_LABEL','Outline has no Label')
         elif c['type']=='cc.Layout':
-            if c['layoutType'] not in (1,2,3) or c['resize']!=1 or c['affectedByScale']:gap('LAYOUT_SUBSET_UNSUPPORTED','Only unscaled container resize')
+            if c['layoutType']not in(0,1,2,3)or c['resize']not in(0,1,2)or c.get('constraint',0)not in(0,1,2):gap('LAYOUT_SUBSET_UNSUPPORTED','Unknown native Layout mode')
         if not c['convertible']:diagnostics.append(diagnostic('COMPONENT_HANDOFF',sid,'Unsupported native mapping: '+c['type'],sid))
         c['nativeType']=('cc.Label' if c['type']=='cc.LabelOutline' else c['type']) if c['convertible'] else None;components.append(c)
     for c in components:
         if c['type']=='cc.LabelOutline' and c['convertible'] and not any(x['type']=='cc.Label' and x['node']==c['node'] and x['convertible'] for x in components):
             c['convertible']=False;c['nativeType']=None
             diagnostics.append(diagnostic('MISSING_OUTLINE_LABEL',c['sourceId'],'Label dependency could not be converted',c['sourceId']))
-    from .prefabs import plan_prefabs
+    from .prefabs import plan_prefabs,native_relationships
     prefabs,prefab_gaps=plan_prefabs(ir,components)
     diagnostics.extend(prefab_gaps)
+    prefabs,instances=native_relationships(ir,prefabs,components)
+    roots={p['sourceId']:p['root']for p in prefabs}
+    for link in instances:
+        if roots.get(link['owner'])==link['root']:
+            fail('CREATOR_ROOT_PREFAB_INHERITANCE_PENDING',link['root'],'Root inheritance needs a dedicated Creator asset contract; nested instances are supported, Unity emits a native Variant')
     by_node={n['sourceId']:n for n in ir['nodes']}
     for prefab in prefabs:
         prefab['path']=naming.path(prefab['sourceId'],'.prefab','assets/generated/prefabs')
@@ -148,7 +151,7 @@ def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None):
         scopeMode=ir.get('scopeMode','asset-selection'),
         sourceIrSha256=sha(stage_bytes(path)),sourceManifestSha256=ir['sourceManifestSha256'],sourceManifestPath=ir.get('sourceManifestPath'),
         sourceRoots=ir.get('sourceRoots',{}),sourceLocations=ir.get('sourceLocations',{}),bindings=receipt,
-        designSize=[750,1334],assets=assets,copies=copies,animations=animations,sourcePrefabs=prefabs,naming=naming.report(),nodes=ir['nodes'],components=components,
+        designSize=[750,1334],assets=assets,copies=copies,animations=animations,sourcePrefabs=prefabs,prefabInstances=instances,naming=naming.report(),nodes=native_color_nodes(ir['nodes'],components),components=components,
         diagnostics=diagnostics,editorValidation='not_run',subresourceValidation='pending-native-import')
     write_json(out/'plan.json',result);return finish(out,result)
 
@@ -177,14 +180,25 @@ def export(plan_path,output):
     ext=out/'extensions/monkey-import'
     for name in ['main.js','scene.js']:(ext/name).write_bytes(files('monkey.targets').joinpath('Creator'+('Main.js' if name=='main.js' else 'Scene.js')).read_bytes())
     (ext/'execution.js').write_bytes(files('monkey.targets').joinpath('CreatorExecution.js').read_bytes())
+    (ext/'numeric-code.js').write_bytes(files('monkey.targets').joinpath('CreatorNumericCode.js').read_bytes())
     (ext/'prefab.js').write_bytes(files('monkey.targets').joinpath('CreatorPrefab.js').read_bytes())
+    (ext/'prefab-instances.js').write_bytes(files('monkey.targets').joinpath('CreatorPrefabInstances.js').read_bytes())
+    (ext/'dynamic-ui.js').write_bytes(files('monkey.targets').joinpath('CreatorDynamicUi.js').read_bytes())
+    (ext/'sprite-metadata.js').write_bytes(files('monkey.targets').joinpath('CreatorSpriteMetadata.js').read_bytes())
     (ext/'batch.js').write_bytes(files('monkey.targets').joinpath('CreatorBatch.js').read_bytes())
     (ext/'jobs.js').write_bytes(files('monkey.targets').joinpath('CreatorJobs.js').read_bytes())
     (ext/'animation.js').write_bytes(files('monkey.targets').joinpath('CreatorAnimation.js').read_bytes())
     write_json(ext/'package.json',dict(package_version=2,version='0.2.0',name='monkey-import',main='./main.js',
         contributions=dict(scene=dict(script='./scene.js'),menu=[dict(path='Monkey',label='Import isolated candidate',message='import-candidate')],
                            messages={'import-candidate':dict(methods=['importCandidate'])})))
-    write_json(ext/'import-plan.json',{k:p[k] for k in ['schemaVersion','targetProfile','designSize','assets','nodes','components'] }|dict(projectUuid=project_id,animations=p.get('animations',[]),sourcePrefabs=p.get('sourcePrefabs',[]),sceneGeometryReadback='full-local-v1',bitmapPageReadback='sprite-frame-v1'))
+    write_json(ext/'import-plan.json',{k:p[k] for k in ['schemaVersion','targetProfile','designSize','assets','nodes','components'] }|dict(projectUuid=project_id,animations=p.get('animations',[]),sourcePrefabs=p.get('sourcePrefabs',[]),prefabInstances=p.get('prefabInstances',[]),prefabRelationshipReadback='creator-native-fileid-v1',uiGeometryReadback='native-ui-layout-roundtrip-v1',sceneGeometryReadback='full-local-v1',bitmapPageReadback='sprite-frame-v1',spriteMeshReadback='native-rect-mesh-v1'))
+    from .dynamic_ui import driven_fields
+    instruction_path=ext/'import-plan.json';instruction=load(instruction_path.read_bytes())
+    instruction['uiStateProbeVersion']=2
+    from .dynamic_ui import probe_sources
+    instruction['uiProbeSources']=probe_sources(instruction)
+    instruction['uiDrivenFields']={sid:{key:sorted(axes)for key,axes in fields.items()}for sid,fields in driven_fields(instruction).items()}
+    write_json(instruction_path,instruction)
     from ..assets.animation import module_report
     write_json(out/'Analysis/animation-module.json',module_report(p.get('animations',[])))
     write_json(out/'Analysis/source-map.json',dict(assets=p['assets'],sourcePrefabs=p.get('sourcePrefabs',[]),nodes=[dict(sourceId=n['sourceId'],target='assets/generated/views/Candidate.scene') for n in p['nodes']],
@@ -217,7 +231,7 @@ def verify(candidate,output,level='static'):
     root=safe(candidate);m=stage_manifest(root);diagnostics=[]
     from .layout import translate
     from ..sources.containers import fingerprint
-    path_for=lambda p:translate(p,m.get('pathMap',{}))
+    path_for=lambda p:m.get('pathMap',{}).get(p,p)if m.get('pathMappingMode')=='exact'else translate(p,m.get('pathMap',{}))
     if m.get('targetProfile')!=PROFILE:fail('UNSUPPORTED_CANDIDATE',str(root),'Expected Creator profile')
     native={};editor='not_run'
     if level=='editor':
@@ -255,8 +269,14 @@ def verify(candidate,output,level='static'):
             if plan.get('sceneGeometryReadback')=='full-local-v1':
                 from .unity import node_geometry_matches
                 saved_nodes={n['sourceId']:n for n in rb.get('nodes',[])}
-                for spec in plan['nodes']:
-                    if not node_geometry_matches(saved_nodes.get(spec['sourceId']),spec,True):
+                from .dynamic_ui import expectations,verify_probes
+                probe_gaps=verify_probes(plan,rb.get('dynamicUiProbes'));diagnostics.extend(probe_gaps)
+                if probe_gaps:good=False
+                scene_expected,ui_gaps=expectations(plan,rb.get('nativeInitialNodes'),'CreatorScene');diagnostics.extend(ui_gaps)
+                if ui_gaps:good=False
+                for spec in scene_expected:
+                    actual_node=saved_nodes.get(spec['sourceId'])
+                    if not node_geometry_matches(actual_node,spec,True) or ('sourceLayer'in spec and actual_node.get('sourceLayer')!=spec['sourceLayer']):
                         good=False;diagnostics.append(diagnostic('SCENE_GEOMETRY_MISMATCH',spec['sourceId'],'Saved native Scene transform differs from the frozen source plan'))
             def near(actual,expected):
                 return isinstance(actual,list) and len(actual)==len(expected) and all(type(x) in (int,float) and abs(x-y)<.001 for x,y in zip(actual,expected))
@@ -267,17 +287,35 @@ def verify(candidate,output,level='static'):
                     expected=dict(uuid=actual_assets.get(sid,{}).get('spriteFrameUuid'),textureUuid=actual_assets.get(sid,{}).get('textureUuid'),
                                   rect=a.get('trimOrigin',[0,0])+a['size'],originalSize=a['originalSize'],offset=a['offset'],border=a['border'])
                     mismatches=[key for key,value in expected.items() if (f.get(key)!=value if key in ('uuid','textureUuid') else not near(f.get(key),value))]
+                    if plan.get('spriteMeshReadback')=='native-rect-mesh-v1':
+                        w,h=a['size'];tw,th=a['originalSize'];x,y=a.get('trimOrigin',[0,0]);mesh=f.get('mesh')or{}
+                        expected_mesh=dict(rawPosition=[-w/2,-h/2,0,w/2,-h/2,0,-w/2,h/2,0,w/2,h/2,0],indexes=[0,1,2,2,1,3],
+                            uv=[x,th-y,x+w,th-y,x,th-y-h,x+w,th-y-h],nuv=[x/tw,(th-y-h)/th,(x+w)/tw,(th-y-h)/th,x/tw,(th-y)/th,(x+w)/tw,(th-y)/th])
+                        for key,value in expected_mesh.items():
+                            actual=mesh.get(key)
+                            if not isinstance(actual,list)or len(actual)!=len(value)or any(type(v)not in(int,float)or abs(v-e)>1e-6 for v,e in zip(actual,value)):
+                                good=False;diagnostics.append(diagnostic('SPRITE_NATIVE_MESH_MISMATCH',sid,'Saved native RECT mesh '+key+' differs'))
                     if mismatches:
                         good=False;diagnostics.append(diagnostic('SPRITE_READBACK_MISMATCH',sid,
                             'Saved native sprite differs: '+str({key:dict(expected=expected[key],actual=f.get(key)) for key in mismatches})))
             good=good and all(isinstance(n.get('nodeUuid'),str) and n['nodeUuid'] for n in rb.get('nodes',[]))
             good=good and all(isinstance(c.get('componentUuid'),str) and c['componentUuid'] for c in rb.get('components',[]))
+            from ..code_validation import numeric as verify_numeric
+            code_gaps=verify_numeric(plan['components'],rb.get('numericCodeBindings'),'cocos','scene',rb.get('numericCodeExercise',[]))
+            if code_gaps:good=False;diagnostics.extend(code_gaps)
             good=good and path_for('assets/generated/views/Candidate.scene') in native and bool(rb.get('sceneUuid'))
             actual_prefabs={v['sourceId']:v for v in rb.get('sourcePrefabs',[])}
             expected_prefabs={v['sourceId']:v for v in plan.get('sourcePrefabs',[])}
             if set(actual_prefabs)!=set(expected_prefabs):good=False
             for sid,spec in expected_prefabs.items():
                 actual=actual_prefabs.get(sid,{})
+                source_nodes=set(spec['nodes']);code_specs=[c for c in plan['components']if c.get('node')in source_nodes]
+                code_gaps=verify_numeric(code_specs,actual.get('numericCodeBindings'),'cocos',sid)
+                if code_gaps:good=False;diagnostics.extend(code_gaps)
+                if plan.get('uiGeometryReadback')=='native-ui-layout-roundtrip-v1':
+                    from .dynamic_ui import expectations
+                    _,ui_gaps=expectations(plan,actual.get('nativeInitialNodes'),sid,[n for n in plan['nodes']if n['sourceId']in source_nodes])
+                    if ui_gaps:good=False;diagnostics.extend(ui_gaps)
                 for mismatch in actual.get('geometryMismatches',[]):
                     good=False
                     diagnostics.append(diagnostic('PREFAB_GEOMETRY_MISMATCH',mismatch.get('sourceId',sid),
@@ -290,6 +328,12 @@ def verify(candidate,output,level='static'):
                     valid=valid and all(actual.get(key)==spec[key] for key in ['rootNamePolicy','sourceRootName','nativeRootName'])
                 if not valid:
                     good=False;diagnostics.append(diagnostic('SOURCE_PREFAB_NOT_VERIFIED',sid,'Independent Creator prefab save/reload evidence absent or inconsistent'))
+            from .prefabs import verify_native_relationships
+            native_ids={sid:a.get('uuid')for sid,a in actual_prefabs.items()}
+            relation_gaps=verify_native_relationships(plan.get('prefabInstances',[]),plan.get('sourcePrefabs',[]),rb.get('prefabInstances',[]),'CreatorScene',native_ids,'uuid')
+            for sid,a in actual_prefabs.items():
+                relation_gaps.extend(verify_native_relationships([x for x in plan.get('prefabInstances',[])if x['owner']==sid],plan.get('sourcePrefabs',[]),a.get('prefabInstances',[]),sid,native_ids,'uuid'))
+            if relation_gaps:good=False;diagnostics.extend(relation_gaps)
             from ..assets.animation import verify_native
             motion_gaps=verify_native(plan.get('animations',[]),rb.get('animations',[]),native);diagnostics.extend(motion_gaps);good=good and not motion_gaps
             if not good:diagnostics.append(diagnostic('EDITOR_READBACK_FAILED',str(rb_path),'Native identities/counts/version differ'))
@@ -299,10 +343,13 @@ def verify(candidate,output,level='static'):
         target=inside(root,f['path']);expected=native.get(f['path'],f['sha256'])
         if not target.is_file() or fingerprint(target)!=expected:diagnostics.append(diagnostic('GENERATED_FILE_CHANGED',f['path'],'Generated file differs'))
     for relative,h in native.items():
-        prefixes=('assets/','Analysis/') if m.get('layout')=='game-standard-v1' else ('assets/generated/','Analysis/')
+        prefixes=('assets/','Analysis/')
         if not relative.startswith(prefixes):fail('UNSAFE_NATIVE_FILE',relative,'Unexpected native output')
         p=inside(root,relative)
         if not p.is_file() or fingerprint(p)!=h:diagnostics.append(diagnostic('NATIVE_FILE_CHANGED',relative,'Saved native hash differs'))
+    from ..identities import verify as verify_assigned
+    identity_gaps=verify_assigned(root,m);diagnostics.extend(identity_gaps)
+    if identity_gaps and editor=='pass':editor='fail'
     # Static asset references are logical, not asserted native subresource UUIDs.
     plan=load(read(root/'extensions/monkey-import/import-plan.json',max_bytes=128*1024*1024),max_nodes=8_000_000);ids={a['sourceId'] for a in plan['assets']}
     for a in plan['assets']:
@@ -313,5 +360,6 @@ def verify(candidate,output,level='static'):
                 if c.get(field) is not None and c[field] not in ids:diagnostics.append(diagnostic('MISSING_REFERENCE',c['sourceId'],'Missing '+field))
     if any(d['code'] in ('GENERATED_FILE_CHANGED','NATIVE_FILE_CHANGED') for d in diagnostics) and editor=='pass':editor='fail'
     out=new_output(output,[root]);report=dict(schemaVersion=1,toolVersion=__version__,diagnostics=diagnostics,
-        staticValidation='conflict' if any(d['code']!='EDITOR_NOT_RUN' for d in diagnostics) else 'pass',editorValidation=editor)
+        staticValidation='conflict' if any(d['code']!='EDITOR_NOT_RUN' for d in diagnostics) else 'pass',editorValidation=editor,
+        counts=dict(scope='candidate-import-plan',assets=len(plan['assets']),spriteFrames=sum(a['kind']=='sprite'for a in plan['assets']),nodes=len(plan['nodes']),plannedPrefabs=len(plan.get('sourcePrefabs',[]))))
     write_json(out/'verification.json',report);return finish(out,report)

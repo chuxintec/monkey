@@ -106,6 +106,8 @@ def finish(out, report):
     if sum(f['bytes'] for f in report['files']) > limit:
         fail('OUTPUT_BUDGET',str(out),'Candidate exceeds declared stage output budget')
     if report.get('scopeMode')=='whole-input':report['limits']=dict(maxOwnedOutputBytes=limit)
+    from .identities import assigned
+    assigned(out,report)
     report['status'] = 'partial' if report.get('diagnostics') else 'candidate'
     write_json(out / 'manifest.json', report)
     return report

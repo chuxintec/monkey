@@ -9,6 +9,16 @@ from monkey.targets.unity import cross_axis_mapping
 
 
 class NativeGeometryTests(unittest.TestCase):
+    def test_scaled_flow_and_child_resize_contract_rejects_undefined_division(self):
+        from monkey.targets.unity import layout_issues
+        layout=dict(layoutType=3,resize=1,startAxis=0,affectedByScale=True,padding=[0]*4,constraint=2,constraintCount=2)
+        children=[dict(scale=[.8,.8,1]),dict(scale=[.8,.8,1])]
+        self.assertEqual(layout_issues(layout,children),[])
+        self.assertEqual(layout_issues(dict(layout,resize=2),children),[])
+        self.assertTrue(any(code=='LAYOUT_ZERO_SCALE_PENDING'for code,_ in layout_issues(dict(layout,resize=2),[dict(scale=[0,1,1])])))
+        self.assertTrue(layout_issues(dict(layout,constraintCount=0),children))
+        self.assertTrue(layout_issues(dict(layout,padding=[.5,0,0,0]),children))
+
     def test_saved_scale_and_rotation_are_required_without_rejecting_quaternion_sign(self):
         from monkey.targets.unity import node_geometry_matches
         source=dict(size=[100,40],anchor=[.5,.5],position=[12,20,0],scale=[1.1,1,1],rotation=[0,0,0,1],active=True)
@@ -20,6 +30,15 @@ class NativeGeometryTests(unittest.TestCase):
         old={k:v for k,v in actual.items() if k not in ('scale','rotation')}
         self.assertTrue(node_geometry_matches(old,source,False))
         self.assertFalse(node_geometry_matches(old,source,True))
+
+    def test_creator3_opacity_and_emitted_renderer_color_are_required(self):
+        from monkey.targets.unity import node_geometry_matches
+        source=dict(size=[100,40],anchor=[.5,.5],position=[12,20,0],scale=[1,1,1],rotation=[0,0,0,1],active=True,sourceGeometryProfile='cocos-3.8.7-node-ui-v1',opacity=128,color=[12,34,56,255],verifyUiColor=True)
+        actual=dict(size=source['size'],pivot=source['anchor'],position=source['position'],scale=source['scale'],rotation=source['rotation'],active=True,opacity=128,color=[12,34,56,255])
+        self.assertTrue(node_geometry_matches(actual,source,True))
+        self.assertFalse(node_geometry_matches(dict(actual,opacity=255),source,True))
+        self.assertFalse(node_geometry_matches(dict(actual,color=[255]*4),source,True))
+        self.assertFalse(node_geometry_matches({k:v for k,v in actual.items()if k!='color'},source,True))
 
     def test_unity_prefab_count_only_receipt_does_not_prove_geometry_or_references(self):
         from fixtures import fixture
@@ -101,7 +120,7 @@ assert.strictEqual(rejected,true);assert.deepStrictEqual(started,[0,1]);
         adapter=Path(__file__).resolve().parents[1]/'src/monkey/targets/CreatorPrefab.js'
         script=r'''
 const Module=require('module'),load=Module._load;
-Module._load=function(name,...args){if(name==='cc')return {instantiate:x=>x,UITransform:class {},Widget:class {}};if(name==='./jobs.js')name=process.argv[2];return load.call(this,name,...args);};
+Module._load=function(name,...args){if(name==='cc')return {instantiate:x=>x,UITransform:class {},Widget:class {}};if(name==='./jobs.js')name=process.argv[2];if(name==='./dynamic-ui.js')name=require('path').join(require('path').dirname(process.argv[1]),'CreatorDynamicUi.js');if(name==='./prefab-instances.js')name=require('path').join(require('path').dirname(process.argv[1]),'CreatorPrefabInstances.js');return load.call(this,name,...args);};
 const adapter=require(process.argv[1]);
 const make=(name,width)=>({name,parent:null,children:[],position:{x:0,y:0,z:0},scale:{x:1,y:1,z:1},rotation:{x:0,y:0,z:0,w:1},active:true,
 getComponent:()=>({width,height:32,anchorX:.5,anchorY:.5}),destroy(){}});

@@ -68,10 +68,12 @@ def enrich(project,out,rows,code_index,tasks):
         for asset in inspected['assets']:
             source_root=Path(inspected['sourceRoots'][asset.get('bundle',inspected['bundle'])])
             prefix=source_root.relative_to(out/'InputTree').as_posix()
-            file_rows=[by_tree.get(prefix+'/'+asset[k]) for k in ('importPath','native') if asset.get(k)]
+            prefix=''if prefix=='.'else prefix+'/'
+            file_rows=[by_tree.get(prefix+asset[k]) for k in ('importPath','native') if asset.get(k)]
             source_ids=[r['sourceId'] for r in file_rows if r]
             record=dict(sourceId=asset['sourceId'],kind=asset.get('kind'),sourceInputs=source_ids,logicalPath=asset.get('logicalPath'),
                         state='decoded_only' if asset.get('document') else 'unresolved',nativeValidation='not_run')
+            if asset.get('sourceDocument'):record['sourceDocument']=asset['sourceDocument']
             if asset.get('document'):
                 relative=naming.path(asset['sourceId'],'.json','Analysis/Decoded')
                 dest=project/relative;dest.parent.mkdir(parents=True,exist_ok=True)
