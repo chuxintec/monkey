@@ -8,12 +8,12 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-public static class MonkeyImporter
+public static partial class MonkeyImporter
 {
     [Serializable] public class Plan {
         public float[] designSize; public float pixelsPerUnit;
         public TextureSpec[] textures; public AssetSpec[] assets; public BitmapSpec[] bitmapFonts; public int sourceDiagnosticCount;
-        public NodeSpec[] nodes; public ComponentSpec[] components; public MotionSpec[] animations; public bool galleryOnly; public SourcePrefabSpec[] sourcePrefabs; public TmpResourceSpec tmpResources;
+        public NodeSpec[] nodes; public ComponentSpec[] components; public MotionSpec[] animations; public bool galleryOnly; public SourcePrefabSpec[] sourcePrefabs; public PrefabInstanceSpec[] prefabInstances; public TmpResourceSpec tmpResources;
     }
     [Serializable] public class TmpResourceSpec { public string packageName,packageVersion,resource,importMode; }
     [Serializable] public class TmpResourceResult {
@@ -24,8 +24,9 @@ public static class MonkeyImporter
     static TmpResourceResult tmpResourceResult;
     [Serializable] public class SourcePrefabSpec { public string sourceId,root,path; public string[] nodes; public int nodeCount; }
     [Serializable] public class SourcePrefabResult {
+        public PrefabInstanceResult[] prefabInstances;
         public MonkeyNumericCode.Result[] numericCodeBindings;
-        public string sourceId,path,guid,geometryPhase; public int nodeCount,missingScripts,layoutSettlePasses;
+        public string sourceId,path,guid,geometryPhase,nativePrefabType; public int nodeCount,missingScripts,layoutSettlePasses;
         public bool savedReloaded,referencesVerified; public NodeResult[] nodes; public string[] referenceFailures;
     }
     [Serializable] public class MotionKey { public float time,value; public string interpolation; }
@@ -65,6 +66,7 @@ public static class MonkeyImporter
     [Serializable] public class LabelResult { public string sourceId, text, fontGuid, geometryProbe; public float fontSize; public int characterCount; public bool allCharactersPresent; public GlyphBounds[] glyphBounds; }
     [Serializable] public class GlyphBounds { public uint unicode; public float left,top,width,height,quadPadding; }
     [Serializable] public class Readback {
+        public PrefabInstanceResult[] prefabInstances;
         public string nativeScope,sourceGraphVerification; public GalleryResult[] gallery;
         public MonkeyNumericCode.Result[] numericCodeBindings,numericCodeExercise;
         public string status, unityVersion, prefabGuid, sceneGuid;
@@ -686,13 +688,10 @@ public static class MonkeyImporter
         var numericCodeExercise=MonkeyNumericCode.Exercise(plan.components,nodeMap);
         NativeCheckpoint("animations",0,plan.animations.Length);
         var motionReadback=BuildMotions(plan,nodeMap);
-        var view = canvas.AddComponent<MonkeyCandidateView>();
-        view.Images = canvas.GetComponentsInChildren<UnityEngine.UI.Image>(true);
-        view.Labels = canvas.GetComponentsInChildren<TMPro.TextMeshProUGUI>(true);
-        view.Buttons = canvas.GetComponentsInChildren<UnityEngine.UI.Button>(true);
         var events=new GameObject("EventSystem",typeof(UnityEngine.EventSystems.EventSystem),typeof(UnityEngine.EventSystems.StandaloneInputModule));
         SceneManager.MoveGameObjectToScene(events,scene);
         var sourcePrefabResults=new List<SourcePrefabResult>();
+        prefabTemplateHashes=new Dictionary<string,string>();
         foreach(var spec in plan.sourcePrefabs ?? new SourcePrefabSpec[0]) {
             if(string.IsNullOrEmpty(spec.path) || !spec.path.StartsWith(Paths.sourcePrefabsRoot+"/",StringComparison.Ordinal) || spec.path.Contains(".."))
                 throw new InvalidOperationException("Invalid source prefab path");
@@ -703,11 +702,16 @@ public static class MonkeyImporter
             if(sourcePrefabResults.Count%16==0)NativeCheckpoint("source-prefabs",sourcePrefabResults.Count,plan.sourcePrefabs.Length);
             if(!spec.path.StartsWith(Paths.sourcePrefabsRoot+"/",StringComparison.Ordinal) || spec.path.Contains("..") || File.Exists(spec.path))
                 throw new InvalidOperationException("Invalid or existing source prefab path: "+spec.path);
+            PrepareNativeInstances(plan,spec.sourceId,nodeMap,nodeSpecs);
             // SaveAsPrefabAsset serializes this subtree without modifying it.
             // A managed active Instantiate can run layout lifecycle callbacks
             // while the cloned hierarchy is still initializing.
             var sourcePrefab=PrefabUtility.SaveAsPrefabAsset(nodeMap[spec.root],spec.path,out bool saved);
             if(!saved || sourcePrefab==null)throw new InvalidOperationException("Source prefab save failed: "+spec.sourceId);
+            var nativePrefabType=PrefabUtility.GetPrefabAssetType(sourcePrefab);
+            bool rootVariant=(plan.prefabInstances??new PrefabInstanceSpec[0]).Any(p=>p.owner==spec.sourceId&&p.root==spec.root);
+            if(nativePrefabType!=(rootVariant?PrefabAssetType.Variant:PrefabAssetType.Regular))throw new InvalidOperationException("Native Prefab/Variant type differs from source relationship");
+            prefabTemplateHashes.Add(spec.sourceId,Hash(spec.path));
             var contents=PrefabUtility.LoadPrefabContents(spec.path);
             try {
                 int passes=SettleNativeLayout(contents);
@@ -734,13 +738,20 @@ public static class MonkeyImporter
                 }
                 var persistentMap=SavedNodeMap(plan.nodes,sourcePrefab,spec,nodeSpecs);
                 var numericBindings=plan.components.Where(c=>c.convertible&&!string.IsNullOrEmpty(c.codeClassName)&&persistentMap.ContainsKey(c.node)).Select(c=>MonkeyNumericCode.Read(c,persistentMap[c.node].gameObject)).ToArray();
-                sourcePrefabResults.Add(new SourcePrefabResult {numericCodeBindings=numericBindings,sourceId=spec.sourceId,path=spec.path,
+                sourcePrefabResults.Add(new SourcePrefabResult {prefabInstances=ReadNativeInstances(plan,mapped,spec.sourceId),numericCodeBindings=numericBindings,sourceId=spec.sourceId,path=spec.path,
+                    nativePrefabType=nativePrefabType.ToString(),
                     guid=AssetDatabase.AssetPathToGUID(spec.path),nodeCount=transforms.Length,missingScripts=missing,
                     savedReloaded=true,geometryPhase="native-layout-settled-v1",layoutSettlePasses=passes,
                     nodes=spec.nodes.Select(id=>DescribeNode(nodeSpecs[id],mapped[id])).ToArray(),
                     referencesVerified=referenceFailures.Count==0,referenceFailures=referenceFailures.ToArray()});
             } finally { PrefabUtility.UnloadPrefabContents(contents); }
         }
+        foreach(var owner in (plan.prefabInstances??new PrefabInstanceSpec[0]).Select(p=>p.owner).Distinct().Where(s=>!prefabTemplateHashes.ContainsKey(s)))
+            PrepareNativeInstances(plan,owner,nodeMap,nodeSpecs);
+        var view = canvas.AddComponent<MonkeyCandidateView>();
+        view.Images = canvas.GetComponentsInChildren<UnityEngine.UI.Image>(true);
+        view.Labels = canvas.GetComponentsInChildren<TMPro.TextMeshProUGUI>(true);
+        view.Buttons = canvas.GetComponentsInChildren<UnityEngine.UI.Button>(true);
         NativeCheckpoint("candidate-save",0,1);
         var prefab = PrefabUtility.SaveAsPrefabAsset(canvas,PrefabPath,out var success);
         if (!success || prefab == null) throw new InvalidOperationException("Native Prefab save failed");
@@ -766,6 +777,7 @@ public static class MonkeyImporter
         var gallery=plan.galleryOnly?ReadSavedGallery(plan,instance):new GalleryResult[0];
         var savedNodeMap=plan.galleryOnly?new Dictionary<string,RectTransform>():SavedNodeMap(plan.nodes,instance);
         var readback = new Readback {
+            prefabInstances=ReadNativeInstances(plan,savedNodeMap),
             nativeScope=plan.galleryOnly?"resources-and-gallery-only":"source-node-subset",sourceGraphVerification=plan.galleryOnly?"not_run":"saved-source-node-subset",gallery=gallery,
             numericCodeExercise=numericCodeExercise,numericCodeBindings=plan.components.Where(c=>c.convertible&&!string.IsNullOrEmpty(c.codeClassName)).Select(c=>MonkeyNumericCode.Read(c,savedNodeMap[c.node].gameObject)).ToArray(),
             sourcePrefabs=sourcePrefabResults.ToArray(),tmpResources=tmpResourceResult,sceneReopened=true,

@@ -315,6 +315,8 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
     diagnostics.extend(animation_gaps)
     from .prefabs import plan_prefabs
     source_prefabs,prefab_gaps=plan_prefabs(ir,components)
+    from .prefabs import native_relationships
+    source_prefabs,prefab_instances=native_relationships(ir,source_prefabs)
     for prefab in source_prefabs:prefab['path']=naming.path(prefab['sourceId'],'.prefab','Assets/Generated/Views/Sources')
     diagnostics.extend(prefab_gaps)
     out = new_output(output,[ir_path.parent])
@@ -329,7 +331,7 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
         if node.get('sourceGeometryProfile'):
             diagnostics.append(diagnostic('COCOS3_UNITY_LAYER_HANDOFF',node['sourceId'],'Original layer bits retained as provenance; native uGUI uses target UI layer 5, source camera visibility is pending',node['sourceId']))
     result=dict(schemaVersion=1,toolVersion=__version__,targetProfile=PROFILE,namespace=namespace,
-                sourcePrefabs=source_prefabs,naming=naming.report(),
+                sourcePrefabs=source_prefabs,prefabInstances=prefab_instances,naming=naming.report(),
                 scopeMode=ir.get('scopeMode','asset-selection'),
                 sourceIrSha256=sha(stage_bytes(ir_path)),sourceManifestPath=ir.get('sourceManifestPath'),sourceManifestSha256=ir['sourceManifestSha256'],
                 sourceRoots=ir.get('sourceRoots',{}),sourceLocations=ir.get('sourceLocations',{}),designSize=[750,1334],pixelsPerUnit=100,
@@ -379,11 +381,14 @@ def export(plan_path, output):
     numeric_path=out/'Assets/Monkey/Editor/MonkeyNumericCode.cs'
     numeric_path.write_bytes(files('monkey.targets').joinpath('UnityNumericCode.cs').read_bytes())
     Path(str(numeric_path)+'.meta').write_text('fileFormatVersion: 2\nguid: '+guid(p['namespace'],'numeric-code-editor')+'\n')
+    instances_path=out/'Assets/Monkey/Editor/MonkeyPrefabInstances.cs'
+    instances_path.write_bytes(files('monkey.targets').joinpath('UnityPrefabInstances.cs').read_bytes())
+    Path(str(instances_path)+'.meta').write_text('fileFormatVersion: 2\nguid: '+guid(p['namespace'],'prefab-instances-editor')+'\n')
     adapter=files('monkey.targets').joinpath('UnityImporter.cs').read_bytes()
     adapter_path=out/'Assets/Monkey/Editor/MonkeyImporter.cs';adapter_path.write_bytes(adapter)
     Path(str(adapter_path)+'.meta').write_text('fileFormatVersion: 2\nguid: '+guid(p['namespace'],'editor-adapter')+'\n')
     # Only the typed, finite import instruction subset is sent to the Editor.
-    instruction={key:p.get(key,[]) for key in ('designSize','pixelsPerUnit','textures','assets','bitmapFonts','nodes','components','galleryOnly','animations','sourcePrefabs')}
+    instruction={key:p.get(key,[]) for key in ('designSize','pixelsPerUnit','textures','assets','bitmapFonts','nodes','components','galleryOnly','animations','sourcePrefabs','prefabInstances')}
     instruction['tmpResources']=dict(packageName='com.unity.ugui',packageVersion='2.6.0',resource='Package Resources/TMP Essential Resources.unitypackage',importMode='package-completion-callback')
     instruction['glyphReadback']='native-quad-padding-v1'
     instruction['sceneRoundtrip']=True
@@ -391,6 +396,7 @@ def export(plan_path, output):
     instruction['transformReadback']='full-local-v1'
     instruction['sourceDiagnosticCount']=len(p['diagnostics'])
     instruction['prefabGuid']=guid(p['namespace'],'native-prefab')
+    instruction['prefabRelationshipReadback']='native-source-correspondence-v1'
     instruction['sceneGuid']=guid(p['namespace'],'native-scene')
     if p['galleryOnly']:
         instruction['galleryReadback']='exact-sprite-and-rect-v1'
@@ -520,12 +526,20 @@ def verify(candidate, output, level='static'):
                 diagnostics.append(diagnostic('SCENE_ROUNDTRIP_NOT_VERIFIED','Candidate.unity','Saved scene was not normally closed/reopened before native readback'))
             json_assets={a['id']:a for a in rb.get('jsonAssets',[])}
             actual_prefabs={a['sourceId']:a for a in rb.get('sourcePrefabs',[])}
+            from .prefabs import verify_native_relationships
+            template_guids={sid:row.get('guid')for sid,row in actual_prefabs.items()}
+            diagnostics.extend(verify_native_relationships(instruction.get('prefabInstances',[]),instruction.get('sourcePrefabs',[]),rb.get('prefabInstances'),'scene',template_guids))
             expected_nodes={n['sourceId']:n for n in instruction['nodes']}
             for spec in instruction.get('sourcePrefabs',[]):
                 actual=actual_prefabs.get(spec['sourceId'],{})
+                diagnostics.extend(verify_native_relationships([x for x in instruction.get('prefabInstances',[])if x['owner']==spec['sourceId']],instruction.get('sourcePrefabs',[]),actual.get('prefabInstances'),spec['sourceId'],template_guids))
                 target=spec['path']
                 if not actual.get('guid') or actual.get('nodeCount')!=spec['nodeCount'] or actual.get('missingScripts')!=0 or actual.get('path')!=target or target not in native:
                     diagnostics.append(diagnostic('SOURCE_PREFAB_NOT_VERIFIED',spec['sourceId'],'Independent native prefab save/reopen evidence is absent or inconsistent'))
+                if instruction.get('prefabRelationshipReadback')=='native-source-correspondence-v1':
+                    root_variant=any(x['owner']==spec['sourceId']and x['root']==spec['root']for x in instruction.get('prefabInstances',[]))
+                    if actual.get('nativePrefabType')!=('Variant'if root_variant else'Regular'):
+                        diagnostics.append(diagnostic('NATIVE_PREFAB_ASSET_TYPE',spec['sourceId'],'Native Prefab/Variant asset type differs from the source relation'))
                 if instruction.get('sourcePrefabReadback')=='native-layout-settled-v1':
                     saved_nodes={n['sourceId']:n for n in actual.get('nodes',[])}
                     if actual.get('savedReloaded') is not True or actual.get('geometryPhase')!='native-layout-settled-v1' or set(saved_nodes)!=set(spec['nodes']):

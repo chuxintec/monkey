@@ -11,6 +11,29 @@ BASELINE='https://github.com/cocos/cocos-engine/tree/v3.8.7/cocos'
 
 
 def graph(asset):
+    return _graph(asset,False)
+
+
+def resolved_graph(asset,resolver):
+    resolved=resolver.resolve(asset)
+    nodes,components,gaps=_graph(resolved,True)
+    namespace=asset['sourceId'];identities=resolved['objectIdentities']
+    def source_id(value):
+        if value is None or not value.startswith(namespace+'#'):return value
+        index,separator,tail=value[len(namespace)+1:].partition('/')
+        if index not in identities:fail('PREFAB_NORMALIZED_IDENTITY',value,'Resolved source object identity unavailable')
+        return identities[index]+(separator+tail if separator else '')
+    for node in nodes:
+        for key in ('sourceId','parent'):node[key]=source_id(node[key])
+        for key in ('children','components','sourceGeometryComponents'):node[key]=[source_id(x)for x in node[key]]
+    for component in components:
+        for key in ('sourceId','node','target','content'):
+            if key in component:component[key]=source_id(component[key])
+    for gap in gaps:gap['sourceId']=source_id(gap['sourceId'])
+    return nodes,components,gaps,resolved
+
+
+def _graph(asset,instances_resolved):
     from ..normalize import expand_nodes,ref,vector,node_ir,component_ir
     namespace=asset['sourceId']
     objects=asset['document']['instances']
@@ -20,7 +43,7 @@ def graph(asset):
         if isinstance(value,list):pending.extend(value)
         elif isinstance(value,dict):
             pending.extend(value.values())
-            if value.get('__type__')=='cc.PrefabInstance' or (value.get('__type__')=='cc.PrefabInfo' and any(value.get(k) for k in ('instance','targetOverrides','nestedPrefabInstanceRoots'))):
+            if not instances_resolved and (value.get('__type__')=='cc.PrefabInstance' or (value.get('__type__')=='cc.PrefabInfo' and any(value.get(k) for k in ('instance','targetOverrides','nestedPrefabInstanceRoots')))):
                 fail('COCOS3_PREFAB_INSTANCE_PENDING',namespace,'Original nested Prefab instances/overrides are not flattened or guessed')
     entries=list(expand_nodes(objects,namespace))
     by_id={str(index):obj for index,obj in entries if isinstance(obj,dict)}
@@ -93,7 +116,7 @@ def graph(asset):
         if obj['__type__']=='cc.Scene':node['sourceType']='cc.Scene';gap(index,'Source Scene globals/cameras remain pending; static hierarchy only')
         node.update(sourceGeometryProfile=PROFILE,sourceLayer=layer,sourceGeometryComponents=geometry)
         nodes.append(node)
-    metadata={'cc.Prefab','cc.SceneAsset','cc.Node','cc.Scene','cc.PrefabInfo','cc.CompPrefabInfo','cc.TargetInfo'}
+    metadata={'cc.Prefab','cc.SceneAsset','cc.Node','cc.Scene','cc.PrefabInfo','cc.CompPrefabInfo','cc.TargetInfo','cc.PrefabInstance','CCPropertyOverrideInfo','cc.TargetOverrideInfo'}
     for index,obj in entries:
         index=str(index)
         if not isinstance(obj,dict)or obj.get('__type__')in metadata or index in consumed:continue

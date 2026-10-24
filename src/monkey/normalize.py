@@ -120,9 +120,13 @@ def normalize(manifest_path, output):
     result = dict(schemaVersion=1, toolVersion=__version__, sourceProfile=m['sourceProfile'],
                   sourceManifestSha256=sha(stage_bytes(manifest_path)),sourceManifestPath=str(manifest_path),sourceRoots=m.get('sourceRoots',{m['bundle']:m['sourceRoot']}),
                   sourceNames=source_names(m),sourceLocations={a['sourceId']:dict(bundle=a.get('bundle',m['bundle']),importPath=a.get('importPath'),nativePath=a.get('native')) for a in m['assets']}, evidenceFiles=m.get('evidenceFiles',[]),aliases=aliases, assets=[], spriteFrames=[], bitmapFonts=[],materials=[], nodes=[],
-                  components=[], quarantinedAssets=[], animationSchemaVersion=1,animationClips=[],diagnostics=diagnostics,
+                  components=[], quarantinedAssets=[],prefabInstances=[],prefabOverrideGaps=[],animationSchemaVersion=1,animationClips=[],diagnostics=diagnostics,
                   scopeMode='whole-input' if m.get('packageSelection') else 'asset-selection',
                   coordinateConvention=dict(origin='center anchor', x='right', y='up', units='pixels'))
+    prefab_resolver=None
+    if m['sourceProfile']=='cocos-3.8.7-bundle':
+        from .sources.cocos38_prefabs import Resolver
+        prefab_resolver=Resolver(m['assets'])
     for asset in m['assets']:
         sid = asset['sourceId']
         name = sha(sid.encode())[:24]
@@ -140,9 +144,11 @@ def normalize(manifest_path, output):
                 result['quarantinedAssets'].append(dict(sourceId=sid,kind=kind,reason='LEGACY_RESOURCE_ONLY'))
                 diagnostics.append(diagnostic('LEGACY_RESOURCE_ONLY',asset.get('importPath',sid),'2.1.2 graph, clip and other semantics require a dedicated adapter',sid));continue
             if cocos38 and kind in ('cc.Prefab','cc.Scene','cc.SceneAsset'):
-                from .sources.cocos38_graphs import graph as graph38
-                nodes38,components38,gaps38=graph38(asset)
+                from .sources.cocos38_graphs import resolved_graph
+                nodes38,components38,gaps38,resolved38=resolved_graph(asset,prefab_resolver)
                 result['nodes'].extend(nodes38);result['components'].extend(components38)
+                result['prefabInstances'].extend(resolved38['prefabInstances']);result['prefabOverrideGaps'].extend(resolved38['pendingPrefabOverrides'])
+                diagnostics.extend(diagnostic('COCOS3_PREFAB_OVERRIDE_HANDOFF',asset.get('importPath',sid),g['kind']+': '+'.'.join(g.get('propertyPath')or[]),g['target'])for g in resolved38['pendingPrefabOverrides'])
                 diagnostics.extend(diagnostic('COCOS3_SOURCE_SEMANTIC_HANDOFF',asset.get('importPath',sid),g['message'],g['sourceId'])for g in gaps38)
                 continue
             if kind == 'cc.SpriteFrame':
@@ -318,6 +324,7 @@ def quarantine_graphs(ir):
     if bad:
         ir['nodes']=[n for n in ir['nodes'] if n['sourceId'].split('#')[0] not in bad]
         ir['components']=[c for c in ir['components'] if c['sourceId'].split('#')[0] not in bad]
+        ir['prefabInstances']=[x for x in ir.get('prefabInstances',[])if x['root'].split('#')[0]not in bad]
         for source,reason in sorted(bad.items()):
             ir.setdefault('quarantinedAssets',[]).append(dict(sourceId=source,reason='INVALID_NODE_GRAPH',detail=reason))
             ir['diagnostics'].append(diagnostic('UNSUPPORTED_NODE_GRAPH',source,reason+'; original decoded object retained',source))

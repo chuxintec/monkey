@@ -2,19 +2,15 @@
 
 完工/阻塞/交付与续推按[DIRECTOR-CONTINUATION](/Users/wangmeng/Documents/Manager/standards/DIRECTOR-CONTINUATION.md)执行；本聊天已原生核验人类授权`01a166b4-5c18-78f3-8cc2-c0d07dd46a20`，总监路由`01a14c8c-6402-7d03-bab8-ec7ea8051abf`。更新本PLAN后以稳定事件ID报告，已批准就绪下一包连续推进，不因报告或普通ACK停下。
 
-## 当前：v0.1 已发布；v0.2 补源与结构行为持续开发
+## 当前：v0.2 实际实现与必要剩余（2026-10-24）
 
-2026-10-24最新取舍已原生核验：总监human01a16b73-717e-7021-9a9c-e8219f8667ea授权天命/机智从微信目标包/资源缓存与有据远端补源，不等旧archives；不可逆代码/缺类型/不可支持引擎按真实limitations保留，不要求全游戏全方法恢复。嵌套Prefab/实例/override及动态Layout/Widget/Label行为仍必须解决，不能全部handoff。随后human01a16b77-a82c-7e53-805d-265e0f7296d0要求核实灵画师引擎：当前166缓存包与Research同SHA，实际egret.runEgret及Capabilities.engineVersion=5.2.32，故按Egret/EUI+custom binary推进；短暂Laya判断已纠正，不借此声称支持真实Laya。原生核验与本地源字节证据复用，不重复开团队/安装/发布。
+v0.1 已发布冻结；当前本地 `codex/v0.2`，未推送/发布。用户持续推进授权及本轮进度核查已原生核验：总监 turn01a16bea-fe5f-7082-9583-f3a7f0292b56 / human01a16beb-0267-79b1-9472-e1ced602d6ba。原生验证仍限自有独立副本与单次≤30分钟；单主开发，不唤醒肥鹅。
 
-已按用户直接授权（总监human01a169b8-b2d8-7d71-8dcf-06f470bfe371）创建私有https://github.com/chuxintec/monkey，正常推送main与不可变v0.1并发布正式Release https://github.com/chuxintec/monkey/releases/tag/v0.1。Python0.1.0，源码8363fde1ce2f1a5164b5109a16bf558a28f8977c、annotated tag a21c410782d5069c68c888a6ef62785e3c57a9b5。GitHub REST与ls-remote核对private/main/tag/peeled SHA一致，Release draft=false/prerelease=false；wheel223293B SHA30e267edf4e6c8d2df89c3282edb629e8f8d62c671a701b1759b488ac9c6a9d5，sdist350714B SHA7674afdf1dce52e44eefa2a7e0bbdf464cc979fc10e08f8ff9fb4b531e43b362，SHA256SUMS共3附件已实际下载再核对API/local SHA。回执.private/v01-release-audit/published.json。
-
-发布前main历史路径/blob检查未发现私有原件/产物/凭据特征；9项CLI/编排检查、wheel/sdist内容、sdist重建wheel逐文件一致及隔离安装7合成文件双端CLI烟测通过。无全局安装/新引擎/服务变更。旧0.3.dev/full14证据不改身份；full14资源层零诊断不等于914业务初稿/动态语义/Spine播放/视觉交互完成。
-
-本地已从v0.1建立codex/v0.2，未推该分支。用户明确推进到v0.2开发完成（总监human01a169c7-6ea9-7fb3-a08a-bb2fe1819996已原生核验）；不以检查点替代版本出口，也未授权v0.2远端发布。总监event monkey-v02-design-review-20261024-01已通过docs/V0.2-PLAN.md主体（Manager/decisions/20261024-monkey-v01-v02/DESIGN-REVIEW.md），不再等普通ACK。两项具体样例已在V0.2-EXAMPLES.md补齐：真实NumberLabel模块SHA/方法/5处MainUi绑定、C#/实际JS的有据方法和未知接口；同一MainUi的none/grea具体路径、稳定GUID/UUID/引用及v0.1旧自动布局的明确迁移。用户新要求Cocos代码TS优先、JS次选（总监human01a169c9-28a9-7120-96b0-df9511be3764已原生读取），默认TS及--cocos-code-language ts|js具体合同已同步方案。现在按既定Research发现/阶段结果/CodeModel/ProjectModel→U→C→全Research持续实现，不增加审批。
-
-Research发现CLI已实际实现并扫出11案例（9可检查证据目录/2外部指针），缺源/未知仍在分母且export全部not_run；输出outputs/research-matrix-v02-01，2项动态新增/未知/坏metadata/symlink反例通过。发现不冒充兼容或导出，具名CodeModel CLI已读取真实NumberLabel六方法（2字段读写语义候选/4明确unsupported），逐方法字节范围/SHA与未执行声明，仍未编译或恢复完整业务。2项Unicode范围/源不可执行/重复方法歧义反例通过；ProjectModel已实现精确typed槽/身份/所有权检查，真实Creator sizingProbe03输出282路径槽，15个未物化Prefab身份明确pending而不假造GUID；2项文本/逻辑key不替换、stale/越界反例通过。格式应用尚未实现，接着U固定provider输出。
-
-Unity reader草稿已按合同恢复到v0.2并接入公开convert：一个明确bundle→严格UnityPy→具名TypeTree C#字段→固定AssetRipper本机副本→Unity6候选，原始/Provider空壳隔离、旧VR包明确迁移、缺方法/缺引用保留。真实3122B代表输出原Prefab1/FrameSpritePool16字段、C#编译通过，3外部Sprite未闭合；原生probe01 own65810 exit1/reap，几何/GUID可读但schema组件未注册，未保存，首失败停止冷重跑。启动UnityFS实际1603/1497parsed/106缺类型/4外置纹理令牌，公开convert先blocked且不启动AR。详见providers/UNITY-SOURCE.md；这不是U整包或全版本通过，继续离线定位注册和精确缓存键。来源全矩阵11真实游戏已列，unknown/缺源仍在分母。仅工具开发，不恢复暂停游戏或改GREA/服务器，不新Agent。
+- 已实现：公共CLI统一输入/精确远端获取、按资源与版本隔离、具名有据C#/TS/JS数值子集、ProjectModel typed引用与可选none/grea格式、Unity来源受限原生恢复、Cocos2.1.1/2.1.2/3.8.7资源及部分图、Egret5.2.32自定义资源/图集。Research 11例尝试、9例不同范围输出、2例未导出、完整游戏0，详见validation/research-v02-status.json；候选数量不代表完整兼容。
+- 补源：机智147的13091份精确远端文件已取得，19298项声明资源missing0，双端最新07静态零诊断（完整新版Editor/玩法not_run）；天命当前3包336缓存与Cocos3.4.1来源已冻结，旧archives缺源阻塞解除，版本专用reader/export待完成。灵画师核实Egret5.2.32，不记作Laya。
+- 结构在途：Creator3.8.7开发期模板DAG/局部ID/覆盖解析已接公共IR/Unity计划；114/119图可结构解析，5图缺6个精确模板。Unity真实4Prefab/104节点/5关系及合成双实例/三层嵌套/Variant均完成保存重开、对应节点/模板未污染读回；已通过23项定向检查。尚未恢复源脚本的partial与结构检查分开，详见validation/2026-10-24-native-prefab-relations.md。
+- 当前下一包：Creator3.8.8原生模板/实例/覆盖保存重开（暂显式拒绝关系图，防止误作扁平完成）；随后动态Layout/Widget/Label状态变化、天命3.4.1公共双目标导出及真实输入集成。真实mounted/removed出现时按具体结构解决；缺模板只接精确声明补源。
+- 版本出口：上述必修结构/动态行为落地，逐case支持矩阵与limitations、CLI本地分发/安装和必要代表验证收口。未知受保护方法/不可支持引擎允许明确限制，不要求全游戏全业务恢复；不得把必修能力降为handoff结项。旧证据及旧未实现状态按下方历史读取。
 
 ## 历史依据与全量候选记录
 
