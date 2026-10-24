@@ -36,6 +36,21 @@ class BulkFinishTests(unittest.TestCase):
                 with self.assertRaises(ParseError):finish.execute(**opts)
                 self.assertFalse(opts['output'].exists())
 
+    def test_previous_failed_layer_requires_exact_owned_evidence_before_any_replacement(self):
+        with tempfile.TemporaryDirectory()as temp:
+            opts=self.fixture(Path(temp).resolve());project=opts['candidate'];previous=Path(temp).resolve()/'previous';previous.mkdir()
+            helper=(opts['preparation']/'UnityBulkFinish.cs').read_bytes();(project/'Assets/Editor/UnityBulkFinish.cs').write_bytes(helper)
+            old_plan=json.loads((opts['preparation']/'bulk-finish-plan.json').read_text());old_plan.update(budgetSeconds=600,deadlineUtc=opts['deadline_utc']);write_json(project/'Analysis/bulk-finish-plan.json',old_plan)
+            failed=dict(status='failed',scenes=[],fonts=[]);write_json(project/'Analysis/bulk-finish-readback.json',failed);write_json(previous/'bulk-finish-readback.json',failed)
+            write_json(previous/'execution-result.json',dict(project=str(project),processExited=True,status='partial',historicalManifestUnchanged=True,nativeStatus='failed',sourceManifestSha256=opts['expected_manifest']))
+            write_json(previous/'execution-plan.json',dict(preparation=str(opts['preparation']),budgetSeconds=600,deadlineUtc=opts['deadline_utc'],helperSha256=sha(helper)))
+            with self.assertRaises(ParseError):finish.execute(**opts)
+            with patch('subprocess.Popen',side_effect=AssertionError('planning must not launch')):result=finish.execute(**dict(opts,previous_execution=previous))
+            self.assertEqual(result['status'],'planned');self.assertEqual(json.loads((project/'Analysis/bulk-finish-readback.json').read_text()),failed)
+            (project/'Assets/Editor/UnityBulkFinish.cs').write_text('manual edit')
+            with self.assertRaises(ParseError):finish.execute(**dict(opts,output=Path(temp).resolve()/'other',previous_execution=previous))
+            self.assertFalse((Path(temp)/'other').exists())
+
     def test_long_expired_or_marginless_windows_are_rejected(self):
         with tempfile.TemporaryDirectory()as temp:
             opts=self.fixture(Path(temp).resolve());now=datetime.now(timezone.utc)
@@ -51,6 +66,18 @@ class BulkFinishTests(unittest.TestCase):
             self.assertFalse(label_font_matches(spec,actual,font,dict(proof,**changed)),changed)
         self.assertFalse(label_font_matches(dict(spec,overflow=0),actual,font,proof))
         self.assertFalse(label_font_matches(spec,dict(actual,fontGuid='fallback'),font,proof))
+
+    def test_shrink_geometry_keeps_native_fixed_margin_and_scales_metrics(self):
+        from monkey.targets.unity import bitmap_label_probe
+        font=dict(pointSize=20,ascent=20,kernings=[],glyphs=[dict(unicode=65,metrics=[8,12,1,16,12],sourceRect=[0,0,8,12])])
+        from monkey.assets.bitmap import single_line
+        spec=dict(text='AA',fontSize=40,overflow=2,spacing=4,bitmapProbe=single_line(font,'AA',40,4))
+        probe,size,aligned=bitmap_label_probe(spec,font,20)
+        self.assertEqual(size,20);self.assertEqual(probe['boxes'][0]['width'],8);self.assertEqual(probe['boxes'][1]['x'],15)
+        fixed=spec['bitmapProbe']['inkRight']-spec['bitmapProbe']['advance']
+        self.assertEqual(aligned,probe['advance']+fixed)
+        self.assertNotEqual(aligned,probe['inkRight'])
+        self.assertEqual(bitmap_label_probe(dict(spec,overflow=0),font,20)[0],spec['bitmapProbe'])
 
     def test_future_native_equal_size_shrink_still_requires_auto_size_configuration(self):
         spec=dict(text='short',fontSize=30,overflow=2);font=dict(guid='guid');row=dict(text='short',fontSize=30,fontGuid='guid',allCharactersPresent=True,autoSizeReadback=True,autoSizing=False,fontSizeMin=.1,fontSizeMax=30)

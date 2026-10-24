@@ -10,7 +10,7 @@ from pathlib import Path
 from .io import safe,read,load,sha,write_json,inside
 from .sources.compiled import fail
 
-ROLES={'metadata','source-binary','source-package','source-script','il2cpp-declarations','dummy-assembly','semantic-snapshot'}
+ROLES={'metadata','source-binary','source-package','source-script','il2cpp-declarations','dummy-assembly','semantic-snapshot','asset-evidence','native-media','recovery-source'}
 
 
 def declared(manifest):
@@ -65,7 +65,15 @@ def attach(manifest,project):
         path=Path(row['path']);dest=inside(out,row['role']+'/'+row['sha256'][:16]+'-'+path.name);dest.parent.mkdir(parents=True,exist_ok=True)
         if not dest.exists():shutil.copy2(path,dest)
         if sha(read(dest,max_bytes=128*1024**2))!=row['sha256']:fail('UNITY_CODE_COPY_CHANGED',str(dest),'Evidence copy differs')
-        copied.append(dict(role=row['role'],sha256=row['sha256'],bytes=row['bytes'],path=dest.relative_to(project).as_posix()))
+        native=None
+        if row['role']=='native-media':
+            payload=read(path,max_bytes=128*1024**2);suffix=path.suffix.lower()
+            good=(suffix=='.png'and payload.startswith(b'\x89PNG\r\n\x1a\n'))or(suffix in('.jpg','.jpeg')and payload.startswith(b'\xff\xd8'))or(suffix=='.mp3'and(payload.startswith(b'ID3')or len(payload)>1 and payload[0]==255 and payload[1]&224==224))
+            if not good:fail('UNITY_MEDIA_FORMAT',str(path),'Declared native media signature differs; keep unrecognized bytes as evidence')
+            native=inside(project,'Assets/Game/Imported/SourceMedia/'+row['sha256'][:16]+'-'+path.name);native.parent.mkdir(parents=True,exist_ok=True)
+            if not native.exists():shutil.copy2(path,native)
+            if sha(read(native,max_bytes=128*1024**2))!=row['sha256']:fail('UNITY_MEDIA_COPY_CHANGED',str(native),'Media copy differs')
+        copied.append(dict(role=row['role'],sha256=row['sha256'],bytes=row['bytes'],path=dest.relative_to(project).as_posix(),nativePath=native.relative_to(project).as_posix()if native else None,nativeIdentity='pending-editor-import'if native else'not-applicable'))
         if row['role']=='il2cpp-declarations':
             recovered=declarations(read(path,max_bytes=128*1024**2),project/'SourceRecovery/CodeDrafts/Il2Cpp',selected)
             drafts.extend(recovered['types']);total_methods+=recovered['methods'];total_fields+=recovered['fields']

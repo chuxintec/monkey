@@ -468,8 +468,18 @@ def label_font_matches(spec,actual,font,evidence=None):
     config=proof.get('autoSizing')is True and (not evidence or proof.get('prefabUnchanged')is True)
     measured=proof.get('actualFontSize',proof.get('fontSize'));low=proof.get('fontSizeMin');high=proof.get('fontSizeMax')
     if not all(type(v)in(int,float)and math.isfinite(v)for v in (measured,low,high)):return False
-    if evidence and (proof.get('fontGuid')!=font['guid'] or proof.get('text')!=spec['text']or proof.get('allCharactersPresent')is not True or not close(proof.get('requestedFontSize'),spec['fontSize'])):return False
+    if evidence and (not close(measured,actual.get('fontSize'))or proof.get('fontGuid')!=font['guid'] or proof.get('text')!=spec['text']or proof.get('allCharactersPresent')is not True or not close(proof.get('requestedFontSize'),spec['fontSize'])):return False
     return bool(config and close(high,spec['fontSize'])and 0<low<=high and low-.001<=measured<=high+.001)
+
+
+def bitmap_label_probe(spec,font,effective_size):
+    """Native TMP keeps the emitted margin fixed while SHRINK scales glyph metrics."""
+    original=spec['bitmapProbe']
+    if spec.get('overflow')!=2 or close(effective_size,spec['fontSize']):return original,spec['fontSize'],original['inkRight']
+    from ..assets.bitmap import single_line
+    probe=single_line(font,spec['text'],effective_size,spec.get('spacing',0)*effective_size/spec['fontSize'])
+    fixed_right_margin=original['inkRight']-original['advance']
+    return probe,effective_size,probe['advance']+fixed_right_margin
 
 
 def node_geometry_matches(actual,source,full=False):
@@ -603,7 +613,8 @@ def verify(candidate, output, level='static'):
                 if spec.get('bitmapProbe'):
                     geometry=by_node.get(spec['node'],{});node=node_specs[spec['node']]
                     size=geometry.get('size',node['size']);pivot=geometry.get('pivot',node['anchor'])
-                    probe=spec['bitmapProbe'];glyphs=actual.get('glyphBounds',[])
+                    source_font=next(f for f in instruction['bitmapFonts']if f['id']==spec['font'])
+                    probe,line_size,aligned_width=bitmap_label_probe(spec,source_font,actual['fontSize']);glyphs=actual.get('glyphBounds',[])
                     if instruction.get('glyphReadback')=='native-quad-padding-v1':
                         from .common import native_ink_box
                         try:
@@ -616,8 +627,8 @@ def verify(candidate, output, level='static'):
                     if len(glyphs)!=len(expected):
                         diagnostics.append(diagnostic('BITMAP_QUAD_READBACK_MISMATCH',spec['sourceId'],'Visible glyph count differs'))
                         continue
-                    origin_x=-pivot[0]*size[0]+spec['horizontalAlign']*.5*(size[0]-probe['inkRight'])
-                    origin_top=(1-pivot[1])*size[1]-spec['verticalAlign']*.5*(size[1]-spec['fontSize'])
+                    origin_x=-pivot[0]*size[0]+spec['horizontalAlign']*.5*(size[0]-aligned_width)
+                    origin_top=(1-pivot[1])*size[1]-spec['verticalAlign']*.5*(size[1]-line_size)
                     for actual_glyph,box in zip(glyphs,expected):
                         intended=dict(left=origin_x+box['x'],top=origin_top-box['top'],width=box['width'],height=box['height'])
                         if actual_glyph.get('unicode')!=box['unicode'] or any(not close(actual_glyph.get(key),value,.03) for key,value in intended.items()):

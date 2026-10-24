@@ -43,7 +43,7 @@ def validated_preparation(candidate,preparation,expected_manifest):
     return root,plan,helper,locations
 
 
-def execute(candidate,preparation,output,editor,expected_manifest,budget_seconds,deadline_utc,window_end_utc,execute=False):
+def execute(candidate,preparation,output,editor,expected_manifest,budget_seconds,deadline_utc,window_end_utc,execute=False,previous_execution=None):
     """Explicit in-place finish of an owned native copy; no clone or full importer."""
     import os,signal,subprocess,threading,time
     from datetime import timedelta
@@ -56,7 +56,18 @@ def execute(candidate,preparation,output,editor,expected_manifest,budget_seconds
     if executable.name not in ('Unity','Unity.exe')or not executable.is_file()or not os.access(executable,os.X_OK):fail('BULK_FINISH_EDITOR',str(executable),'Explicit installed Editor executable required')
     root,plan,helper,locations=validated_preparation(candidate,preparation,expected_manifest)
     helper_path=inside(root,(Path(locations['plan']).parent/'UnityBulkFinish.cs').as_posix());plan_path=root/'Analysis/bulk-finish-plan.json'
-    if any(p.exists()for p in [helper_path,plan_path,root/'Analysis/bulk-finish-readback.json',root/'Temp/UnityLockfile']):fail('BULK_FINISH_EXISTING_STATE',str(root),'Keep existing partial/manual output or active Editor; never overwrite or remove locks')
+    previous_files={}
+    if (root/'Temp/UnityLockfile').exists():fail('BULK_FINISH_EXISTING_STATE',str(root),'Never remove an Editor lock')
+    if previous_execution:
+        previous=safe(previous_execution);old=load(read(previous/'execution-result.json'));old_spec=load(read(previous/'execution-plan.json'))
+        failed=read(previous/'bulk-finish-readback.json');old_rb=load(failed)
+        if old.get('project')!=str(root)or old.get('processExited')is not True or old.get('status')!='partial'or old.get('historicalManifestUnchanged')is not True or old.get('nativeStatus')not in ('failed','partial')or any(r.get('savedReopened')or r.get('status')not in ('failed','excluded')for r in old_rb.get('scenes',[]))or any(r.get('status')!='configuration-verified'or r.get('prefabUnchanged')is not True for r in old_rb.get('fonts',[]))or old.get('sourceManifestSha256')!=expected_manifest:
+            fail('BULK_FINISH_PREVIOUS_STATE',str(previous),'Only an exited, unchanged owned failure with no saved source Scene may be resumed')
+        old_preparation=safe(old_spec['preparation']);old_plan=load(read(old_preparation/'bulk-finish-plan.json'));old_plan.update(budgetSeconds=old_spec['budgetSeconds'],deadlineUtc=old_spec['deadlineUtc'])
+        if sha(read(helper_path))!=old_spec['helperSha256']or load(read(plan_path))!=old_plan or read(root/'Analysis/bulk-finish-readback.json')!=failed:
+            fail('BULK_FINISH_PREVIOUS_CHANGED',str(root),'Prior helper/plan/failure evidence changed; no overwrite')
+        previous_files={helper_path:read(helper_path),plan_path:read(plan_path),root/'Analysis/bulk-finish-readback.json':failed}
+    elif any(p.exists()for p in [helper_path,plan_path,root/'Analysis/bulk-finish-readback.json']):fail('BULK_FINISH_EXISTING_STATE',str(root),'Explicit exact previous execution required; unknown files never overwritten')
     for row in plan['scenes']:
         if row['status']=='export'and inside(root,row['path']).exists():fail('BULK_FINISH_EXISTING_SCENE',row['path'],'Source Scene already exists')
     out=new_output(output,[root,safe(preparation),executable]);plan.update(budgetSeconds=budget_seconds,deadlineUtc=stamp(deadline))
@@ -65,6 +76,14 @@ def execute(candidate,preparation,output,editor,expected_manifest,budget_seconds
               deadlineUtc=stamp(deadline),windowEndUtc=stamp(end),budgetSeconds=budget_seconds,fullReimport=False,processStarted=False,processExited=True)
     write_json(out/'execution-plan.json',spec)
     if not execute:return dict(spec,report=str(out/'execution-plan.json'))
+    if previous_files:
+        archive=out/'PreviousLayer';archive.mkdir()
+        for path,body in previous_files.items():
+            (archive/path.name).write_bytes(body)
+        meta=helper_path.with_suffix('.cs.meta')
+        if meta.exists():(archive/meta.name).write_bytes(read(meta))
+        write_json(out/'previous-layer.json',dict(previousExecution=str(safe(previous_execution)),files=[dict(path=str(p.relative_to(root)),sha256=sha(body))for p,body in previous_files.items()]))
+        (root/'Analysis/bulk-finish-readback.json').unlink()
     helper_path.write_bytes(helper);write_json(plan_path,plan)
     # Source manifest/readback remain immutable historical records; new files form an additive layer.
     result=dict(spec,status='running',startedUtc=stamp(now()));child=None;interrupted=[];handlers={}
@@ -105,7 +124,9 @@ def font_evidence(root,instruction,readback_path):
     """Accept an additive native proof only when frozen source/Prefab hashes match."""
     path=root/'Analysis/bulk-finish-readback.json'
     if not path.is_file():return {}
-    body=load(read(path));locations=load(read(root/'Analysis/output-paths.json'))
+    body=load(read(path))
+    if body.get('status')!='completed':return {}
+    locations=load(read(root/'Analysis/output-paths.json'))
     if body.get('status')!='completed'or body.get('priorReadbackSha256')!=sha(read(readback_path,max_bytes=128*1024**2))or body.get('inputPlanSha256')!=sha(read(inside(root,locations['plan']),max_bytes=128*1024**2))or body.get('candidatePrefabSha256')!=sha(read(inside(root,locations['prefab']),max_bytes=128*1024**2)):
         fail('BULK_FONT_EVIDENCE_CHANGED',str(path),'Successful source/plan-bound native incremental proof required')
     prefabs={p['sourceId']:p for p in instruction.get('sourcePrefabs',[])};result={}

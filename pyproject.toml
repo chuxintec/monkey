@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "monkey-native"
 version = "0.2.0.dev3"
-description = "Offline, evidence-traceable Cocos native asset conversion candidates"
+description = "Evidence-traceable game package recovery to editable native Unity 6 projects"
 requires-python = ">=3.11"
 dependencies = ["Pillow==12.2.0"]
 

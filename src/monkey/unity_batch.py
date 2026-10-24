@@ -58,7 +58,12 @@ def merged_model_inputs(inspections, output, manifest_sha):
             row=copy.deepcopy(f);row['id']=str(len(files));row['containerSha256']=receipt['source']['sha256'];mapping[f['id']]=row['id'];files.append(row);names[name]=row
         for o in data['objects']:
             if o['file']in skipped or o['type']not in ('MonoBehaviour','MonoScript'):continue
-            row=copy.deepcopy(o);row['file']=mapping[o['file']];objects.append(row)
+            row=copy.deepcopy(o);row['file']=mapping[o['file']]
+            # Code declaration generation needs identity headers, not large instance value arrays.
+            # Full typed values remain frozen in all601 original resource shards.
+            wanted=('m_Script','m_GameObject')if o['type']=='MonoBehaviour'else('m_ClassName','m_Namespace','m_AssemblyName')
+            if isinstance(row.get('data'),dict):row['data']={k:row['data'][k]for k in wanted if k in row['data']}
+            objects.append(row)
         for field,target in [('embeddedSchemas',embedded),('borrowedSchemas',borrowed)]:
             for key,value in data.get(field,{}).items():
                 if key in target and target[key]!=value:fail('UNITY_BATCH_SCHEMA_AMBIGUOUS',key,'Schema content differs')

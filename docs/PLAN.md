@@ -2,20 +2,15 @@
 
 完工/阻塞/交付与续推按[DIRECTOR-CONTINUATION](/Users/wangmeng/Documents/Manager/standards/DIRECTOR-CONTINUATION.md)执行；本聊天已原生核验人类授权`01a166b4-5c18-78f3-8cc2-c0d07dd46a20`，总监路由`01a14c8c-6402-7d03-bab8-ec7ea8051abf`。更新本PLAN后以稳定事件ID报告，已批准就绪下一包连续推进，不因报告或普通ACK停下。
 
-## 当前：批量完整初版工程交接（2026-10-24）
+## 当前：两份批量完整初版已冻结，准备工具本地交付（2026-10-25）
 
-用户纠正已原生核验：总监turn01a16e4e-40c8-7a22-96df-5777c46a4900/message01a16e53-16d8-7351-b6e3-981caef2ceb5。monkey先批量导出已取得全集的原生资源与代码初版，再由Agent继续开发；依据Manager/decisions/20261024-monkey-release-game-adoption/BULK-FIRST-CORRECTION.md执行，不能用入账/lookup/图库或小组件校验代替。
+依据用户全量先行纠正`01a16e53-16d8-7351-b6e3-981caef2ceb5`及重启续推`01a16e87-16ec-7111-9d25-967b392eed98`：先批量导出已取得全集与具名代码证据，再由游戏Agent继续开发。分支`codex/full-project-handoff`，本地工具0.2.0.dev3；无远端发布。grea实际MCP已核2026.10.24rc1；两个游戏工程保持只读。
 
-当前分支`codex/full-project-handoff`，本地开发身份0.2.0.dev3，基于冻结dev2；dev1发布及dev2候选保持不变。重启前WIP全部保留，未reset/新建Agent/发布。重启后实际grea MCP session已回读2026.10.24rc1/status ok/package_root `/Users/wangmeng/.codex/plugins/cache/Konanw/grea/2026.10.24rc1`，skill matched；已复用新版路由和全量初版协作合同。旧CLI-only刷新回执作为历史保留，不追溯修改此前工具身份。
+- 肥鹅：同一自包含`outputs/bulk-foodstreet-native-01/UnityProject`已冻结，manifest `b8dde1e12d87a0ff059f46a230bfbec039bb4afefa026e7d3dd35b3d31f5e387`，92434文件/3486088823字节。1694源Prefab/24480节点、2源Scene/300节点、16934 Sprite及7756 Sprite PPtr实际身份合同；main/room16_test保持原名，测试场景不称完整主线玩法，小游戏4节点排除。914具名模块、10607方法/10391字段声明，0方法实现。SHRINK严格配置与缩放几何复核后，冻结工程独立editor verify零诊断；原5fail、两次增量失败/partial、16630来源限制全部保留。入口`Docs/BULK-INITIAL-HANDOFF.md`。
+- 向僵尸：`outputs/bulk-zombie-handoff-03/UnityProject`已冻结，recovery manifest `f2410ed90d038867dca6b6093e7927fe1c516c408dacf471a1da83242a623752`，163473文件/3252286957字节。887原始文件逐项原字节保留，7595已取得纹理（含13未引用原件）齐；7626纹理对象水合、426对象对应425确切404键隔离、不造像素。一次AssetRipper导出601输入，65362资源文件、65309唯一GUID、64476唯一内容hash，53新媒体GUID待Editor，0重复GUID。原路径精确映射57346/63302，5956未映射、975未解析、1992 provider占位引用显式保留。13有据字段类/57字段，20181元数据类型/20129具名声明初稿、138243方法签名，0方法实现；Editor/Player/业务not_run。入口同名初版文档。
+- 工具：已有可恢复检查点`09b026c`；增量原生、源Scene/实际fileID、具名代码、固定CDN补取、601 typed复用、可续接纹理准备、独立限时provider、全量组装/冻结均经公开CLI实际执行。跨Bundle同名脚本仅在MonoScript原字节及有据字段完全一致时合并，保留全部源身份；不按名称猜合并。代码生成输入只取必需字段，完整745576030字节typed分片保留。
 
-- 肥鹅full02一次原生装配已于15:11:01Z退出回收，固定窗口已释放、不可复用。实际1694源Prefab已保存重开，16934 Sprite读回、24784节点、10508引用、0MissingScript；原结果completed_partial且Editor fail/5诊断、16630来源限制不改写。5诊断均SHRINK标签：字体GUID/文本/字形一致，实际字号缩小；正在补配置证据/修验证共因。3源Scene仅有节点读回，需从既有完整层级另存两主线原生Scene、小游戏保留原件与排除说明；不重冷跑素材。
-- 914模块已生成10607具名方法、10391字段声明/TODO，模块原文、RF、owner alias/参数/字节SHA保留（`outputs/bulk-foodstreet-named-code-02`），0方法实现、未编译；需添加到自有自包含交接并补importer/实际Sprite fileID/Prefab引用合同。7.1MB主脚本bulk静态模型已输出16384方法，重复赋值显式unsupported，不再因全文件预算而丢失模型。
-- 向僵尸601容器typed结果已完成并复用：80605 parsed/975 unparsed，745576030字节分片，600池不重解析；发现8052纹理引用/8007唯一键。104原池覆盖91，另找到94个确切缓存键；原脚本DATA_CDN的v8根已通过已知冻结纹理同SHA证明。同一job续取已结束：8007唯一键中7582已取得、425均为确切HTTP404；池共7595份（含13份原始未引用项），无补取child。成功项与404未重试、不猜URL/Hash。下一步为缺失纹理隔离、可续接批量provider准备与完整初版导出。
-- 大型typed文档仅在明确批量入口用16M值/128深度、每片128MiB有界预算；全局默认不放开。当前优先收敛纹理清单与可续接准备/导出阶段，再在新协调窗口内做一次AssetRipper整体导出（每段≤30分钟，旧窗口不可复用）。原始/lookup/图库、typed行数与真实native资源分开报告。
-
-肥鹅914具名模块已通过公开code-handoff追加到上述自有完整原生工程；原始模块与源映射同工程可读。实际Sprite合同已输出16934 Sprite/8467源帧/1694 Prefab/7756 Sprite PPtr。增量Scene/SHRINK helper已通过本机Unity6程序集离线编译（11份C#），公开native-finish执行器和SHRINK配置/哈希/窗口保护的19项定向检查通过；原5fail不改写。最新准备目录`outputs/bulk-foodstreet-finish-plan-03`；仅申请该准备的单次增量原生窗口，不重装配1694 Prefab或媒体。
-
-当前继续实现与隔离输出。唯一输出/检查点归本项目`.private/full-project-handoff-01`和`outputs/bulk-*`；两个游戏工作工程保持只读，无新provider/引擎安装、Agent或远端发布。
+三次肥鹅增量和一次AssetRipper原生child均已退出回收，无新引擎运行；正在冻结工具源码与本地wheel/sdist及公开命令交付。此处交付的是可接续初版，完整玩法/全像素一致性/所有源版本支持均不扩大宣称。完整失败层及过程见`docs/validation/2026-10-25-bulk-development-notes.md`；机器回执在`.private/full-project-handoff-01`和上述outputs。清理维护已完成，不再扩清理。
 
 ## 历史：dev2语义校验与身份保护已接收
 

@@ -12,10 +12,12 @@ from .unity_code_model import model as code_model
 CODE_SUFFIXES={'.cs','.dll','.js','.jsc','.wasm','.lua','.so','.dylib'}
 
 
-def convert(source,output,provider_python,asset_ripper,budget_seconds=600,dependencies=None,texture_cache=None,schema_manifest=None,quarantine_invalid_textures=False,dependency_manifest=None,export_scope="reachable",code_evidence=None,reuse_inspection=None):
+def convert(source,output,provider_python,asset_ripper,budget_seconds=600,dependencies=None,texture_cache=None,schema_manifest=None,quarantine_invalid_textures=False,dependency_manifest=None,export_scope="reachable",code_evidence=None,reuse_inspection=None,prepared_textures=None,reuse_export=None):
     if not 30<=budget_seconds<=7200:fail('UNITY_EXPORT_BUDGET','$','Expected 30..7200 seconds')
     if export_scope not in ('reachable','all'):fail('UNITY_EXPORT_SCOPE','$','Expected reachable or all')
     if export_scope=='all' and not dependency_manifest:fail('UNITY_EXPORT_SCOPE','$','All scope requires an explicit frozen dependency manifest')
+    if (prepared_textures or reuse_export)and export_scope!='all':fail('UNITY_BULK_RESUME_SCOPE','$','Prepared/export reuse requires explicit all scope')
+    if reuse_export and not prepared_textures:fail('UNITY_BULK_EXPORT_BINDING','$','Reused provider export requires exact prepared textures')
     source=safe(source);exe=safe(asset_ripper);requested_python=Path(provider_python).absolute();python=safe(requested_python.resolve(strict=True))
     if not source.is_file() or not exe.is_file() or not python.is_file():fail('UNITY_PROVIDER_MISSING','$','Source and existing providers must be files')
     with source.open('rb') as stream:header=stream.read(16)
@@ -39,7 +41,7 @@ def convert(source,output,provider_python,asset_ripper,budget_seconds=600,depend
     if code_evidence:
         from .unity_code_handoff import declared
         _,_,code_rows=declared(code_evidence)
-    out=new_output(output,[source,exe.parent,python.parent,*dependencies,*([safe(code_evidence),*[Path(r['path'])for r in code_rows]]if code_evidence else []),*([safe(dependency_manifest),*[Path(r['path'])for r in dependency_pool['files']]]if dependency_pool else []),*([safe(texture_cache)]if texture_cache else []),*([safe(schema_manifest),*[Path(r['path'])for r in schema_pool['files']]]if schema_pool else [])])
+    out=new_output(output,[*([safe(prepared_textures)]if prepared_textures else []),*([safe(reuse_export)]if reuse_export else []),source,exe.parent,python.parent,*dependencies,*([safe(code_evidence),*[Path(r['path'])for r in code_rows]]if code_evidence else []),*([safe(dependency_manifest),*[Path(r['path'])for r in dependency_pool['files']]]if dependency_pool else []),*([safe(texture_cache)]if texture_cache else []),*([safe(schema_manifest),*[Path(r['path'])for r in schema_pool['files']]]if schema_pool else [])])
     report=dict(schemaVersion=1,toolVersion=__version__,sourceFamily='unity',sourceProfile=kind+'-unitypy-1.25.3-assetripper-2.0.0',
                 status='partial',workflowStatus='needs_action',completed=False,resultKind='candidate',
                 format=dict(profile='none',applied=False),completionScope='all-explicit-unity-containers'if export_scope=='all'else'explicit-unity-containers-and-consumed-texture-cache',inputFiles=1+len(dependencies),inputBytes=source.stat().st_size+sum(p.stat().st_size for p in dependencies),projects=[],
@@ -87,8 +89,20 @@ def convert(source,output,provider_python,asset_ripper,budget_seconds=600,depend
         if extra['status'] not in ('inspected','partial') or not extra.get('sourceUnchanged') or not extra.get('processExited'):
             report['status']='failed';save();return report
     active=[];hydrations=[];consumed={};quarantines=[]
+    prepared_rows=None
+    if prepared_textures:
+        from .unity_bulk_prepare import prepared_inputs
+        prepared_job,prepared_body,prepared_paths=prepared_inputs(prepared_textures)
+        prepared_rows=prepared_body['rows']
+        if len(prepared_rows)!=len(inspections)or any(r['source']['sha256']!=entry['source']['sha256']for r,(_,entry)in zip(prepared_rows,inspections)):fail('UNITY_BULK_PREPARED_BINDING',str(prepared_textures),'Prepared sources differ from inspected whole set')
+        report['missingTextureQuarantine']=[dict(source=r['source'],removed=r['removed'])for r in prepared_rows if r.get('removed')]
     for index,(path,inspection) in enumerate(inspections):
         working=path
+        if prepared_rows is not None:
+            row=prepared_rows[index];active.append(prepared_paths[index])
+            for entry in row.get('resolved',[]):consumed[entry['logicalPath']]=entry
+            hydrations.append(dict(sourceIndex=index,status=row['status'],hydratedTextures=len(row.get('resolved',[])),missingTextureObjects=len(row.get('removed',[])),derivedSha256=row.get('derivedSha256')))
+            continue
         if inspection['summary'].get('invalidInlineTextures',0):
             report['diagnostics'].append(dict(code='UNITY_INVALID_INLINE_ETC1',sourceIndex=index,count=inspection['summary']['invalidInlineTextures'],disposition='quarantine-requested' if quarantine_invalid_textures else 'blocked',message='Declared ETC1 base level bytes are absent; original bytes retained, no replacement pixels'))
             if not quarantine_invalid_textures:
@@ -125,19 +139,30 @@ def convert(source,output,provider_python,asset_ripper,budget_seconds=600,depend
         from .unity_batch import merged_model_inputs
         report['batchCodeInput']=merged_model_inputs(inspections,out/'CombinedInspection',sha(read(out/'all-inputs.json')))
         model_input=out/'CombinedInspection'
-    generated=code_model(model_input,out/'CodeModel')
+    generated=code_model(model_input,out/'CodeModel',**({'bulk':True}if batch is not None else{}))
     report['codeModel']=generated;save()
-    exported=export_unity(active[0],exe,out/'ProviderExport',budget_seconds,dependencies=active[1:])
+    provider_stage=out/'ProviderExport'
+    if reuse_export:
+        previous=safe(reuse_export);exported=load(read(previous/'export.json'));binding=load(read(previous/'bulk-export-binding.json'))
+        expected=[dict(name=p.name,bytes=p.stat().st_size,sha256=fingerprint(p))for p in active]
+        if binding.get('preparedJobSha256')!=fingerprint(safe(prepared_textures)/'prepare-job.json')or binding.get('preparedSha256')!=fingerprint(safe(prepared_textures)/'prepared.json')or exported.get('status')!='exported_partial'or not exported.get('processExited')or not exported.get('sourceUnchanged')or exported.get('targetVersion')!=TARGET_VERSION or exported.get('source')!={k:expected[0][k]for k in ('bytes','sha256')}or exported.get('dependencies')!=expected[1:]:fail('UNITY_BULK_EXPORT_BINDING',str(previous),'Frozen exported input set or completed provider status differs')
+        inventory=load(read(previous/'output-files.json',max_bytes=128*1024**2),max_nodes=8_000_000)
+        from .io import inside
+        for row in inventory['files']:
+            path=inside(previous/'exported',row['path'])
+            if path.stat().st_size!=row['bytes']or fingerprint(path)!=row['sha256']:fail('UNITY_BULK_EXPORTED_CHANGED',row['path'],'Frozen provider output changed')
+        provider_stage=previous
+    else:exported=export_unity(active[0],exe,provider_stage,min(budget_seconds,1500)if export_scope=='all'else budget_seconds,dependencies=active[1:],**({'bulk':True}if export_scope=='all'else{}))
     report['providerExport']={k:exported.get(k) for k in ('status','stage','targetVersion','processExited','outputFiles','outputBytes','nativeAssetFiles','unreadableObjectFiles','sourceUnchanged','error')}
     if exported['status']=='exported_evidence_only':
         report['status']='blocked';report['diagnostics'].append(dict(code='UNITY_PROVIDER_EVIDENCE_ONLY',details=report['providerExport'],message='Provider retained unreadable objects but exported no native resource assets; no Unity candidate promoted'));save();return report
     if exported['status']!='exported_partial' or not exported.get('processExited') or not exported.get('sourceUnchanged'):
         report['status']='failed';report['diagnostics'].append(dict(code='UNITY_PROVIDER_EXPORT_FAILED',details=report['providerExport']));save();return report
-    raw_project=safe(out/'ProviderExport'/exported['project']);project=out/'UnityProject';shutil.copytree(raw_project,project)
+    raw_project=safe(provider_stage/exported['project']);project=out/'UnityProject';shutil.copytree(raw_project,project)
     recovery=project/'SourceRecovery';recovery.mkdir();originals=recovery/'Original';originals.mkdir()
     for path,_ in inspections:
         shutil.copy2(path,originals/(fingerprint(path)[:16]+'-'+path.name))
-    analysis=project/'Analysis';analysis.mkdir();shutil.copy2(out/'SourceInspection/typed-objects.json',analysis/'unity-typed-objects.json')
+    analysis=project/'Analysis';analysis.mkdir();write_json(analysis/'provider-export.json',exported);shutil.copy2(out/'SourceInspection/typed-objects.json',analysis/'unity-typed-objects.json')
     if schema_pool:
         frozen=recovery/'SchemaSources';frozen.mkdir();entries=[]
         for row in schema_pool['files']:

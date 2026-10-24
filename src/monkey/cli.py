@@ -29,6 +29,8 @@ def main(argv=None):
     p.add_argument('--unity-quarantine-invalid-textures',action='store_true',help='Explicit partial export excluding exact invalid ETC1 objects; originals and unresolved references retained')
     p.add_argument('--unity-dependency-manifest',help='Frozen Unity bundle lookup pool; export only exact reachable serialized-file closure')
     p.add_argument('--unity-export-scope',choices=['reachable','all'],default='reachable',help='all exports every unique container in the explicit Unity bundle manifest')
+    p.add_argument('--unity-prepared-textures',help='Frozen prepare-unity-bulk output; reuse exact derived containers')
+    p.add_argument('--unity-reuse-provider-export',help='Frozen export-unity-bulk output; assemble without relaunching provider')
     p.add_argument('--unity-reuse-inspection',help='Reuse an exact same-worker complete inspect-unity --bundle-manifest snapshot')
     p.add_argument('--unity-code-evidence',help='Frozen metadata/declaration/source-code evidence manifest for a self-contained AI handoff')
     p.add_argument('--unity-schema-manifest',help='Frozen bundle pool for exact missing TypeTree lookup during Unity conversion')
@@ -80,6 +82,7 @@ def main(argv=None):
     p = sub.add_parser('unity-code-model', help='Recover named C# data fields from embedded Unity TypeTree evidence')
     p.add_argument('--inspection', required=True)
     p.add_argument('--out', required=True)
+    p.add_argument('--bulk',action='store_true',help='Alias repeated MonoScript only with exact raw bytes and proven field equality')
     p = sub.add_parser('export-unity', help='Export a Unity bundle through an existing fixed AssetRipper in an isolated copy')
     p.add_argument('--source', required=True)
     p.add_argument('--asset-ripper', required=True)
@@ -120,13 +123,23 @@ def main(argv=None):
     p = sub.add_parser('research-matrix', help='Discover every Research game without converting or following external sources')
     p.add_argument('--root', required=True)
     p.add_argument('--out', required=True)
+    p = sub.add_parser('freeze-unity-handoff',help='Freeze complete original/acquired input dispositions in a Unity-source initial')
+    p.add_argument('--candidate',required=True);p.add_argument('--texture-cache',required=True);p.add_argument('--source-manifest',required=True);p.add_argument('--source-root',required=True);p.add_argument('--expected-manifest',required=True);p.add_argument('--out',required=True)
+    p = sub.add_parser('freeze-handoff',help='Freeze an additive source-native identity and named-code initial handoff')
+    p.add_argument('--candidate',required=True);p.add_argument('--native-contract',required=True);p.add_argument('--verification',required=True);p.add_argument('--expected-manifest',required=True);p.add_argument('--out',required=True);p.add_argument('--apply-owned',action='store_true')
+    p = sub.add_parser('export-unity-bulk',help='Export all frozen prepared containers in one separately bounded AssetRipper stage')
+    p.add_argument('--prepared',required=True);p.add_argument('--asset-ripper',required=True);p.add_argument('--out',required=True);p.add_argument('--budget-seconds',type=int,default=1200)
+    p.add_argument('--deadline-utc',required=True);p.add_argument('--window-end-utc',required=True)
+    p = sub.add_parser('prepare-unity-bulk',help='Resume exact whole-pool texture preparation independently of provider export')
+    p.add_argument('--inspection',required=True);p.add_argument('--texture-cache',required=True);p.add_argument('--capture',required=True);p.add_argument('--provider-python',required=True);p.add_argument('--out',required=True)
+    p.add_argument('--budget-seconds',type=int,default=1200);p.add_argument('--resume',action='store_true')
     p = sub.add_parser('native-finish-plan',help='Prepare incremental source Scene export and SHRINK evidence using existing native assets')
     p.add_argument('--candidate',required=True);p.add_argument('--out',required=True);p.add_argument('--exclude-scene',action='append',default=[])
     p = sub.add_parser('native-finish',help='Plan or execute one bounded incremental finish in an explicitly owned native project')
     p.add_argument('--candidate',required=True);p.add_argument('--preparation',required=True);p.add_argument('--out',required=True)
     p.add_argument('--editor-path',required=True);p.add_argument('--expected-manifest',required=True)
     p.add_argument('--budget-seconds',type=int,default=600);p.add_argument('--deadline-utc',required=True)
-    p.add_argument('--window-end-utc',required=True);p.add_argument('--execute',action='store_true')
+    p.add_argument('--window-end-utc',required=True);p.add_argument('--execute',action='store_true');p.add_argument('--previous-execution')
     p = sub.add_parser('native-import',help='Plan or explicitly execute a bounded Unity/Creator import in a fresh copy')
     p.add_argument('--candidate',required=True);p.add_argument('--out',required=True)
     p.add_argument('--editor-path',required=True);p.add_argument('--expected-manifest',required=True)
@@ -179,7 +192,7 @@ def main(argv=None):
         if args.command == 'capabilities':
             print(json.dumps(dict(version=__version__, profiles=[PROFILE,PROJECT_PROFILE,'cocos-2.4.11-bundle','cocos-3.8.7-bundle','cocos-3.4.1-bundle','cocos-2.1.2-resource','generic-image-resources-v1','egret-custom-resource-plist-v1'], targetProfiles=[UNITY_PROFILE,cocos.PROFILE],
                 additionalPackageProfiles={'cocos-3.4.1-bundle':dict(scope='version-proven-node-ui-prefab-and-resource-subset',graphs='856-of-857-source-graphs;22503-nodes;52-instances;one-null-quaternion-rejected',native='5-source-frames-plus-6-prefabs-331-nodes-8-instances-7-mounted-nodes-1-mounted-widget-both-targets-verified',operations=['package-convert']), 'egret-custom-resource-plist-v1':dict(scope='reviewed-custom-resource-manifest-plist-binjson-v2',targets=['unity6'],sourceSkins='typed-data-only-native-layout-pending',remoteAcquisition='explicit-manifest-cache-and-bounded-fetch',native='132-source-frames-verified; expanded-atlas-set-pending',operations=['package-convert']), 'cocos-2.1.2-resource':dict(scope='version-proven-resource-subset',native='211-source-frames-both-targets-verified',graphs='pending',operations=['package-convert']), 'generic-image-resources-v1':dict(scope='derived-original-image-gallery-only',families=['laya','layaair','egret','eraget','custom','other'],targets=['unity6'],native='Egret-16-derived-images-verified',sourceGraphs='not-restored',operations=['package-convert']), 'cocos-2.4.11-bundle':dict(scope='version-proven-published-bundle-subset',native='91-source-graphs-both-targets-verified',operations=['package-convert']), 'cocos-3.8.7-bundle':dict(scope='version-proven-node-ui-template-and-resource-subset',native='83-static-graphs-plus-4-prefab-5-native-relations-and-16-node-dynamic-ui-representatives-both-targets-verified',graphs='114-root-closures-static;5-graphs-missing-6-exact-templates;not-all-native-validated',operations=['package-convert'])},
-                schemaVersion=1, dynamicUi=dict(probeVersion=2,verifiedLayoutGroups=6,verifiedLayoutStates=54,native='bounded-grid-scale-constraints-child-resize-and-linear-scale-representatives',timing='Editor-native-forced-update;Player-not_run'), formatting=dict(implemented=['unity-creator-unimported-owned-grea-v1','fresh-package-convert-none-grea'],pending=['unity-general-scene-native-format','unity-source-positive-native-move-sample'],rejected=['materialized-native-assets-require-a-future-native-move-adapter']), unitySourceProfile=dict(name='unityfs-unitypy-1.25.3-assetripper-2.0.0',status='partial',inputs='explicit-unity-bundle-or-webdata-files-and-exact-local-texture-cache',additionalContainers=['UnityWebData1.0'],invalidTexturePolicy='block-default-explicit-quarantine-retains-original',dependencyClosure='explicit-frozen-pool-exact-serialized-file-closure',editor='one-prefab-schema-reference-save-reload-verified',publicNative=True,nativeProfile='unity-leaf-prefab-sprite-array-v1',nativeFormatting='typed-resource-moves-with-dynamic-path-pins; real sample pinned all 134 assets',methodsRecovered=0), implemented=['unity-field-plan','convert','catalog','inspect','normalize','plan','export','verify','handoff','diff','register','apply','preflight','native-import','research-matrix','code-model','code-emit','format-project','project-model','inspect-unity','export-unity','unity-code-model','index-unity','hydrate-unity'], planned=[],
+                schemaVersion=1, dynamicUi=dict(probeVersion=2,verifiedLayoutGroups=6,verifiedLayoutStates=54,native='bounded-grid-scale-constraints-child-resize-and-linear-scale-representatives',timing='Editor-native-forced-update;Player-not_run'), formatting=dict(implemented=['unity-creator-unimported-owned-grea-v1','fresh-package-convert-none-grea'],pending=['unity-general-scene-native-format','unity-source-positive-native-move-sample'],rejected=['materialized-native-assets-require-a-future-native-move-adapter']), unitySourceProfile=dict(name='unityfs-unitypy-1.25.3-assetripper-2.0.0',status='partial',inputs='explicit-unity-bundle-or-webdata-files-and-exact-local-texture-cache',additionalContainers=['UnityWebData1.0'],invalidTexturePolicy='block-default-explicit-quarantine-retains-original',dependencyClosure='explicit-frozen-pool-exact-serialized-file-closure',editor='one-prefab-schema-reference-save-reload-verified',publicNative=True,nativeProfile='unity-leaf-prefab-sprite-array-v1',nativeFormatting='typed-resource-moves-with-dynamic-path-pins; real sample pinned all 134 assets',methodsRecovered=0), implemented=['unity-field-plan','convert','catalog','inspect','normalize','plan','export','verify','handoff','diff','register','apply','preflight','native-import','research-matrix','code-model','code-emit','format-project','project-model','inspect-unity','export-unity','unity-code-model','index-unity','hydrate-unity','code-handoff','native-finish-plan','native-finish','acquire-unity-textures','prepare-unity-bulk','export-unity-bulk','freeze-handoff','freeze-unity-handoff'], planned=[],
                 targetValidation={UNITY_PROFILE:dict(static='implemented',editor='representative-subset-verified',visual='not_run'),cocos.PROFILE:dict(static='implemented',editor='representative-subset-verified',visual='not_run')},
                 compiledFormats=['compiled-v1','pack-v1','texture-pack-v1'],
                 containerFormats=['plain-wxapkg','APK-ZIP','Cocos-resource-directory'],
@@ -214,7 +227,7 @@ def main(argv=None):
             return 0 if result['writable'] else 1
         if args.command == 'unity-code-model':
             from .unity_code_model import model as unity_code_model
-            print(json.dumps(unity_code_model(args.inspection,args.out),ensure_ascii=False))
+            print(json.dumps(unity_code_model(args.inspection,args.out,args.bulk),ensure_ascii=False))
             return 1
         if args.command == 'export-unity':
             from .providers.assetripper import export as export_unity
@@ -238,9 +251,23 @@ def main(argv=None):
             from .project_model import inspect as project_model
             print(json.dumps(project_model(args.candidate,args.out),ensure_ascii=False))
             return 0
+        if args.command == 'freeze-unity-handoff':
+            from .unity_bulk_freeze import freeze as freeze_unity
+            print(json.dumps(freeze_unity(args.candidate,args.texture_cache,args.source_manifest,args.source_root,args.out,args.expected_manifest),ensure_ascii=False));return 0
+        if args.command == 'freeze-handoff':
+            from .bulk_handoff import freeze
+            print(json.dumps(freeze(args.candidate,args.native_contract,args.verification,args.out,args.expected_manifest,args.apply_owned),ensure_ascii=False));return 0
+        if args.command == 'export-unity-bulk':
+            from .unity_bulk_prepare import export_prepared
+            result=export_prepared(args.prepared,args.asset_ripper,args.out,args.budget_seconds,args.deadline_utc,args.window_end_utc)
+            print(json.dumps({k:result.get(k)for k in ('status','stage','pid','processExited','exitCode','outputFiles','outputBytes','nativeAssetFiles','sourceUnchanged','error')},ensure_ascii=False));return 0 if result['status']=='exported_partial'else 1
+        if args.command == 'prepare-unity-bulk':
+            from .unity_bulk_prepare import prepare as prepare_bulk
+            result=prepare_bulk(args.inspection,args.texture_cache,args.capture,args.provider_python,args.out,args.budget_seconds,args.resume)
+            print(json.dumps(result,ensure_ascii=False));return 0 if result['status']=='prepared'else 1
         if args.command == 'native-finish':
             from .cocos_native_finish import execute as native_finish
-            result=native_finish(args.candidate,args.preparation,args.out,args.editor_path,args.expected_manifest,args.budget_seconds,args.deadline_utc,args.window_end_utc,args.execute)
+            result=native_finish(args.candidate,args.preparation,args.out,args.editor_path,args.expected_manifest,args.budget_seconds,args.deadline_utc,args.window_end_utc,args.execute,args.previous_execution)
             print(json.dumps(result,ensure_ascii=False));return 0 if result['status']in ('planned','completed')else 1
         if args.command == 'native-finish-plan':
             from .cocos_native_finish import prepare
@@ -354,16 +381,16 @@ def main(argv=None):
                     acquired=acquire(remote_settings,args.offline)
                     inputs=merge(acquired,**{k:inputs[k]for k in ('texture_cache','dependency_manifest','dependencies')})
                 from .recover_unity import convert as convert_unity
-                result=convert_unity(args.source,args.out,args.provider_python,args.asset_ripper,args.provider_budget_seconds,schema_manifest=args.unity_schema_manifest,quarantine_invalid_textures=args.unity_quarantine_invalid_textures,export_scope=args.unity_export_scope,code_evidence=args.unity_code_evidence,reuse_inspection=args.unity_reuse_inspection,**inputs)
+                result=convert_unity(args.source,args.out,args.provider_python,args.asset_ripper,args.provider_budget_seconds,schema_manifest=args.unity_schema_manifest,quarantine_invalid_textures=args.unity_quarantine_invalid_textures,export_scope=args.unity_export_scope,code_evidence=args.unity_code_evidence,reuse_inspection=args.unity_reuse_inspection,prepared_textures=args.unity_prepared_textures,reuse_export=args.unity_reuse_provider_export,**inputs)
                 if acquired:
                     from .unity_acquisition import attach
                     attach(result,args.out,acquired)
                 if native_settings:
                     from .unity_native import finish_conversion
                     result=finish_conversion(result,native_settings,args.format or 'none')
-                print(json.dumps(dict(status=result['status'],completed=result['completed'],resultKind=result['resultKind'],sourceFamily='unity',projects=result['projects'],diagnostics=result['diagnostics'],nativeExecution=result.get('nativeExecution'),remoteAcquisition=result.get('acquisition'),format=result['format'],report=str(Path(args.out).resolve()/'conversion-result.json')),ensure_ascii=False))
+                print(json.dumps(dict(status=result['status'],completed=result['completed'],resultKind=result['resultKind'],sourceFamily='unity',projects=result['projects'],diagnostics=[{k:d.get(k)for k in ('code','references','message')}for d in result['diagnostics']],nativeExecution=result.get('nativeExecution'),remoteAcquisition=result.get('acquisition'),format=result['format'],report=str(Path(args.out).resolve()/'conversion-result.json')),ensure_ascii=False))
                 return 1
-            if args.unity_export_scope!='reachable' or args.unity_code_evidence or args.unity_reuse_inspection:parser.error('Unity bulk export/code evidence require a Unity source')
+            if args.unity_export_scope!='reachable' or args.unity_code_evidence or args.unity_reuse_inspection or args.unity_prepared_textures or args.unity_reuse_provider_export:parser.error('Unity bulk export/code evidence require a Unity source')
             if args.provider_python or args.asset_ripper or args.unity_texture_cache or args.unity_schema_manifest or args.unity_dependency_manifest or args.unity_quarantine_invalid_textures or args.provider_budget_seconds!=600:parser.error('Unity provider options require a Unity source')
             from .convert import convert, resume, recipe
             if not args.remote_manifest and any((args.remote_cache_root,args.acquisition_out,args.remote_budget_seconds!=900)):

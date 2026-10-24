@@ -30,6 +30,25 @@ class UnityCodeSchemaTests(unittest.TestCase):
             with self.assertRaises(ParseError):model(source,root/'changed')
             self.assertFalse((root/'changed').exists())
 
+    def test_bulk_alias_requires_identical_script_bytes_and_fields_and_keeps_all_source_ids(self):
+        with tempfile.TemporaryDirectory()as temp:
+            root=Path(temp).resolve();source=root/'inspection';source.mkdir()
+            shape=dict(children=[dict(name='m_GameObject',type='PPtr<GameObject>'),dict(name='gain',type='float')])
+            objects=[]
+            for file in ['0','1']:
+                objects.extend([dict(file=file,pathId='1',type='MonoBehaviour',status='parsed',embeddedSchemaId='shape',rawSha256='a'*64,references=[],data=dict(m_Script=dict(fileId='0',pathId='2'),m_GameObject=dict(fileId='0',pathId='3'))),dict(file=file,pathId='2',type='MonoScript',status='parsed',rawSha256='b'*64,data=dict(m_ClassName='Gain',m_Namespace='Game',m_AssemblyName='Game.dll'))])
+            data=dict(source=dict(sha256='c'*64),objects=objects,embeddedSchemas=dict(shape=shape))
+            def save():
+                write_json(source/'typed-objects.json',data);write_json(source/'inspection.json',dict(typedObjectsSha256=sha(read(source/'typed-objects.json'))))
+            save()
+            with self.assertRaises(ParseError):model(source,root/'strict')
+            result=model(source,root/'bulk',True);self.assertEqual(result['summary']['classes'],1);self.assertEqual(result['summary']['instances'],2)
+            body=json.loads((root/'bulk/unity-code-model.json').read_text());self.assertEqual(len(body['classes'][0]['sourceScripts']),2)
+            objects[-1]['rawSha256']='d'*64;save()
+            with self.assertRaises(ParseError):model(source,root/'different-bytes',True)
+            objects[-1]['rawSha256']='b'*64;data['embeddedSchemas']['other']=dict(children=[dict(name='m_GameObject',type='PPtr<GameObject>'),dict(name='gain',type='int')]);objects[-2]['embeddedSchemaId']='other';save()
+            with self.assertRaises(ParseError):model(source,root/'different-fields',True)
+
     def test_borrowed_fields_resolve_exact_external_file_and_do_not_shadow_native_or_invent_asset_base(self):
         with tempfile.TemporaryDirectory()as t:
             root=Path(t).resolve();source=root/'inspection';source.mkdir()

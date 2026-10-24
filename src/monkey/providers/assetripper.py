@@ -42,8 +42,8 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self,*args):return None
 
 
-def export(source,executable,output,budget_seconds=600,dependencies=None):
-    if not 30<=budget_seconds<=7200:fail('UNITY_EXPORT_BUDGET','$','Expected 30..7200 seconds')
+def export(source,executable,output,budget_seconds=600,dependencies=None,bulk=False):
+    if not 30<=budget_seconds<=(1500 if bulk else 7200):fail('UNITY_EXPORT_BUDGET','$','Expected bounded provider stage')
     source=safe(source);exe=safe(executable)
     if not source.is_file() or not exe.is_file():fail('UNITY_EXPORT_INPUT','$','Explicit file and existing provider executable required')
     source_raw=read(source,max_bytes=MAX_INPUT)
@@ -57,7 +57,7 @@ def export(source,executable,output,budget_seconds=600,dependencies=None):
         data=read(path,max_bytes=MAX_INPUT)
         if not container_kind(data[:16]):fail('UNITY_DEPENDENCY_FORMAT',str(path),'Expected explicit Unity container')
         snapshots.append((path,data))
-    if sum(len(data)for _,data in snapshots)>1024*1024*1024:fail('UNITY_DEPENDENCY_BUDGET','$','Bundle inputs exceed1GiB')
+    if sum(len(data)for _,data in snapshots)>(8 if bulk else 1)*1024**3:fail('UNITY_DEPENDENCY_BUDGET','$','Bundle inputs exceed declared mode budget')
     if len({p.name.casefold()for p,_ in snapshots})!=len(snapshots):fail('UNITY_DEPENDENCY_NAME_COLLISION','$','Distinct source basenames collide')
     out=new_output(output,[source,exe.parent,*dependency_paths]);runtime=out/'runtime';runtime.mkdir();inputs=out/'source';inputs.mkdir()
     copied=[]
@@ -89,7 +89,7 @@ def export(source,executable,output,budget_seconds=600,dependencies=None):
         fail('UNITY_PROVIDER_VERSION',str(exe),'Expected exact AssetRipper '+VERSION)
     receipt=dict(schemaVersion=1,provider='AssetRipper',providerVersion=VERSION,binaries=binaries,
                  source=dict(bytes=len(source_raw),sha256=sha(source_raw)),dependencies=[dict(name=p.name,bytes=len(data),sha256=sha(data))for p,data in snapshots[1:]],targetVersion=TARGET_VERSION,
-                 status='started',stage='startup',budgetSeconds=budget_seconds,processExited=False,sourceCodeExecuted=False,
+                 status='started',stage='startup',budgetSeconds=budget_seconds,bulkMode=bulk,processExited=False,sourceCodeExecuted=False,
                  settingsWriteScope='owned runtime directory only',editor='not_run',business='not_run')
     journal=out/'export.json'
     def save(stage=None):
@@ -150,7 +150,7 @@ def export(source,executable,output,budget_seconds=600,dependencies=None):
                 safe(path)
                 if path.is_file():
                     total+=path.stat().st_size
-                    if total>2*1024*1024*1024 or len(files)>=50_000:raise RuntimeError('Provider output budget')
+                    if total>(8 if bulk else 2)*1024**3 or len(files)>=(200_000 if bulk else 50_000):raise RuntimeError('Provider output budget')
                     files.append(dict(path=path.relative_to(export_root).as_posix(),bytes=path.stat().st_size,sha256=fingerprint(path)))
             asset_files=[p for p in (project/'Assets').rglob('*')if p.is_file() and p.suffix.lower()not in ('.meta','.cs','.dll','.asmdef','.asmref','.js','.wasm')]
             unreadable=list((project/'AssetRipper/UnreadableAssets').rglob('*.unreadable'))

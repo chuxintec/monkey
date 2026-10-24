@@ -65,12 +65,12 @@ def script_object(data, objects, obj, ptr):
     return script if script and script.get('type')=='MonoScript'and script.get('status')=='parsed'else None
 
 
-def model(inspection,output):
+def model(inspection,output,bulk=False):
     inspection=safe(inspection);receipt=load(read(inspection/'inspection.json'))
     raw=read(inspection/'typed-objects.json',max_bytes=128*1024*1024)
     if sha(raw)!=receipt.get('typedObjectsSha256'):fail('UNITY_TYPED_CHANGED',str(inspection),'Typed snapshot differs from receipt')
     data=load(raw,max_nodes=8_000_000);out=new_output(output,[inspection])
-    objects={(o['file'],o['pathId']):o for o in data['objects']};schemas=data.get('embeddedSchemas',{});classes={};gaps=[];native_packages=[]
+    objects={(o['file'],o['pathId']):o for o in data['objects']};schemas=data.get('embeddedSchemas',{});classes={};gaps=[];native_packages=[];logical_classes={}
     for obj in data['objects']:
         if obj['type']!='MonoBehaviour' or obj.get('status')!='parsed':continue
         shape=schemas.get(obj.get('embeddedSchemaId'))
@@ -96,12 +96,19 @@ def model(inspection,output):
         if not fields:
             gaps.append(dict(object=dict(file=obj['file'],pathId=obj['pathId']),reason='No recoverable fields or method bodies; no empty class emitted'));continue
         key=(script['file'],script['pathId'])
+        original_key=key;logical=(assembly,namespace,name);script_hash=script.get('rawSha256')
+        if bulk and logical in logical_classes:
+            previous_key=logical_classes[logical];previous=classes[previous_key]
+            if not script_hash or script_hash!=previous.get('scriptRawSha256')or previous['fields']!=fields:fail('CSHARP_CLASS_COLLISION',name,'Bulk alias requires byte-identical MonoScript and exact same proven fields')
+            key=previous_key
         record=dict(name=name,namespace=namespace,assembly=assembly,sourceScript=dict(file=key[0],pathId=key[1]),
-                    fields=fields,instances=[],methodRecovery='unavailable-in-asset-bundle',status='schema_only',business='not_run')
+                    fields=fields,instances=[],scriptRawSha256=script_hash,sourceScripts=[],methodRecovery='unavailable-in-asset-bundle',status='schema_only',business='not_run')
         if key in classes:
             if classes[key]['fields']!=fields:fail('UNITY_SCHEMA_CONFLICT',name,'Same script identity has differing embedded schemas')
-        else:classes[key]=record
-        classes[key]['instances'].append(dict(file=obj['file'],pathId=obj['pathId'],rawSha256=obj['rawSha256'],references=obj['references']))
+        else:classes[key]=record;logical_classes[logical]=key
+        alias=dict(file=original_key[0],pathId=original_key[1],rawSha256=script_hash)
+        if alias not in classes[key]['sourceScripts']:classes[key]['sourceScripts'].append(alias)
+        classes[key]['instances'].append(dict(file=obj['file'],pathId=obj['pathId'],rawSha256=obj['rawSha256'],references=obj['references'],sourceScript=alias))
         classes[key]['instances'][-1]['schemaEvidence']=dict(kind='exact-frozen-bundle'if borrowed else'embedded',schemaId=obj.get('borrowedSchemaId')if borrowed else obj.get('embeddedSchemaId'),provenance=obj.get('schemaProvenance')if borrowed else None)
     occupied=set()
     for (file_id,path_id),c in classes.items():
