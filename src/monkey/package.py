@@ -183,7 +183,7 @@ def convert_package(source, target, output, namespace='monkey-project',offline=F
                         report['diagnostics'].append(diagnostic(error['code'],row['path'],error.get('message','Unresolved source module wrapper'),row['sourceId']))
                         recovered.append(dict(sourceId=row['sourceId'],sourcePath=row['path'],entryType='unresolved_source',status='unresolved',reason=error))
                     for mod in found:
-                        mod['entryType']='module_candidate';mod['sourceFile']=row['path'];mod['sourceId']=row['sourceId']+'#'+str(mod['name'] or mod['candidate_id'])+'@'+str(mod['source_bytes']['start'])
+                        mod['entryType']='module_candidate';mod['sourceFile']=row['path'];mod['sourceSnapshotPath']=row['inputRoot']+'/'+row['localPath'];mod['sourceId']=row['sourceId']+'#'+str(mod['name'] or mod['candidate_id'])+'@'+str(mod['source_bytes']['start'])
                         recovered.append(mod)
         code_emission=None
         if code_spec:
@@ -310,7 +310,7 @@ def convert_package(source, target, output, namespace='monkey-project',offline=F
             for mod in recovered:
                 record={k:v for k,v in mod.items() if k!='source'}
                 if code_emission and mod['sourceId']==report['codeEmission']['sourceModule']:
-                    record['codeEmission']=dict(report['codeEmission'],scriptPath=native_manifest.get('codeEmission',{}).get('scriptPath'),status='numeric_subdomain_planned_native_import')
+                    record['codeEmission']=dict(report['codeEmission'],scriptPath=native_manifest.get('codeEmission',{}).get('scriptPath'),status='static_numeric_utility_no_component_binding'if report['codeEmission'].get('kind')=='static-number-methods-v1'else'numeric_subdomain_planned_native_import')
                 if 'source' in mod:
                     token,cs,ts=drafts(mod,mod['sourceId'])
                     meta=dict(bundle=mod.get('sourceFile','source').split('/')[0],sourceName=mod.get('name'))
@@ -413,6 +413,10 @@ Neither target requires monkey, Python, the source tree, the other target or the
 ''').encode())
             from .handoff_package import enrich
             handoff=enrich(project,out,rows,code_index,tasks)
+            if code_emission:
+                from .package_code import enrich_handoff
+                count=enrich_handoff(project)
+                if count is not None:handoff['aggregateTasks']=count
             inspected_path=out/'Structured/inspect/source-manifest.json'
             if inspected_path.exists():
                 from .assets.spine import recover_closures

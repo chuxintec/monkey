@@ -3,7 +3,8 @@
 const fs=require('node:fs'),crypto=require('node:crypto'),acorn=require('./sources/acorn.cjs');
 const raw=fs.readFileSync(0);if(raw.length>32*1024*1024)throw Error('Source budget');
 const source=new TextDecoder('utf-8',{fatal:true}).decode(raw);
-const ast=acorn.parse(source,{ecmaVersion:2020,sourceType:'script',allowReturnOutsideFunction:true});
+let ast;try{ast=acorn.parse(source,{ecmaVersion:2020,sourceType:'script',allowReturnOutsideFunction:true});}
+catch(error){ast=acorn.parseExpressionAt(source,0,{ecmaVersion:2020});if(ast.type!=='FunctionExpression'||!['',';'].includes(source.slice(ast.end).trim()))throw error;}
 const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
 const range=n=>({start:Buffer.byteLength(source.slice(0,n.start)),end:Buffer.byteLength(source.slice(0,n.end))});
 const property=n=>n?.type==='MemberExpression'&&!n.computed&&n.property.type==='Identifier'?n.property.name:null;
@@ -45,6 +46,8 @@ while(stack.length){
   else if(v&&typeof v.type==='string')stack.push([v,[...parents,n],depth+1]);
  }
 }
+const descriptors=require('./numeric-descriptors.cjs')(ast,range,n=>{const r=range(n);return hash(raw.subarray(r.start,r.end));});
+methods.push(...descriptors.methods);registrations.push(...descriptors.registrations);
 methods.sort((a,b)=>a.sourceBytes.start-b.sourceBytes.start);
-process.stdout.write(JSON.stringify({schemaVersion:1,source:{sha256:hash(raw),bytes:raw.length},methods,calls,classScopes,registrations,sourceExecuted:false,
-  scope:'AST facts; field-copy semantics only; types and enclosing aliases require explicit contract'}));
+process.stdout.write(JSON.stringify({schemaVersion:1,source:{sha256:hash(raw),bytes:raw.length},methods,calls,classScopes,registrations,descriptorClasses:descriptors.classes,importBindings:descriptors.imports,sourceExecuted:false,
+  scope:'Static field-copy and candidate numeric descriptor facts; helper binding and call domains require explicit verification'}));

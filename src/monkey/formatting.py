@@ -63,7 +63,7 @@ def _build(project):
             if not meta.exists():fail('FORMAT_SCRIPT_IDENTITY_PENDING',old,'An explicit verified importer meta is required before moving code')
             data=load(read(meta));uid=contract.get('nativeIdentity',{}).get('creatorScriptUuid')
             if not uid or data.get('uuid')!=uid:fail('FORMAT_SCRIPT_IDENTITY',old,'Code contract and meta identity differ')
-            layer='presentation/ui'if kind=='label-adapter'else'domain/state'
+            layer='presentation/ui'if kind=='label-adapter'else'domain/math'if contract.get('kind')=='static-number-methods-v1'else'domain/state'
             change(old,'assets/scripts/'+layer+'/'+Path(old).name);identities.append(dict(sourceId='code:'+contract['className'],uuid=uid,kind='script'))
     # Re-render only the declared page reference in generated BMFont text.
     assets={a['sourceId']:a for a in document['assets']}

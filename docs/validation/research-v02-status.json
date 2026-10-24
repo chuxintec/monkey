@@ -23,6 +23,18 @@
         {
           "path": "outputs/cocos38-xiafangle-graphs-08-current-policy-audit/audit.json",
           "sha256": "8fdfdb425d5a863fa416072ae0d6a681383e46e149ac5d7bb35524f4bcec4073"
+        },
+        {
+          "path": "outputs/cocos38-parabola-package-10/conversion-result.json",
+          "sha256": "ba5b8870e2a8417e439ac2e5f884e94161cc8c4c6c2e7c29bbac3ffcf5446bbb"
+        },
+        {
+          "path": "outputs/parabola-math-audit-10/audit.json",
+          "sha256": "de40dd5bd54cb98999b2ab4ef900eab2026c6ae65b2e757501de617afbe023e8"
+        },
+        {
+          "path": "outputs/parabola-math-audit-10/runtime-receipt.json",
+          "sha256": "3766e4fa2b0b3448554b2aa934e0c7bce20ac9effcc546f96930bcf69755d37a"
         }
       ],
       "export": "partial-resource-candidate",
@@ -46,7 +58,7 @@
         "sampler behavior and Spine",
         "excel/res.80d2b.zip",
         "proto/res.ba762.zip",
-        "source methods and gameplay"
+        "ParabolaUtils 3 static Number methods compiled/exercised in C#/TS/JS, 5 vector methods and remaining source/gameplay pending"
       ],
       "sourceRevision": "70",
       "targets": [

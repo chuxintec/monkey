@@ -2,7 +2,7 @@
 
 本地v0.2开发中：fresh package `convert`默认`--format none`，可选`--format grea`（先完整导出、再typed后处理，Unformatted保留基线），支持顺序`--native`；Unity源包已接入受限叶Prefab的公开native与grea路径保护，见[Unity源验证](docs/providers/UNITY-SOURCE-NATIVE.md)；不代表通用Scene/已导入工程迁移。代码具名子集与原生接线、格式范围及真实证据分别见[CODE-SUBSET](docs/CODE-SUBSET.md)、[FORMATTING](docs/FORMATTING.md)。下文v0.1发布事实对应不可变Release，不把开发分支当新发布。
 
-开发版`convert --numeric-code-contract numeric.json`可在同一命令里发现精确源模块、生成有据C#/默认TypeScript并绑定原组件，再格式化/原生导入；当前有限Label数值调用子域及声明格式见[CODE-SUBSET](docs/CODE-SUBSET.md)。未知业务方法继续保留待补。
+开发版`convert --numeric-code-contract numeric.json`可在同一命令里发现精确源模块、生成有据C#/默认TypeScript，再格式化。现有Label数值调用子域支持原组件绑定；新增静态数值方法子集按调用合同生成独立工具类。声明格式和分层验证见[CODE-SUBSET](docs/CODE-SUBSET.md)，未知业务方法继续保留待补。
 
 Python 驱动的原包恢复工程命令行工具。产品目标：Cocos各版本原包→Unity6/Cocos3.8.8/both；Unity、Laya/LayaAir、Egret、自研及其他引擎原包→Unity6。按来源逐步实现；结构化reader当前覆盖已验证的Cocos2.4.15子集，开发分支新增Cocos2.4.11、2.1.2/3.8.7资源子集、Unity显式Bundle/WebData来源，以及其他引擎原图gallery出口（原节点/方法范围见支持矩阵）。wxapkg/APK/已取得资源集合一键生成独立工程，含全部输入资源、恢复源码与目标代码初稿，交给AI继续开发。当前正式工具版本为 **v0.1（Python 包 0.1.0）**。已验证的原生资源恢复范围和业务缺口见下文；其他源引擎按 [v0.2 设计](docs/V0.2-PLAN.md)推进。
 

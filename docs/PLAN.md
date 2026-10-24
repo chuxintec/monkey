@@ -586,3 +586,11 @@ Unity typed值预算新增逐对象250000/全请求4000000强限；超大对象�
 08仅重建Creator；own2304于23:53:25.726798Z→23:54:10.873039Z正常TERM/reaped，方法21.22秒、strict0/editorpass，810节点/81Prefab/95Label源几何/引用/颜色/透明度/层/保存重开通过。Python后补layer强核editor级只读复验pass/0诊断，无新Editor；一次误用static层级看到importer meta变化的冲突结果保留，改用正确editor层级核对，没有降低meta校验或改旧证据。Unity07 manifest ba63a4652259a04bfcb368e3e694f8c1a898df0c3053dbf360099ada41bb6153；Creator08 7983feacd55006b06aa94f7aca2aa2cbc5dca635e187346e1963a6a00ae7a10c。
 
 34定向检查在本项目.venv全过（含可选ASTC），host C#与两个JS语法检查过；篡改Unityplan的早期stage hash错误现保留既有PLAN_CHANGED代码，不放宽内容保护。未重跑已过Unity、未全库测试/发布。Research仍11/9不同范围输出/2blocked/完整游戏0，更新当前case ledger而保留旧gallery/失败记录。继续代码接续与专用来源缺口，v0.2尚未完成。
+
+事件monkey-v02-new-source-number-code-20261024-01：新增static-number-methods-v1公开convert合同，从真实下方了ParabolaUtils951B/8方法中静态恢复3个Number算术方法；保留原名/范围/SHA/原文，5向量方法继续待补。literal模块setup/import setter/RF/export/constructor scope/createClass descriptor逐项绑定；精确helper SHA及其自由e从原main/game.js追到../../@babel/runtime/helpers/typeof和唯一声明callback SHA，不执行原源/constructor/helper。首次context worker保留逐节点parent数组导致256MiB OOM，改scope-only栈/有界索引后同预算真实验证通过，没有抬高限制。后补Math遮蔽、descriptor歧义、别名update/解构重赋值、require遮蔽和动态scope拒绝反例。
+
+双目标生成静态C#/TS（可选JS），不伪造原组件接线；Number/double显式参数子域包含-0/NaN/Infinity，排除非number/constructor/未知向量/可变intrinsics。C#用NoInlining独立binary64运算保持源序，特别保留unclamped lerp和先乘后除溢出。grea Unity归Domain/Math，Creator归domain/math；09旧Creator目录state冻结，10修正。工程START-HERE连到可调用签名/源证据/5待补方法/实际scriptPath指针及一个聚合任务，不靠大量同构空桩。
+
+公开新10：496输入38081754B、83图/810节点/81Prefab/986Frame不变，双端格式成功；Unity manifest d7a6c143a5db8d3e73a847bec6c1d7dbe307942d47fa66bd2c207ea8acdfc56b，Creator 0ac57d3e28988db54508811333c531ad8095b0db9bbcf8b6080826690e8a20d1。当前源码重解析model与冻结完全相等，helper context也相等；30974个owned文件全核。C#SHA e95db24463f04ebd4b6d7cdced345c8dd99f6270699088ca01b586dfa8e43d10，TS SHA9d481af7ddcdf49ae7b08958f8cba9e45690b5f9da483b91bd78eec9ad415955。Unity6 SDK编译及TS5.8.2 strict过，C#/.NET8.0.21、TS编译产物/Node、JS次选/Node各13实际边界调用过（负零位、NaN/Inf、外插、mul-add舍入与大数运算序）。仅运行受控生成代码。26定向检查全过，包括TS/JS包级both+grea及未知helper/模型篡改反例。
+
+审计outputs/parabola-math-audit-10的audit.json/runtime-receipt.json封存输入/代码/编译产物/检查hash；没有新Editor/Player，资源Editor沿此前07/08，不据此晋级视觉/业务。Research仍11attempted/9不同范围导出/2blocked/完整游戏0。继续专用来源atlas/图等有据缺口与v0.2出口整理，不推送/Release、不以此检查点结束版本。

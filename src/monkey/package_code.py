@@ -6,9 +6,14 @@ from .sources.compiled import fail
 
 def declaration(path, language='ts'):
     path=safe(path);raw=read(path);data=load(raw)
-    if data.get('schemaVersion')!=1 or data.get('kind')!='numeric-call-subdomain-v1':
-        fail('PACKAGE_CODE_CONTRACT',str(path),'Expected numeric-call-subdomain-v1 schema 1')
+    if data.get('schemaVersion')!=1 or data.get('kind')not in ('numeric-call-subdomain-v1','static-number-methods-v1'):
+        fail('PACKAGE_CODE_CONTRACT',str(path),'Expected a supported explicit numeric code schema 1')
     if language not in ('ts','js'):fail('PACKAGE_CODE_LANGUAGE',str(language),'Expected ts or js')
+    if data['kind']=='static-number-methods-v1':
+        expected={'schemaVersion','kind','moduleName','moduleSha256','helperModuleName','helperModuleSha256','methods'}
+        if set(data)!=expected or any(not isinstance(data[k],str)or not data[k]for k in expected-{'schemaVersion','methods'}):fail('PACKAGE_CODE_CONTRACT',str(path),'Unknown/missing static numeric module fields')
+        if not isinstance(data['methods'],list)or not 1<=len(data['methods'])<=32 or any(not isinstance(m,str)or not m for m in data['methods']):fail('PACKAGE_CODE_CONTRACT',str(path),'Expected bounded explicit method names')
+        return dict(path=str(path),sha256=sha(raw),data=data,language=language)
     if set(data)!={'schemaVersion','kind','moduleName','registrationId','moduleSha256','numericField'}:
         fail('PACKAGE_CODE_CONTRACT',str(path),'Unknown or missing contract fields')
     if any(not isinstance(data[k],str)or not data[k]for k in ('moduleName','registrationId','moduleSha256','numericField')):
@@ -20,6 +25,9 @@ def prepare(recovered, spec, namespace, output):
     from .code_model import inspect
     from .code_emit import emit
     data=spec['data']
+    if data['kind']=='static-number-methods-v1':
+        from .code_math import prepare as prepare_math
+        return prepare_math(recovered,spec,namespace,output)
     matches=[m for m in recovered if m.get('name')==data['moduleName'] and any(r.get('identity')==data['registrationId'] for r in m.get('rf',[]))]
     if len(matches)!=1:fail('PACKAGE_CODE_MODULE',data['moduleName'],'Expected one exact original RF module; duplicates are ambiguous')
     module=matches[0];raw=module['source'].encode()
@@ -45,6 +53,7 @@ def prepare(recovered, spec, namespace, output):
 
 def project_ir(ir_path, inspected, emission, output):
     from .code_presentation import label_components
+    if load(read(emission/'package-code.json')).get('kind')=='static-number-methods-v1':return ir_path,stage_document(ir_path/'ir.json')
     ir=stage_document(ir_path/'ir.json');contract=load(read(emission/'Emitted/Analysis/code-contract.json'));report=load(read(emission/'package-code.json'))
     identity=contract['presentation']['sourceRegistration']['identity']
     expected={c['sourceId'] for c in ir['components']if c['type']==identity}
@@ -92,6 +101,35 @@ def install(emission, project, profile, manifest, plan):
     binding_report['sourceBindings']=[dict(sourceId=c['sourceId'],node=c['node'],state='planned_native_import'if c['convertible']else'blocked_presentation_adapter')for c in plan['components']if c.get('codeClassName')==contract['className']]
     write_json(project/'Analysis/package-code.json',binding_report)
     shutil.copy2(emission/'OriginalContract.json',project/'Analysis/numeric-code-declaration.json')
-    manifest['codeEmission']=dict(language='csharp'if profile==unity.PROFILE else contract.get('cocosCodeLanguage','ts'),sourceContractSha256=sha(read(contract_path)),
+    manifest['codeEmission']=dict(kind=contract.get('kind','numeric-call-subdomain-v1'),binding=contract['binding'],language='csharp'if profile==unity.PROFILE else contract.get('cocosCodeLanguage','ts'),sourceContractSha256=sha(read(contract_path)),
         scriptPath=script,scriptGuid=contract['nativeIdentity']['unityScriptGuid']if profile==unity.PROFILE else None,
         scriptUuid=contract['nativeIdentity']['creatorScriptUuid']if profile!=unity.PROFILE else None,sourceRegistration=contract['presentation']['sourceRegistration'])
+
+
+def enrich_handoff(project):
+    """Describe emitted static calls without pretending they are scene components."""
+    path=project/'Analysis/package-code.json'
+    if not path.exists()or load(read(path)).get('kind')!='static-number-methods-v1':return None
+    contract=load(read(project/'Analysis/code-contract.json'));report=load(read(path))
+    methods=[dict(name=m['name'],parameters=[p['name']for p in m['parameters']],sourceBytes=m['sourceBytes'],sourceSha256=m['sourceSha256'])for m in contract['methods']]
+    task=dict(taskId='static-numeric-utility',module=contract['className'],sourceRefs=[report['sourceModule']],
+              codeState='implemented-evidenced-number-subdomain',binding=report['binding'],sourceBindings=[],
+              implementedMethods=methods,pendingMethods=[m['name']for m in contract['pendingMethods']],callDomain=contract['callDomain'],
+              targetScript='manifest.json#/codeEmission/scriptPath',contract='Analysis/code-contract.json',
+              allowedPaths=['Assets/Game/Domain/','Assets/Generated/Code/','assets/scripts/domain/','assets/generated/scripts/'],
+              nextAction='Review static Number-call contract before using these methods; recover vector/object methods separately from exact preserved source',
+              verification=['compile generated target script','Number boundary and rounding vectors','target Player/runtime before gameplay integration'],
+              validation=dict(compile='not_run',numericCalls='not_run',player='not_run',business='not_run'))
+    work=load(read(project/'Analysis/agent-work.json'));work['tasks'].append(task);write_json(project/'Analysis/agent-work.json',work)
+    invocation='Monkey.Recovered.'+contract['className'] if (project/'ProjectSettings').exists()else contract['className']
+    lines=['# Static numeric utility', '',f'Class: `{invocation}`. Resolve the current script from `manifest.json` → `codeEmission.scriptPath`; this pointer stays valid after formatting.',
+           '',f"{len(methods)} source methods emitted, {len(contract['pendingMethods'])} pending. Binding: `{report['binding']}`. No source constructor or helper executes, and no source component is wired by this utility.", '',
+           'Implemented calls:',*['- `'+invocation+'.'+m['name']+'('+', '.join(m['parameters'])+')` → number / C# double'for m in methods], '',
+           'Accepted calls: '+contract['callDomain']['accepted']+'.', 'Excluded calls: '+contract['callDomain']['excluded']+'.',
+           'Rounding: '+contract['callDomain']['rounding']+'. Do not replace unclamped interpolation with an engine clamp or reassociate arithmetic.', '',
+           'Pending original methods: '+', '.join('`'+m['name']+'`'for m in contract['pendingMethods'])+'.',
+           'Exact source ranges, SHA256, helper context and method mappings: `../Analysis/code-contract.json`. Original module, reviewed helper and typeof dependency: `../SourceRecovery/Original/`.',
+           'This generated candidate has no compile, numeric runtime, Player or gameplay acceptance yet. External validation receipts must name this candidate and exact code hashes.','']
+    (project/'Docs/STATIC-NUMERIC-UTILITY.md').write_text('\n'.join(lines),encoding='utf-8')
+    start=project/'Docs/START-HERE.md';start.write_text(start.read_text(encoding='utf-8')+'\nAn evidenced static utility is available: [calls, domain and pending methods](STATIC-NUMERIC-UTILITY.md). Its generated methods are separate from the uncompiled original code drafts.\n',encoding='utf-8')
+    return len(work['tasks'])

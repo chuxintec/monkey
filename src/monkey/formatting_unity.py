@@ -58,7 +58,7 @@ def build(project):
         'Assets/Generated/Scenes/ImportBootstrap.unity':PATHS['bootstrap'],'Assets/Generated/Views/EditableProbe.prefab':PATHS['editableProbe']}.items():change(old,new)
     contract_path=root/'Analysis/code-contract.json'
     if contract_path.exists():
-        contract=load(read(contract_path));layer='Presentation/UI'if contract.get('presentation',{}).get('kind')=='label-adapter'else'Domain/State'
+        contract=load(read(contract_path));layer='Presentation/UI'if contract.get('presentation',{}).get('kind')=='label-adapter'else'Domain/Math'if contract.get('kind')=='static-number-methods-v1'else'Domain/State'
         for entry in contract['files']:
             if not entry['path'].startswith('Unity/Assets/Generated/Code/')or entry['path'].endswith('.meta'):continue
             old=entry['path'].removeprefix('Unity/');meta=inside(root,old+'.meta')

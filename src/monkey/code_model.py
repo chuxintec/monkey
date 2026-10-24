@@ -29,7 +29,7 @@ def inspect(source,output,module_name):
         span=method['sourceBytes'];start,end=span['start'],span['end']
         if not 0<=start<end<=len(raw) or sha(raw[start:end])!=method['sourceSha256']:
             fail('CODE_METHOD_IDENTITY',method['name'],'AST method range/hash differs')
-        key=(method['scopeBytes']['start'],method['ownerAlias'],method['name'],method['static'])
+        key=(method['scopeBytes']['start'],method['ownerAlias'],method['name'],method['static'],method.get('accessor'))
         if key in seen:fail('CODE_METHOD_AMBIGUOUS',method['name'],'Repeated member assignment requires control-flow recovery')
         seen.add(key)
         method['status']='semantic_candidate' if method['semantic']['kind']!='unsupported' else 'unsupported'
