@@ -12,8 +12,10 @@ from .unity_code_model import model as code_model
 CODE_SUFFIXES={'.cs','.dll','.js','.jsc','.wasm','.lua','.so','.dylib'}
 
 
-def convert(source,output,provider_python,asset_ripper,budget_seconds=600,dependencies=None,texture_cache=None,schema_manifest=None,quarantine_invalid_textures=False,dependency_manifest=None):
-    if not 30<=budget_seconds<=1200:fail('UNITY_EXPORT_BUDGET','$','Expected 30..1200 seconds')
+def convert(source,output,provider_python,asset_ripper,budget_seconds=600,dependencies=None,texture_cache=None,schema_manifest=None,quarantine_invalid_textures=False,dependency_manifest=None,export_scope="reachable",code_evidence=None,reuse_inspection=None):
+    if not 30<=budget_seconds<=7200:fail('UNITY_EXPORT_BUDGET','$','Expected 30..7200 seconds')
+    if export_scope not in ('reachable','all'):fail('UNITY_EXPORT_SCOPE','$','Expected reachable or all')
+    if export_scope=='all' and not dependency_manifest:fail('UNITY_EXPORT_SCOPE','$','All scope requires an explicit frozen dependency manifest')
     source=safe(source);exe=safe(asset_ripper);requested_python=Path(provider_python).absolute();python=safe(requested_python.resolve(strict=True))
     if not source.is_file() or not exe.is_file() or not python.is_file():fail('UNITY_PROVIDER_MISSING','$','Source and existing providers must be files')
     with source.open('rb') as stream:header=stream.read(16)
@@ -30,19 +32,42 @@ def convert(source,output,provider_python,asset_ripper,budget_seconds=600,depend
     if schema_manifest:
         from .unity_schemas import frozen_pool
         schema_pool=frozen_pool(schema_manifest)
-    out=new_output(output,[source,exe.parent,python.parent,*dependencies,*([safe(dependency_manifest),*[Path(r['path'])for r in dependency_pool['files']]]if dependency_pool else []),*([safe(texture_cache)]if texture_cache else []),*([safe(schema_manifest),*[Path(r['path'])for r in schema_pool['files']]]if schema_pool else [])])
+    if export_scope=='all' and schema_pool is None:
+        schema_pool=dependency_pool
+        schema_manifest=dependency_manifest
+    code_rows=[]
+    if code_evidence:
+        from .unity_code_handoff import declared
+        _,_,code_rows=declared(code_evidence)
+    out=new_output(output,[source,exe.parent,python.parent,*dependencies,*([safe(code_evidence),*[Path(r['path'])for r in code_rows]]if code_evidence else []),*([safe(dependency_manifest),*[Path(r['path'])for r in dependency_pool['files']]]if dependency_pool else []),*([safe(texture_cache)]if texture_cache else []),*([safe(schema_manifest),*[Path(r['path'])for r in schema_pool['files']]]if schema_pool else [])])
     report=dict(schemaVersion=1,toolVersion=__version__,sourceFamily='unity',sourceProfile=kind+'-unitypy-1.25.3-assetripper-2.0.0',
                 status='partial',workflowStatus='needs_action',completed=False,resultKind='candidate',
-                format=dict(profile='none',applied=False),completionScope='explicit-unity-containers-and-consumed-texture-cache',inputFiles=1+len(dependencies),inputBytes=source.stat().st_size+sum(p.stat().st_size for p in dependencies),projects=[],
+                format=dict(profile='none',applied=False),completionScope='all-explicit-unity-containers'if export_scope=='all'else'explicit-unity-containers-and-consumed-texture-cache',inputFiles=1+len(dependencies),inputBytes=source.stat().st_size+sum(p.stat().st_size for p in dependencies),projects=[],
                 validation=dict(source='not_run',editor='not_run',visual='not_run',business='not_run'),diagnostics=[])
     def save():write_json(out/'conversion-result.json',report)
     save()
-    inspected=inspect_unity(source,requested_python,out/'SourceInspection',min(budget_seconds,120),schema_manifest=schema_manifest)
+    batch=None
+    if export_scope=='all':
+        from .unity_batch import inspect_all,reuse_inspections
+        primary=dict(path=str(source),bytes=source.stat().st_size,sha256=fingerprint(source))
+        chosen=[];seen={primary['sha256']};aliases=[]
+        for row in dependency_pool['files']:
+            if row['sha256']in seen:aliases.append(dict(row,disposition='byte-identical-container-alias'));continue
+            seen.add(row['sha256']);chosen.append(row)
+        dependencies=[Path(r['path'])for r in chosen]
+        rows=[primary,*chosen]
+        write_json(out/'all-inputs.json',dict(schemaVersion=1,files=rows,aliases=aliases,manifestSha256=dependency_pool['sourceManifestSha256']))
+        batch=reuse_inspections(rows,reuse_inspection,out,schema_pool)if reuse_inspection else inspect_all(rows,requested_python,out,schema_pool,min(budget_seconds,1200))
+        inspected=batch[0][1]
+        report.update(exportScope='all',declaredContainers=1+len(dependency_pool['files']),uniqueContainers=len(rows),byteIdenticalAliases=len(aliases),
+                      inputFiles=len(rows),inputBytes=sum(r['bytes']for r in rows))
+    else:
+        inspected=inspect_unity(source,requested_python,out/'SourceInspection',min(budget_seconds,120),schema_manifest=schema_manifest)
     report['sourceInspection']={k:inspected.get(k) for k in ('status','source','summary','provider','typedObjectsSha256','sourceUnchanged','processExited')}
     if not inspected.get('sourceUnchanged') or not inspected.get('processExited') or inspected['status'] not in ('inspected','partial'):
         report['status']='failed';save();return report
     report['validation']['source']='partial' if inspected['summary']['unparsed'] else 'pass';save()
-    if dependency_pool:
+    if dependency_pool and export_scope!='all':
         from .unity_dependencies import resolve
         typed_raw=read(out/'SourceInspection/typed-objects.json',max_bytes=128*1024*1024)
         if sha(typed_raw)!=inspected['typedObjectsSha256']:fail('UNITY_DEPENDENCY_SOURCE_CHANGED',str(out),'Primary typed inspection changed')
@@ -52,8 +77,8 @@ def convert(source,output,provider_python,asset_ripper,budget_seconds=600,depend
         report.update(inputFiles=1+len(dependencies),inputBytes=source.stat().st_size+sum(r['bytes']for r in lookup['dependencies']))
         if lookup['missing']:report['diagnostics'].append(dict(code='UNITY_DEPENDENCY_LOOKUP_MISSING',items=lookup['missing'],message='Only exact serialized-file names resolve; missing resources remain unresolved'))
         save()
-    inspections=[(source,inspected)]
-    for index,path in enumerate(dependencies):
+    inspections=batch if batch is not None else [(source,inspected)]
+    for index,path in enumerate(dependencies if batch is None else []):
         if dependency_pool:
             expected=next(r for r in dependency_pool['files']if r['path']==str(path))
             if path.stat().st_size!=expected['bytes']or fingerprint(path)!=expected['sha256']:fail('UNITY_DEPENDENCY_SOURCE_CHANGED',str(path),'Selected dependency changed after indexing')
@@ -95,7 +120,12 @@ def convert(source,output,provider_python,asset_ripper,budget_seconds=600,depend
     report['dependencyInspections']=[dict(source=extra['source'],summary=extra['summary'],status=extra['status'])for _,extra in inspections[1:]]
     report['consumedTextureCache']=list(consumed.values())
     report['inputFiles']=len(inspections)+len(consumed);report['inputBytes']+=sum(r['cacheBytes']for r in consumed.values());save()
-    generated=code_model(out/'SourceInspection',out/'CodeModel')
+    model_input=out/'SourceInspection'
+    if batch is not None:
+        from .unity_batch import merged_model_inputs
+        report['batchCodeInput']=merged_model_inputs(inspections,out/'CombinedInspection',sha(read(out/'all-inputs.json')))
+        model_input=out/'CombinedInspection'
+    generated=code_model(model_input,out/'CodeModel')
     report['codeModel']=generated;save()
     exported=export_unity(active[0],exe,out/'ProviderExport',budget_seconds,dependencies=active[1:])
     report['providerExport']={k:exported.get(k) for k in ('status','stage','targetVersion','processExited','outputFiles','outputBytes','nativeAssetFiles','unreadableObjectFiles','sourceUnchanged','error')}
@@ -126,9 +156,12 @@ def convert(source,output,provider_python,asset_ripper,budget_seconds=600,depend
             name=row['sha256']+'.bundle';dest=frozen/name
             if not dest.exists():dest.write_bytes(payload)
             entries.append(dict(path=name,bytes=len(payload),sha256=row['sha256']))
-        write_json(frozen/'manifest.json',dict(schemaVersion=1,sourceManifestSha256=dependency_pool['sourceManifestSha256'],files=entries,scope='lookup pool; only exact reachable closure exported as resources'))
-        shutil.copy2(out/'DependencyLookup/closure.json',analysis/'dependency-closure.json')
-        shutil.copy2(out/'DependencyLookup/Index/unity-index.json',frozen/'unity-index.json')
+        write_json(frozen/'manifest.json',dict(schemaVersion=1,sourceManifestSha256=dependency_pool['sourceManifestSha256'],files=entries,scope='all explicit unique containers exported'if export_scope=='all'else'lookup pool; only exact reachable closure exported as resources'))
+        if export_scope=='all':
+            shutil.copy2(out/'all-inputs.json',analysis/'all-inputs.json')
+        else:
+            shutil.copy2(out/'DependencyLookup/closure.json',analysis/'dependency-closure.json')
+            shutil.copy2(out/'DependencyLookup/Index/unity-index.json',frozen/'unity-index.json')
     package_path=project/'Packages/manifest.json'
     package=load(read(package_path));shutil.copy2(package_path,analysis/'provider-packages.json')
     removed=[]
@@ -149,6 +182,8 @@ def convert(source,output,provider_python,asset_ripper,budget_seconds=600,depend
             if sha(payload)!=entry['cacheSha256']:fail('UNITY_TEXTURE_CACHE_CHANGED',logical,'Consumed cache changed before evidence copy')
             dest=inside(recovery/'TextureCache',logical);dest.parent.mkdir(parents=True,exist_ok=True);dest.write_bytes(payload)
 
+    if batch is not None:
+        shutil.copy2(out/'CombinedInspection/typed-objects.json',analysis/'all-typed-objects.json')
     models=load(read(out/'CodeModel/unity-code-model.json',max_bytes=128*1024*1024),max_nodes=8_000_000)
     known={Path('Assets/Scripts')/Path(c['target']).relative_to('CSharp'):c for c in models['classes']}
     code=[];schema_applied=[]
@@ -192,6 +227,11 @@ Assets contains provider resources and only evidence-derived C# fields; original
 Do not treat missing external assets or placeholder provider GUIDs as resolved. Acquire the explicit dependencies, repair via typed source references,
 and verify native references before claiming a complete resource or gameplay recovery.
 ''')
+    if code_evidence:
+        from .unity_code_handoff import attach
+        report['codeEvidence']=attach(code_evidence,project)
+    from .unity_handoff import inventory
+    report['resourceHandoff']=inventory(project,inspections,exported)
     placeholders=[]
     for path in sorted(assets.rglob('*')):
         if path.is_file() and path.suffix in ('.prefab','.unity','.asset','.mat','.controller'):

@@ -109,7 +109,7 @@ def full_schema(node):
     return [{k:v for k,v in n.items() if k != 'm_Children'} for n in node.to_dict_list()]
 
 
-def schema_pool(assets, job):
+def schema_pool(assets, job, all_schemas=False):
     import UnityPy
     wanted = {type_identity(a, o.serialized_type) for a in assets for o in a.objects.values()
               if o.type.name == 'MonoBehaviour' and not (o.serialized_type and o.serialized_type.node)} - {None}
@@ -124,7 +124,7 @@ def schema_pool(assets, job):
         for asset in env.assets:
             for typ in asset.types:
                 key = type_identity(asset, typ)
-                if key not in wanted or typ.node is None: continue
+                if key is None or (not all_schemas and key not in wanted) or typ.node is None: continue
                 encoded = json.dumps(full_schema(typ.node), sort_keys=True, separators=(',',':')).encode()
                 schema_hash = digest(encoded)
                 if key in matches and matches[key]['sha256'] != schema_hash:
@@ -137,7 +137,7 @@ def schema_pool(assets, job):
     return matches
 
 
-def inspect_bytes(raw, schema_job=None):
+def inspect_bytes(raw, schema_job=None, schema_cache=None):
     import UnityPy
     if UnityPy.__version__ != PROVIDER_VERSION:
         raise RuntimeError('Expected UnityPy ' + PROVIDER_VERSION)
@@ -147,13 +147,15 @@ def inspect_bytes(raw, schema_job=None):
         raise ValueError('No serialized files found')
     if sum(len(f.objects) for f in assets) > MAX_OBJECTS:
         raise ValueError('Object budget exceeded')
-    borrowed = schema_pool(assets, schema_job) if schema_job else {}
+    borrowed = schema_cache if schema_cache is not None else (schema_pool(assets, schema_job) if schema_job else {})
     files, objects, schemas, borrowed_schemas = [], [], {}, {};typed_values=0
     for index, asset in enumerate(assets):
         file_id = str(index)
         externals = [dict(fileId=str(i+1), path=e.path, guid=e.guid.hex()) for i, e in enumerate(asset.externals)]
         files.append(dict(id=file_id, name=asset.name, unityVersion=asset.unity_version,
                           targetPlatform=str(asset.target_platform), sourceTypeTreeEnabled=asset._enable_type_tree, externals=externals, objects=len(asset.objects)))
+        if hasattr(asset, 'reader'):
+            files[-1]['serializedFileSha256'] = digest(bytes(asset.reader.bytes))
         for obj in asset.objects.values():
             row = dict(file=file_id, pathId=identifier(obj.path_id), classId=int(obj.type), type=obj.type.name,
                        bytes=obj.byte_size, rawSha256=digest(obj.get_raw_data()), references=[],
@@ -343,6 +345,39 @@ def index_manifest(manifest_path,output):
     output.write_bytes(encoded)
 
 
+def inspect_batch(job_path, output):
+    """Read each frozen schema bundle once, then inspect every explicit container."""
+    import UnityPy
+    if UnityPy.__version__ != PROVIDER_VERSION: raise RuntimeError('Expected UnityPy '+PROVIDER_VERSION)
+    job=json.loads(job_path.read_text());pool=job.get('schemaPool');rows=job['files']
+    if not 1 <= len(rows) <= 2001: raise ValueError('Batch container budget')
+    cache=schema_pool([],pool,all_schemas=True) if pool else {}
+    reports=[];total=0
+    for index,row in enumerate(rows):
+        source=Path(row['path']);raw=source.read_bytes();total+=len(raw)
+        if len(raw)>MAX_BYTES or total>1024**3 or len(raw)!=row['bytes'] or digest(raw)!=row['sha256']:
+            raise ValueError('Batch input identity or budget changed')
+        dest=Path(row['inspection']);dest.mkdir(exist_ok=False)
+        receipt=dict(schemaVersion=1,status='started',source=dict(path=str(source),bytes=len(raw),sha256=digest(raw)),
+                     processExited=True,sourceCodeExecuted=False)
+        try:
+            typed=inspect_bytes(raw,pool,schema_cache=cache)
+            typed['source']={k:receipt['source'][k] for k in ('bytes','sha256')}
+            encoded=json.dumps(typed,ensure_ascii=False,allow_nan=False,separators=(',',':')).encode()
+            if len(encoded)>MAX_BYTES:raise ValueError('Batch typed document exceeds128MiB')
+            (dest/'typed-objects.json').write_bytes(encoded)
+            receipt.update(status='partial' if typed['summary']['unparsed'] else 'inspected',
+                           summary=typed['summary'],provider=typed['provider'],typedObjectsSha256=digest(encoded))
+        except Exception as error:
+            receipt.update(status='failed',error=dict(type=type(error).__name__,message=str(error)[:300]))
+        receipt['sourceUnchanged']=digest(source.read_bytes())==row['sha256']
+        (dest/'inspection.json').write_text(json.dumps(receipt,indent=2)+'\n')
+        reports.append(dict(path=str(source),inspection=str(dest),receipt=receipt))
+        (output.parent/'batch-progress.json').write_text(json.dumps(dict(processed=index+1,total=len(rows)))+'\n')
+    output.write_text(json.dumps(dict(schemaVersion=1,files=reports,schemaBundlesRead=len(pool['files'])if pool else 0,
+                                     containersInspected=len(rows),sourceCodeExecuted=False),separators=(',',':'))+'\n')
+
+
 def main():
     schema_job = None
     if sys.argv[1] == '--inspect-with-schemas':
@@ -363,7 +398,8 @@ def main():
 
 
 if __name__ == '__main__':
-    if len(sys.argv)==4 and sys.argv[1]=='--hydrate':hydrate_manifest(Path(sys.argv[2]),Path(sys.argv[3]))
+    if len(sys.argv)==4 and sys.argv[1]=='--inspect-batch':inspect_batch(Path(sys.argv[2]),Path(sys.argv[3]))
+    elif len(sys.argv)==4 and sys.argv[1]=='--hydrate':hydrate_manifest(Path(sys.argv[2]),Path(sys.argv[3]))
     elif len(sys.argv)==4 and sys.argv[1]=='--quarantine-invalid-textures':quarantine_invalid_textures(Path(sys.argv[2]),Path(sys.argv[3]))
     elif len(sys.argv)==4 and sys.argv[1]=='--index':index_manifest(Path(sys.argv[2]),Path(sys.argv[3]))
     else:main()

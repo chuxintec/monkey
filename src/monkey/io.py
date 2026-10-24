@@ -36,7 +36,7 @@ def read(path, max_bytes=MAX_BYTES):
     return raw
 
 
-def load(raw, max_nodes=3_000_000):
+def load(raw, max_nodes=3_000_000, max_depth=96):
     def pairs(items):
         out = {}
         for key, value in items:
@@ -46,7 +46,7 @@ def load(raw, max_nodes=3_000_000):
         return out
     result = json.loads(raw.decode('utf-8-sig'), object_pairs_hook=pairs,
                         parse_constant=lambda x: fail('NONFINITE_NUMBER', '$', x))
-    budget(result, max_nodes=max_nodes)
+    budget(result, max_nodes=max_nodes, max_depth=max_depth)
     return result
 
 

@@ -43,7 +43,7 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 def export(source,executable,output,budget_seconds=600,dependencies=None):
-    if not 30<=budget_seconds<=1200:fail('UNITY_EXPORT_BUDGET','$','Expected 30..1200 seconds')
+    if not 30<=budget_seconds<=7200:fail('UNITY_EXPORT_BUDGET','$','Expected 30..7200 seconds')
     source=safe(source);exe=safe(executable)
     if not source.is_file() or not exe.is_file():fail('UNITY_EXPORT_INPUT','$','Explicit file and existing provider executable required')
     source_raw=read(source,max_bytes=MAX_INPUT)
@@ -103,7 +103,7 @@ def export(source,executable,output,budget_seconds=600,dependencies=None):
             process=subprocess.Popen([str(owned_exe),'--headless','--port','0','--log-path',str(out/'provider.log')],cwd=out,env=env,stdout=log,stderr=subprocess.STDOUT)
             receipt['pid']=process.pid;save()
             endpoint=None
-            while time.monotonic()<min(start+60,deadline-10):
+            while time.monotonic()<min(start+max(60,min(600,budget_seconds//2)),deadline-10):
                 if process.poll() is not None:raise RuntimeError('Provider exited before endpoint')
                 text=read(log_path,max_bytes=8*1024*1024).decode(errors='replace')
                 match=re.search(r'http://127\.0\.0\.1:([0-9]+)',text)

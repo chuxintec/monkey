@@ -52,7 +52,12 @@ def script_object(data, objects, obj, ptr):
         entries=[e for e in source.get('externals',[])if e['fileId']==ptr.get('fileId')]if source else []
         if len(entries)!=1:return None
         name=entries[0]['path']
-        if not isinstance(name,str)or '/'in name or '\\'in name:return None
+        if not isinstance(name,str):return None
+        if name.startswith('archive:/'):
+            parts=name.removeprefix('archive:/').split('/')
+            if len(parts)!=2 or parts[0]!=parts[1]:return None
+            name=parts[1]
+        if '/'in name or '\\'in name:return None
         targets=[f for f in data['files']if f['name']==name]
         if len(targets)!=1:return None
         file_id=targets[0]['id']

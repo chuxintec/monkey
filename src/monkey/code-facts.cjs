@@ -2,16 +2,17 @@
 // Static AST facts and a deliberately narrow semantic subset; no input execution.
 const fs=require('node:fs'),crypto=require('node:crypto'),acorn=require('./sources/acorn.cjs');
 const raw=fs.readFileSync(0);if(raw.length>32*1024*1024)throw Error('Source budget');
-const source=new TextDecoder('utf-8',{fatal:true}).decode(raw);
+const source=new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(raw);
 let ast;try{ast=acorn.parse(source,{ecmaVersion:2020,sourceType:'script',allowReturnOutsideFunction:true});}
 catch(error){ast=acorn.parseExpressionAt(source,0,{ecmaVersion:2020});if(ast.type!=='FunctionExpression'||!['',';'].includes(source.slice(ast.end).trim()))throw error;}
 const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
-const range=n=>({start:Buffer.byteLength(source.slice(0,n.start)),end:Buffer.byteLength(source.slice(0,n.end))});
+const positions=require('./sources/source-offsets.cjs')(source);
+const range=n=>({start:positions[n.start],end:positions[n.end]});
 const property=n=>n?.type==='MemberExpression'&&!n.computed&&n.property.type==='Identifier'?n.property.name:null;
 const field=n=>n?.type==='MemberExpression'&&n.object.type==='ThisExpression'?property(n):null;
 const methods=[],calls=[],classScopes=[],registrations=[],members=[],stack=[[ast,[],0]];let count=0;
 while(stack.length){
- const [n,parents,depth]=stack.pop();if(++count>1000000||depth>256)throw Error('AST budget');
+ const [n,parents,depth]=stack.pop();if(++count>3000000||depth>512)throw Error('AST budget');
  if(n.type==='CallExpression'){
   const method=property(n.callee);if(method)calls.push({method,sourceBytes:range(n)});
   if(method==='push'&&property(n.callee.object)==='_RF'&&n.callee.object.object.type==='Identifier'&&n.callee.object.object.name==='cc'&&n.arguments.length===3&&n.arguments[1].type==='Literal'&&typeof n.arguments[1].value==='string'&&n.arguments[2].type==='Literal'&&typeof n.arguments[2].value==='string')registrations.push({identity:n.arguments[1].value,name:n.arguments[2].value,sourceBytes:range(n)});

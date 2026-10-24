@@ -49,30 +49,51 @@ def modules(raw, source_path=None):
 
 
 def drafts(module, module_id):
-    """Contracts retain source identity/dependencies; no fabricated business implementation."""
+    """Named source members for AI editing; no fabricated unified Invoke API."""
+    import re
     token='M'+sha(module_id.encode())[:20]
-    deps=[str(d.get('module')) for d in module.get('dependencies',[])]
-    facts=module.get('syntax',{})
-    exports=facts.get('exports',[]);events=facts.get('events',[]);keys=facts.get('dynamicKeys',[])
-    array=lambda values: 'new string[] { '+', '.join(json.dumps(v) for v in values)+' }'
-    # These drafts remain outside all engine compilation roots until an Agent implements them.
-    cs=('// SourceRecovery draft: not compiled, behavior unresolved.\n'
-        'namespace Recovered.Gameplay {\n'
-        f'  public sealed class {token} {{\n'
-        f'    public const string SourceModule = {json.dumps(module_id)};\n'
-        f'    public static readonly string[] SourceDependencies = {array(deps)};\n'
-        f'    public static readonly string[] SourceExports = {array(exports)};\n'
-        f'    public static readonly string[] SourceEvents = {array(events)};\n'
-        f'    public static readonly string[] SourceResourceKeys = {array(keys)};\n'
-        '    public object Invoke(string sourceExport, params object[] arguments) {\n'
-        '      throw new System.NotImplementedException("Restore source module behavior before enabling");\n'
-        '    }\n  }\n}\n')
-    ts=('// SourceRecovery draft: not compiled, behavior unresolved.\n'
-        f'export const sourceModule = {json.dumps(module_id)};\n'
-        f'export const sourceDependencies: readonly string[] = {json.dumps(deps)};\n'
-        f'export const sourceExports: readonly string[] = {json.dumps(exports)};\n'
-        f'export const sourceEvents: readonly string[] = {json.dumps(events)};\n'
-        f'export const sourceResourceKeys: readonly string[] = {json.dumps(keys)};\n'
-        'export function invoke(sourceExport: string, ...args: unknown[]): never {\n'
-        '  throw new Error("Restore source module behavior before enabling");\n}\n')
-    return token,cs,ts
+    logical=module.get('name')or next((r.get('class_name')for r in module.get('rf',[])if r.get('class_name')),None)
+    name=re.sub(r'[^A-Za-z0-9_]','_',logical or ('UnknownModule_'+token))
+    if not name or name[0].isdigit():name='Module_'+name
+    members=module.get('syntax',{}).get('members',{})
+    methods=members.get('methods',[]);fields=members.get('fields',[])
+    if not methods:methods=[dict(f,static=True,ownerAlias=None)for f in members.get('functions',[])]
+    from ..unity_code_model import CS_KEYWORDS
+    def identifier(value):
+        if not isinstance(value,str)or not re.fullmatch('[A-Za-z_][A-Za-z_0-9]*',value):return None
+        return '@'+value if value in CS_KEYWORDS else value
+    header=['// Named source declaration draft; outside Assets and not compiled.',
+            '// TODO: recover source ownership/types/behavior from exact original module. No methods are marked implemented.',
+            '// Source module: '+json.dumps(module_id),
+            '// Source module SHA256: '+str(module.get('sha256','unknown'))]
+    cs=header+['namespace Recovered.Gameplay {', '  public partial class '+identifier(name)+' {']
+    ts=header+['export class '+name+' {']
+    known_fields=set()
+    for f in fields:
+        member=identifier(f.get('name'))
+        if not member or f['name']in known_fields:continue
+        known_fields.add(f['name']);span=f.get('sourceBytes',{})
+        comment='    // TODO source field type; owner '+str(f.get('ownerAlias'))+'; bytes '+str(span.get('start'))+'..'+str(span.get('end'))
+        cs += [comment,'    public object '+member+';'];ts += [comment,'  '+f['name']+': unknown;']
+    seen=set()
+    for m in methods:
+        member=identifier(m.get('name'));params=m.get('parameters',[])
+        param_names=[identifier(p.get('name'))or('arg'+str(i))for i,p in enumerate(params)]
+        if len(set(param_names))!=len(param_names):param_names=['arg'+str(i)for i in range(len(params))]
+        key=(m.get('name'),len(params));span=m.get('sourceBytes',{})
+        comment='    // TODO source body/types; owner '+str(m.get('ownerAlias'))+'; bytes '+str(span.get('start'))+'..'+str(span.get('end'))+'; SHA256 '+str(m.get('sourceSha256','unknown'))
+        cs.append(comment);ts.append(comment)
+        if not member or key in seen:
+            cs.append('    // Unresolved/duplicate original member signature: '+json.dumps(m.get('name'))+'('+', '.join(p.get('sourceBinding',p.get('name')or'?')for p in params)+')')
+            ts.append('    // Ambiguous source member retained in method index; no duplicate placeholder emitted.')
+            continue
+        seen.add(key);stat='static 'if m.get('static')else''
+        cs += ['    public '+stat+'object '+member+'('+', '.join('object '+p for p in param_names)+') {',
+               '      throw new System.NotImplementedException("TODO: restore '+str(m.get('name')).replace('"','')+' from original source");','    }']
+        ts += ['  '+stat+json.dumps(m['name'])+'('+', '.join(p.removeprefix('@')+': unknown'for p in param_names)+'): unknown {',
+               '    throw new Error("TODO: restore original source method");','  }']
+    if not methods and not fields:
+        cs=header+['// No proven member declarations; original source retained. No empty class fabricated.']
+        ts=header+['// No proven member declarations; original source retained.']
+    else:cs+=['  }','}'];ts+=['}']
+    return token,'\n'.join(cs)+'\n','\n'.join(ts)+'\n'

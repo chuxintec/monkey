@@ -28,6 +28,9 @@ def main(argv=None):
     p.add_argument('--unity-texture-cache',help='Explicit local ASTC cache pool for supported Unity texture-key hydration')
     p.add_argument('--unity-quarantine-invalid-textures',action='store_true',help='Explicit partial export excluding exact invalid ETC1 objects; originals and unresolved references retained')
     p.add_argument('--unity-dependency-manifest',help='Frozen Unity bundle lookup pool; export only exact reachable serialized-file closure')
+    p.add_argument('--unity-export-scope',choices=['reachable','all'],default='reachable',help='all exports every unique container in the explicit Unity bundle manifest')
+    p.add_argument('--unity-reuse-inspection',help='Reuse an exact same-worker complete inspect-unity --bundle-manifest snapshot')
+    p.add_argument('--unity-code-evidence',help='Frozen metadata/declaration/source-code evidence manifest for a self-contained AI handoff')
     p.add_argument('--unity-schema-manifest',help='Frozen bundle pool for exact missing TypeTree lookup during Unity conversion')
     p.add_argument('--numeric-code-contract',help='Explicit source identity and numeric Label-field or reviewed static Number-method contract; fresh package conversion only')
     p.add_argument('--cocos-code-language',choices=['ts','js'],default='ts',help='Cocos code output; TypeScript first; JS uses an explicit ESM package boundary')
@@ -57,6 +60,9 @@ def main(argv=None):
     p.add_argument('--remote-cache-root', help='Read-only root for paths in the remote manifest')
     p.add_argument('--acquisition-out', help='Fresh acquired-files workspace; default OUTPUT-acquired')
     p.add_argument('--remote-budget-seconds', type=int, default=900, help='Acquisition budget, 30..3600 seconds')
+    p = sub.add_parser('acquire-unity-textures',help='Capture exact serialized ASTC keys under a literal original DATA_CDN')
+    for name in ('inspection','cache-manifest','cdn-source','cdn-root','out'):p.add_argument('--'+name,required=True)
+    p.add_argument('--cache-root');p.add_argument('--budget-seconds',type=int,default=1200);p.add_argument('--workers',type=int,default=8);p.add_argument('--resume',action='store_true')
     p = sub.add_parser('hydrate-unity', help='Resolve explicit WeChat texture keys against a pinned local ASTC cache pool')
     p.add_argument('--source',required=True)
     p.add_argument('--texture-cache',required=True)
@@ -85,6 +91,7 @@ def main(argv=None):
     p.add_argument('--provider-python', required=True, help='Existing Python with UnityPy 1.25.3; never installed automatically')
     p.add_argument('--out', required=True)
     p.add_argument('--budget-seconds', type=int, default=120)
+    p.add_argument('--bundle-manifest',help='Inspect every unique container in the explicit frozen bundle pool in one worker')
     p = sub.add_parser('format-project',help='Preview or apply a typed GREA layout into a fresh unimported Unity/Creator candidate')
     p.add_argument('--project',required=True)
     p.add_argument('--profile',choices=['grea'],default='grea')
@@ -102,13 +109,24 @@ def main(argv=None):
     p.add_argument('--numeric-field',action='append',required=True,help='Explicit numeric call-subdomain contract; not a global JS type inference')
     p.add_argument('--cocos-code-language',choices=['ts','js'],default='ts')
     p.add_argument('--out',required=True)
+    p = sub.add_parser('code-handoff',help='Generate source-bound named drafts from a frozen Cocos candidate; optional additive owned-copy handoff')
+    p.add_argument('--candidate',required=True);p.add_argument('--out',required=True)
+    p.add_argument('--expected-manifest');p.add_argument('--apply-owned',action='store_true');p.add_argument('--reuse-facts');p.add_argument('--expected-facts')
     p = sub.add_parser('code-model', help='Inspect named methods and evidenced semantic candidates without executing JavaScript')
     p.add_argument('--source', required=True)
     p.add_argument('--module-name', required=True)
     p.add_argument('--out', required=True)
+    p.add_argument('--bulk',action='store_true',help='Preserve ambiguous whole-file assignments as unsupported evidence')
     p = sub.add_parser('research-matrix', help='Discover every Research game without converting or following external sources')
     p.add_argument('--root', required=True)
     p.add_argument('--out', required=True)
+    p = sub.add_parser('native-finish-plan',help='Prepare incremental source Scene export and SHRINK evidence using existing native assets')
+    p.add_argument('--candidate',required=True);p.add_argument('--out',required=True);p.add_argument('--exclude-scene',action='append',default=[])
+    p = sub.add_parser('native-finish',help='Plan or execute one bounded incremental finish in an explicitly owned native project')
+    p.add_argument('--candidate',required=True);p.add_argument('--preparation',required=True);p.add_argument('--out',required=True)
+    p.add_argument('--editor-path',required=True);p.add_argument('--expected-manifest',required=True)
+    p.add_argument('--budget-seconds',type=int,default=600);p.add_argument('--deadline-utc',required=True)
+    p.add_argument('--window-end-utc',required=True);p.add_argument('--execute',action='store_true')
     p = sub.add_parser('native-import',help='Plan or explicitly execute a bounded Unity/Creator import in a fresh copy')
     p.add_argument('--candidate',required=True);p.add_argument('--out',required=True)
     p.add_argument('--editor-path',required=True);p.add_argument('--expected-manifest',required=True)
@@ -147,6 +165,7 @@ def main(argv=None):
     p = sub.add_parser('handoff')
     p.add_argument('--candidate',required=True)
     p.add_argument('--out',required=True)
+    p.add_argument('--native-contract',action='store_true',help='Read existing Sprite importer, actual fileID and Prefab reference evidence')
     p = sub.add_parser('diff')
     p.add_argument('--before',required=True);p.add_argument('--after',required=True);p.add_argument('--out',required=True)
     p = sub.add_parser('register')
@@ -173,6 +192,10 @@ def main(argv=None):
             from .code_emit import emit
             result=emit(args.source,args.code_model,args.out,args.numeric_field,args.cocos_code_language,args.namespace)
             print(json.dumps(result,ensure_ascii=False));return 1
+        if args.command == 'acquire-unity-textures':
+            from .unity_texture_acquisition import acquire
+            result=acquire(args.inspection,args.cache_manifest,args.cdn_source,args.cdn_root,args.out,args.cache_root,args.budget_seconds,args.workers,args.resume)
+            print(json.dumps(result,ensure_ascii=False));return 0 if result['status']=='captured'else 1
         if args.command == 'hydrate-unity':
             from .unity_textures import hydrate
             result=hydrate(args.source,args.texture_cache,args.provider_python,args.out,args.budget_seconds)
@@ -200,7 +223,11 @@ def main(argv=None):
             return 1
         if args.command == 'inspect-unity':
             from .sources.unity_serialized import inspect as inspect_unity
-            result = inspect_unity(args.source,args.provider_python,args.out,args.budget_seconds,schema_manifest=args.schema_manifest)
+            if args.bundle_manifest:
+                from .unity_batch import inspect_set
+                result=inspect_set(args.source,args.bundle_manifest,args.provider_python,args.out,args.budget_seconds,args.schema_manifest)
+            else:
+                result = inspect_unity(args.source,args.provider_python,args.out,args.budget_seconds,schema_manifest=args.schema_manifest)
             print(json.dumps(result,ensure_ascii=False))
             return 0 if result['status']=='inspected' else 1
         if args.command == 'format-project':
@@ -211,9 +238,23 @@ def main(argv=None):
             from .project_model import inspect as project_model
             print(json.dumps(project_model(args.candidate,args.out),ensure_ascii=False))
             return 0
+        if args.command == 'native-finish':
+            from .cocos_native_finish import execute as native_finish
+            result=native_finish(args.candidate,args.preparation,args.out,args.editor_path,args.expected_manifest,args.budget_seconds,args.deadline_utc,args.window_end_utc,args.execute)
+            print(json.dumps(result,ensure_ascii=False));return 0 if result['status']in ('planned','completed')else 1
+        if args.command == 'native-finish-plan':
+            from .cocos_native_finish import prepare
+            print(json.dumps(prepare(args.candidate,args.out,args.exclude_scene),ensure_ascii=False));return 0
+        if args.command == 'handoff' and args.native_contract:
+            from .cocos_native_contract import export as native_contract
+            print(json.dumps(native_contract(args.candidate,args.out),ensure_ascii=False));return 0
+        if args.command == 'code-handoff':
+            from .cocos_code_handoff import enrich
+            print(json.dumps(enrich(args.candidate,args.out,args.expected_manifest,args.apply_owned,args.reuse_facts,args.expected_facts),ensure_ascii=False))
+            return 1
         if args.command == 'code-model':
             from .code_model import inspect as code_model
-            print(json.dumps(code_model(args.source,args.out,args.module_name),ensure_ascii=False))
+            print(json.dumps(code_model(args.source,args.out,args.module_name,bulk=args.bulk),ensure_ascii=False))
             return 1
         if args.command == 'research-matrix':
             from .research_cases import discover
@@ -313,7 +354,7 @@ def main(argv=None):
                     acquired=acquire(remote_settings,args.offline)
                     inputs=merge(acquired,**{k:inputs[k]for k in ('texture_cache','dependency_manifest','dependencies')})
                 from .recover_unity import convert as convert_unity
-                result=convert_unity(args.source,args.out,args.provider_python,args.asset_ripper,args.provider_budget_seconds,schema_manifest=args.unity_schema_manifest,quarantine_invalid_textures=args.unity_quarantine_invalid_textures,**inputs)
+                result=convert_unity(args.source,args.out,args.provider_python,args.asset_ripper,args.provider_budget_seconds,schema_manifest=args.unity_schema_manifest,quarantine_invalid_textures=args.unity_quarantine_invalid_textures,export_scope=args.unity_export_scope,code_evidence=args.unity_code_evidence,reuse_inspection=args.unity_reuse_inspection,**inputs)
                 if acquired:
                     from .unity_acquisition import attach
                     attach(result,args.out,acquired)
@@ -322,6 +363,7 @@ def main(argv=None):
                     result=finish_conversion(result,native_settings,args.format or 'none')
                 print(json.dumps(dict(status=result['status'],completed=result['completed'],resultKind=result['resultKind'],sourceFamily='unity',projects=result['projects'],diagnostics=result['diagnostics'],nativeExecution=result.get('nativeExecution'),remoteAcquisition=result.get('acquisition'),format=result['format'],report=str(Path(args.out).resolve()/'conversion-result.json')),ensure_ascii=False))
                 return 1
+            if args.unity_export_scope!='reachable' or args.unity_code_evidence or args.unity_reuse_inspection:parser.error('Unity bulk export/code evidence require a Unity source')
             if args.provider_python or args.asset_ripper or args.unity_texture_cache or args.unity_schema_manifest or args.unity_dependency_manifest or args.unity_quarantine_invalid_textures or args.provider_budget_seconds!=600:parser.error('Unity provider options require a Unity source')
             from .convert import convert, resume, recipe
             if not args.remote_manifest and any((args.remote_cache_root,args.acquisition_out,args.remote_budget_seconds!=900)):

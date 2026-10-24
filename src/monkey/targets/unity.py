@@ -458,6 +458,20 @@ def close(actual,expected,tolerance=.001):
     return type(actual) in (int,float) and abs(actual-expected)<=tolerance
 
 
+def label_font_matches(spec,actual,font,evidence=None):
+    """SHRINK sizes may vary only with explicit native auto-size/bounds proof."""
+    import math
+    if not actual or not font or not font.get('guid') or actual.get('fontGuid')!=font['guid'] or actual.get('text')!=spec['text'] or actual.get('allCharactersPresent')is not True:return False
+    if close(actual.get('fontSize'),spec['fontSize']) and not actual.get('autoSizeReadback'):return True
+    if spec.get('overflow')!=2:return close(actual.get('fontSize'),spec['fontSize'])
+    proof=evidence or actual
+    config=proof.get('autoSizing')is True and (not evidence or proof.get('prefabUnchanged')is True)
+    measured=proof.get('actualFontSize',proof.get('fontSize'));low=proof.get('fontSizeMin');high=proof.get('fontSizeMax')
+    if not all(type(v)in(int,float)and math.isfinite(v)for v in (measured,low,high)):return False
+    if evidence and (proof.get('fontGuid')!=font['guid'] or proof.get('text')!=spec['text']or proof.get('allCharactersPresent')is not True or not close(proof.get('requestedFontSize'),spec['fontSize'])):return False
+    return bool(config and close(high,spec['fontSize'])and 0<low<=high and low-.001<=measured<=high+.001)
+
+
 def node_geometry_matches(actual,source,full=False):
     if not actual or actual.get('active')!=source['active']:
         return False
@@ -577,11 +591,13 @@ def verify(candidate, output, level='static'):
                 if spec.get('atlasGuid') and (not actual or actual.get('atlasGuid')!=spec['atlasGuid'] or actual.get('materialAtlasGuid')!=spec['atlasGuid']):
                     diagnostics.append(diagnostic('BITMAP_ATLAS_READBACK_MISMATCH',spec['id'],'Saved font and material must reference the original atlas GUID'))
             by_label={l['sourceId']:l for l in rb.get('labels',[])}
+            from ..cocos_native_finish import font_evidence
+            extra_fonts=font_evidence(root,instruction,readback_path)
             node_specs={n['sourceId']:n for n in instruction['nodes']}
             for spec in instruction['components']:
                 if spec['type']!='cc.Label' or not spec['convertible']:continue
                 actual=by_label.get(spec['sourceId']);font=by_font.get(spec.get('font'))
-                if not actual or not font or actual.get('fontGuid')!=font.get('guid') or not font.get('guid') or actual.get('text')!=spec['text'] or not close(actual.get('fontSize'),spec['fontSize']) or not actual.get('allCharactersPresent'):
+                if not label_font_matches(spec,actual,font,extra_fonts.get(spec['sourceId'])):
                     diagnostics.append(diagnostic('LABEL_FONT_READBACK_MISMATCH',spec['sourceId'],'Saved text/font/GUID/glyph coverage differs; no fallback accepted'))
                     continue
                 if spec.get('bitmapProbe'):

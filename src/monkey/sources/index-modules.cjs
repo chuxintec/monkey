@@ -23,7 +23,7 @@ function walk(root, visit) {
   }
 }
 // Literal syntax facts only, never name/alias resolution or proof of behavior.
-function syntaxFacts(factory) {
+function syntaxFacts(factory, source, byteRange) {
   const exports = new Set(), classes = new Set(), properties = new Set(), events = new Set(), dynamicKeys = new Set();
   const aliases = new Set(['exports', factory.params?.[2]?.name].filter(Boolean));
   walk(factory, node => {
@@ -45,7 +45,8 @@ function syntaxFacts(factory) {
     }
   });
   const list = s => [...s].sort().slice(0,2048);
-  return {confidence:'literal_syntax_only',exports:list(exports),classes:list(classes),propertyKeys:list(properties),events:list(events),dynamicKeys:list(dynamicKeys),truncated:[exports,classes,properties,events,dynamicKeys].some(s=>s.size>2048)};
+  const members=require('../code-handoff-facts.cjs')(factory,source,byteRange,sha);
+  return {members,confidence:'literal_syntax_only',exports:list(exports),classes:list(classes),propertyKeys:list(properties),events:list(events),dynamicKeys:list(dynamicKeys),truncated:[exports,classes,properties,events,dynamicKeys].some(s=>s.size>2048)};
 }
 function index(raw, adapter) {
   if (acorn.version !== '8.15.0') fail('DEPENDENCY_VERSION', '$', 'Pinned acorn 8.15.0 required');
@@ -66,7 +67,8 @@ function index(raw, adapter) {
   });
   if (!tables.length || !multiMode && tables.length !== 1) fail(tables.length ? 'AMBIGUOUS_WRAPPER' : 'UNSUPPORTED_WRAPPER', '$.ast', 'Exactly one supported three-argument loader table is required (or explicit multi-candidate mode)');
   const modules = [], names = new Set(), identities = new Map(), issues = [];
-  const byteRange = node => ({start:Buffer.byteLength(source.slice(0,node.start),'utf8'), end:Buffer.byteLength(source.slice(0,node.end),'utf8')});
+  const positions=require('./source-offsets.cjs')(source);
+  const byteRange = node => ({start:positions[node.start],end:positions[node.end]});
   const entries=[];
   if(candidateMode) {
     for (const table of tables) {
@@ -115,14 +117,15 @@ function index(raw, adapter) {
       rf.push(record);
     });
     const range=byteRange(factory), bytes=raw.subarray(range.start,range.end);
-    modules.push({name:candidateMode?null:name,confidence:candidateMode?'syntax_candidate':'literal_table_syntax',candidate_id:candidateMode?name:null,filename:'module-'+sha(Buffer.from(name,'utf8'))+'.js',source_bytes:range,sha256:sha(bytes),dependencies,rf,syntax:syntaxFacts(factory),unresolved,source:bytes.toString('utf8')});
+    modules.push({name:candidateMode?null:name,confidence:candidateMode?'syntax_candidate':'literal_table_syntax',candidate_id:candidateMode?name:null,filename:'module-'+sha(Buffer.from(name,'utf8'))+'.js',source_bytes:range,sha256:sha(bytes),dependencies,rf,syntax:syntaxFacts(factory,source,byteRange),unresolved,source:bytes.toString('utf8')});
   }
   if (!modules.length) fail('EMPTY_INPUT', '$.table', 'No modules found');
   return {schema_version:1,tool:'cocos_modules',implementation_version:'0.1.0',source_format:adapter,selection:{adapter},status:candidateMode || issues.length || modules.some(x=>x.unresolved.length)?'partial':'complete',source:{sha256:sha(raw),bytes:raw.length},modules,issues,errors:[],unsupported:[],scope:'AST syntax evidence only; no identifier folding, deobfuscation, module execution or RF runtime registration proof',effects:['filesystem_read','create_only_candidate']};
 }
 function rfIndex(raw,source,ast) {
   const calls=[], stacks=new Map(), modules=[], issues=[];
-  const range=n=>({start:Buffer.byteLength(source.slice(0,n.start)),end:Buffer.byteLength(source.slice(0,n.end))});
+  const positions=require('./source-offsets.cjs')(source);
+  const range=n=>({start:positions[n.start],end:positions[n.end]});
   walk(ast,(node,parents)=>{
     if(node.type!=='CallExpression' || !['push','pop'].includes(property(node.callee))) return;
     const rf=node.callee.object;
@@ -143,7 +146,8 @@ function rfIndex(raw,source,ast) {
     let syntax, dependencies=[];
     try {
       const region=acorn.parse(snippet,{ecmaVersion:2020,sourceType:'script',allowReturnOutsideFunction:true});
-      syntax=syntaxFacts(region);
+      const offsets=require('./source-offsets.cjs')(snippet);
+      syntax=syntaxFacts(region,snippet,n=>({start:r.start+offsets[n.start],end:r.start+offsets[n.end]}));
       walk(region,node=>{
         if(node.type==='CallExpression' && node.callee.type==='Identifier' && node.callee.name==='require' && node.arguments.length===1 && literal(node.arguments[0]))
           dependencies.push({key:String(node.arguments[0].value),module:node.arguments[0].value});
@@ -161,7 +165,8 @@ function rfIndex(raw,source,ast) {
 }
 function systemIndex(raw, source, ast) {
   const modules=[], names=new Set();
-  const range=n=>({start:Buffer.byteLength(source.slice(0,n.start)),end:Buffer.byteLength(source.slice(0,n.end))});
+  const positions=require('./source-offsets.cjs')(source);
+  const range=n=>({start:positions[n.start],end:positions[n.end]});
   walk(ast,node=>{
     if(node.type!=='CallExpression' || property(node.callee)!=='register' || node.callee.object.type!=='Identifier' || node.callee.object.name!=='System') return;
     const args=node.arguments, named=args.length===3;
@@ -179,7 +184,7 @@ function systemIndex(raw, source, ast) {
       else unresolved.push({kind:'dependency_expression',source_bytes:range(d||deps)});
     });
     const r=range(factory), bytes=raw.subarray(r.start,r.end), id=name===null?'candidate@'+node.start:name;
-    modules.push({name,confidence:'literal_syntax_only',candidate_id:name===null?id:null,filename:'module-'+sha(Buffer.from(id))+'.js',source_bytes:r,sha256:sha(bytes),dependencies,rf:[],syntax:syntaxFacts(factory),unresolved,source:bytes.toString('utf8')});
+    modules.push({name,confidence:'literal_syntax_only',candidate_id:name===null?id:null,filename:'module-'+sha(Buffer.from(id))+'.js',source_bytes:r,sha256:sha(bytes),dependencies,rf:[],syntax:syntaxFacts(factory,source,range),unresolved,source:bytes.toString('utf8')});
   });
   if(!modules.length) fail('UNSUPPORTED_WRAPPER','$','No literal System.register calls');
   return {schema_version:1,tool:'cocos_modules',implementation_version:'0.2.0',source_format:'system-register-v1',selection:{adapter:'system-register-v1'},status:modules.some(m=>m.unresolved.length)?'partial':'complete',source:{sha256:sha(raw),bytes:raw.length},modules,issues:[],errors:[],unsupported:[],scope:'Static call syntax only; System binding, execution, imports, and engine version are not proven',effects:['filesystem_read','create_only_candidate']};

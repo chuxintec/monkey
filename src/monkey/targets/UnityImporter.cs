@@ -64,7 +64,7 @@ public static partial class MonkeyImporter
     [Serializable] public class GlyphSpec { public uint unicode, index; public int[] rect; public float[] metrics; }
     [Serializable] public class KerningSpec { public uint first, second; public float advance; }
     [Serializable] public class FontResult { public string id, guid, atlasGuid, materialAtlasGuid; public int glyphCount, characterCount; public float pointSize, lineHeight; }
-    [Serializable] public class LabelResult { public string sourceId, text, fontGuid, geometryProbe; public float fontSize,lineBoxHeight,lineBoxLineHeight,lineBoxExtra; public int characterCount,lineCount; public bool lineBoxPresent,lineBoxActive; public bool allCharactersPresent; public GlyphBounds[] glyphBounds; }
+    [Serializable] public class LabelResult { public string sourceId, text, fontGuid, geometryProbe; public bool autoSizeReadback,autoSizing; public float fontSizeMin,fontSizeMax; public float fontSize,lineBoxHeight,lineBoxLineHeight,lineBoxExtra; public int characterCount,lineCount; public bool lineBoxPresent,lineBoxActive; public bool allCharactersPresent; public GlyphBounds[] glyphBounds; }
     [Serializable] public class GlyphBounds { public uint unicode; public float left,top,width,height,quadPadding; }
     [Serializable] public class Readback {
         public PrefabInstanceResult[] prefabInstances;
@@ -1004,6 +1004,7 @@ public static partial class MonkeyImporter
             return new LabelResult {lineBoxPresent=lineBox!=null,lineBoxActive=lineBox!=null&&lineBox.isActiveAndEnabled,
                 lineBoxHeight=lineBox!=null?lineBox.preferredHeight:0,lineBoxLineHeight=lineBox!=null?lineBox.LineHeight:0,lineBoxExtra=lineBox!=null?lineBox.ExtraLineFraction:0,
                 lineCount=measured.textInfo.lineCount,sourceId=spec.sourceId,text=measured.text,fontGuid=AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(measured.font)),
+                autoSizeReadback=true,autoSizing=label.enableAutoSizing,fontSizeMin=label.fontSizeMin,fontSizeMax=label.fontSizeMax,
                 fontSize=measured.fontSize,characterCount=measured.textInfo.characterCount,geometryProbe=geometryProbe,
                 glyphBounds=measured.textInfo.characterInfo.Take(measured.textInfo.characterCount).Where(info=>info.isVisible).Select(info=>new GlyphBounds {
                     unicode=info.character,left=info.bottomLeft.x,top=info.topLeft.y,width=info.topRight.x-info.topLeft.x,height=info.topLeft.y-info.bottomLeft.y,
