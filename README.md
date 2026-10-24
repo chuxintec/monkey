@@ -1,5 +1,7 @@
 # monkey
 
+已发布预发布 `v0.2.0.dev1` 保持冻结；当前独立本地修复候选为 `0.2.0.dev2`，新增 Unity 字段语义校验与精确对象身份的离线计划入口。接入、失败隔离及限制见 [UNITY-FIELD-PLAN](docs/UNITY-FIELD-PLAN.md)，本地候选不是新 Release。
+
 本地v0.2开发中：fresh package `convert`默认`--format none`，可选`--format grea`（先完整导出、再typed后处理，Unformatted保留基线），支持顺序`--native`；Unity源包已接入受限叶Prefab的公开native与grea路径保护，见[Unity源验证](docs/providers/UNITY-SOURCE-NATIVE.md)；不代表通用Scene/已导入工程迁移。代码具名子集与原生接线、格式范围及真实证据分别见[CODE-SUBSET](docs/CODE-SUBSET.md)、[FORMATTING](docs/FORMATTING.md)。下文v0.1发布事实对应不可变Release，不把开发分支当新发布。
 
 开发版`convert --numeric-code-contract numeric.json`可在同一命令里发现精确源模块、生成有据C#/默认TypeScript，再格式化。现有Label数值调用子域支持原组件绑定；新增静态数值方法子集按调用合同生成独立工具类。声明格式和分层验证见[CODE-SUBSET](docs/CODE-SUBSET.md)，未知业务方法继续保留待补。

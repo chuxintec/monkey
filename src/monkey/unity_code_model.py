@@ -24,6 +24,12 @@ def identifier(value):
 
 def field_type(node):
     typ=node['type']
+    if typ == 'string' and node.get('children'):
+        from .unity_semantics import array_data, SemanticError
+        try:
+            if array_data(node).get('type') != 'char': raise SemanticError('Non-character scalar string')
+        except SemanticError as error:
+            fail('UNITY_STRING_ARRAY_SCHEMA',node.get('name','?'),str(error))
     if typ in PRIMITIVES:return PRIMITIVES[typ]
     if typ in VALUE_TYPES:return 'UnityEngine.'+VALUE_TYPES[typ]
     match=re.fullmatch(r'PPtr<([^<>]+)>',typ)

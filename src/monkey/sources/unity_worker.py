@@ -8,6 +8,11 @@ import sys
 from collections import Counter
 from pathlib import Path
 
+# -I worker imports only its installed tool code, never source-side Python.
+if not __package__:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from monkey.unity_semantics import validate_component
+
 PROVIDER_VERSION = '1.25.3'
 MAX_BYTES = 128 * 1024 * 1024
 MAX_OBJECTS = 250_000
@@ -84,7 +89,10 @@ def texture_payload(typed):
 
 def schema_node(node,depth=0):
     if depth>64:raise ValueError('Embedded schema depth budget')
-    return dict(name=node.m_Name,type=node.m_Type,children=[schema_node(n,depth+1) for n in node.m_Children])
+    result = dict(name=node.m_Name,type=node.m_Type,children=[schema_node(n,depth+1) for n in node.m_Children])
+    for source, target in [('m_MetaFlag','metaFlag'),('m_Version','version'),('m_ByteSize','byteSize')]:
+        if hasattr(node, source): result[target] = getattr(node, source)
+    return result
 
 
 def type_identity(asset, serialized_type):
@@ -164,6 +172,17 @@ def inspect_bytes(raw, schema_job=None):
                         sourceManifestSha256=schema_job['sourceManifestSha256'], sources=exact['sources']))
             try:
                 typed = obj.read_typetree(nodes=exact['node'], check_read=True) if exact else obj.read_typetree(check_read=True)
+                if obj.type.name == 'MonoBehaviour':
+                    node = exact['node'] if exact else (obj.serialized_type.node if obj.serialized_type else None)
+                    if node is None:
+                        raise ValueError('No proven MonoBehaviour schema for semantic validation')
+                    head = obj.parse_monobehaviour_head()
+                    header = {name: {'m_FileID': getattr(head, name).m_FileID,
+                                     'm_PathID': getattr(head, name).m_PathID}
+                              for name in ('m_Script', 'm_GameObject')}
+                    validate_component(schema_node(node), typed, header)
+                    row['semanticValidation'] = dict(status='passed', header='independent-native-prefix',
+                                                      fields='schema-shape', fieldValues='not-cross-checked', writable=False)
                 counter=[0]
                 converted=portable(typed,row['references'],counter=counter)
                 typed_values+=counter[0]
@@ -178,6 +197,8 @@ def inspect_bytes(raw, schema_job=None):
             except Exception as error:
                 # No relaxed read, zero-fill, guessed schema or source assembly execution.
                 row['status'] = 'unparsed'
+                row.pop('data', None)
+                row.pop('semanticValidation', None)
                 row['references'] = []
                 row['error'] = dict(type=type(error).__name__, message=str(error).splitlines()[0][:240])
             objects.append(row)

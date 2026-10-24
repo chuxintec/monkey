@@ -76,6 +76,29 @@ class SchemaBorrowingTests(unittest.TestCase):
             self.assertNotIn('embeddedSchemaId',row)
             self.assertFalse(result['sourceCodeExecuted'])
 
+    def test_worker_rejects_full_read_with_shifted_header_and_retains_no_writable_data(self):
+        import copy
+        with tempfile.TemporaryDirectory() as tmp:
+            target,job=self.fixture(Path(tmp))
+            children=[NS(m_Name=n,m_Type=t,m_Children=[]) for n,t in [('m_GameObject','PPtr<GameObject>'),('m_Script','PPtr<MonoScript>'),('value','float')]]
+            node=tree();node.m_Children=children
+            obj=target.objects[1]
+            class Kind:
+                name='MonoBehaviour'
+                def __int__(self):return 114
+            obj.type=Kind();obj.path_id=7;obj.byte_size=32;obj.get_raw_data=lambda:b'original bytes'
+            values=dict(m_GameObject=dict(m_FileID=0,m_PathID=3),m_Script=dict(m_FileID=0,m_PathID=2),value=1.25)
+            obj.read_typetree=lambda **kwargs:copy.deepcopy(values)
+            obj.parse_monobehaviour_head=lambda:NS(m_GameObject=NS(m_FileID=0,m_PathID=3),m_Script=NS(m_FileID=0,m_PathID=2))
+            provider=NS(__version__='1.25.3',load=lambda raw:NS(assets=[target] if raw==b'primary' else [asset(typ(node))]))
+            with patch.dict('sys.modules',UnityPy=provider):
+                row=inspect_bytes(b'primary',job)['objects'][0]
+                self.assertEqual(row['status'],'parsed');self.assertFalse(row['semanticValidation']['writable'])
+                values['m_Script']['m_PathID']=2<<32
+                row=inspect_bytes(b'primary',job)['objects'][0]
+                self.assertEqual(row['status'],'unparsed');self.assertEqual(row['references'],[])
+                self.assertNotIn('data',row);self.assertIn('header identity',row['error']['message'])
+
     def test_manifest_rejects_duplicates_and_boolean_size_before_worker(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp).resolve();_,job=self.fixture(root);manifest=root/'pool.json'
