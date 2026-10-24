@@ -269,8 +269,15 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
             for code,message in layout_issues(c,children):
                 entry['convertible']=False;diagnostics.append(diagnostic(code,c['sourceId'],message,c['sourceId']))
             entry.setdefault('alignCross',False);entry.setdefault('affectedByScale',False)
-            entry['presentationPolicy']='native-flow-layout-v1'if c['layoutType']==3 else'native-linear-layout-v1'
-            if c['layoutType']==3:entry['effectiveCellSize']=list(c['cellSize'])
+            entry['presentationPolicy']='unity-layout-components-v2'if c['layoutType']==3 else'native-linear-layout-v1'
+            if c['layoutType']==3 and entry['convertible']:
+                from ..native_layout_patch import classify
+                try:
+                    choice=classify(c,by_node[c['node']],children,c['cellSize']if c.get('cellSizeFromSource')else None)
+                    entry['nativeLayoutMode']=choice['mode'];entry['nativeCellSize']=choice['cellSize']or[]
+                except ValueError as error:
+                    entry['convertible']=False
+                    diagnostics.append(diagnostic('NATIVE_GRID_REVIEW_REQUIRED',c['sourceId'],'Authored rectangles retained; no source layout runtime emitted: '+str(error),c['sourceId']))
         elif c['type']=='cc.Button':
             if c['transition'] not in (0,3) or c['target'] not in (None,c['node']):
                 entry['convertible']=False
@@ -368,7 +375,7 @@ def export(plan_path, output):
     instances_path=out/'Assets/Monkey/Editor/MonkeyPrefabInstances.cs'
     instances_path.write_bytes(files('monkey.targets').joinpath('UnityPrefabInstances.cs').read_bytes())
     Path(str(instances_path)+'.meta').write_text('fileFormatVersion: 2\nguid: '+guid(p['namespace'],'prefab-instances-editor')+'\n')
-    for filename,relative in [('NativeFlowLayoutGroup.cs','Assets/Generated/Views/'),('NativeLinearLayoutGroup.cs','Assets/Generated/Views/'),('NativeRectConstraints.cs','Assets/Generated/Views/'),('NativeTextLineBox.cs','Assets/Generated/Views/'),('UnityDynamicUi.cs','Assets/Monkey/Editor/')]:
+    for filename,relative in [('NativeLinearLayoutGroup.cs','Assets/Generated/Views/'),('NativeRectConstraints.cs','Assets/Generated/Views/'),('NativeTextLineBox.cs','Assets/Generated/Views/'),('UnityDynamicUi.cs','Assets/Monkey/Editor/')]:
         dest=out/relative/filename;dest.write_bytes(files('monkey.targets').joinpath(filename).read_bytes())
         Path(str(dest)+'.meta').write_text('fileFormatVersion: 2\nguid: '+guid(p['namespace'],'native-ui/'+filename)+'\n')
     adapter=files('monkey.targets').joinpath('UnityImporter.cs').read_bytes()

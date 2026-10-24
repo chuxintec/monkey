@@ -1,3 +1,5 @@
+> 当前开发分支的原生 Flow 替换及限制见 [原生布局增量修复](NATIVE-LAYOUT-PATCH.md)。旧版本动态布局读回为历史证据；新实现按候选另验，不继承旧算法的全子集宣称。
+
 # 来源与目标支持矩阵
 
 2026-10-23用户批准产品目标，原生验证按独立资源窗口执行。planned/supported_static/partial/native_verified/unsupported必须按具体profile和样本记录，不把一个样本推成整个家族兼容。用户本聊天最新目标规则：Cocos所有版本原包→Unity6/Cocos3.8.8/both；Unity、Laya/LayaAir、Egret（用户写作Eraget）、自研及其他引擎所有版本原包→Unity6。此为产品范围，不是全格式已支持。目标当前精确版本为Unity6000.6.2f1/Creator3.8.8，不更改已安装引擎。用户最新补充：所有Unity来源版本一律以Unity6为目标，源版本解析能力逐profile验收。

@@ -358,3 +358,7 @@ bin/monkey convert --input-set inputs.json --remote-manifest downloads.json \
 最多50000项、32个明确origin、4路下载，单文件128MiB/总量1GiB；获取窗30..3600秒，默认900秒，内部预留20秒收尾。跳转只允许清单已声明origin。缓存只有SHA匹配才复用；已在原输入范围内不重复复制，不改原件。新下载/外部缓存进入独立`files/`根，生成新的输入集；身份不符放Quarantine，404/缺失/失败逐项记录。没有预期SHA时，下载后SHA只是本次观察值，不声称核对过原厂哈希。
 
 `--offline`只核对缓存，不联网。清单存在缺失项时仍可转换已取得文件，状态保持partial并记录missingFiles；每个目标的`Analysis/acquisition.json`及候选manifest包含获取证据。新增文件时不能套用旧`--reuse-source-stages`；获取结果会保留，应使用新源阶段。可与`--native`组合为获取→生成→顺序原生验证；原生输出须与输入、候选及获取目录分开。
+
+## 有界原生布局替换
+
+`native-layout-audit / native-layout-prepare / native-layout-patch / native-layout-finish` 用于已冻结项目的精确布局子集增量，准备、原生执行和可采用增量分别记录。窗口、正常审批、失败保留与当前支持边界见 [原生布局增量修复](NATIVE-LAYOUT-PATCH.md)。

@@ -436,13 +436,15 @@ def component_ir(namespace, index, obj):
         known={'_N$content','horizontal','vertical','_N$horizontalScrollBar','_N$verticalScrollBar','bounceDuration','brake','elastic','inertia','scrollEvents','cancelInnerEvents'}
         if obj.get('scrollEvents'):gaps.append('scroll events need business binding')
     elif typ == 'cc.Layout':
+        if '_N$cellSize'in obj and '_cellSize'in obj and vector(obj['_N$cellSize'],['width','height'],[40,40])!=vector(obj['_cellSize'],['width','height'],[40,40]):
+            fail('CONFLICTING_LAYOUT_CELL_SIZE',str(index),'Source cell-size aliases disagree')
         base.update(layoutType=obj.get('_N$layoutType',0),resize=obj.get('_resize',0),
                     spacingXY=[obj.get('_N$spacingX',0),obj.get('_N$spacingY',0)],
                     padding=[obj.get('_N$paddingLeft',0),obj.get('_N$paddingBottom',0),obj.get('_N$paddingRight',0),obj.get('_N$paddingTop',0)],
                     horizontalDirection=obj.get('_N$horizontalDirection',0),verticalDirection=obj.get('_N$verticalDirection',1),
-                    startAxis=obj.get('_N$startAxis',0),cellSize=vector(obj.get('_cellSize'),['width','height'],[40,40]),
+                    startAxis=obj.get('_N$startAxis',0),cellSizeFromSource=('_N$cellSize'in obj or '_cellSize'in obj),cellSize=vector(obj.get('_N$cellSize',obj.get('_cellSize')),['width','height'],[40,40]),
                     affectedByScale=obj.get('_affectedByScale',False),alignCross=obj.get('_isAlign',False),constraint=obj.get('_constraint',0),constraintCount=obj.get('_constraintNum',2))
-        known={'_N$layoutType','_resize','_N$spacingX','_N$spacingY','_N$paddingLeft','_N$paddingRight','_N$paddingTop','_N$paddingBottom','_N$horizontalDirection','_N$verticalDirection','_N$startAxis','_cellSize','_layoutSize','_affectedByScale','_isAlign','_constraint','_constraintNum'}
+        known={'_N$layoutType','_resize','_N$spacingX','_N$spacingY','_N$paddingLeft','_N$paddingRight','_N$paddingTop','_N$paddingBottom','_N$horizontalDirection','_N$verticalDirection','_N$startAxis','_N$cellSize','_cellSize','_layoutSize','_affectedByScale','_isAlign','_constraint','_constraintNum'}
     elif typ == 'cc.Button':
         events=[]
         for ordinal,event in enumerate(obj.get('clickEvents',[]) or []):

@@ -48,7 +48,8 @@ public static partial class MonkeyImporter
     [Serializable] public class NumericMethodsSpec { public string setter,getter; }
     [Serializable] public class ComponentSpec {
         public string codeClassName,codeScriptGuid,sourceScriptIdentity; public NumericMethodsSpec numericMethods;
-        public string sourceId, type, node, spriteFrame, font, text;
+        public string sourceId, type, node, spriteFrame, font, text, nativeLayoutMode;
+        public float[] nativeCellSize;
         public int mode, sizeMode, horizontalAlign, verticalAlign, overflow; public float fontSize,lineHeight;
         public bool enabled, convertible, trim, wrap, bold, italic; public float spacing; public BitmapProbe bitmapProbe;
         public string target,content,nativeId; public int flags,maskType,layoutType,resize,horizontalDirection,verticalDirection,startAxis,constraint,constraintCount,transition;
@@ -608,17 +609,7 @@ public static partial class MonkeyImporter
                 if(go.GetComponent<UnityEngine.UI.LayoutGroup>()!=null || go.GetComponent<UnityEngine.UI.ContentSizeFitter>()!=null)
                     throw new InvalidOperationException("Native layout conflict: "+spec.sourceId);
                 if(spec.layoutType==1||spec.layoutType==2){ConfigureLinearLayout(go,spec);continue;}
-                var group=go.AddComponent<NativeFlowLayoutGroup>();group.enabled=false;
-                group.Axis=spec.startAxis;group.ReverseHorizontal=spec.horizontalDirection==1;group.ReverseVertical=spec.verticalDirection==1;
-                group.ResizeContainer=spec.resize==1;group.ResizeChildren=spec.resize==2;group.IncludeScale=spec.affectedByScale;
-                group.FixedRows=spec.constraint==1?spec.constraintCount:0;group.FixedColumns=spec.constraint==2?spec.constraintCount:0;
-                group.CellSize=new Vector2(spec.cellSize[0],spec.cellSize[1]);group.Spacing=new Vector2(spec.spacingXY[0],spec.spacingXY[1]);
-                group.padding=new RectOffset((int)spec.padding[0],(int)spec.padding[2],(int)spec.padding[3],(int)spec.padding[1]);group.enabled=spec.enabled;
-                if(spec.resize==1){var fitter=go.AddComponent<UnityEngine.UI.ContentSizeFitter>();
-                    if(spec.startAxis==0)fitter.verticalFit=UnityEngine.UI.ContentSizeFitter.FitMode.PreferredSize;
-                    else fitter.horizontalFit=UnityEngine.UI.ContentSizeFitter.FitMode.PreferredSize;
-                    fitter.enabled=spec.enabled;
-                }
+                ConfigureNativeGrid(go,spec);
             }
             else if(spec.type=="cc.ScrollView") {
                 var scroll=go.AddComponent<UnityEngine.UI.ScrollRect>();scroll.enabled=spec.enabled;

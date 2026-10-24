@@ -109,6 +109,31 @@ public static partial class MonkeyImporter
             fitter.verticalFit=UnityEngine.UI.ContentSizeFitter.FitMode.PreferredSize;fitter.enabled=spec.enabled;
         }
     }
+    static UnityEngine.UI.LayoutGroup ConfigureNativeGrid(GameObject go,ComponentSpec spec) {
+        UnityEngine.UI.LayoutGroup result;
+        int align=(spec.verticalDirection==0?6:0)+(spec.horizontalDirection==1?2:0);
+        if(spec.nativeLayoutMode=="unity-horizontal-row") {
+            var row=go.AddComponent<UnityEngine.UI.HorizontalLayoutGroup>();row.enabled=false;
+            row.childControlWidth=false;row.childControlHeight=false;row.childForceExpandWidth=false;row.childForceExpandHeight=false;
+            row.childScaleWidth=false;row.childScaleHeight=false;row.reverseArrangement=spec.horizontalDirection==1;
+            row.spacing=spec.spacingXY[0];result=row;
+        } else {
+            if(spec.nativeLayoutMode!="unity-grid"&&spec.nativeLayoutMode!="unity-content-grid")throw new InvalidOperationException("Native grid mapping absent; regenerate or review the source candidate");
+            var grid=spec.nativeLayoutMode=="unity-content-grid"&&spec.enabled?go.AddComponent<IntrinsicGridLayoutGroup>():go.AddComponent<UnityEngine.UI.GridLayoutGroup>();grid.enabled=false;
+            if(spec.nativeCellSize==null||spec.nativeCellSize.Length!=2)throw new InvalidOperationException("Explicit native cell size required");
+            grid.cellSize=new Vector2(spec.nativeCellSize[0],spec.nativeCellSize[1]);grid.spacing=new Vector2(spec.spacingXY[0],spec.spacingXY[1]);
+            grid.startCorner=(UnityEngine.UI.GridLayoutGroup.Corner)((spec.verticalDirection==0?2:0)+(spec.horizontalDirection==1?1:0));
+            grid.startAxis=UnityEngine.UI.GridLayoutGroup.Axis.Horizontal;grid.constraint=UnityEngine.UI.GridLayoutGroup.Constraint.Flexible;
+            result=grid;
+        }
+        result.childAlignment=(TextAnchor)align;result.padding=new RectOffset((int)spec.padding[0],(int)spec.padding[2],(int)spec.padding[3],(int)spec.padding[1]);result.enabled=spec.enabled;
+        if(spec.resize==1){
+            var fitter=go.GetComponent<UnityEngine.UI.ContentSizeFitter>()??go.AddComponent<UnityEngine.UI.ContentSizeFitter>();
+            if(fitter.horizontalFit!=UnityEngine.UI.ContentSizeFitter.FitMode.Unconstrained)throw new InvalidOperationException("Grid has an unrelated horizontal fitter");
+            fitter.verticalFit=UnityEngine.UI.ContentSizeFitter.FitMode.PreferredSize;fitter.enabled=spec.enabled;
+        }
+        return result;
+    }
     static void ConfigureLinearLayout(GameObject go,ComponentSpec spec) {
         var group=go.AddComponent<NativeLinearLayoutGroup>();group.enabled=false;
         group.Axis=spec.layoutType-1;group.Reverse=spec.layoutType==1?spec.horizontalDirection==1:spec.verticalDirection==1;

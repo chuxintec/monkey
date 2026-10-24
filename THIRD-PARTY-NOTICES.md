@@ -12,4 +12,4 @@ No private game source/assets, editor binaries or AssetDeoce implementation are 
 
 ## Cocos engine Layout geometry reference
 
-NativeFlowLayoutGroup uses the version-audited row-extent recurrence from Cocos engine v3.8.7 under its MIT license; no source runtime is embedded. Source: https://github.com/cocos/cocos-engine/blob/v3.8.7/cocos/ui/layout.ts . Copyright and license are preserved in src/monkey/licenses/cocos-layout-mit.txt. Older engine files are read-only behavioral references and are not bundled or executed.
+The retired NativeFlowLayoutGroup implementation from the frozen dev3 tool is retained verbatim as an offline migration reference in `src/monkey/licenses/native-flow-reference.cs.txt`, together with `cocos-layout-mit.txt`. It is no longer emitted into generated production Assets. The original source reference is https://github.com/cocos/cocos-engine/blob/v3.8.7/cocos/ui/layout.ts . Copyright and license notices remain with the archived reference and in frozen history. This records provenance and artifact placement, not a legal determination.
