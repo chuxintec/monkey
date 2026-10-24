@@ -10,7 +10,8 @@ v0.1 已发布冻结；当前本地 `codex/v0.2`，未推送/发布。用户持�
 - 补源：机智147的13091份精确远端文件已取得，19298项声明资源missing0，双端最新07静态零诊断（完整新版Editor/玩法not_run）；天命当前3包336缓存与Cocos3.4.1来源已冻结，旧archives缺源阻塞解除，版本专用reader/export待完成。灵画师核实Egret5.2.32，不记作Laya。
 - 结构在途：Creator3.8.7开发期模板DAG/局部ID/覆盖解析已接公共IR/Unity计划；114/119图可结构解析，5图缺6个精确模板；以Prefab.data闭包修正PveFightUI的3个游离记录后114图父子均闭合，其他图hash不变。Unity真实4Prefab/104节点/5关系及合成双实例/三层嵌套/Variant均完成保存重开、对应节点/模板未污染读回；Creator3.8.8同真实4Prefab/104节点/5关系及合成三层嵌套也已通过原生保存重开/UUID-fileID/模板SHA校验，严格0诊断。尚未恢复源脚本的partial与结构检查分开，详见validation/2026-10-24-native-prefab-relations.md。
 - 动态UI已落地：同一真实SysDialogPop/StarGroup（16节点/2Prefab），Unity05与Creator05均严格0诊断，NONE/RESIZE_HEIGHT改字与隐藏恢复、Widget父尺寸变化、线性布局子节点增隐显删均通过；跨目标各阶段≤0.05px，TTF高度已对齐。Creator1972帧原生RECT网格也已逐项读回；详见validation/2026-10-24-dynamic-ui.md。
-- 当前下一包：嵌套关系与新动态组件的代表集成，随后天命3.4.1公共双目标导出及真实输入集成。Creator仅根继承仍需专用资产合同，普通嵌套不再guard；真实代表中未出现根继承。真实mounted/removed出现时按具体结构解决；缺模板只接精确声明补源。
+- 代表集成已过：同源4Prefab/104节点/5关系与新动态组件，Unity01严格0诊断、Creator04严格0诊断/editor pass；两端各2组动态探针。Creator子资源按原生SpriteFrame UUID保存/重导入并核对真实library，修复父meta已改而子资产仍旧；序列化后恢复自有活对象ID，避免Scheduler销毁异常。Creator04全部1972帧读回通过且无该生命周期错误，own75174已回收。01–03失败保留，详见validation/2026-10-24-prefab-dynamic-integration.md。
+- 当前下一包：天命3.4.1公共双目标导出及真实输入集成。Creator仅根继承仍需专用资产合同，普通嵌套不再guard；真实代表中未出现根继承。真实mounted/removed出现时按具体结构解决；缺模板只接精确声明补源。
 - 版本出口：上述必修结构/动态行为落地，逐case支持矩阵与limitations、CLI本地分发/安装和必要代表验证收口。未知受保护方法/不可支持引擎允许明确限制，不要求全游戏全业务恢复；不得把必修能力降为handoff结项。旧证据及旧未实现状态按下方历史读取。
 
 ## 历史依据与全量候选记录

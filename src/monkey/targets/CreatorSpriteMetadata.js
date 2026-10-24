@@ -10,4 +10,12 @@ function rectVertices(asset){
     const nuv=[x/tw,(th-y-h)/th,(x+w)/tw,(th-y-h)/th,x/tw,(th-y)/th,(x+w)/tw,(th-y)/th];
     return {rawPosition,indexes:[0,1,2,2,1,3],uv,nuv,minPos:[-w/2,-h/2,0],maxPos:[w/2,h/2,0]};
 }
-module.exports={rectVertices};
+function libraryMatches(asset,document){
+    if(!document||document.__type__!=='cc.SpriteFrame'||!document.content)return false;
+    const c=document.content,[x,y]=asset.trimOrigin||[0,0],[w,h]=asset.size;
+    return c.rect&&c.rect.x===x&&c.rect.y===y&&c.rect.width===w&&c.rect.height===h&&
+        c.originalSize&&c.originalSize.width===asset.originalSize[0]&&c.originalSize.height===asset.originalSize[1]&&
+        c.offset&&c.offset.x===asset.offset[0]&&c.offset.y===asset.offset[1]&&
+        Array.isArray(c.capInsets)&&c.capInsets.length===4&&c.capInsets.every((v,i)=>v===asset.border[i]);
+}
+module.exports={rectVertices,libraryMatches};

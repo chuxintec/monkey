@@ -89,7 +89,11 @@ module.exports = {
                 const info = await timedReq('query-asset-info', url);
                 if (!info || info.invalid || info.uuid !== a.uuid) throw Error('Native asset import/identity mismatch: ' + a.path);
                 if (a.kind === 'sprite') {
-                    const m = await timedReq('query-asset-meta', a.uuid);
+                    // Query the parent to discover the native subasset identity.
+                    // Save/reimport the SpriteFrame itself: updating a parent
+                    // image meta can persist subMetas without invalidating the
+                    // already-imported SpriteFrame payload in library.
+                    const m = JSON.parse(JSON.stringify(await timedReq('query-asset-meta', a.uuid)));
                     const spriteEntries = Object.values(m.subMetas || {}).filter(s => s.importer === 'sprite-frame');
                     if (spriteEntries.length !== 1) throw Error('Expected exactly one native sprite-frame');
                     const sm = spriteEntries[0]; const u = sm.userData;
@@ -103,10 +107,15 @@ module.exports = {
                     const vertices=spriteMetadata.rectVertices(a);
                     if(Object.entries(desired).some(([key,value])=>u[key]!==value)||JSON.stringify(u.vertices)!==JSON.stringify(vertices)) {
                         Object.assign(u,desired,{vertices,meshType:0});
-                        await timedReq('save-asset-meta', a.uuid, JSON.stringify(m));
-                        // A folder refresh does not reimport changed subresource
-                        // metadata. Await the public per-asset reimport barrier.
-                        await timedReq('reimport-asset',a.uuid);
+                        const saved=await timedReq('save-asset-meta', sm.uuid, JSON.stringify(sm));
+                        if(saved&&saved.invalid)throw Error('Native SpriteFrame metadata save failed: '+a.sourceId);
+                        const persisted=await timedReq('query-asset-meta',sm.uuid);
+                        if(!persisted||persisted.uuid!==sm.uuid||!persisted.userData||
+                            Object.entries(desired).some(([key,value])=>persisted.userData[key]!==value)||
+                            JSON.stringify(persisted.userData.vertices)!==JSON.stringify(vertices))throw Error('Native SpriteFrame metadata did not persist: '+a.sourceId);
+                        // Public reimport returns void; its library output is
+                        // checked below before the scene worker loads the frame.
+                        await timedReq('reimport-asset',sm.uuid);
                     }
                 }
                 prepared++;
@@ -121,6 +130,19 @@ module.exports = {
                     const sf = await timedReq('query-asset-info', url + '/spriteFrame');
                     const texture = await timedReq('query-asset-info', url + '/texture');
                     if (!sf || !texture || sf.invalid || texture.invalid) throw Error('Native subresource missing: ' + url);
+                    if(!/^[a-f0-9-]{36}@[a-f0-9]+$/.test(sf.uuid))throw Error('Native SpriteFrame storage identity unsupported');
+                    // Profile-bound Creator library readiness, not a retry or
+                    // another metadata write. Observe this one import until its
+                    // actual generated payload matches the requested meta.
+                    const library=within(root,'library/'+sf.uuid.slice(0,2)+'/'+sf.uuid+'.json');
+                    const readyEnd=Math.min(Date.now()+10000,execution.deadlineMs());
+                    while(true){
+                        let data=null;try{data=JSON.parse(fs.readFileSync(library,'utf8'));}catch(error){if(error.code&&error.code!=='ENOENT')throw error;}
+                        if(spriteMetadata.libraryMatches(a,data))break;
+                        if(Date.now()>=readyEnd)throw Error('Native SpriteFrame import did not settle: '+a.sourceId);
+                        execution.checkpoint('textures',resolved,plan.assets.length);
+                        await new Promise(resolve=>setTimeout(resolve,100));
+                    }
                     return {...a, spriteFrameUuid: sf.uuid, textureUuid: texture.uuid};
                 }
                 return {...a};

@@ -9,6 +9,15 @@ const api=()=>{
     if(!u||!p||!u.generateTargetMap||!p.addPrefabInfo||!p.checkAndStripNode)throw Error('Native Prefab SDK unavailable');
     return {u,p};
 };
+function serializeNative(root,asset){
+    // The SDK strips live object IDs for native instance serialization. They
+    // must be restored before destroying our temporary tree: Scheduler cleanup
+    // still needs each live Component's actual ID, not its Prefab fileID.
+    const ids=[];
+    function walk(n){ids.push([n,n._id]);for(const c of n.components)ids.push([c,c._id]);n.children.forEach(walk);}walk(root);
+    try{api().p.checkAndStripNode(root,true);const raw=EditorExtends.serialize(asset);return typeof raw==='string'?raw:JSON.stringify(raw);}
+    finally{for(const [obj,id]of ids){obj._id=id;if(obj instanceof cc.Component&&!obj.uuid)cc.Scheduler.enableForTarget(obj);}}
+}
 function session(id,plan) {
     if(!current||current.id!==id||current.plan!==plan&&current.plan.projectUuid!==plan.projectUuid)throw Error('Native assembly session differs');
     if(Date.now()>=plan.nativeDeadlineMs)throw Error('NATIVE_BUDGET_EXHAUSTED');
@@ -91,8 +100,7 @@ async function serializePrefab(id,sid,saved,plan,load) {
         const {p}=api();
         if(root._prefab&&root._prefab.instance)throw Error('Creator root template inheritance requires a dedicated native asset contract');
         p.addPrefabInfo(root,root,prefab);root._prefab.nestedPrefabInstanceRoots=instanceRoots(root);
-        p.checkAndStripNode(root,true);
-        const raw=EditorExtends.serialize(prefab);return {sourceId:sid,path:spec.path,nativeInitialNodes,serialized:typeof raw==='string'?raw:JSON.stringify(raw)};
+        return {sourceId:sid,path:spec.path,nativeInitialNodes,serialized:serializeNative(root,prefab)};
     }finally{root.destroy();}
 }
 async function finish(id,saved,plan,load) {
@@ -102,9 +110,9 @@ async function finish(id,saved,plan,load) {
         dynamic.settle(state.scene,state.nodes,plan);
         const nativeInitialNodes=dynamic.capture(state.nodes);
         const {u,p}=api(),info=new u.PrefabInfo();info.root=state.scene;info.nestedPrefabInstanceRoots=instanceRoots(state.scene);state.scene._prefab=info;
-        p.checkAndStripNode(state.scene,true);
-        const asset=new cc.SceneAsset();asset.scene=state.scene;const raw=EditorExtends.serialize(asset);
-        return {...state.result,nativeInitialNodes,serialized:typeof raw==='string'?raw:JSON.stringify(raw)};
+        dynamic.release(state.scene);
+        const asset=new cc.SceneAsset();asset.scene=state.scene;
+        return {...state.result,nativeInitialNodes,serialized:serializeNative(state.scene,asset)};
     }finally{release(id);}
 }
 function read(plan,mapped,templates,saved,owner=null){

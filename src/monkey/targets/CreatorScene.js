@@ -10,7 +10,7 @@ const jobs=require('./jobs.js');
 const numeric=require('./numeric-code.js');
 const color = a => new cc.Color(...a);
 const checkTime=plan=>{if(plan.nativeDeadlineMs&&Date.now()>=plan.nativeDeadlineMs)throw Error('NATIVE_BUDGET_EXHAUSTED');};
-const loadAsset = (uuid, type) => new Promise((resolve,reject) => cc.assetManager.loadAny({uuid}, (e,a) => {
+const loadAsset = (uuid, type) => new Promise((resolve,reject) => cc.assetManager.loadAny({uuid}, {reloadAsset:type===cc.SpriteFrame}, (e,a) => {
     if (e) reject(e); else if (!(a instanceof type)) reject(Error('Unexpected native asset type: '+uuid)); else resolve(a);
 }));
 function describe(root, plan) {
