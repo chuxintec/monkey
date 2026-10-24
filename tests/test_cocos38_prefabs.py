@@ -98,6 +98,12 @@ class PrefabResolutionTests(unittest.TestCase):
         self.assertTrue(any(g['code']=='NATIVE_PREFAB_TEMPLATE_GUID'for g in verify_native_relationships(instances,plans,proof,'scene',{'main:leaf':'native-guid'})))
         proof[0]['templateGuid']='native-guid';proof[0]['templateUnchanged']=False
         self.assertTrue(any(g['code']=='NATIVE_PREFAB_RELATION_NOT_VERIFIED'for g in verify_native_relationships(instances,plans,proof,'scene')))
+        for row in proof:
+            row.update(templateUuid='native-uuid',templateRootFileId='creator-scoped-file-id',templateUnchanged=True)
+            row.pop('templateGuid')
+        self.assertEqual(verify_native_relationships(instances,plans,proof,'CreatorScene',{'main:leaf':'native-uuid'},'uuid'),[])
+        proof[0]['templateUuid']='other-asset'
+        self.assertTrue(verify_native_relationships(instances,plans,proof,'CreatorScene',{'main:leaf':'native-uuid'},'uuid'))
 
 
 if __name__=='__main__':unittest.main()

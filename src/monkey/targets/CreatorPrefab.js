@@ -36,7 +36,7 @@ async function serialize(plan,nodes) {
     }
     return result;
 }
-function read(prefab,spec,plan,info) {
+function read(prefab,spec,plan,info,templates) {
     const root=cc.instantiate(prefab);
     try {
         if(root.parent)throw Error('Saved prefab has external parent');
@@ -68,7 +68,7 @@ function read(prefab,spec,plan,info) {
             if(c.type==='cc.Widget'&&comp.target!==node.parent)throw Error('Prefab widget reference differs');
             components.push(c.sourceId);
         }
-        return {...info,nodeCount:mapped.size,savedReloaded:true,geometryVerified:geometryMismatches.length===0,geometryMismatches,referencesVerified:true,components,
+        return {...info,prefabInstances:require('./prefab-instances.js').read(plan,mapped,templates,plan.savedPrefabs||[],spec.sourceId),nodeCount:mapped.size,savedReloaded:true,geometryVerified:geometryMismatches.length===0,geometryMismatches,referencesVerified:true,components,
             numericCodeBindings,rootNamePolicy:spec.rootNamePolicy||'source-name-v1',sourceRootName:sources.get(spec.root).name,nativeRootName:root.name};
     } finally {root.destroy();}
 }

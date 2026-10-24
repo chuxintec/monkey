@@ -8,8 +8,8 @@ v0.1 已发布冻结；当前本地 `codex/v0.2`，未推送/发布。用户持�
 
 - 已实现：公共CLI统一输入/精确远端获取、按资源与版本隔离、具名有据C#/TS/JS数值子集、ProjectModel typed引用与可选none/grea格式、Unity来源受限原生恢复、Cocos2.1.1/2.1.2/3.8.7资源及部分图、Egret5.2.32自定义资源/图集。Research 11例尝试、9例不同范围输出、2例未导出、完整游戏0，详见validation/research-v02-status.json；候选数量不代表完整兼容。
 - 补源：机智147的13091份精确远端文件已取得，19298项声明资源missing0，双端最新07静态零诊断（完整新版Editor/玩法not_run）；天命当前3包336缓存与Cocos3.4.1来源已冻结，旧archives缺源阻塞解除，版本专用reader/export待完成。灵画师核实Egret5.2.32，不记作Laya。
-- 结构在途：Creator3.8.7开发期模板DAG/局部ID/覆盖解析已接公共IR/Unity计划；114/119图可结构解析，5图缺6个精确模板。Unity真实4Prefab/104节点/5关系及合成双实例/三层嵌套/Variant均完成保存重开、对应节点/模板未污染读回；已通过23项定向检查。尚未恢复源脚本的partial与结构检查分开，详见validation/2026-10-24-native-prefab-relations.md。
-- 当前下一包：Creator3.8.8原生模板/实例/覆盖保存重开（暂显式拒绝关系图，防止误作扁平完成）；随后动态Layout/Widget/Label状态变化、天命3.4.1公共双目标导出及真实输入集成。真实mounted/removed出现时按具体结构解决；缺模板只接精确声明补源。
+- 结构在途：Creator3.8.7开发期模板DAG/局部ID/覆盖解析已接公共IR/Unity计划；114/119图可结构解析，5图缺6个精确模板。Unity真实4Prefab/104节点/5关系及合成双实例/三层嵌套/Variant均完成保存重开、对应节点/模板未污染读回；Creator3.8.8同真实4Prefab/104节点/5关系及合成三层嵌套也已通过原生保存重开/UUID-fileID/模板SHA校验，严格0诊断。尚未恢复源脚本的partial与结构检查分开，详见validation/2026-10-24-native-prefab-relations.md。
+- 当前下一包：动态Layout/Widget/Label状态变化、天命3.4.1公共双目标导出及真实输入集成。Creator仅根继承仍需专用资产合同，普通嵌套不再guard；真实代表中未出现根继承。真实mounted/removed出现时按具体结构解决；缺模板只接精确声明补源。
 - 版本出口：上述必修结构/动态行为落地，逐case支持矩阵与limitations、CLI本地分发/安装和必要代表验证收口。未知受保护方法/不可支持引擎允许明确限制，不要求全游戏全业务恢复；不得把必修能力降为handoff结项。旧证据及旧未实现状态按下方历史读取。
 
 ## 历史依据与全量候选记录
@@ -618,3 +618,9 @@ Unity typed值预算新增逐对象250000/全请求4000000强限；超大对象�
 公开06全源步骤成功；07在相同输入/hash及完全相同inspect/normalize算法下复用受验来源/像素，不重解码。07实际13220输入1228708650B、19298声明身份缺0、7343源Frame/每端14686变体、249音频/1字体、956模块草稿/5未知wrapper，6546源图/Spine/动画等继续隔离。Unity manifest93502f5cfd2e0a1ba9a65608221e77621b8cf69e8b11698e81843388d4c3f0d3，Creator872235edc8036c39f824efbceadd47eeabf926f1993c8f1d1d6d121dd3978304。双端static pass/0诊断，35关联检查通过。7343全几何/纹理身份核过、48代表源Frame/96trim-full像素覆盖13组合RGBA相等，双端29372 PNG载荷与源规范化语义相符；Creator正确使用完整图+trim元数据。审计outputs/cocos212-jizhi147-resource-audit-07/audit.json；全07 Editor/视觉/玩法not_run，旧211代表原生证据不追认当前全量。
 
 天命已定位当前wxbdf25cb34ce9bf6e/12并冻结3包13675974B、7展开文件13675688B及336缓存71617967B，原索引无缺项；原game_name天命行者经Acorn8.15 tokenize绑定精确字节，settings.CocosEngine=3.4.1，资源URL版本1.2.67一致。仅1个缺bundle条目按原remoteBundles与完整URL段生成有证派生索引，不改原件；原始缺archives不再是当前阻塞。docs/validation/tianming-source-intake.json记录身份/哈希，3.4.1专用reader/公开导出仍pending，不套3.8.7。下一主优先仍是下方了嵌套Prefab/override及动态布局，已有development-only解析储备，尚未计原生能力；v0.2不结项、不推送发布。
+
+## 2026-10-24 Creator 原生嵌套与实例覆盖
+
+event monkey-v02-native-prefab-creator-20261024-01：Creator3.8.8后端已接公共IR/plan的精确模板DAG，按依赖顺序保存真实Prefab后原生instantiate，差异写目标SDK的PrefabInstance/propertyOverrides，Editor serializer/checkAndStripNode保存。SceneAsset读回显式初始化自有inactive Scene使原生占位展开；不激活Director当前场景或执行原脚本。源实例/模板节点按native fileID+asset UUID读回；共享模板磁盘SHA保持不变。
+
+合成02：13节点/3Prefab/5关系，双实例不同覆盖/三层嵌套/Scene与Prefab保存重开通过，own49700、03:29:51Z–03:30:10Z、按正常TERM退出/reaped，严格0诊断；真实01：104节点/4Prefab/5关系/1972帧，own49926、03:30:57Z–03:31:39Z，TERM/reaped，严格0诊断/editor pass。失败01的缺少Scene._load初始化记录保留，离线修复后使用新候选02；不覆盖旧证据。Creator根继承专用asset合同尚待实现，计划阶段显式拒绝（Unity原生Variant已通过），真实选定样本没有该类型。21项相关测试通过；动态布局及天命接续，不计视觉或玩法完成。

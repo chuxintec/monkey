@@ -130,8 +130,25 @@ module.exports = {
             execution.checkpoint('hierarchy',0,plan.nodes.length);
             const nativeDeadlineMs=execution.deadlineMs();
             const nativePlan={...plan,assets,nativeDeadlineMs,components:plan.components.filter(c=>c.convertible),animations:(plan.animations||[]).filter(a=>a.convertible)};
-            const result = await sceneJob('assemble',[nativePlan],'hierarchy');
-            if (!result || typeof result.serialized !== 'string') throw Error('No native scene serialization');
+            let result = await sceneJob('assemble',[nativePlan],'hierarchy');
+            if (!result || (typeof result.serialized !== 'string'&&!result.assemblyId)) throw Error('No native scene serialization');
+            const assemblyId=result.assemblyId;const savedPrefabs=[];
+            if(assemblyId) {
+                try {
+                    for(const spec of plan.sourcePrefabs||[]) {
+                        const dest=within(root,spec.path);fs.mkdirSync(path.dirname(dest),{recursive:true});
+                        await timedReq('refresh-asset','db://'+outputPaths.prefabs);
+                        const p=await sceneJob('serializePrefab',[assemblyId,spec.sourceId,savedPrefabs,nativePlan],'source-prefabs');
+                        if(!p||p.path!==spec.path||p.sourceId!==spec.sourceId||typeof p.serialized!=='string')throw Error('Native prefab serialization differs');
+                        const info=await timedReq('create-asset','db://'+p.path,p.serialized,{overwrite:false,rename:false});
+                        if(!info||info.invalid)throw Error('Native prefab save failed');
+                        savedPrefabs.push({sourceId:p.sourceId,path:p.path,uuid:info.uuid,sha256:hash(fs.readFileSync(dest))});
+                    }
+                    result=await sceneJob('finishAssembly',[assemblyId,savedPrefabs,nativePlan],'candidate-save');
+                }finally{
+                    await Editor.Message.request('scene','execute-scene-script',{name:'monkey-import',method:'releaseAssembly',args:[assemblyId]});
+                }
+            }
             const animationAssets=[];
             for(const a of result.animationAssets||[]) {
                 if(!a.path.startsWith(outputPaths.animations+'/')||!a.path.endsWith('.anim'))throw Error('Unsafe animation path');
@@ -140,10 +157,9 @@ module.exports = {
                 if(!info||info.invalid)throw Error('Native animation save failed');
                 animationAssets.push({id:a.id,uuid:info.uuid,path:a.path});
             }
-            const savedPrefabs=[];
             const expectedPrefabs=new Map((plan.sourcePrefabs||[]).map(p=>[p.sourceId,p]));
             const serializedIds=new Set();
-            if((result.sourcePrefabs||[]).length!==expectedPrefabs.size)throw Error('Prefab serialization count mismatch');
+            if(!assemblyId&&(result.sourcePrefabs||[]).length!==expectedPrefabs.size)throw Error('Prefab serialization count mismatch');
             for(const p of result.sourcePrefabs||[]) {
                 const spec=expectedPrefabs.get(p.sourceId);
                 if(!spec||serializedIds.has(p.sourceId)||p.path!==spec.path||typeof p.serialized!=='string')throw Error('Unexpected prefab serialization');
@@ -164,6 +180,7 @@ module.exports = {
             // Re-load saved/imported scene through the engine asset manager, not the in-memory tree.
             execution.checkpoint('native-readback');
             const saved = await sceneJob('readSaved',[scene.uuid,{...nativePlan,animationAssets,savedPrefabs}],'native-readback');
+            for(const p of savedPrefabs)if(p.sha256&&hash(fs.readFileSync(within(root,p.path)))!==p.sha256)throw Error('Shared native template changed: '+p.sourceId);
             const nativeFiles = [];
             function collect(relative) {
                 const folder = within(root, relative);

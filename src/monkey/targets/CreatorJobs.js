@@ -3,9 +3,10 @@
 let current=null,sequence=0;
 const phases=new Set(['textures','hierarchy','components','source-prefabs','candidate-save','native-readback']);
 function begin(method,args,handlers) {
-    if(!['assemble','readSaved'].includes(method)||!Array.isArray(args)||args.length!==(method==='assemble'?1:2)||typeof handlers[method]!=='function')throw Error('NATIVE_JOB_METHOD_INVALID');
+    const arity={assemble:1,readSaved:2,serializePrefab:4,finishAssembly:3},planIndex={assemble:0,readSaved:1,serializePrefab:3,finishAssembly:2};
+    if(!Object.hasOwn(arity,method)||!Array.isArray(args)||args.length!==arity[method]||typeof handlers[method]!=='function')throw Error('NATIVE_JOB_METHOD_INVALID');
     if(current)throw Error('NATIVE_JOB_ALREADY_EXISTS');
-    const plan=args[method==='assemble'?0:1],deadline=plan&&plan.nativeDeadlineMs!=null?plan.nativeDeadlineMs:Date.now()+1200000;
+    const plan=args[planIndex[method]],deadline=plan&&plan.nativeDeadlineMs!=null?plan.nativeDeadlineMs:Date.now()+1200000;
     if(!Number.isFinite(deadline)||deadline<=Date.now())throw Error('NATIVE_BUDGET_EXHAUSTED');
     const job=current={id:String(++sequence)+'-'+Date.now(),method,deadline,status:'running',phase:method==='assemble'?'hierarchy':'native-readback',processed:0,total:1};
     Promise.resolve().then(()=>handlers[method](...args)).then(result=>{

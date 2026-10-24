@@ -13,3 +13,13 @@
 完整119源图静态结构试读114图可解析，5图缺6个精确模板。未知构造字段/失效覆盖端点保留显式gap；不宣称所有组件或全部图原生验收。原件和共享模板不修改，Creator关系图暂显式阻止输出以免扁平化误报成功。
 
 实现依据：原包元数据及官方 Cocos v3.8.7 `cocos/scene-graph/prefab/utils.ts` / `prefab-info.ts` 的序列化合同（MIT，Chukong / Xiamen Yaji），仅作行为研究，未复制引擎实现到目标Player。原出处及SHA在私有 `official-baseline/manifest.json`。Unity目标行为使用已安装6000.6.2f1官方API；独立生成代码不包含Cocos运行时。
+
+## Creator 3.8.8 接续
+
+新增 Editor-only 依赖顺序保存会话：真实模板先由asset-db保存，实例用 `cc.instantiate(Prefab)`，覆盖用本机 `cc.Prefab._utils` 的原生元数据类型及scoped target map；EditorExtends生成/剥离/序列化Prefab。主进程在保存全部资产及读回后核对所有模板文件SHA；源图、UUID和fileID均不作为Player解释器。组件值/资源引用用目标SDK的序列化字段传递，未知结构不猜测。
+
+- 合成 `outputs/creator388-prefab-relations-fixture-02-native`：13节点/3Prefab/5关系，双实例不同覆盖/三层嵌套及Scene/独立Prefab保存重开，native UUID/fileID对应、模板SHA不变均通过。own49700，03:29:51Z–03:30:10Z，正常TERM/reaped，严格0诊断。
+- 真实 `outputs/creator388-prefab-relations-real-01-native`：104节点/4Prefab/5关系、1972帧，来自同一已冻结真实选择。own49926，03:30:57Z–03:31:39Z，正常TERM/reaped，严格0诊断/editor pass；两级覆盖数量实际保留。
+- 失败合成01：SceneAsset加载本身不调用Scene._load，原生嵌套占位未展开，节点数不足；已停止/保留，离线核本机Scene._load合同后修复为初始化自有inactive Scene，再生成新02。没有启动Director当前Scene或运行原版业务。
+- Creator根Prefab继承仍需专用资产合同，计划阶段显式拒绝，不能当普通嵌套支持或扁平输出；本次实际代表没有该类型。Unity Variant证据独立。动态Layout/Widget/Label和视觉/玩法仍not_run。
+- 21项相关检查通过：test_cocos38_prefabs、test_creator_jobs、test_creator_native、test_cocos；现有Unity证据无需为Creator改动重跑。SDK类型/签名和来源SHA保留于私有creator388-prefab-sdk-01，不复制安装包代码。

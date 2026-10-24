@@ -62,17 +62,20 @@ def native_relationships(ir,prefabs):
     return ordered,instances
 
 
-def verify_native_relationships(expected,prefabs,actual,scope,template_guids=None):
+def verify_native_relationships(expected,prefabs,actual,scope,template_guids=None,identity_kind='guid'):
     if not expected and not actual:return []
     rows=actual if isinstance(actual,list)else[];found={r.get('root'):r for r in rows};specs={p['sourceId']:p for p in prefabs};gaps=[]
     if len(found)!=len(rows)or set(found)!={x['root']for x in expected}:
         gaps.append(diagnostic('NATIVE_PREFAB_INSTANCE_SET',scope,'Saved native instance set differs from the source plan'))
     for instance in expected:
         row=found.get(instance['root'],{});template=specs[instance['template']]
+        identity_key='templateUuid' if identity_kind=='uuid'else'templateGuid'
+        root_id=row.get('templateRootFileId')
+        valid_root=bool(root_id)and(type(root_id)is str if identity_kind=='uuid'else type(root_id)is int)
         if (row.get('nativeInstance')is not True or row.get('correspondingSourceVerified')is not True or row.get('nodeCorrespondenceVerified')is not True or row.get('templateUnchanged')is not True or
                 row.get('templateSourceId')!=instance['template']or row.get('templatePath')!=template['path']or
-                not row.get('templateGuid')or type(row.get('templateRootFileId'))is not int or row['templateRootFileId']==0 or row.get('nodeCount')!=len(instance['nodes'])):
+                not row.get(identity_key)or not valid_root or row.get('nodeCount')!=len(instance['nodes'])):
             gaps.append(diagnostic('NATIVE_PREFAB_RELATION_NOT_VERIFIED',instance['root'],'Native source correspondence/shared template/save-reopen proof missing in '+scope))
-        elif template_guids is not None and row['templateGuid']!=template_guids.get(instance['template']):
+        elif template_guids is not None and row[identity_key]!=template_guids.get(instance['template']):
             gaps.append(diagnostic('NATIVE_PREFAB_TEMPLATE_GUID',instance['root'],'Saved instance template GUID differs from the actual native asset'))
     return gaps

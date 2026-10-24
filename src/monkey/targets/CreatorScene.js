@@ -3,6 +3,7 @@
 const cc = require('cc');
 const motion=require('./animation.js');
 const prefabs=require('./prefab.js');
+const relations=require('./prefab-instances.js');
 const batch=require('./batch.js');
 const jobs=require('./jobs.js');
 const numeric=require('./numeric-code.js');
@@ -22,9 +23,13 @@ module.exports = {
         beginJob(method,args){return jobs.begin(method,args,module.exports.methods);},
         jobStatus(id){return jobs.status(id);},
         takeJob(id){return jobs.take(id);},
+        releaseAssembly(id){relations.release(id);},
+        async serializePrefab(id,sid,saved,plan){return relations.serializePrefab(id,sid,saved,plan,loadAsset);},
+        async finishAssembly(id,saved,plan){return relations.finish(id,saved,plan,loadAsset);},
         async assemble(plan) {
             if (!globalThis.EditorExtends || typeof EditorExtends.serialize !== 'function') throw Error('Native serializer unavailable');
             const scene = new cc.Scene('Candidate');
+            let retained=false;
             try {
                 const canvasNode = new cc.Node('Canvas');canvasNode.layer=cc.Layers.Enum.UI_2D;canvasNode.parent=scene;
                 canvasNode.addComponent(cc.UITransform).setContentSize(...plan.designSize);
@@ -106,6 +111,10 @@ module.exports = {
                     const clip=motion.create(spec,nodes);const raw=EditorExtends.serialize(clip);
                     animationAssets.push({id:spec.id,path:spec.path,serialized:typeof raw==='string'?raw:JSON.stringify(raw)});
                 }
+                if((plan.prefabInstances||[]).length) {
+                    const assemblyId=relations.keep(plan,scene,nodes,{nativeRefs,animationAssets,numericCodeExercise,...describe(scene,plan)});
+                    retained=true;return {assemblyId,nativeRefs,animationAssets,numericCodeExercise};
+                }
                 const asset=new cc.SceneAsset();asset.scene=scene;
                 jobs.progress('candidate-save',0,1);
                 const serialized=EditorExtends.serialize(asset);
@@ -113,14 +122,18 @@ module.exports = {
                 return {serialized:typeof serialized==='string'?serialized:JSON.stringify(serialized),nativeRefs,animationAssets,
                     sourcePrefabs,numericCodeExercise,
                     nodes:plan.nodes.map(n=>({sourceId:n.sourceId,nodeUuid:nodes.get(n.sourceId).uuid})),...describe(scene,plan)};
-            } finally {scene.destroy();}
+            } finally {if(!retained)scene.destroy();}
         },
         async readSaved(uuid,plan) {
             const asset=await loadAsset(uuid,cc.SceneAsset);const scene=asset.scene;
+            // Loading a SceneAsset alone does not perform Scene._load, which is
+            // where Creator expands native instance placeholders. Initialize
+            // this owned, inactive Scene without running/activating it.
+            if((plan.prefabInstances||[]).length)scene._load();
             const nodes=[];const visit=n=>{nodes.push(n);for(const child of n.children)visit(child);};visit(scene);
             const design=nodes.find(n=>n.name==='DesignRoot');if(!design)throw Error('Saved scene missing DesignRoot');
             const saved=[];const walk=n=>{saved.push(n);for(const child of n.children)walk(child);};for(const n of design.children)walk(n);
-            if(saved.length!==plan.nodes.length)throw Error('Saved source node count mismatch');
+            if(saved.length!==plan.nodes.length)throw Error('Saved source node count mismatch: '+saved.length+'/'+plan.nodes.length);
             // Match hierarchy by child indices; duplicate source names do not lose identity.
             const mapped=new Map(),sourceNodes=new Map(plan.nodes.map(n=>[n.sourceId,n]));
             function match(sid,n) {
@@ -168,6 +181,9 @@ module.exports = {
                 fontPages.push({sourceId:a.sourceId,fontUuid:font._uuid,spriteFrameUuid:sf._uuid,textureUuid:sf.texture._uuid,
                     rect:[sf.rect.x,sf.rect.y,sf.rect.width,sf.rect.height]});
             }
+            const templates=new Map();
+            for(const info of plan.savedPrefabs||[])templates.set(info.sourceId,await loadAsset(info.uuid,cc.Prefab));
+            const prefabInstances=relations.read(plan,mapped,templates,plan.savedPrefabs||[]);
             const sourcePrefabs=[];
             for(const spec of plan.sourcePrefabs||[]) {
                 jobs.progress('native-readback',sourcePrefabs.length,(plan.sourcePrefabs||[]).length);
@@ -175,9 +191,9 @@ module.exports = {
                 checkTime(plan);
                 const info=(plan.savedPrefabs||[]).find(p=>p.sourceId===spec.sourceId);
                 if(!info)throw Error('Saved prefab identity absent');
-                sourcePrefabs.push(prefabs.read(await loadAsset(info.uuid,cc.Prefab),spec,plan,info));
+                sourcePrefabs.push(prefabs.read(templates.get(spec.sourceId),spec,plan,info,templates));
             }
-            return {sourcePrefabs,jsonAssets,fontPages,animations,numericCodeBindings,nodeCount:saved.length,nodes:[...mapped].map(([sourceId,n])=>({sourceId,nodeUuid:n.uuid,name:n.name,
+            return {sourcePrefabs,prefabInstances,jsonAssets,fontPages,animations,numericCodeBindings,nodeCount:saved.length,nodes:[...mapped].map(([sourceId,n])=>({sourceId,nodeUuid:n.uuid,name:n.name,
                 position:[n.position.x,n.position.y,n.position.z],size:[n.getComponent(cc.UITransform).width,n.getComponent(cc.UITransform).height],
                 pivot:[n.getComponent(cc.UITransform).anchorX,n.getComponent(cc.UITransform).anchorY],scale:[n.scale.x,n.scale.y,n.scale.z],
                 rotation:[n.rotation.x,n.rotation.y,n.rotation.z,n.rotation.w],active:n.active,...prefabs.uiState(n,sourceNodes.get(sourceId))})),components:refs,labels,frames};

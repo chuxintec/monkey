@@ -33,7 +33,6 @@ def bitmap_text(font,atlas_name,face="MonkeySourceBitmap"):
 
 def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None):
     path,ir,bindings,receipt,resource,resolve=input_ir(ir_path,bindings_path)
-    if ir.get('prefabInstances'):fail('CREATOR_PREFAB_RELATION_BACKEND_PENDING',str(ir_path),'Native instance serialization must be implemented before exporting this graph; flattening refused')
     if ir.get('sourceProfile')in ('generic-image-resources-v1','egret-custom-resource-plist-v1'):fail('SOURCE_TARGET_UNSUPPORTED',str(ir_path),'Non-Cocos sources target Unity 6 only')
     from ..names import Names
     naming=Names(ir.get('sourceNames'))
@@ -128,9 +127,14 @@ def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None):
         if c['type']=='cc.LabelOutline' and c['convertible'] and not any(x['type']=='cc.Label' and x['node']==c['node'] and x['convertible'] for x in components):
             c['convertible']=False;c['nativeType']=None
             diagnostics.append(diagnostic('MISSING_OUTLINE_LABEL',c['sourceId'],'Label dependency could not be converted',c['sourceId']))
-    from .prefabs import plan_prefabs
+    from .prefabs import plan_prefabs,native_relationships
     prefabs,prefab_gaps=plan_prefabs(ir,components)
     diagnostics.extend(prefab_gaps)
+    prefabs,instances=native_relationships(ir,prefabs)
+    roots={p['sourceId']:p['root']for p in prefabs}
+    for link in instances:
+        if roots.get(link['owner'])==link['root']:
+            fail('CREATOR_ROOT_PREFAB_INHERITANCE_PENDING',link['root'],'Root inheritance needs a dedicated Creator asset contract; nested instances are supported, Unity emits a native Variant')
     by_node={n['sourceId']:n for n in ir['nodes']}
     for prefab in prefabs:
         prefab['path']=naming.path(prefab['sourceId'],'.prefab','assets/generated/prefabs')
@@ -155,7 +159,7 @@ def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None):
         scopeMode=ir.get('scopeMode','asset-selection'),
         sourceIrSha256=sha(stage_bytes(path)),sourceManifestSha256=ir['sourceManifestSha256'],sourceManifestPath=ir.get('sourceManifestPath'),
         sourceRoots=ir.get('sourceRoots',{}),sourceLocations=ir.get('sourceLocations',{}),bindings=receipt,
-        designSize=[750,1334],assets=assets,copies=copies,animations=animations,sourcePrefabs=prefabs,naming=naming.report(),nodes=native_color_nodes(ir['nodes'],components),components=components,
+        designSize=[750,1334],assets=assets,copies=copies,animations=animations,sourcePrefabs=prefabs,prefabInstances=instances,naming=naming.report(),nodes=native_color_nodes(ir['nodes'],components),components=components,
         diagnostics=diagnostics,editorValidation='not_run',subresourceValidation='pending-native-import')
     write_json(out/'plan.json',result);return finish(out,result)
 
@@ -186,13 +190,14 @@ def export(plan_path,output):
     (ext/'execution.js').write_bytes(files('monkey.targets').joinpath('CreatorExecution.js').read_bytes())
     (ext/'numeric-code.js').write_bytes(files('monkey.targets').joinpath('CreatorNumericCode.js').read_bytes())
     (ext/'prefab.js').write_bytes(files('monkey.targets').joinpath('CreatorPrefab.js').read_bytes())
+    (ext/'prefab-instances.js').write_bytes(files('monkey.targets').joinpath('CreatorPrefabInstances.js').read_bytes())
     (ext/'batch.js').write_bytes(files('monkey.targets').joinpath('CreatorBatch.js').read_bytes())
     (ext/'jobs.js').write_bytes(files('monkey.targets').joinpath('CreatorJobs.js').read_bytes())
     (ext/'animation.js').write_bytes(files('monkey.targets').joinpath('CreatorAnimation.js').read_bytes())
     write_json(ext/'package.json',dict(package_version=2,version='0.2.0',name='monkey-import',main='./main.js',
         contributions=dict(scene=dict(script='./scene.js'),menu=[dict(path='Monkey',label='Import isolated candidate',message='import-candidate')],
                            messages={'import-candidate':dict(methods=['importCandidate'])})))
-    write_json(ext/'import-plan.json',{k:p[k] for k in ['schemaVersion','targetProfile','designSize','assets','nodes','components'] }|dict(projectUuid=project_id,animations=p.get('animations',[]),sourcePrefabs=p.get('sourcePrefabs',[]),sceneGeometryReadback='full-local-v1',bitmapPageReadback='sprite-frame-v1'))
+    write_json(ext/'import-plan.json',{k:p[k] for k in ['schemaVersion','targetProfile','designSize','assets','nodes','components'] }|dict(projectUuid=project_id,animations=p.get('animations',[]),sourcePrefabs=p.get('sourcePrefabs',[]),prefabInstances=p.get('prefabInstances',[]),prefabRelationshipReadback='creator-native-fileid-v1',sceneGeometryReadback='full-local-v1',bitmapPageReadback='sprite-frame-v1'))
     from ..assets.animation import module_report
     write_json(out/'Analysis/animation-module.json',module_report(p.get('animations',[])))
     write_json(out/'Analysis/source-map.json',dict(assets=p['assets'],sourcePrefabs=p.get('sourcePrefabs',[]),nodes=[dict(sourceId=n['sourceId'],target='assets/generated/views/Candidate.scene') for n in p['nodes']],
@@ -305,6 +310,12 @@ def verify(candidate,output,level='static'):
                     valid=valid and all(actual.get(key)==spec[key] for key in ['rootNamePolicy','sourceRootName','nativeRootName'])
                 if not valid:
                     good=False;diagnostics.append(diagnostic('SOURCE_PREFAB_NOT_VERIFIED',sid,'Independent Creator prefab save/reload evidence absent or inconsistent'))
+            from .prefabs import verify_native_relationships
+            native_ids={sid:a.get('uuid')for sid,a in actual_prefabs.items()}
+            relation_gaps=verify_native_relationships(plan.get('prefabInstances',[]),plan.get('sourcePrefabs',[]),rb.get('prefabInstances',[]),'CreatorScene',native_ids,'uuid')
+            for sid,a in actual_prefabs.items():
+                relation_gaps.extend(verify_native_relationships([x for x in plan.get('prefabInstances',[])if x['owner']==sid],plan.get('sourcePrefabs',[]),a.get('prefabInstances',[]),sid,native_ids,'uuid'))
+            if relation_gaps:good=False;diagnostics.extend(relation_gaps)
             from ..assets.animation import verify_native
             motion_gaps=verify_native(plan.get('animations',[]),rb.get('animations',[]),native);diagnostics.extend(motion_gaps);good=good and not motion_gaps
             if not good:diagnostics.append(diagnostic('EDITOR_READBACK_FAILED',str(rb_path),'Native identities/counts/version differ'))
