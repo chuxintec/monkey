@@ -35,6 +35,18 @@
         {
           "path": "outputs/parabola-math-audit-10/runtime-receipt.json",
           "sha256": "3766e4fa2b0b3448554b2aa934e0c7bce20ac9effcc546f96930bcf69755d37a"
+        },
+        {
+          "path": "docs/validation/2026-10-24-native-prefab-relations.md",
+          "sha256": "0e74f13432b9605fbbb00305d670106e667e0e827dd571d8f57b0a253a6307dc"
+        },
+        {
+          "path": "docs/validation/2026-10-24-dynamic-ui.md",
+          "sha256": "da619531dc0b99e95b2d354d735dce0baabd84dbc8e5e7185d2935ad033adfaa"
+        },
+        {
+          "path": "docs/validation/2026-10-24-prefab-dynamic-integration.md",
+          "sha256": "22f6a87863d02249ebe8da594a56c71fa3f3a48707fb1ddb62ac56ede44e73e9"
         }
       ],
       "export": "partial-resource-candidate",
@@ -47,12 +59,12 @@
       },
       "metadataSha256": "2ce51099b7aac666aa4c377ffc46f87ddd30c3acbe7150834725f1f95a221c43",
       "name": "下方了",
-      "native": "83-static-source-graphs-810-nodes-81-prefabs-both-targets-verified; UI-color-opacity-and-Creator-layer-verified",
+      "native": "83-static-source-graphs-810-nodes-81-prefabs-both-targets-verified; UI-color-opacity-and-Creator-layer-verified;4-prefabs-5-template-relations-plus-16-node-dynamic-ui-both-targets-verified",
       "profile": "cocos-3.8.7-bundle",
       "read": "partial",
       "remaining": [
-        "36 source nested-Prefab/override graphs",
-        "source components outside Sprite/Label/UITransform/UIOpacity subset",
+        "5 source graphs still lack 6 exact templates;114/119 graph closures available; not all graphs native-tested",
+        "source components outside audited Sprite/Label/Widget/Layout/UITransform/UIOpacity subset and untested dynamic modes",
         "Unity camera/layer mapping, source Scene globals",
         "35 source image edges",
         "sampler behavior and Spine",
