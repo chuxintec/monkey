@@ -1,6 +1,10 @@
 # v0.2 本地候选与分发验收
 
-第一轮分发01已获总监独立认可；整体仍待有限动态布局续修及新分发回执复核。Grid/child-resize/线性缩放的续修已通过，见[有限续修](validation/2026-10-24-layout-followup.md)。本页下方包SHA属于保留的分发01，最新续修包02见[本地续修分发回执](validation/v02-local-delivery-followup.json)，不覆盖01。版本仍为 `0.2.0.dev1`，未推送、未创建tag或Release。正式远端v0.1保持冻结。完成的是工具的声明子集及交接出口，各游戏仍有明确partial/blocked，不能宣称所有引擎版本或完整游戏自动转换。
+2026-10-24，总监已确认 **v0.2声明支持范围的本地工具交付验收通过**，依据[总监本地验收决定](/Users/wangmeng/Documents/Manager/decisions/20261024-monkey-v01-v02/LOCAL-ACCEPTANCE.md)，事件monkey-v02-director-local-acceptance-20261024-01。总监独立核对分发02两包大小/SHA、4份回执SHA与106包文件等于源码；原生记录和隔离安装证据复用，不重打包或重验。
+
+版本仍为 `0.2.0.dev1`，未正式发布；本轮开发结束，保留成果，后续等待用户反馈或明确发布指令。不推送/tag/Release，正式v0.1保持冻结。47份其他布局guard、Spine/Egret源UI、缺模板及未知方法等限制保持逐case记录，Player逐帧、原版视觉/输入/完整玩法仍not_run；本地验收不表示全部引擎/布局或完整游戏恢复。
+
+第一轮分发01作为历史认可记录保留；最新分发02见[续修分发回执](validation/v02-local-delivery-followup.json)，实际布局证据见[有限续修](validation/2026-10-24-layout-followup.md)。机器回执中的pending-director-review是生成时状态，当前结论以上述总监验收决定为准，不反向改写回执。
 
 ## 一条命令
 
@@ -40,4 +44,4 @@ Cocos目标可选unity/cocos/both，其他源引擎统一unity6；默认格式no
 
 源码快照 `0a523d5`（实现df68c59），235个登记文件；wheel 398326B，SHA `e1bec49ee36c8bed5519c37955c045b38a69c0a805f3ee11406da3828efb950e`；sdist 609147B，SHA `d00575b17075381b72597a1da10910098e7db19e0d8c1b3e53853a0f83800640`。在 `.private/v02-delivery-02/dist/`，旧01不覆盖。106份包载荷逐字节匹配源码，sdist重建wheel载荷相同，无原包/游戏图片/outputs/引擎二进制。
 
-新私有venv从项目缓存离线安装本地wheel与固定Pillow12.2.0，独立cwd8条安装后CLI包含缩放Grid+child-resize合成输入，none/grea各双目标、4份静态验证通过，原输入SHA不变、仓库src不在sys.path；新Flow组件及完整MIT许可已确认随包和生成工程保留。实际原生6组/54态和232工具测试通过。布局helpers与实际最终代表字节相同，Grid02仅后增许可头、源码体一致。整体仍交总监复核，不自行关项/推送/发布；Player时序/视觉/玩法和其他组合保留限制。
+新私有venv从项目缓存离线安装本地wheel与固定Pillow12.2.0，独立cwd8条安装后CLI包含缩放Grid+child-resize合成输入，none/grea各双目标、4份静态验证通过，原输入SHA不变、仓库src不在sys.path；新Flow组件及完整MIT许可已确认随包和生成工程保留。实际原生6组/54态和232工具测试通过。布局helpers与实际最终代表字节相同，Grid02仅后增许可头、源码体一致。声明范围本地交付现已获总监验收；不推送/发布，Player时序/视觉/玩法和其他组合保留限制。
