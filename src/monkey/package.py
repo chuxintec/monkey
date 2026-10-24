@@ -3,6 +3,7 @@
 Object/behavior recovery is reported separately from complete file accounting.
 """
 import json
+import re
 import zipfile
 from collections import Counter
 from io import BytesIO
@@ -138,8 +139,8 @@ def convert_package(source, target, output, namespace='monkey-project',offline=F
                     if Path(name).name.startswith('settings.')and suffix=='.json':
                         try:
                             settings_data=json.loads(raw)
-                            if isinstance(settings_data,dict)and settings_data.get('CocosEngine')=='3.8.7':
-                                cocos_evidence.append(dict(path=name,kind='creator-published-settings',version='3.8.7',sha256=digest))
+                            if isinstance(settings_data,dict)and settings_data.get('CocosEngine')in ('3.8.7','3.4.1'):
+                                cocos_evidence.append(dict(path=name,kind='creator-published-settings',version=settings_data['CocosEngine'],sha256=digest))
                         except (ValueError,UnicodeError,RecursionError):pass
                     if category=='Bundle':
                         config=json.loads(raw)
@@ -196,9 +197,13 @@ def convert_package(source, target, output, namespace='monkey-project',offline=F
         for row in rows: by_stem.setdefault(Path(row['path']).name.split('.')[0],[]).append(row['path'])
         for item in configs:
             c=item['data'];bundle=c['name']
+            string_indices=(selection and selection['sourceProfile']=='cocos-3.4.1-bundle')or any(e.get('version')=='3.4.1'for e in cocos_evidence)
+            def pack_index(value):
+                if string_indices and isinstance(value,str)and re.fullmatch(r'0|[1-9][0-9]{0,5}',value):return int(value)
+                return value
             if (not isinstance(c.get('paths',{}),dict) or not isinstance(c.get('types',[]),list)
                     or not isinstance(c.get('packs',{}),dict) or len(c['uuids'])>50000
-                    or any(not isinstance(v,list) or any(type(i) is not int for i in v) for v in c.get('packs',{}).values())):
+                    or any(not isinstance(v,list) or any(type(pack_index(i)) is not int for i in v) for v in c.get('packs',{}).values())):
                 report['diagnostics'].append(diagnostic('INVALID_BUNDLE_TABLE',item['path'],'Malformed/oversized UUID/path/type/pack tables; original config retained'))
                 continue
             previous=bundles.get(bundle)
@@ -212,7 +217,7 @@ def convert_package(source, target, output, namespace='monkey-project',offline=F
                 prefix=Path(item['ledgerPath']).parent.as_posix()
                 prefix='' if prefix=='.' else prefix+'/'
                 matches=[p for p in by_stem.get(canonical,[]) if p.startswith(prefix)]
-                pack_keys=[str(pack) for pack,indices in c.get('packs',{}).items() if index in indices]
+                pack_keys=[str(pack) for pack,indices in c.get('packs',{}).items() if index in [pack_index(value)for value in indices]]
                 if pack_keys:
                     matches += [p for pack in pack_keys for p in by_stem.get(pack,[]) if p.startswith(prefix)]
                 logical=c.get('paths',{}).get(str(index))
@@ -234,13 +239,15 @@ def convert_package(source, target, output, namespace='monkey-project',offline=F
         source_profile=selection['sourceProfile'] if selection else ('cocos-2.4.15-project' if any(e['kind']=='editable-cocos-project' for e in cocos_evidence) else
                         'cocos-2.1.2-resource'if any(e.get('version')=='2.1.2'for e in cocos_evidence)else
                         'cocos-3.8.7-bundle'if any(e.get('version')=='3.8.7'for e in cocos_evidence)else
+                        'cocos-3.4.1-bundle'if any(e.get('version')=='3.4.1'for e in cocos_evidence)else
                         'cocos-2.4.11-bundle'if any(e.get('version')=='2.4.11'for e in cocos_evidence)else
                         'cocos-2.4.15-bundle' if any(e.get('version')=='2.4.15' for e in cocos_evidence) else None)
         if source_profile=='cocos-2.4.11-bundle'and not any(e.get('version')=='2.4.11'and e['kind']in ('creator-engine-literal','cocos-bundle-config')for e in cocos_evidence):
             fail('SOURCE_VERSION_EVIDENCE_REQUIRED','2.4.11','Include original engine version assignment or explicit source bundle engineVersion')
-        if source_profile=='cocos-3.8.7-bundle'and not any(e['kind']=='creator-published-settings'and e['version']=='3.8.7'for e in cocos_evidence):
-            fail('COCOS3_VERSION_EVIDENCE_REQUIRED','settings','Published settings.CocosEngine=3.8.7 must be included in explicit inputs')
-        expected_version={'cocos-3.8.7-bundle':'3.8.7','cocos-2.4.11-bundle':'2.4.11','cocos-2.4.15-bundle':'2.4.15','cocos-2.4.15-project':'2.4.15','cocos-2.1.2-resource':'2.1.2'}.get(source_profile)
+        cocos3_version={'cocos-3.8.7-bundle':'3.8.7','cocos-3.4.1-bundle':'3.4.1'}.get(source_profile)
+        if cocos3_version and not any(e['kind']=='creator-published-settings'and e['version']==cocos3_version for e in cocos_evidence):
+            fail('COCOS3_VERSION_EVIDENCE_REQUIRED','settings','Published settings.CocosEngine='+cocos3_version+' must be included in explicit inputs')
+        expected_version={'cocos-3.8.7-bundle':'3.8.7','cocos-3.4.1-bundle':'3.4.1','cocos-2.4.11-bundle':'2.4.11','cocos-2.4.15-bundle':'2.4.15','cocos-2.4.15-project':'2.4.15','cocos-2.1.2-resource':'2.1.2'}.get(source_profile)
         versions={e['version']for e in cocos_evidence if e.get('version')and e['version']!='unknown'}
         if expected_version and versions-{expected_version}:
             fail('SOURCE_ENGINE_PROFILE_CONFLICT','engine','Conflicting source engine versions cannot share a profile')

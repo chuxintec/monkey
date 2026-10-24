@@ -46,7 +46,7 @@ class Creator38Tests(unittest.TestCase):
     def test_unsupported_v3_widget_is_retained_without_breaking_either_target_emission(self):
         with tempfile.TemporaryDirectory()as t:
             root=Path(t).resolve();config=fixture38(root/'source')
-            write_json(config.parent/'import'/PREFAB[:2]/(PREFAB+'.a.json'),normal([dict(__type__='cc.Prefab',data={'__id__':1}),dict(__type__='cc.Node',_components=[dict(__type__='cc.Widget',node={'__id__':1},_alignFlags=45)])]))
+            write_json(config.parent/'import'/PREFAB[:2]/(PREFAB+'.a.json'),normal([dict(__type__='cc.Prefab',data={'__id__':1}),dict(__type__='cc.Node',_components=[dict(__type__='cc.Widget',node={'__id__':1},_alignFlags=128)])]))
             report=convert_package(config.parent,'both',root/'out')
             self.assertNotEqual(report['structuredRecovery']['status'],'failed',report['structuredRecovery'])
             plan=load(read(root/'out/Structured/CocosProject-plan/plan.json'))

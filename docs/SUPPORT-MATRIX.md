@@ -16,6 +16,7 @@
 |Unity6来源|Unity6|planned，需明确版本真实样本|U|
 |Cocos Creator3.8.7发布资源|Unity6 / Cocos3.8.8 / both|partial：下方了496明确输入/38081754B，4804对象正文；986源Frame→1972变体，83源图/810节点/81 Prefab双端原生0严格差异。ParabolaUtils的3个静态Number方法生成C#/TS/JS并各13边界调用通过，无组件绑定；真实4Prefab/5原生嵌套关系双端已验证，动态16节点代表双端状态≤0.05px；114图静态闭合（5图缺6模板），其余5向量方法/未覆盖布局/采样/Spine/业务待补，两zip缺失|C，持续逐case|
 |Cocos Creator3.x其他格式|Unity6 / Cocos3.8.8 / both|planned，不能套2.4 reader|C|
+|Cocos Creator3.4.1发布资源|Unity6 / Cocos3.8.8 / both|partial：天命11962输入/约1.01GB全部入账，11618已确认下载项齐；7071源Frame/每端14142变体、1TTF/13JSON，双端静态0诊断。5源Frame/10变体双端原生0诊断；原版UI图未恢复|857图及实际mounted结构继续；162未知native后缀、redirect/源码/Spine明确列限|
 |Cocos Creator2.4.x以下/1.x旧格式|Unity6 / Cocos3.8.8 / both|planned，逐格式/版本反例，不能笼统已支持|C|
 |Cocos2d-x及其他Cocos分支原包|Unity6 / Cocos3.8.8 / both|planned，独立识别和适配，不能套Creator序列化|逐来源样本|
 |Unity任意来源|Cocos / both|unsupported，不在本次批准矩阵|明确拒绝，不产假工程|

@@ -1,4 +1,4 @@
-"""Explicit Creator 3.8.7 resource subset; graph/layout conversion remains pending."""
+"""Explicit Creator 3.8.7 resource serialization; graphs use cocos38_graphs."""
 import copy
 from .compiled import asset_key, fail
 

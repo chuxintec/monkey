@@ -7,7 +7,7 @@ from .sources.compiled import fail
 
 def input_set(path):
     path=safe(path);raw=read(path);data=load(raw)
-    if data.get('schemaVersion')!=1 or data.get('sourceProfile') not in ('cocos-2.4.15-bundle','cocos-2.4.15-project','cocos-3.8.7-bundle','cocos-2.4.11-bundle','cocos-2.1.2-resource','generic-image-resources-v1','egret-custom-resource-plist-v1'):
+    if data.get('schemaVersion')!=1 or data.get('sourceProfile') not in ('cocos-2.4.15-bundle','cocos-2.4.15-project','cocos-3.8.7-bundle','cocos-3.4.1-bundle','cocos-2.4.11-bundle','cocos-2.1.2-resource','generic-image-resources-v1','egret-custom-resource-plist-v1'):
         fail('INPUT_SET_SCHEMA',str(path),'Expected input-set schema 1 and explicit supported sourceProfile')
     from .sources.containers import MAX_TOTAL,MAX_EXPLICIT_TOTAL
     limits=data.get('limits',{})

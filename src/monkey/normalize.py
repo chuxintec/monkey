@@ -86,7 +86,7 @@ def sprite(atlas, frame):
 def normalize(manifest_path, output):
     manifest_path = safe(manifest_path)
     m = stage_document(manifest_path)
-    if m.get('sourceProfile') not in ('cocos-2.4.15-bundle','cocos-2.4.15-project','cocos-3.8.7-bundle','cocos-2.4.11-bundle','cocos-2.1.2-resource') or m.get('schemaVersion') != 1:
+    if m.get('sourceProfile') not in ('cocos-2.4.15-bundle','cocos-2.4.15-project','cocos-3.8.7-bundle','cocos-3.4.1-bundle','cocos-2.4.11-bundle','cocos-2.1.2-resource') or m.get('schemaVersion') != 1:
         fail('UNSUPPORTED_MANIFEST', '$', 'Expected inspect schema 1')
     roots = {name:safe(path) for name,path in m.get('sourceRoots',{m['bundle']:m['sourceRoot']}).items()}
     expected = {(i.get('bundle',m['bundle']),i['path']):i for i in m['inputs']}
@@ -140,6 +140,11 @@ def normalize(manifest_path, output):
         lengths={k:len(result[k]) for k in ('assets','spriteFrames','bitmapFonts','materials','nodes','components','animationClips')}
         try:
             cocos38=m.get('sourceProfile')=='cocos-3.8.7-bundle'
+            cocos34=m.get('sourceProfile')=='cocos-3.4.1-bundle'
+            cocos3=cocos38 or cocos34
+            if cocos34 and kind not in ('cc.SpriteFrame','cc.Texture2D','cc.ImageAsset','cc.TTFFont','cc.AudioClip','cc.JsonAsset','redirect','native'):
+                result['quarantinedAssets'].append(dict(sourceId=sid,kind=kind,reason='COCOS34_RESOURCE_PROFILE_ONLY'))
+                diagnostics.append(diagnostic('COCOS34_RESOURCE_PROFILE_ONLY',asset.get('importPath',sid),'3.4.1 graph/animation/custom semantics need version-specific validation; original retained',sid));continue
             if m.get('sourceProfile')=='cocos-2.1.2-resource' and kind not in ('cc.SpriteFrame','cc.Texture2D','cc.TTFFont','cc.AudioClip'):
                 result['quarantinedAssets'].append(dict(sourceId=sid,kind=kind,reason='LEGACY_RESOURCE_ONLY'))
                 diagnostics.append(diagnostic('LEGACY_RESOURCE_ONLY',asset.get('importPath',sid),'2.1.2 graph, clip and other semantics require a dedicated adapter',sid));continue
@@ -153,8 +158,10 @@ def normalize(manifest_path, output):
                 continue
             if kind == 'cc.SpriteFrame':
                 resource_evidence={}
-                if cocos38:
+                if cocos3:
                     from .sources.cocos38 import frame as frame38
+                    if cocos34:
+                        from .sources.cocos34 import frame as frame38
                     frame,source,resource_evidence=frame38(asset,by_id,resolved)
                     texture_key=resource_evidence['sourceTexture']
                 else:
@@ -183,7 +190,7 @@ def normalize(manifest_path, output):
                 except (ParseError, OSError, Image.DecompressionBombError) as error:
                     diagnostics.append(diagnostic(getattr(error, 'code', 'IMAGE_ERROR'),
                         getattr(error, 'location', sid), str(error), sid))
-            elif cocos38 and kind=='cc.Texture2D':
+            elif cocos3 and kind=='cc.Texture2D':
                 diagnostics.append(diagnostic('COCOS3_SAMPLER_HANDOFF',sid,'Source sampler preserved in typed texture metadata; target sampler behavior is pending',sid))
             elif kind in ('cc.Texture2D', 'cc.ImageAsset', 'cc.TTFFont', 'cc.AudioClip', 'native'):
                 path = asset.get('native')
@@ -266,8 +273,10 @@ def normalize(manifest_path, output):
             result['quarantinedAssets'].append(dict(sourceId=sid,kind=kind,reason=getattr(error,'code','UNSUPPORTED_ASSET_SEMANTIC')))
             diagnostics.append(diagnostic('UNSUPPORTED_ASSET_SEMANTIC',asset.get('importPath',sid),str(error),sid))
     frames={f['sourceId']:f for f in result['spriteFrames']}
+    quarantined={a['sourceId']for a in result['quarantinedAssets']}
     for asset in m['assets']:
         if asset.get('kind')!='cc.BitmapFont':continue
+        if asset['sourceId']in quarantined:continue
         if not asset.get('document'):continue  # Source-only profile already records the quarantined payload.
         value=asset['document']['instances'][asset['document']['root']]
         atlas_ref=resolved(ref(value.get('spriteFrame'),asset['sourceId']))

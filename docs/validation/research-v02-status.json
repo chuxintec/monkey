@@ -189,9 +189,13 @@
         {
           "path": "docs/validation/source-unavailable-tianming.json",
           "sha256": "21267178c2f34bef51da4cdec1b33119099a9beb340de82249306bb6d6e62140"
+        },
+        {
+          "path": "docs/validation/tianming341-native-resources.json",
+          "sha256": "6837ed7d530a8f3d063ed69f37380cbd3ed7fe7177faf863fec86f1077ca817e"
         }
       ],
-      "export": "blocked-version-specific-reader-pending",
+      "export": "partial-resources-both-targets",
       "metadataHint": {
         "backend": null,
         "confidence": "unknown",
@@ -200,13 +204,13 @@
       },
       "metadataSha256": "fd710e669f350b3ed5097f1a45ecdf747038cec5233376f384a1d0722fa14884",
       "name": "天命行者",
-      "native": "not_run",
-      "profile": "cocos-3.4.1-source-acquired-adapter-pending",
-      "read": "current-appid12-source-and336-cache-files-frozen",
+      "native": "5-source-frames-10-variants-both-targets-pass",
+      "profile": "cocos-3.4.1-bundle",
+      "read": "11962-files-accounted;19960-source-objects;7071-source-frames",
       "remaining": [
-        "Original packages found, decrypted and title/settings verified; old archive absence is history",
-        "3.4.1 dedicated bundle reader and public conversion pending; do not label as3.8.7",
-        "336 indexed resources frozen; remaining declared remote bundle resources require exact config-based acquisition"
+        "3.4.1 source graph/default validation and actual mounted Widget/children structures still required",
+        "162 SpriteAtlas native extension declarations unresolved;203 built-in/external redirects;6 import shapes",
+        "Source scripts,738 Spine closures,full-package native and gameplay not recovered"
       ],
       "sourceEngineProof": {
         "appId": "wxbdf25cb34ce9bf6e",
@@ -217,7 +221,8 @@
       },
       "sourceRevision": "1.2.67",
       "targets": [
-        "unity6"
+        "unity6",
+        "cocos38"
       ]
     },
     {
@@ -503,18 +508,18 @@
   ],
   "discovery": {
     "denominator": 11,
-    "path": "outputs/research-matrix-v02-02/cases.json",
+    "path": "outputs/research-matrix-v02-final-01/cases.json",
     "sha256": "64e4d14a90e0a56bd73d927b1f7c6d21b208f8048465f98b605d64d171d67ad2"
   },
   "schemaVersion": 1,
   "scope": "actual per-case evidence; metadata hints are not conversion success; native labels name their verified subset",
   "summary": {
     "casesAttempted": 11,
-    "casesWithActualExports": 9,
-    "casesWithBlockedExport": 2,
+    "casesWithActualExports": 10,
+    "casesWithBlockedExport": 1,
     "completeGames": 0,
     "denominator": 11,
     "fullCompatibilityComplete": false,
-    "remainingCasesNotExported": 2
+    "remainingCasesNotExported": 1
   }
 }
