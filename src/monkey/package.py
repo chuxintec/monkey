@@ -476,7 +476,7 @@ Neither target requires monkey, Python, the source tree, the other target or the
                     prior=load(read(safe(reuse_source_stages)/'conversion-result.json'))
                     cached=next((p for p in prior['projects'] if p['path']==project.name),prior['projects'][0])
                     previous=(safe(reuse_source_stages)/cached['path'],cached['manifestSha256'])
-                spine=recover_closures(stage_document(inspected_path),project,previous=previous)
+                spine=recover_closures(stage_document(inspected_path),project,previous=previous,engine=engine)
                 coverage['spineClosures']=dict(closed=spine['closed'],unresolved=spine['unresolved'],nativeValidation='not_run')
             objects=load(read(project/'Analysis/structured-objects.json'))['objects']
             by_input={}

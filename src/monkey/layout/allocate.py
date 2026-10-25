@@ -83,7 +83,7 @@ class LayoutPlanner:
         cased=module if raw_folders is not None or typ in ('font','font-asset') else self._folders(module)
         record=dict(sourceId=meta.get('sourceId',base),identity=sid,kind=kind,type=typ,bundle=d['bundle'],originalPath=meta.get('logicalPath'),
             sourceName=meta.get('sourceName'),provenance=d['provenance'],locale=d['locale'],minigame=d['minigame'],
-            module=([casing.folder(d['minigame'],self.engine)] if d['minigame'] else [])+cased,reasons=reasons)
+            module=([casing.folder(d['minigame'],self.engine)] if d['minigame'] else [])+cased,stem=stem,reasons=reasons)
         return target,record
 
     def module_of(self,sid,kind='prefab',metadata=None):

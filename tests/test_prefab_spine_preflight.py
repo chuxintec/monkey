@@ -55,6 +55,7 @@ class BoundaryTests(unittest.TestCase):
                 dict(bundle='main',path=p.name,sha256=sha(p.read_bytes())) for p in source.iterdir()])
             result=recover_closures(manifest,root/'out');self.assertEqual(result['closed'],1)
             row=result['skeletons'][0];self.assertEqual(row['runtime'],'not_installed')
+            self.assertTrue(all(f['path'].startswith('SourceRecovery/Unconverted/Spine/') for f in row['files']),row['files'])
             files={Path(f['path']).name:root/'out'/f['path'] for f in row['files']}
             self.assertEqual(next(p for n,p in files.items() if n.endswith('.bin')).read_bytes(),binary);self.assertEqual(next(p for n,p in files.items() if n.endswith('.atlas')).read_text(),atlas)
             inline={'skeleton':{'spine':'3.8-from-4.2.43'},'bones':[{'name':'root'}],'slots':[],'skins':{},'animations':{}}

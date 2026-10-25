@@ -38,7 +38,7 @@ def atlas_pages(text):
     return pages
 
 
-def recover_closures(manifest,destination,previous=None):
+def recover_closures(manifest,destination,previous=None,engine='unity'):
     destination=Path(destination);assets={a['sourceId']:a for a in manifest['assets']}
     inputs={(i.get('bundle',manifest['bundle']),i['path']):i for i in manifest['inputs']}
     def resource(asset):
@@ -47,8 +47,11 @@ def recover_closures(manifest,destination,previous=None):
         expected=inputs.get((bundle,relative));raw=read(inside(Path(manifest['sourceRoots'][bundle]),relative),max_bytes=128*1024*1024)
         if expected is None or expected['sha256']!=sha(raw):fail('SPINE_SOURCE_CHANGED',relative,'Native resource differs from frozen receipt')
         return raw,relative
-    from ..names import Names,source_names
-    naming=Names(source_names(manifest))
+    from ..names import source_names
+    from ..layout import LayoutPlanner,casing
+    from ..layout.standard import RECOVERY
+    # No Spine runtime is installed, so closures wait in SourceRecovery mirroring their future Content/Spine place (PROJECT-SPEC 6.3).
+    naming=LayoutPlanner(engine,source_names(manifest))
     old_rows={};old_root=None;old_owned={};decoded_pages=0;reused_pages=0
     if previous:
         from ..io import stage_manifest,load,safe
@@ -116,8 +119,8 @@ def recover_closures(manifest,destination,previous=None):
                     image=open_texture(image_raw,Path(image_path).suffix.lower())
                     stream=BytesIO();image.save(stream,format='PNG');files[name]=stream.getvalue();decoded_pages+=1
                 dependencies.append(dict(page=name,sourceId=sid,sourceSha256=sha(image_raw)))
-            folder=naming.path(asset['sourceId'],'','SourceRecovery/Spine')
-            stem=Path(folder).name
+            folder=naming.folder(asset['sourceId'],'spine',root=RECOVERY['unconverted'])
+            stem=casing.snake(naming.record(asset['sourceId'],'spine','','folder')['stem'])
             files={((stem+Path(name).suffix) if name in ('skeleton.bin','skeleton.json','source.atlas') else name):data for name,data in files.items()}
             for name,data in files.items():
                 path=inside(destination/folder,name);path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(data)
