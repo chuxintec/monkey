@@ -76,15 +76,28 @@ class AnimationTests(unittest.TestCase):
         old=ir_for(base());old.pop('animationSchemaVersion');old.pop('animationClips')
         self.assertEqual(plan_clips(old,'fixture',unity.PROFILE),([],[]))
 
+    def test_minigame_animation_is_inside_declared_native_import_root(self):
+        from monkey.layout import standard
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp).resolve();ir=ir_for(base())
+            ir['sourceNames']={'source:clip':dict(bundle='miniGameRes',logicalPath='Anim/Rope3d/fly')}
+            (root/'ir').mkdir();write_json(root/'ir/ir.json',ir);finish(root/'ir',dict(schemaVersion=1,diagnostics=[]))
+            unity.plan(root/'ir/ir.json','minigame',root/'plan');unity.export(root/'plan/plan.json',root/'project')
+            paths=load(read(root/'project'/standard.unity('outputPaths')))
+            plan=load(read(root/'project'/standard.unity('importPlan')))
+            clip=next(a for a in plan['animations'] if a['convertible'])
+            self.assertIn('/MiniGames/Rope3d/',clip['path'])
+            self.assertTrue(clip['path'].startswith(paths['animationsRoot']+'/'),clip['path'])
+
     def test_shared_ir_dual_export_no_native_files_or_callback_stubs_and_create_only(self):
         with tempfile.TemporaryDirectory() as temp:
             r=Path(temp).resolve();ir=ir_for(base());(r/'ir').mkdir();write_json(r/'ir/ir.json',ir);finish(r/'ir',dict(schemaVersion=1,diagnostics=[]))
             for target in [unity,cocos]:
                 prefix='unity' if target is unity else 'creator'
                 target.plan(r/'ir/ir.json','fixture',r/(prefix+'-plan'));target.export(r/(prefix+'-plan/plan.json'),r/prefix)
-                module=load(read(r/prefix/'Analysis/animation-module.json'));self.assertFalse(module['callbacksGenerated']);self.assertEqual(len(module['clips']),1)
+                module=load(read(r/prefix/'Analysis/Tasks/animation-module.json'));self.assertFalse(module['callbacksGenerated']);self.assertEqual(len(module['clips']),1)
                 self.assertFalse(any((r/prefix).rglob('*.anim')))
-                task=next(t for t in load(read(r/prefix/'Analysis/handoff.json'))['tasks'] if t['taskId']=='finite-ui-animation');self.assertTrue(task['gaps'])
+                task=next(t for t in load(read(r/prefix/'Analysis/Tasks/handoff.json'))['tasks'] if t['taskId']=='finite-ui-animation');self.assertTrue(task['gaps'])
                 self.assertEqual(target.verify(r/prefix,r/(prefix+'-static'))['staticValidation'],'pass')
                 with self.assertRaises(ParseError):target.export(r/(prefix+'-plan/plan.json'),r/prefix)
                 (r/(prefix+'-plan/plan.json')).write_text('{}')

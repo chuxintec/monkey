@@ -1,3 +1,17 @@
+# 当前开发分支：monkey-project/1
+
+当前包版本 `0.3.0.dev1`，以 GitHub prerelease 交付。日常使用已安装 Release 的 `monkey`；仓库入口仅转发，源码开发显式使用 `.venv/bin/python -m monkey.cli`。新输出布局以 [PROJECT-SPEC](PROJECT-SPEC.md) 为准，以下历史格式化说明不适用于新输出；`--format none|grea` 都是弃用别名。
+
+```sh
+monkey convert --help
+monkey layout-preview --conversion /path/to/completed-conversion --layout /path/to/layout.json --out /path/to/new-preview
+monkey layout-migration --from /path/to/old/UnityProject --to /path/to/new/UnityProject --out /path/to/new-migration
+```
+
+预览读取转换输出中的 Structured 计划；迁移命令读取工程 Assets/assets 的 meta 身份，拒绝重复 GUID/UUID。清单列出移动、未移动、仅旧工程存在及新增资产；它不修改游戏工程，也不证明内容、导入设置或玩法一致。新输出目录必须不存在。
+
+以下保留旧版本用法及历史验收说明。
+
 # v0.2 开发增量（尚未发布）
 
 本地开发版本0.2.0.dev1；v0.1发行包/标签保持0.1.0不变。
@@ -20,7 +34,7 @@ Unity来源首个明确本地bundle的单命令候选转换已接入`convert`，
 
 # v0.1 命令说明
 
-正式工具版本v0.1，Python包0.1.0；`monkey --version`和`monkey capabilities --json`可核对。旧0.3.0.dev1为内部开发候选编号，旧证据不改写；跨toolVersion的resume/reuse按原身份合同拒绝，需明确新输出，不静默改旧候选。
+当前预发布版本v0.3.0.dev1；`monkey --version`和`monkey capabilities --json`可核对。旧0.3.0.dev1为内部开发候选编号，旧证据不改写；跨toolVersion的resume/reuse按原身份合同拒绝，需明确新输出，不静默改旧候选。
 
 # 一键工程转换
 
@@ -362,3 +376,28 @@ bin/monkey convert --input-set inputs.json --remote-manifest downloads.json \
 ## 有界原生布局替换
 
 `native-layout-audit / native-layout-prepare / native-layout-patch / native-layout-finish` 用于已冻结项目的精确布局子集增量，准备、原生执行和可采用增量分别记录。窗口、正常审批、失败保留与当前支持边界见 [原生布局增量修复](NATIVE-LAYOUT-PATCH.md)。
+
+### 中文命名与游戏配置表
+
+新导出的目标工程文件/目录使用无声调拼音，再应用 Unity/Creator 原有大小写规则；同音文件按稳定源身份消歧。`Analysis/Mappings/*name-map.json` 保留原中文名称与目标路径；源游戏只读，JSON 键和值、界面文本、骨骼 region 名称不改。原始输入缓存保持源路径供哈希追溯。
+
+整包 `convert` 自动识别已支持的 BON 配置，不需要另加参数。进入 `Docs/CONFIGURATION.md` 可直接打开逐表 JSON，机器索引为 `Analysis/Mappings/config.json`。肥鹅主表位于 Unity `Assets/Game/Content/Config/Base/`；地区配置独立保存，语言表位于 `Content/Strings/<Locale>/`。目前支持有静态 decoder 证据的 BON tagged-le-v1；其他二进制、含 Binary/Date 的表列 needs_adapter，不能仅将 `.bin` 改后缀。JSON 导出不代表游戏运行时已接入这些表。
+
+已有工程应重新生成到新输出，使用 `layout-migration` 核对 GUID 与路径差异后受控迁移；不直接批量重命名旧工程或改原包。Unity 来源的脚本类型名、Resources 动态键和第三方固定路径仍有身份约束，不能脱离消费者直接改名。
+
+### 统一资源目录（monkey-project/2.0.0）
+
+```sh
+bin/monkey convert --package --input-set /absolute/path/inputs.json --target both --offline --out /absolute/path/new-output
+```
+
+Unity：`UnityProject/Assets/Game/Content/<Type>/<Module>/`。
+Creator：`CocosProject/assets/resources/<Type>/<Module>/`。
+
+两端类型、模块使用 PascalCase；中文名字转拼音，源 bundle/采集目录保留于台账，不生成 Group/Local/Remote/Bundles 目录。`--layout` 支持 modules/renames 等规则，partitions 已取消。语言与小游戏位于对应类型下面。
+
+Scene/Prefab/Animation 原生文件由 `native-import` 或 `convert --native` 阶段生成；离线计划不等于原生文件。`Docs/RESOURCE-LOADING.md` 和 `Analysis/Mappings/resource-paths.json` 提供原始键、sourceId、目标路径与加载键；闭包目录不是可加载的单一资源。
+
+`resource-catalog.json` 记录完整纹理与 Shader 源代码，`spine-closures.json` 记录骨骼/atlas/页图。Unity Addressables/AssetBundle 与远端构建未配置，业务运行/播放/渲染仍单独验收。
+
+图片统一使用 `Textures/<Module>/`，不再生成 Sprites 目录。保留 Sprite 导入设置与引用；仅合并字节一致且无独立绑定要求的附加完整纹理，尺寸/裁切不同的图片不强行删除。`resource-catalog.json` 记录纹理别名；Spine/字体页图仍留在对应闭包旁。

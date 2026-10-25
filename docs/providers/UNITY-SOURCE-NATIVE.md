@@ -1,20 +1,20 @@
 # Unity 源包的公开原生验证
 
-`convert` 的 Unity 来源可显式追加 `--native --unity-editor <installed-Unity>`。默认仍只导出 none 候选；`--format grea` 必须同时启用 native，资源路径由 AssetDatabase.MoveAsset 处理，不手改 Unity YAML。当前精确目标 6000.6.2f1，不安装或切换引擎。
+`convert` 的 Unity 来源可显式追加 `--native --unity-editor <installed-Unity>`。默认输出统一目录的候选；`--format none|grea` 为兼容别名，不再控制目录迁移。当前精确目标 6000.6.2f1，不安装或切换引擎。原生验证目前只接受下述叶 Prefab 子集，整包资源核验不等于此原生入口支持整包导入。
 
 ```sh
 monkey convert --source <original.bundle> --target unity6 --out <fresh-output> \
   --provider-python <UnityPy-1.25.3-python> --asset-ripper <AssetRipper-2.0.0> \
   --unity-dependency-manifest <frozen-bundles.json> \
   --unity-texture-cache <exact-texture-cache.json> \
-  --native --unity-editor <Unity-6000.6.2f1> --format grea
+  --native --unity-editor <Unity-6000.6.2f1>
 ```
 
 本期 `unity-leaf-prefab-sprite-array-v1` 只接受一份原生叶 Prefab、一个嵌入结构的组件/字段类、名称保持的 Sprite[] 字段与精确水合的非变体图集。场景、多组件、借取字段尚未落入实例、缺依赖、null 数组元素、未证明的图集状态、同名资源歧义等，在启动 Editor 前阻断原生段，成功的基础导出保留。null 数组与空数组长度独立核对，不补空资源或猜像素。
 
 原 PPtr 沿 container/serialized-file 的原 external 表精确解析，decimal pathID 与目标 localID 分列。目标通过唯一源资源名和真实类型匹配，再核原生 GUID/localID、逐项引用顺序、图集 rect、纹理 GUID。PNG 像素按固定纵向方向转换，与源水合 RGBA SHA 比较。Root 名称、active 与 Transform 值保存重开后保持；实际 MonoScript 绑定与声明字段类型/长度、缺脚本均核对。方法不恢复，也不调用源游戏代码。
 
-格式计划只为已证明的 Sprite/Texture 生成资源移动，保留文件名；Resources 路径、非空 bundle 名固定原位，脚本/asmdef 及其他资源保持原路径。全部既有 meta GUID 在 Editor 前后封存。真实《武侠》样本 134 项全部固定，**实际移动 0 项**；当前正向 native 移动仅有实现与定向计划反例，不能称已用真实游戏证明了资源搬移。
+下述 v0.2 历史格式验证只为已证明的 Sprite/Texture 生成资源移动，保留文件名；当前布局以 PROJECT-SPEC.md 为准。全部既有 meta GUID 在 Editor 前后封存。真实《武侠》样本 134 项全部固定，**实际移动 0 项**；当前正向 native 移动仅有实现与定向计划反例，不能称已用真实游戏证明了资源搬移。
 
 原生段检查实际主 Editor 冲突，仅新副本和自有子进程；方法≤1200秒，固定28分钟内部/30分钟外部截止，正常TERM与回收，不强杀。失败保留 none 基线及 native 工作区；通过后显式 grea 晋升清理过缓存/helper/probe 的独立工程，none 基线放 Unformatted/UnityProject。已导入或人工修改的任意工程仍不是通用迁移对象。
 

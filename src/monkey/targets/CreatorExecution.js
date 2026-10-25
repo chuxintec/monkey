@@ -5,7 +5,7 @@ const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
 let state=null;
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 function write(name,value) {
-    const target=path.join(state.root,'Analysis',name),temp=target+'.tmp';
+    const target=path.join(state.root,'Analysis','Readback',name),temp=target+'.tmp';fs.mkdirSync(path.dirname(target),{recursive:true});
     fs.writeFileSync(temp,JSON.stringify(value,null,2)+'\n',{mode:0o600});fs.renameSync(temp,target);
 }
 function checkpoint(phase,processed=0,total=1,status='running') {

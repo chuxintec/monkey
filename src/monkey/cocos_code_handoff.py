@@ -6,13 +6,14 @@ from .io import safe,inside,read,load,sha,write_json,new_output
 from .sources.code import drafts
 from .sources.compiled import fail
 from .layout import standard
+from .layout.standard import find_analysis
 
 
 def enrich(candidate,output,expected_manifest=None,apply=False,reuse_facts=None,expected_facts=None):
     root=safe(candidate);manifest_path=root/'manifest.json';raw=read(manifest_path,max_bytes=128*1024**2);identity=sha(raw);manifest=load(raw,max_nodes=8_000_000)
     if apply and identity!=expected_manifest:fail('CODE_HANDOFF_MANIFEST_CHANGED',str(root),'Explicit current owned manifest hash required')
     if apply and (root/'Temp/UnityLockfile').exists():fail('CODE_HANDOFF_EDITOR_ACTIVE',str(root),'Close owned Editor before additive handoff')
-    index=load(read(root/'Analysis/code-index.json',max_bytes=128*1024**2),max_nodes=8_000_000);modules=[m for m in index['modules']if m.get('entryType')=='module_candidate'and m.get('sourceEvidence')]
+    index=load(read(find_analysis(root,'code-index.json'),max_bytes=128*1024**2),max_nodes=8_000_000);modules=[m for m in index['modules']if m.get('entryType')=='module_candidate'and m.get('sourceEvidence')]
     if not modules:fail('CODE_HANDOFF_NO_MODULES',str(root),'No explicit recovered original module list')
     out=new_output(output,[root]);job=[]
     for m in modules:
@@ -48,10 +49,10 @@ def enrich(candidate,output,expected_manifest=None,apply=False,reuse_facts=None,
         emitted.append(relative.as_posix());entries.append(dict(sourceId=m['sourceId'],name=m.get('name'),rf=m.get('rf',[]),dependencies=m.get('dependencies',[]),sourceFile=m.get('sourceFile'),sourceFileBytes=m.get('source_bytes'),memberByteBasis='module-relative-UTF8',original=m['sourceEvidence'],originalSha256=m['sha256'],draft=relative.as_posix(),members=record['members'],methodsImplemented=0,compiled=False))
     report=dict(schemaVersion=1,toolVersion=__version__,sourceManifestSha256=identity,modules=len(entries),namedMembers=sum(len(e['members']['methods'])for e in entries),fieldDeclarations=sum(len(e['members']['fields'])for e in entries),methodsImplemented=0,sourceExecuted=False,entries=entries)
     (out/'Analysis').mkdir(exist_ok=True)
-    write_json(out/'Analysis/named-code-handoff.json',report);emitted.append('Analysis/named-code-handoff.json')
+    write_json(find_analysis(out,'named-code-handoff.json'),report);emitted.append('Analysis/Code/named-code-handoff.json')
     if current:text='''# Recovered code status
 
-Read Analysis/named-code-handoff.json and the drafts it lists (SourceRecovery/Code/Drafts/<Layer>/<Module>) before implementing behavior.
+Read Analysis/Code/named-code-handoff.json and the drafts it lists (SourceRecovery/Code/Drafts/<Layer>/<Module>) before implementing behavior.
 Each draft's folder and namespace mirror its future five-layer location; Unclassified means no binding or name evidence yet.
 Every member points to its exact original module, byte range/hash, literal JS owner alias and parameters.
 Types/alias ownership and all unimplemented bodies remain explicit TODOs. Drafts stay outside Assets.
@@ -59,7 +60,7 @@ Use native import/readback receipts for actual Prefab/Scene/resource coverage; b
 '''
     else:text='''# AI development entry
 
-Read Analysis/named-code-handoff.json and SourceRecovery/CodeDrafts/NamedCSharp before implementing behavior.
+Read Analysis/Code/named-code-handoff.json and SourceRecovery/CodeDrafts/NamedCSharp before implementing behavior.
 Every member points to its exact original module, byte range/hash, literal JS owner alias and parameters.
 Types/alias ownership and all unimplemented bodies remain explicit TODOs. Named drafts stay outside Assets.
 Legacy uniform Invoke drafts are historical only; do not treat their module count as recovered code.
@@ -83,7 +84,7 @@ Use native import/readback receipts for actual Prefab/Scene/resource coverage; b
             body=read(src,max_bytes=128*1024**2)
             if rel in existing:existing[rel].update(bytes=len(body),sha256=sha(body))
             else:manifest['files'].append(dict(path=rel,bytes=len(body),sha256=sha(body),owner='generated'))
-        manifest['codeHandoff']=dict(toolVersion=__version__,sourceManifestSha256=identity,report='Analysis/named-code-handoff.json',modules=len(entries),methodsImplemented=0)
+        manifest['codeHandoff']=dict(toolVersion=__version__,sourceManifestSha256=identity,report='Analysis/Code/named-code-handoff.json',modules=len(entries),methodsImplemented=0)
         write_json(manifest_path,manifest)
-    result=dict(status='partial',modules=len(entries),namedMethods=report['namedMembers'],fieldDeclarations=report['fieldDeclarations'],methodsImplemented=0,applied=apply,sourceExecuted=False,report=str(out/'Analysis/named-code-handoff.json'))
+    result=dict(status='partial',modules=len(entries),namedMethods=report['namedMembers'],fieldDeclarations=report['fieldDeclarations'],methodsImplemented=0,applied=apply,sourceExecuted=False,report=str(find_analysis(out,'named-code-handoff.json')))
     write_json(out/'handoff-result.json',result);return result

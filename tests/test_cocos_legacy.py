@@ -41,7 +41,7 @@ class LegacyResourcesTests(unittest.TestCase):
             result=convert_package(None,'both',root/'out',input_set_path=declaration,offline=True)
             self.assertEqual(len(result['sourceInputExclusions']),1)
             for target in ('UnityProject','CocosProject'):
-                rows=load(read(root/'out'/target/'Analysis/resource-ledger.json'))['files'];old=next(r for r in rows if r['localPath']==stale.name)
+                rows=load(read(root/'out'/target/'Analysis/Ledger/resource-ledger.json'))['files'];old=next(r for r in rows if r['localPath']==stale.name)
                 new=next(r for r in rows if r['localPath']==selected.name)
                 self.assertTrue(old['target'].startswith('SourceRecovery/Excluded/'));self.assertEqual(old['targetState'],'excluded_from_runtime')
                 self.assertNotEqual(old['target'],new['target'])
@@ -68,10 +68,10 @@ class LegacyResourcesTests(unittest.TestCase):
             self.assertTrue(result['completed']);self.assertEqual(result['structuredRecovery']['normalized']['spriteFrames'],1)
             inspected=load(read(root/'out/Structured/inspect/source-manifest.json'));asset=next(a for a in inspected['assets']if a['kind']=='cc.Prefab')
             self.assertIsNone(asset['document']);self.assertEqual(asset['sourceDocument']['payloadSha256'],sha(raw))
-            objects=load(read(root/'out/UnityProject/Analysis/structured-objects.json'))['objects'];obj=next(a for a in objects if a['kind']=='cc.Prefab')
+            objects=load(read(root/'out/UnityProject/Analysis/Evidence/structured-objects.json'))['objects'];obj=next(a for a in objects if a['kind']=='cc.Prefab')
             self.assertTrue(obj['sourceInputs']);self.assertEqual(obj['sourceDocument']['memberKey'],asset['key'])
             self.assertEqual(result['projects'][0]['coverage']['spineClosures']['unresolved'],1)
-            ledger=load(read(root/'out/UnityProject/Analysis/resource-ledger.json'))
+            ledger=load(read(root/'out/UnityProject/Analysis/Ledger/resource-ledger.json'))
             row=next(r for r in ledger['files']if r['localPath']==path.name);self.assertEqual((root/'out/UnityProject'/row['target']).read_bytes(),raw)
 
     def test_texture_unpacker_preserves_original_format_sampler_and_alpha(self):

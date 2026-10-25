@@ -9,6 +9,7 @@ from .sources.compiled import fail
 from .targets import unity
 from .layout import locate
 from .preflight import validate_progress
+from .layout.standard import find_analysis
 
 
 def now():return datetime.now(timezone.utc)
@@ -75,7 +76,7 @@ def native_import(candidate,output,editor,expected_manifest,budget_seconds,deadl
     spec=dict(schemaVersion=1,toolVersion=__version__,launcherSha256=fingerprint(Path(__file__)),source=str(root),sourceManifestSha256=expected_manifest,
               importPlanSha256=plan_hash,editor=str(executable),method='MonkeyImporter.ImportBatchAsync',
               budgetSeconds=budget_seconds,deadlineUtc=stamp(deadline),windowEndUtc=stamp(end),
-              batchmode=True,quitFlag=False,project='UnityProject',nativeResumeSupported=False)
+              batchmode=True,noGraphics=True,quitFlag=False,project='UnityProject',nativeResumeSupported=False)
     if out.exists():
         files={p.relative_to(out).as_posix() for p in out.rglob('*') if p.is_file()}
         if files!={'native-plan.json','plan-identity.json'}:fail('NATIVE_WORKSPACE_EXISTS',str(out),'Only an unchanged planning-only workspace can be executed; keep partial/manual projects')
@@ -92,7 +93,7 @@ def native_import(candidate,output,editor,expected_manifest,budget_seconds,deadl
         result.update(reason='NATIVE_DEADLINE_ELAPSED_BEFORE_LAUNCH');write_json(out/'execution-result.json',result)
         return dict(result,report=str(out/'execution-result.json'))
     env=dict(os.environ,MONKEY_NATIVE_BUDGET_SECONDS=str(budget_seconds),MONKEY_NATIVE_DEADLINE_UTC=stamp(deadline))
-    args=[str(executable),'-batchmode','-projectPath',str(project),'-executeMethod',spec['method'],'-logFile',str(out/'import.log')]
+    args=[str(executable),'-batchmode','-nographics','-projectPath',str(project),'-executeMethod',spec['method'],'-logFile',str(out/'import.log')]
     console=out/'console.log';console.touch(mode=0o600);(out/'import.log').touch(mode=0o600)
     process=None;stopped=None;old_handlers={};interrupted=[]
     def interrupted_handler(number,frame):interrupted.append(number)
@@ -129,7 +130,7 @@ def native_import(candidate,output,editor,expected_manifest,budget_seconds,deadl
         result.update(processExited=process is None or process.poll() is not None,processExitCode=process.poll() if process else None)
     finally:
         for signum,handler in old_handlers.items():signal.signal(signum,handler)
-    progress=project/'Analysis/native-progress.json'
+    progress=find_analysis(project,'native-progress.json')
     if progress.exists():
         try:result['nativeProgress']=validate_progress(load(read(progress,max_bytes=65536)),plan_hash)
         except (ValueError,OSError) as error:result.update(reason='NATIVE_PROGRESS_INVALID',error=str(error))

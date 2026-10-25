@@ -19,6 +19,7 @@ from .sources.compiled import fail
 from .providers.assetripper import fingerprint, TARGET_VERSION
 from .recover_unity import CODE_SUFFIXES
 from .layout.standard import VERSION
+from .layout.standard import find_analysis
 
 PROFILE = 'unity-leaf-prefab-sprite-array-v1'
 
@@ -98,7 +99,7 @@ def plan(project, format_profile='none'):
     identity, files = owned(project)
     require(format_profile in ('none', 'grea'), 'Unknown format profile')
     assets = project/'Assets'
-    quarantine = document(project/'Analysis/unity-code-quarantine.json')
+    quarantine = document(find_analysis(project,'unity-code-quarantine.json'))
     known = {r['path']:r['sha256'] for r in quarantine['schemaApplied']}
     require(len(known) == 1, 'Exactly one schema-derived class required')
     code = {p.relative_to(project).as_posix() for p in assets.rglob('*') if p.is_file() and p.suffix.lower() in CODE_SUFFIXES}
@@ -107,7 +108,7 @@ def plan(project, format_profile='none'):
     packages = document(project/'Packages/manifest.json')
     require(set(packages) == {'dependencies'} and all(k.startswith('com.unity.modules.') and v == '1.0.0' for k,v in packages['dependencies'].items()),
             'Only existing built-in engine packages supported by this native profile')
-    model = document(project/'Analysis/unity-code-model.json')
+    model = document(find_analysis(project,'unity-code-model.json'))
     require(len(model['classes']) == 1, 'One class required')
     cls = model['classes'][0]
     fields = cls['fields']
@@ -118,8 +119,8 @@ def plan(project, format_profile='none'):
     expected_assembly = cls['assembly'].removesuffix('.dll')
     asmdefs = list(assets.rglob('*.asmdef'))
     require(len(asmdefs) == 1 and document(asmdefs[0]) in ({'name':expected_assembly}, {'name':expected_assembly,'references':[],'allowUnsafeCode':True}), 'Unproven assembly definitions')
-    docs = [document(project/'Analysis/unity-typed-objects.json')]
-    docs += [document(p) for p in sorted((project/'Analysis').glob('dependency-typed-*.json'))]
+    docs = [document(find_analysis(project,'unity-typed-objects.json'))]
+    docs += [document(p) for p in sorted([*(project/'Analysis/Evidence').glob('dependency-typed-*.json'),*(project/'Analysis').glob('dependency-typed-*.json')])]
     objects = SourceObjects(docs)
     primary = docs[0]['objects']
     require(len(primary) == 5 and sorted(o['type'] for o in primary) == ['AssetBundle','GameObject','MonoBehaviour','MonoScript','Transform'],
@@ -142,7 +143,7 @@ def plan(project, format_profile='none'):
     require(prefabs[0].stem == root['data']['m_Name'], 'Prefab basename/root-name mismatch requires a different roundtrip profile')
     script_guid = guid(project, script)
     require(read(prefabs[0]).count(('guid: '+script_guid).encode()) == 1, 'Prefab schema binding is not unique')
-    hydration = document(project/'Analysis/texture-hydration.json')
+    hydration = document(find_analysis(project,'texture-hydration.json'))
     textures = {}
     sprite_specs = []
     asset_paths = {}
@@ -231,7 +232,7 @@ def execute(project, output, editor, budget_seconds=1200, format_profile='none')
     end = anchor+timedelta(minutes=30)
     spec = prepared['spec']
     spec.update(deadlineUtc=stamp(deadline),budgetSeconds=budget_seconds)
-    write_json(work/'Analysis/native-check-spec.json',spec)
+    write_json(find_analysis(work,'native-check-spec.json'),spec)
     prepared.update(stageAnchorUtc=stamp(anchor),deadlineUtc=stamp(deadline),windowEndUtc=stamp(end),helperSha256=fingerprint(helper))
     write_json(out/'native-plan.json',prepared)
     result = dict(schemaVersion=1,profile=PROFILE,status='started',processExited=False,startedUtc=stamp(anchor),candidateManifestSha256=prepared['candidateManifestSha256'],
@@ -270,7 +271,7 @@ def execute(project, output, editor, budget_seconds=1200, format_profile='none')
             try:child.wait(timeout=max(.01,min(120,(end-now()).total_seconds())))
             except subprocess.TimeoutExpired:pass
         result.update(endedUtc=stamp(now()),redactedLog=redact_log(log))
-        rb = work/'Analysis/unity-source-readback.json'
+        rb = find_analysis(work,'unity-source-readback.json')
         if rb.exists():
             try:result['readback'] = document(rb)
             except Exception as error:result['readbackError'] = str(error)[:4096]

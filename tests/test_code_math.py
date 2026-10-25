@@ -42,7 +42,7 @@ class StaticMathTests(unittest.TestCase):
                 result=code_math.emit(source,root/'facts/code-model.json',helper,[dict(key='0',module='./rollupPluginModLoBabelHelpers.js'),dict(key='1',module='cc')],root/'out',['mix','degrees'],context=context,typeof_source=body)
             self.assertEqual(result['implementedMethods'],2);self.assertEqual(len(result['pendingMethods']),1);self.assertFalse(result['sourceExecuted']);self.assertTrue(context['processExited'])
             code=(root/'out/Unity/Assets/Game/Domain/Math/Curve.cs').read_text();self.assertIn('NoInlining',code);self.assertIn('_monkey_add(a, _monkey_mul(_monkey_sub(b, a), t))',code);self.assertNotIn('classCallCheck',code)
-            ts=(root/'out/Cocos/assets/scripts/domain/math/Curve.ts').read_text();self.assertIn('static mix(a: number, b: number, t: number): number',ts);self.assertNotIn('vector(',ts)
+            ts=(root/'out/Cocos/assets/Game/Domain/Math/Curve.ts').read_text();self.assertIn('static mix(a: number, b: number, t: number): number',ts);self.assertNotIn('vector(',ts)
 
     def test_modified_helper_context_and_unrecognized_review_are_blocked(self):
         with tempfile.TemporaryDirectory()as t:
@@ -77,14 +77,14 @@ class StaticMathTests(unittest.TestCase):
                 with patch.dict(code_math.HELPER_PROFILES,{sha(HELPER.encode()):profile}):
                     result=convert_package(config.parent,'both',out,code_contract=contract,format_profile='grea',cocos_code_language=language)
                 self.assertTrue(result['completed']);self.assertEqual(result['codeEmission']['implementedMethods'],2);self.assertEqual(result['format']['status'],'retired');self.assertTrue(any(d['code']=='FORMAT_PROFILE_RETIRED' for d in result['diagnostics']))
-                for target,script in [('UnityProject','Assets/Game/Domain/Math/Curve.cs'),('CocosProject','assets/scripts/domain/math/Curve.'+language)]:
+                for target,script in [('UnityProject','Assets/Game/Domain/Math/Curve.cs'),('CocosProject','assets/Game/Domain/Math/Curve.'+language)]:
                     project=out/target;self.assertTrue((project/script).is_file());m=load(read(project/'manifest.json'))
                     self.assertEqual(m['codeEmission']['scriptPath'],script);self.assertEqual(m['codeEmission']['kind'],code_math.KIND)
-                    self.assertEqual(load(read(project/'Analysis/package-code.json'))['sourceBindings'],[])
+                    self.assertEqual(load(read(project/'Analysis/Code/package-code.json'))['sourceBindings'],[])
                     self.assertFalse((out/'Unformatted').exists())
                     if target=='UnityProject':self.assertIn('namespace Game.Domain.Math {',read(project/script).decode())
                     self.assertTrue((project/'SourceRecovery/Code/Source/Emission/ReviewedTypeofHelper.js').exists())
-                    work=load(read(project/'Analysis/agent-work.json'));task=next(t for t in work['tasks']if t['taskId']=='static-numeric-utility')
+                    work=load(read(project/'Analysis/Tasks/agent-work.json'));task=next(t for t in work['tasks']if t['taskId']=='static-numeric-utility')
                     self.assertEqual(task['pendingMethods'],['vector']);self.assertEqual(task['sourceBindings'],[])
                     self.assertIn('STATIC-NUMERIC-UTILITY.md',(project/'Docs/START-HERE.md').read_text());self.assertIn('Curve.mix',(project/'Docs/STATIC-NUMERIC-UTILITY.md').read_text())
 

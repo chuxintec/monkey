@@ -6,6 +6,7 @@ from .providers.assetripper import fingerprint
 from .sources.compiled import fail
 from .sources.unity_serialized import container_kind
 from .unity_schemas import frozen_pool
+from .layout.standard import find_analysis
 
 
 def protected_inputs(source,dependencies,texture_cache,schema_manifest,dependency_manifest,provider_python,asset_ripper):
@@ -106,7 +107,7 @@ def attach(conversion,output,acquired):
             project=output/row['path']
             identity,_=owned(project)
             target_root=project/'SourceRecovery/Acquired'
-            evidence=project/'Analysis/acquisition.json'
+            evidence=find_analysis(project,'acquisition.json')
             if target_root.exists() or evidence.exists():fail('UNITY_ACQUIRED_CONVERSION_CHANGED',str(project),'Acquisition evidence exists')
             staging=new_output(output/('AcquisitionAttachment-'+row['path']),[project,acquired['filesRoot']])
             staged_root=staging/'Acquired';staged_root.mkdir()
@@ -123,11 +124,11 @@ def attach(conversion,output,acquired):
                 added.append(dict(path='SourceRecovery/Acquired/'+entry['path'],bytes=len(raw),sha256=sha(raw)))
             staged_receipt=staging/'acquisition.json'
             write_json(staged_receipt,dict(receipt,classification=acquired['classification'],sourceCodeExecuted=False))
-            added.append(dict(path='Analysis/acquisition.json',bytes=staged_receipt.stat().st_size,sha256=fingerprint(staged_receipt)))
+            added.append(dict(path='Analysis/Ledger/acquisition.json',bytes=staged_receipt.stat().st_size,sha256=fingerprint(staged_receipt)))
             if owned(project)[0]!=identity:fail('UNITY_ACQUIRED_CONVERSION_CHANGED',str(project),'Candidate changed before acquisition attachment')
             target_root.parent.mkdir(exist_ok=True)
             shutil.move(staged_root,target_root)
-            shutil.move(staged_receipt,evidence)
+            evidence.parent.mkdir(parents=True,exist_ok=True);shutil.move(staged_receipt,evidence)
             manifest['files'].extend(added)
             manifest['acquisition']=conversion['acquisition']
             write_json(project/'recovery-manifest.json',manifest)

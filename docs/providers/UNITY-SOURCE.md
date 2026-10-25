@@ -1,6 +1,6 @@
 # Unity来源首个Provider合同（v0.2开发中）
 
-目前仅明确本地UnityFS/UnityRaw/UnityWeb及UnityWebData1.0主文件和显式依赖→Unity6候选，不代表wxapkg整包、APK、serializedFile及全部源版本已支持。`inspect-unity`可单独检查UnityPy能读取的显式文件；转换只接受精确bundle或UnityWebData1.0签名。Unity来源请求Creator/both或尚未实现的native/remote/input-set选项会先拒绝，不能静默忽略。
+目前仅明确本地UnityFS/UnityRaw/UnityWeb及UnityWebData1.0主文件和显式依赖→Unity6候选，不代表wxapkg整包、APK、serializedFile及全部源版本已支持。`inspect-unity`可单独检查UnityPy能读取的显式文件；转换只接受精确bundle或UnityWebData1.0签名。Unity 来源请求 Creator/both 会先拒绝。显式清单 remote/input-set 及受限叶 Prefab 的 native 入口见当前 CLI 帮助与 UNITY-SOURCE-NATIVE.md；不宣称整包原生验收。
 
 ```sh
 monkey convert --source /path/to/file.ab --target unity6 --out /path/to/new-candidate \

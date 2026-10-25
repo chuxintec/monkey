@@ -43,9 +43,9 @@ class PackageCodeTests(unittest.TestCase):
                 main(['convert','--source',str(source),'--target','cocos38','--numeric-code-contract',str(contract),'--cocos-code-language','js','--format','grea','--out',str(root/'out')])
             project=root/'out/CocosProject';manifest=load(read(project/'manifest.json'))
             self.assertEqual(manifest['codeEmission']['language'],'js')
-            self.assertEqual(manifest['codeEmission']['scriptPath'],'assets/scripts/presentation/ui/Meter.js')
+            self.assertEqual(manifest['codeEmission']['scriptPath'],'assets/Game/Presentation/UI/Meter.js')
             self.assertEqual(load(read(project/'assets/package.json')),{'type':'module'})
-            meta=load(read(project/'assets/scripts/presentation/ui/Meter.js.meta'))
+            meta=load(read(project/'assets/Game/Presentation/UI/Meter.js.meta'))
             self.assertEqual((meta['importer'],meta['ver']),('javascript','4.0.24'))
             self.assertEqual(meta['uuid'],manifest['codeEmission']['scriptUuid'])
 
@@ -57,7 +57,7 @@ class PackageCodeTests(unittest.TestCase):
             self.assertEqual(result,1)
             report=load(read(root/'out/conversion-result.json'));self.assertTrue(report['completed'])
             self.assertEqual((report['codeEmission']['implementedMethods'],report['codeEmission']['pendingMethods']),(2,1))
-            for target,plan_rel,code_rel in [('UnityProject','Assets/Game/Editor/Conversion/import-plan.json','Assets/Game/Presentation/UI/Meter.cs'),('CocosProject','extensions/monkey-import/import-plan.json','assets/scripts/presentation/ui/Meter.ts')]:
+            for target,plan_rel,code_rel in [('UnityProject','Assets/Game/Editor/Conversion/import-plan.json','Assets/Game/Presentation/UI/Meter.cs'),('CocosProject','extensions/monkey-import/import-plan.json','assets/Game/Presentation/UI/Meter.ts')]:
                 project=root/'out'/target;plan=load(read(project/plan_rel));manifest=load(read(project/'manifest.json'))
                 bound=[c for c in plan['components']if c.get('codeClassName')]
                 self.assertEqual(len(bound),1);self.assertTrue(bound[0]['convertible'])

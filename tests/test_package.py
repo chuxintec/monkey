@@ -47,6 +47,18 @@ def wxpackage(items):
 
 
 class PackageTests(unittest.TestCase):
+    def test_raw_homophone_evidence_is_not_overwritten(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp).resolve();source=root/'source';source.mkdir()
+            (source/'工.bin').write_bytes(b'first');(source/'公.bin').write_bytes(b'second')
+            (source/'project.json').write_text(json.dumps(dict(id='test',version='2.4.15')))
+            convert_package(source,'unity',root/'out',offline=True)
+            project=root/'out/UnityProject'
+            ledger=[r for r in load(read(project/'Analysis/Ledger/resource-ledger.json'))['files'] if r['path'].endswith('.bin')]
+            self.assertEqual(len({r['target'].casefold() for r in ledger}),2)
+            for row in ledger:
+                self.assertEqual(sha((project/row['target']).read_bytes()),row['sha256'])
+
     def test_explicit_combined_budget_keeps_default_and_single_file_guards(self):
         from monkey.sources import containers
         with patch.object(containers,'MAX_TOTAL',5):
@@ -74,9 +86,9 @@ class PackageTests(unittest.TestCase):
             with contextlib.redirect_stdout(stdout):
                 result=main(['convert','--source',str(source),'--target','cocos','--out',str(root/'out')])
             self.assertEqual(result,1)
-            ledger=load(read(root/'out/CocosProject/Analysis/resource-ledger.json'))
+            ledger=load(read(root/'out/CocosProject/Analysis/Ledger/resource-ledger.json'))
             self.assertEqual(ledger['coverage']['inputFiles'],2)
-            code=load(read(root/'out/CocosProject/Analysis/code-index.json'))['modules'][0]
+            code=load(read(root/'out/CocosProject/Analysis/Code/code-index.json'))['modules'][0]
             self.assertEqual(code['reason']['code'],'SOURCE_CODE_FORMAT_PENDING')
             self.assertTrue((root/'out/CocosProject'/code['sourceEvidence']).exists())
 
@@ -103,15 +115,15 @@ class PackageTests(unittest.TestCase):
             summary=json.loads(stdout.getvalue());self.assertEqual(code,1)
             self.assertEqual(summary['status'],'needs_action');self.assertEqual(summary['inputFiles'],5)
             for project in (root/'out/UnityProject',root/'out/CocosProject'):
-                ledger=load(read(project/'Analysis/resource-ledger.json'))
+                ledger=load(read(project/'Analysis/Ledger/resource-ledger.json'))
                 self.assertEqual(ledger['coverage']['inputBytes'],ledger['coverage']['accountedBytes'])
                 self.assertEqual(ledger['coverage']['accountedFiles'],5)
                 self.assertEqual(ledger['coverage']['dispositions']['deduplicated'],1)
                 for row in ledger['files']:
                     self.assertEqual(sha(read(project/row['target'])),row['sha256'])
-                asset=load(read(project/'Analysis/cocos-assets.json'))['assets'][0]
+                asset=load(read(project/'Analysis/Mappings/cocos-assets.json'))['assets'][0]
                 self.assertEqual(asset['logicalKey'][0],'coin/icon');self.assertTrue(asset['targets'][0]['id'])
-                mod=load(read(project/'Analysis/code-index.json'))['modules'][0]
+                mod=load(read(project/'Analysis/Code/code-index.json'))['modules'][0]
                 self.assertEqual(mod['name'],'Wallet');self.assertIn('spend',mod['syntax']['exports'])
                 self.assertIn('changed',mod['syntax']['events']);self.assertIn('coin/icon',mod['syntax']['dynamicKeys'])
                 self.assertFalse(mod['compiled']);self.assertFalse(mod['behavior_verified'])
@@ -128,7 +140,7 @@ class PackageTests(unittest.TestCase):
                 for row in load(read(moved/'manifest.json'))['files']:
                     self.assertEqual(sha(read(moved/row['path'])),row['sha256'])
                 self.assertTrue((moved/'Docs/PROJECT-STRUCTURE.md').exists())
-                dynamic=load(read(moved/'Analysis/dynamic-keys.json'))['keys'][0]
+                dynamic=load(read(moved/'Analysis/Mappings/dynamic-keys.json'))['keys'][0]
                 self.assertEqual(dynamic['status'],'source_files_mapped')
                 self.assertEqual(dynamic['runtimeBinding'],'not_verified')
             self.assertEqual(before,source.read_bytes())

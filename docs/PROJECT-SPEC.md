@@ -1,6 +1,6 @@
-# monkey 目标工程规范（monkey-project/1）
+# monkey 目标工程规范（monkey-project/2）
 
-状态：**已确认**（2026-10-25，用户在本聊天确认 D1–D6 全部采用推荐项；实施分支 `monkey`，起点 eb91533）。本文件是 monkey 生成 Unity6 / Creator3.8.8 工程目录、文件命名、配置表与交接文件的唯一规范；`targets/layout.py`、`names.py` 及各 emitter 中现有的路径常量都按本文重构。版本号 `monkey-project/1.0.0`，破坏性修改升主版本，兼容新增升次版本。
+状态：**已确认**（2026-10-25，用户在本聊天确认 D1–D6 全部采用推荐项；实施分支 `monkey`，起点 eb91533）。本文件是 monkey 生成 Unity6 / Creator3.8.8 工程目录、文件命名、配置表与交接文件的唯一规范；`targets/layout.py`、`names.py` 及各 emitter 中现有的路径常量都按本文重构。版本号 `monkey-project/2.0.0`，破坏性修改升主版本，兼容新增升次版本。
 
 参照工程：
 - 肥鹅美食街 `projects/20-肥鹅美食街/FoodStreet`（Cocos 2.4.15 → Unity6，已采用 dev3 全量初版）。
@@ -8,6 +8,21 @@
 - 工作区规范：GREA `grea-unity-standard` STR/ARC 规则、`grea-native-port` 原生转换规范、Manager `COCOS-FIVE-LAYER.md`、`UNITY-CONFIGURATION.md`。本文与它们一致；不同之处在第 9 节列出。
 
 ---
+
+
+## 2026-10-25 最新确认：统一类型优先目录（覆盖旧布局示例）
+
+用户明确指定：Unity `Assets/Game/Content/<Type>/<Module>/`；Cocos `assets/resources/<Type>/<Module>/`。两端类型、模块目录均为 PascalCase；`assets`、`resources` 和扩展入口是固定例外。取消自动 Group、Boot/Common 分区、GameRemote、ContentOriginal/ContentSnapshot 及自定义 Bundle 根；源包、采集容器只记录为来源信息。
+
+小游戏按 `<Type>/MiniGames/<Name>/...` 保持资源语义隔离，语言资源按 `<Type>/<Locale>/...` 保存，语言目录规范为 En/ZhHans/ZhHant 等 PascalCase。字符串表为 `Strings/<Locale>/...`；没有模块证据使用 Common/Unsorted。相同路径的不同源身份稳定消歧，GUID/UUID 不随重命名改变。
+
+`layout.json` 继续支持 modules/renames 等命名覆盖，旧 partitions 字段拒绝，不能再自动建分包目录。`Analysis/Mappings/resource-paths.json` 记录原键、身份、物理路径与新加载键；闭包目录标记 closure-prefix 且 loadKey=null，具体 Spine 文件见 skeletonPath。Creator 的新键相对 resources 且不含扩展名；业务调用接线、Unity Addressables/AssetBundle 和远端构建另行验证，本轮不配置远端。
+
+所有已取得音频进入正式 Audio。用户补充要求图片只保留一个目录，因此 Sprite 图片和完整纹理统一到 `Textures/<Module>/`，不再生成 Sprites 类型目录。Sprite/Texture 导入角色保留在 meta、计划和台账中；完整纹理与已有图片逐字节相同且可复用时只保存一份，保持已有 Sprite GUID/UUID、裁切与边框元数据；尺寸/裁切或字节不同的图片保留独立文件。Spine/BMFont 页图继续留在闭包旁，避免破坏文件引用。
+
+重复纹理的源身份仍保留，catalog 中记录 proposedIdentity→targetIdentity 与共享目标路径。已有绑定 Sprite 的身份不变；被合并的附加完整纹理身份形成别名，不能把旧工程的独立纹理 GUID 直接删除而不迁移。Cocos 的 loadKey 对 SpriteFrame 加 `/spriteFrame`、对 Texture2D 加 `/texture`，闭包目录不冒充可加载单资源。
+
+Spine 数据、atlas、页图进入正式 Spine，非标准版本保留文本并标记待适配；Unity 未安装运行包时保持 TextAsset。Shaders 保存 EffectDescription/GLSL 原始代码，不冒充目标引擎可编译 Shader。Scene/Prefab/Animation 只有经原生生成与保存后才计为实际文件。
 
 ## 1. 为什么要改：两款游戏里看到的问题
 
@@ -70,7 +85,7 @@ UnityProject/
       Services/<Capability>/
       Scripts/<Assembly>/           # 仅 Unity 来源：原程序集类型壳（见 4.6）
       Content/                      # 全部资产，见 4.2
-      Scenes/                       # 见 4.4
+        Scenes/                     # Content 下，见 4.4
       Editor/
         Conversion/                 # monkey 胶水，整目录可删（见 4.5）
     Plugins/<Vendor>/               # 第三方二进制（如 Spine38 dll）
@@ -89,13 +104,12 @@ UnityProject/
 
 | `<Type>` | 放什么 | 判定依据 |
 |---|---|---|
-| `Sprites/` | 导入为 Sprite 的图片（UI/2D 显示） | Cocos SpriteFrame 主图；Unity 来源 Texture2D 有 Sprite 子资源或被 Image/SpriteRenderer 引用 |
-| `Textures/` | 非 Sprite 图片（材质、特效、模型贴图） | 被 Material/Mesh/粒子引用，或无 Sprite 用途 |
+| `Textures/` | Sprite 图片与普通纹理统一保存 | 导入角色由 meta/计划区分；可复用完整纹理按字节去重 |
 | `Atlases/` | SpriteAtlas v2 | 生成或来源已有图集 |
 | `Prefabs/` | Prefab / Prefab Variant | cc.Prefab；Unity 来源 Prefab（非特效） |
 | `Effects/` | 粒子与特效 Prefab | 根含 ParticleSystem / cc.ParticleSystem |
 | `Animations/` | `.anim`、`.controller`、`.overrideController` | 同模块的 clip 与 controller 放一起 |
-| `Spine/` | 每个骨骼一个子目录：数据、atlas、页图、SkeletonData/Atlas/Material 资产 | spine 闭包；运行包未安装时整闭包进 `SourceRecovery/Unconverted/Spine/` 同路径 |
+| `Spine/` | 每个骨骼一个子目录：数据、atlas、页图、SkeletonData/Atlas/Material 资产 | spine 闭包；运行包未安装时仍导出数据，明确记录播放待验证 |
 | `Fonts/` | 每个字族一个子目录：ttf/otf、TMP FontAsset、位图字体及其页图 | cc.TTFFont / cc.BitmapFont / TMP_FontAsset |
 | `Audio/Music/`、`Audio/Sfx/`、`Audio/Voice/` | 音频 | 来源路径或名含 bgm/music→Music；voice/vo→Voice；其余 Sfx |
 | `Materials/` | Material | |
@@ -103,13 +117,20 @@ UnityProject/
 | `Models/` | Mesh、FBX 及模型组 | |
 | `Config/` | 正式 UTF-8 JSON 配置 | 见 4.3 |
 | `Data/` | 非配置的 ScriptableObject 资产（Unity 来源） | MonoBehaviour `.asset` 且不属于字体/Spine/图集 |
-| `Localization/<locale>/…` | 语言覆盖资源与字符串表 | 见 5.3 |
-| `MiniGames/<Name>/<Type>/…` | 独立小游戏/活动玩法的全部资产，内部同样按类型 | `layout.json` 或分包规则标记为 minigame |
+| `Strings/<Locale>/` | 本地化字符串表 | 其他语言资源保留于各自类型下面，见 5.3 |
+
+小游戏使用 `<Type>/MiniGames/<Name>/...`，MiniGames 是模块层，不另设资源类型根。
+
+Unity 来源的补充规则（向僵尸开炮实测）：
+- `Resources/` 下的资产保持 `Resources.Load` 键：`Content/<Type>/Resources/<原相对键>`（键内目录与文件名逐字保留，GREA STR 规则）；TextMesh Pro 的 `TMP Settings`、`LineBreaking …` 作为包运行时资源保留。
+- AssetRipper 类型根（`Texture2D/`、`Sprite/`、`MonoBehaviour/`、`TextAsset/` 等）中的文件没有容器路径，进入 `Content/<Type>/Unsorted/<原文件名>`。
+- 未被任何 YAML 资产按 GUID 引用的原始 `.bytes` 表移出 Assets 到 `SourceRecovery/Config/`（D6）；被引用的保留在 `Content/Data/…`。
 
 ### 4.3 配置表
 
-- 源 JSON 表（cc.JsonAsset 等）：**内容逐字节保留**，只改位置与文件名 → `Content/Config/<Module>/<Name>.json`，`<Name>` 为 PascalCase，去掉 `Cfg/Config/Conf/Data` 尾词后加 `Table`（`AudioCfg`→`AudioTable`，`decor-config`→`DecorTable`）。关卡/逐条数据文件不加 `Table`（`level_2`→`Level2`）。
+- 源 JSON 表（cc.JsonAsset 等）：**内容逐字节保留**，只改位置与文件名 → `Content/Config/<Module>/<Name>.json`，`<Name>` 为 PascalCase；名称以 `Cfg/Config/Conf/Data/Table` 结尾时统一为 `<Subject>Table`（`AudioCfg`→`AudioTable`，`decor-config`→`DecorTable`），其他保持 PascalCase 原名（`level_2`→`Level2`，`woodgame.debug`→`WoodgameDebug`），不给非表文件硬加 `Table`。
 - 字段名、数值、ID 不改。字段语义改名只在有明确 table adapter 或 `layout.json` 字段映射时生成新的规范化表；原表仍保留在 `SourceRecovery/Config/`。
+- 已支持的 BON tagged-le-v1：仅接受显式 Config/cc.BufferAsset 索引及输入中静态 decoder 证据，按原顶层键逐表导出 JSON，索引可重建原对象；主表、地区覆盖及语言表不合并。键、数值及中文内容不改，完整消费二进制，原件只读保留；Binary/Date 等未定义 JSON 类型不猜测。
 - 无法解析的原始表（二进制 `.bytes`、resbin 等）不进 Assets，进 `SourceRecovery/Config/<Module>/<原文件名>`，台账状态 `needs_adapter`。
 - 配置 DTO/校验代码（有据生成时）放 `Domain/<Module>/Config/<Name>Row.cs`、`<Name>.cs`；读取 I/O 放 `Services/Config/`。不生成重复的 SO 数值表。
 - 来源、原路径、hash 写 `Analysis/Mappings/config.json`，**不写进生产 JSON**。
@@ -118,11 +139,11 @@ UnityProject/
 
 | 场景 | 位置 | Build |
 |---|---|---|
-| 导入引导（原 `ImportBootstrap.unity`） | `Assets/Game/Scenes/Boot.unity` | 是（唯一） |
-| 内容预览（原 `Candidate.unity`） | `Assets/Game/Scenes/Preview/ContentPreview.unity` | 否，可删 |
-| 恢复的源场景 | `Assets/Game/Scenes/<SceneName>.unity`（`main`→`Main.unity`） | 否，待确认后加入 |
-| 源测试场景（名含 test） | `Assets/Game/Scenes/Tests/<SceneName>.unity`（`room16_test`→`Room16Test.unity`） | 否 |
-| 小游戏场景 | `Content/MiniGames/<Name>/Scenes/` | 否 |
+| 导入引导（原 `ImportBootstrap.unity`） | `Assets/Game/Content/Scenes/Boot/Boot.unity` | 是（唯一） |
+| 内容预览（原 `Candidate.unity`） | `Assets/Game/Content/Scenes/Preview/ContentPreview.unity` | 否，可删 |
+| 恢复的源场景 | `Assets/Game/Content/Scenes/Common/<SceneName>.unity`（`main`→`Main.unity`） | 否，待确认后加入 |
+| 源测试场景（名含 test） | `Assets/Game/Content/Scenes/Tests/<SceneName>.unity`（`room16_test`→`Room16Test.unity`） | 否 |
+| 小游戏场景 | `Content/Scenes/<Module>/` | 否 |
 | 场景附属（Lighting 等） | 与场景同名的同级目录 | — |
 
 ### 4.5 转换胶水 `Assets/Game/Editor/Conversion/`
@@ -156,21 +177,21 @@ monkey 写入的全部 Editor 代码与计划集中于此，删除整个目录�
 
 | 组件 | 新位置 | 命名空间 |
 |---|---|---|
-| `NativeLinearLayoutGroup`、`NativeChildLayoutGroup`、`NativeRectConstraints`、`NativeTextLineBox`、`IntrinsicGridLayoutGroup` | `Assets/Game/Presentation/Common/Layout/<Class>.cs` | `<Root>.Presentation.Common` |
-| `MonkeyCandidateView` | `Assets/Game/Presentation/Preview/ContentPreviewView.cs` | `<Root>.Presentation.Preview` |
+| `NativeLinearLayoutGroup`、`NativeChildLayoutGroup`、`NativeRectConstraints`、`NativeTextLineBox`、`IntrinsicGridLayoutGroup` | `Assets/Game/Presentation/Common/Layout/<Class>.cs` | 全局（保持） |
+| `MonkeyCandidateView` → `ContentPreviewView` | `Assets/Game/Presentation/Preview/ContentPreviewView.cs` | 全局（保持） |
 
-布局组件保持类名（肥鹅已按 GUID 采用，避免无谓改名），脚本 GUID 不变；退役的 `NativeFlowLayoutGroup` 不再输出。
+这些通用组件保持类名与全局命名空间：同一份源码在所有游戏间逐字节一致，肥鹅已按 GUID 采用，改命名空间需要逐游戏改写源码却无收益；脚本 GUID 不变。退役的 `NativeFlowLayoutGroup` 不再输出。游戏代码（草稿与有据生成代码）使用 `<Root>.<Layer>.<Module>`，如数值 Label 适配器 `<Root>.Presentation.UI`、静态数值工具 `<Root>.Domain.Math`。
 
 ## 5. 命名规则
 
 ### 5.1 大小写与字符
 
-分词：按 `_ - . 空格` 切分，再在“小写/数字→大写”“缩写→单词”处切分；字母与数字不切开（`Room7`、`Area01` 各为一个词）。已知缩写 `UI HUD BGM SFX VFX FX NPC AI ID VIP PVP PVE SDK 2D 3D` 在 PascalCase 中保持全大写。非 ASCII（中文等）保留 NFC，不音译。
+分词：按 `_ - . 空格` 切分，再在“小写/数字→大写”“缩写→单词”处切分；字母与数字不切开（`Room7`、`Area01` 各为一个词）。已知缩写 `UI HUD BGM SFX VFX FX NPC AI ID VIP PVP PVE SDK 2D 3D` 在 PascalCase 中保持全大写。中文文件及目录名转无声调拼音（pypinyin 0.55.0，ü 写 v），再按目标类型应用大小写；其他非 ASCII 保留 NFC。同音重名按源身份稳定消歧，GUID 不变；原始键、显示文本与资源内容不音译。此条按用户 2026-10-25 最新要求覆盖旧不音译约定。
 
 | 对象 | Unity | Creator | 例 |
 |---|---|---|---|
-| 固定结构目录 | PascalCase（本文所列名） | 小写（本文所列名） | `Content/Sprites` / `assets/art/sprites` |
-| 模块及子目录 | PascalCase | kebab-case | `CardSeason` / `card-season`；`Fish_3`→`Fish3`/`fish3` |
+| 固定结构目录 | PascalCase | PascalCase（引擎保留名除外） | `Content/Textures` / `assets/resources/Textures` |
+| 模块及子目录 | PascalCase | PascalCase | `CardSeason`；`Fish_3`→`Fish3` |
 | 代码文件、类 | PascalCase＝类名 | PascalCase＝`@ccclass` 名 | `ElementDetailWindow.cs` / `.ts` |
 | Prefab、Scene、Controller、SO、配置 JSON | PascalCase | PascalCase | `DigGamePriceEndWindow.prefab`、`AudioTable.json` |
 | 媒体（图片、音频、clip、模型、材质） | snake_case 小写 | snake_case 小写 | `bgm_Intro`→`bgm_intro.mp3`；`CookGo`→`cook_go.png` |
@@ -180,19 +201,21 @@ monkey 写入的全部 Editor 代码与计划集中于此，删除整个目录�
 
 ### 5.2 引用闭包内文件名保持原样
 
-被数据文件按名字引用的文件，**只规范目录、不改文件名**，避免改写二进制/文本内部引用：Spine 的 `.atlas` 页图、BMFont `.fnt` 页图、plist 帧表页图、Unity 来源 Spine `_Atlas/_SkeletonData/_Material` 三件套。
+被数据文件按名字引用的中文文件，必须由闭包适配器同步更新文件引用。Cocos Spine 的 `.atlas` 页图按拼音命名，并仅改 atlas 页声明行，region/attachment 标识与骨骼原文保持；新旧页名及 hash 写闭包台账。BMFont、plist、Unity 来源 Spine 与 Resources 动态键等尚无安全消费者迁移的身份不能裸改；须明确记录限制，不能声称已全量改名。
 
 ### 5.3 本地化
 
 - 语言分包识别：`en zh zh-cn zh-tw tw jp ja kr ko` 等，规范为 BCP 47：`zh→zh-Hans`，`zh-tw/tw→zh-Hant`，`jp→ja`，`kr→ko`。
-- 默认语言（`layout.json` `defaultLocale`，默认 `zh-Hans`）的资源放普通类型目录；其他语言的覆盖资源放 `Content/Localization/<locale>/<Type>/<Module>/…`，文件名与默认语言资源相同。
-- 字符串表（扁平 key→string，或名为 `label/lang/i18n/text`）放 `Content/Localization/<locale>/Strings/<Name>.json`，内容逐字节保留。
+- 语言覆盖资源放 `<资源根>/<Type>/<PascalCaseLocale>/<Module>/…`；字符串表放 `Strings/<PascalCaseLocale>/…`，语言身份保存在台账。
+- 字符串表（扁平 key→string，或名为 `label/lang/i18n/text`）放 `Content/Strings/<Locale>/<Name>.json`，内容逐字节保留。
 
 ### 5.4 派生变体与冲突
 
-- 变体后缀只有两种：`_untrimmed`（Cocos 裁切帧的原尺寸填充图，原 `.original`）、`_page<N>`（拆出的字体/图集页）。只在 Prefab/Scene/字体实际引用时生成；主资产是被引用的那份。
-- 不再使用 `.<kind>` 扩展式消歧（如 `.animationclip.anim`）。
-- 冲突（大小写不敏感、NFC 后同名）：按 `sourceId` 排序，第一个保留名称，其余加 `_<sha6(sourceId)>`。结果只取决于参与冲突的源身份，与输入顺序无关。全部写入 `Analysis/Mappings/names.json`。
+- 变体后缀只有两种：`_untrimmed`（Cocos 裁切帧的原尺寸填充图，原 `.original`）、`_page<N>`（拆出的字体/图集页）。`_untrimmed` 只在 Unity 中有 `trim=false` 的 Sprite 引用时生成；Creator 由原图原生裁切，从不生成。
+- 不再使用 `.<kind>` 扩展式消歧（如 `.animationclip.anim`）。同一 clip 被多个 owner 使用时（每个 owner 一份原生 clip），先用 `_<owner prefab>_<owner node>` 限定，仍冲突才加哈希。
+- 冲突（大小写不敏感、NFC 后同名）：按 `sourceId` 排序，第一个保留名称，其余加 `_<sha6(sourceId)>`。结果只取决于参与冲突的源身份，与输入顺序无关。全部写入 `Analysis/Mappings/` 的 name-map 系列文件。
+- 源文件名本身是内容哈希（32 位十六进制或 UUID）时不当作名字：保留可读剩余部分，否则命名为 `<type>_<sha6>`，模块目录不变。
+- 源路径中任意位置的类型分组目录（`textures/`、`materials/`、`animation/`、`data/` 等）与来源词目录都会去掉，因为目标已按类型分顶层。
 
 ### 5.5 GUID 命名对象
 
@@ -215,40 +238,46 @@ monkey 写入的全部 Editor 代码与计划集中于此，删除整个目录�
 
 ```text
 Analysis/
-  README.md                 # 本目录文件索引
+  README.md                 # 本目录文件索引（生成）
+  candidate.json            # 候选摘要
   Mappings/                 # 源 ↔ 目标映射（AI 日常最常读）
-    assets.json             # sourceId → 目标路径、GUID/UUID、原包、原逻辑路径、类型、模块、命名理由
-    modules.json            # 模块表与来源规则
-    names.json              # 规范化/冲突/覆盖记录（合并原 name-map、package-name-map、module-name-map、decoded-name-map）
-    dynamic-keys.json       # 原动态加载键 (bundle,key,type) → 新资产
-    locales.json
-    code.json               # 源类 → 层/模块/草稿路径/理由
-    config.json             # 源表 → 正式 JSON / 原件位置
-    layout-migration.json   # 上一布局路径 → 新路径（同 GUID），供已采用工程迁移
-  Ledger/                   # resources.json（原 resource-ledger）、inputs.json（原 all-inputs）、coverage.json
-  Code/                     # code-index、component-code-bindings、named-code-handoff、unity-code-model…
-  Readback/                 # editor-readback、native-identity-contract、initial-editor-verification、bulk-finish-readback…
-  Tasks/                    # agent-work.json、agent-work-details.json
-  Evidence/                 # Decoded/、structured-objects、typed-objects、dependency-typed-*：证据区，保持源布局
+    source-map.json         # 结构化资产/节点/组件 → 目标
+    name-map.json           # 结构化命名记录（来源、类型、模块、理由）
+    package-name-map.json   # 原始输入直拷资源命名记录
+    module-name-map.json    # 源类 → 层/模块/命名空间/草稿路径/理由
+    decoded-name-map.json   # 解码证据命名
+    cocos-assets.json       # 源 UUID/逻辑键 → 目标
+    dynamic-keys.json       # 原动态加载键 → 新资产
+    modules.json            # 实际模块表（生成 PROJECT-STRUCTURE 的数据）
+    unity-relocation.json   # Unity 来源：provider 路径 → 新路径（同 GUID）
+  Ledger/                   # resource-ledger、all-inputs、all-texture-inputs、full-input-disposition、acquisition…
+  Code/                     # code-index、component-code-bindings、named-code-handoff、unity-code-model、code-contract…
+  Readback/                 # editor-readback、native-progress、tmp-resources、bulk-finish-readback、native-identity-contract…
+  Tasks/                    # agent-work、agent-work-details、handoff、initial-handoff、full-resource-handoff、animation-module
+  Plans/                    # Editor 辅助脚本读取的计划：bulk-finish-plan、layout-patch-plan、native-check-spec、numeric-code-spec
+  Evidence/                 # Decoded/、Egret/、structured-objects、spine-closures、typed-objects、dependency-typed-*：证据区，保持源布局
 ```
 
-`dependency-typed-0..600.json` 这类分片收进 `Evidence/Dependencies/`，不再平铺在 `Analysis/` 根。
+分组表唯一维护在 `layout/standard.py` 的 `ANALYSIS_GROUPS`。写入总是分组路径；读取先找分组路径、再回退旧的平铺 `Analysis/`，因此已冻结的 dev3 候选（含 Editor 辅助脚本）仍可读取。原 `Analysis/output-paths.json` 改放在 `Assets/Game/Editor/Conversion/output-paths.json`（导入器旁）。
 
 ### 6.3 `SourceRecovery/`（不编译，不进 Assets）
 
 ```text
 SourceRecovery/
-  Original/<container>/…                  # 原件逐字节，保持源布局
-  Code/Modules/<Module>/<Class>.js        # 源模块切片（按 code.json 的模块）
-  Code/Drafts/CSharp/<Layer>/<Module>/<Class>.cs
-  Code/Drafts/TypeScript/<layer>/<module>/<Class>.ts
-  Code/Source/…                           # 完整源脚本（原 SourceCode/）
-  Code/ThirdParty/<Assembly>/…            # Unity 来源的 SDK/引擎程序集
-  Config/<Module>/<原文件名>               # 原表与无法解析的表
-  Unconverted/<Type>/<Module>/…           # 原格式待转（astc、未接 Spine 等），镜像将来的 Content 位置
+  Original/<inputRoot>/<input path>       # 未放进 Content 的全部原始输入，逐字节、保持源布局（含已被结构化对象消费的图集/原图）
+  Excluded/<inputRoot>/<input path>       # 明确过滤的输入（如版本不匹配）
+  Code/Source/<inputRoot>/<input path>    # 完整源脚本；Code/Source/Emission/ 为代码子集的源切片
+  Code/Modules/<Module>/<Class>.js        # 源模块切片
+  Code/Drafts/CSharp/<Layer>/<Module>/<Class>.cs     # Unity 工程的不编译初稿（一类一份）
+  Code/Drafts/TypeScript/<layer>/<module>/<Class>.ts # Creator 工程的不编译初稿
+  Code/Drafts/Il2Cpp/<Assembly>/…         # Unity 来源的元数据声明草稿
+  Code/Provider/…                         # Unity 来源 provider 生成的占位代码（隔离）
+  Config/<原 Resources 相对路径>           # Unity 来源未被引用的原始 .bytes 表
+  Unconverted/<Type>/<Module>/<Name>/…    # monkey 已恢复但缺运行时的闭包（Spine），镜像将来的 Content 位置
+  Acquired/、TextureCache/、SchemaSources/、DependencyLookup/   # Unity 来源的补取/查找证据，原样保留
 ```
 
-除 `Original/` 与 `Code/Source/` 保持源布局作证据外，其余子目录一律镜像目标布局，转换后可原样搬入 `Content/`。
+`Original/`、`Excluded/`、`Code/Source/` 是证据，保持输入布局；`Code/Drafts/`、`Unconverted/` 镜像目标布局，补齐后可原样搬入 `Assets/Game/`。
 
 ## 7. 游戏级覆盖表 `layout.json`
 
@@ -277,9 +306,9 @@ SourceRecovery/
 }
 ```
 
-- `match` 使用原 `bundle/logicalPath` 的 glob；第一条命中生效；`{1}` 取第一个 `*`。
-- 新命令 `monkey layout-preview --input-set … --layout layout.json --out preview/` 只输出 `Mappings/*.json` 和目录树统计，不写工程；用于人或 AI 审阅后补充覆盖表。
-- 覆盖表只能改路径和名字，不能改身份、内容、数值或动态键本身。
+- `match` 按目录段逐段做 glob（大小写不敏感），对原 `logicalPath` 和 `bundle/logicalPath` 的前导目录分别尝试；第一条命中生效；末尾 `**` 只表示“及其下级”；命中的前导段被替换为 `module`，其余子目录保留；`{1}` 取第一个 `*` 捕获。
+- 预览：`monkey layout-preview --conversion <已完成的转换输出> --layout layout.json --out preview/`，按完整分配记录（含动画、字体派生资产、材质与共享动画重名限定）重放命名，输出 `layout-preview.json`（当前路径 → 预览路径、模块表），不写工程；人或 AI 审阅后再用 `convert --layout layout.json` 重新生成。
+- 覆盖表只能改路径和名字，不能改身份、内容、数值或动态键本身；其 SHA 写入计划与续跑校验，变化即拒绝复用旧阶段。
 
 ### 7.1 内置规则（无覆盖时）
 
@@ -297,51 +326,44 @@ SourceRecovery/
 
 `Assets/`（除 `Editor/Conversion/`、`Plugins/`、`ThirdParty/`、`TextMesh Pro/`）及 Creator `assets/` 内：
 
-1. 目录名：`Original Recovered Recovery Source Sources Generated Monkey Manual BulkInitial Imported SourceMedia Unformatted` 及第 7.1 节全部打包层名、源类型词、语言分包名（`Localization/` 之下除外）。
-2. 文件名：32 位十六进制主干（`[0-9a-f]{32}`）、`-<hash>.cs`、双扩展（`.animationclip.anim`、`.original.png`）、`unknown--*`。
-3. 类名/命名空间前缀：`Original Source Recovered Monkey Generated`（Unity 来源原类型名本身例外）。
-4. 原始二进制配置（`.bytes` 源表）、未编译初稿、源 JS。
+1. 目录名：`Original Recovered Recovery Source Sources Generated Monkey Manual BulkInitial Imported SourceMedia Unformatted` 及源专用类型/打包词（`Texture Prefab Anim SpineCook uiraw gameAsset remoteAsset Texture2D MonoBehaviour TextAsset …`）。`Resources/` 之下的键与 `Fonts/<字族>` 例外。
+2. 文件名：含 32 位十六进制串（`[0-9a-f]{32}`）、`-<hash>.cs`、双扩展（`.animationclip.anim`、`.original.png`）、`unknown--*`。
+3. 类名/命名空间前缀：`Original Source Recovered Monkey Generated`（传入源码时检查；Unity 来源原类型名本身例外）。
+4. Unity 工程中的源 JS。原始 `.bytes` 表由重定位按 GUID 引用证据移出（第 4.2 节），不在路径检查中按扩展名猜测。
 
-检查实现为 `monkey verify --layout` 的一部分，生成后自动执行；命中即 `LAYOUT_FORBIDDEN_NAME`，状态不得为 pass。
+`unity.verify`、`cocos.verify` 的静态检查对 `monkey-project/1` 候选自动执行（`layout/verify.py`）；命中即 `LAYOUT_FORBIDDEN_NAME`，静态状态为 conflict。规划器保证自身输出不命中这些规则。
 
 ## 9. Creator 3.8.8 工程（逐文件）
 
-与 Manager `COCOS-FIVE-LAYER.md` 一致；目录全部小写，模块目录 kebab-case（与肥鹅现有 `goose-handbook`、`street-locks` 一致）。
+用户确认的资源根为 assets/resources，与 Unity Content 以下结构一致。
 
 ```text
 CocosProject/
-  AGENTS.md  README.md  manifest.json  package.json  tsconfig.json
-  extensions/monkey-import/         # 转换胶水，整目录可删（原位置不变）
   assets/
-    scripts/
-      bootstrap/
-      domain/<module>/  gameplay/<module>/  gameplay/ports/
-      presentation/<module>/  presentation/common/layout/
-      services/{config,resources,network,storage,platform}/
-    scenes/<SceneName>.scene  scenes/tests/  scenes/preview/ContentPreview.scene
-    prefabs/<module>/<sub…>/<Name>.prefab
-    effects/<module>/
-    animations/<module>/
-    art/sprites/<module>/…   art/textures/<module>/…   art/atlases/   art/spine/<module>/<skeleton>/
-    art/materials/<module>/  art/shaders/  art/models/<module>/
-    audio/{music,sfx,voice}/<module>/
-    fonts/<family>/
-    config/<module>/<Name>.json
-    localization/<locale>/…
-    mini-games/<name>/…
-    resources/…                     # 仅动态加载证据要求的资产，内部同上分类
-  Docs/  Analysis/  SourceRecovery/  # 同第 6 节
+    Game/Bootstrap/ Domain/ Gameplay/ Presentation/ Services/
+    resources/
+      Scenes/Preview/ContentPreview.scene
+      Prefabs/<Module>/...
+      Animations/<Module>/...
+      Textures/<Module>/...
+      Spine/<Module>/<Skeleton>/...
+      Audio/Music/ Audio/Sfx/ Audio/Voice/
+      Fonts/<Family>/...
+      Materials/<Module>/...
+      Shaders/<Module>/...
+      Config/<Module>/...
+      Strings/<Locale>/...
+  extensions/monkey-import/
+  Docs/ Analysis/ SourceRecovery/
 ```
 
-- 被源代码按动态键加载的资产（`Analysis/Mappings/dynamic-keys.json` 有证据）放 `assets/resources/<同分类路径>`，其余放静态目录。
-- 现 `assets/art/images/Original/<包>/…`、`assets/audio/Original/…`、`assets/fonts/Original/…`、`assets/generated/{art,views,prefabs,animations}`、`assets/manual/` 全部取消。
-- TS 初稿：`SourceRecovery/Code/Drafts/TypeScript/<layer>/<module>/<Class>.ts`；可接线的有据代码进 `assets/scripts/<layer>/<module>/`。
+只建立有实际内容的类型目录。旧动态键不会因改目录自动正确，按 resource-paths.json 接续业务代码。Preview 用于核验；TS 初稿仍隔离在 SourceRecovery/Code/Drafts/TypeScript。
 
 ### 与工作区规范的差异
 
 | 项 | GREA / Manager | 本规范 | 理由 |
 |---|---|---|---|
-| 图片类型目录 | `Images/` `Sprites/` 并列 | `Sprites/`（Sprite 导入）与 `Textures/`（非 Sprite） | 按导入类型二分，名称是 Unity 通用术语；`Images` 含义与 `Sprites` 重叠 |
+| 图片类型目录 | `Images/` `Sprites/` 并列 | 统一 `Textures/`，保留各自导入角色 | 按用户最新要求合并并去除可安全复用的完整纹理副本 |
 | Unity 来源代码 | 五层 | `Scripts/<Assembly>/` 保留原程序集与类型名 | 原类型名是序列化身份，未经语义分析不能拆层 |
 | 媒体文件命名 | 无证据保留原名 | snake_case 规范化原名，闭包内保持原名 | 统一风格且不改语义；闭包内引用不改写 |
 
@@ -349,13 +371,13 @@ CocosProject/
 
 | 旧（dev3 / none / grea） | 新 |
 |---|---|
-| `Assets/Generated/Art/<包>/<逻辑路径>`、`Content/Images/Sprites/<包>/Texture/…` | `Content/Sprites/<Module>/…` 或 `Content/Textures/<Module>/…` |
+| `Assets/Generated/Art/<包>/<逻辑路径>`、`Content/Images/Sprites/<包>/Texture/…` | `Content/Textures/<Module>/…` |
 | `…/<name>.original.png` | `…/<name>_untrimmed.png`（仅被引用时） |
 | `Content/Images/…/*.mp3` | `Content/Audio/{Music,Sfx,Voice}/<Module>/…` |
 | `Assets/Generated/Animations/<包>/Anim/…`、`Content/Animations/<包>/…` | `Content/Animations/<Module>/…` |
 | `Content/Animations/Controllers/<guid>.controller` | `Content/Animations/<Module>/<Owner>.controller` |
 | `Assets/Generated/Views/Sources/<包>/Prefab/…`、`Content/Prefabs/Recovery/Sources/<包>/Prefab/…` | `Content/Prefabs/<Module>/…` |
-| `Content/Config/Recovered/<包>/…` | `Content/Config/<Module>/<Name>Table.json` 或 `Content/Localization/<locale>/Strings/…` |
+| `Content/Config/Recovered/<包>/…` | `Content/Config/<Module>/<Name>Table.json` 或 `Content/Strings/<Locale>/…` |
 | `Content/Fonts/<包>/Font|Texture/…`、`Content/Fonts/Original/…` | `Content/Fonts/<Family>/…` |
 | `Content/Materials/<guid>.mat` | `Content/Materials/<Module>/<name>.mat` |
 | `Assets/Game/Scenes/Sources/main/main.unity` | `Assets/Game/Scenes/Main.unity` |
@@ -370,7 +392,7 @@ CocosProject/
 | Unity 来源 `Assets/Scripts/<Assembly>/…` | `Assets/Game/Scripts/<Assembly>/…`（游戏程序集）或 `SourceRecovery/Code/ThirdParty/…` |
 | `Analysis/*.json` 平铺 | `Analysis/{Mappings,Ledger,Code,Readback,Tasks,Evidence}/…`（第 6.2 节） |
 
-已冻结的 dev3 候选和两款游戏工程**不被修改**；新输出附 `Analysis/Mappings/layout-migration.json`（同 GUID 的旧路径→新路径），游戏工程可自行决定是否用 `AssetDatabase.MoveAsset` 迁移。
+已冻结的 dev3 候选和两款游戏工程**不被修改**。`monkey layout-migration --from <旧候选> --to <新候选> --out <目录>` 按相同 GUID/UUID 输出旧路径→新路径（以及只在一侧存在的资产），游戏工程可据此自行决定是否用 `AssetDatabase.MoveAsset` 迁移；该清单只证明身份对应，不比较内容与导入设置。没有完整分配重放记录的旧计划必须重新规划，不能把部分资源预览当作全量预览。
 
 ## 11. monkey 代码重构（文件级）
 
@@ -386,11 +408,12 @@ CocosProject/
 | `layout/allocate.py` | 大小写不敏感占用、冲突消解、闭包内保名（替代 `names.py` 的 `Names`） |
 | `layout/overrides.py` | 读取并校验 `layout.json` |
 | `layout/code.py` | 层/模块/命名空间推断（第 4.6 节） |
-| `layout/records.py` | 写 `Analysis/Mappings/*.json` 与 `layout-migration.json` |
+| `layout/records.py` | 模块表、`Docs/PROJECT-STRUCTURE.md`、`Docs/CONTENT-INDEX.md`、`Analysis/README.md`；`layout-preview`、`layout-migration` |
 | `layout/verify.py` | 第 8 节禁止项检查 |
+| `unity_layout.py` | Unity 来源 provider 导出的带 `.meta` 重定位（第 4.2、10 节） |
 
 修改：
-- `names.py`：保留为旧 manifest 读取兼容，新输出不再调用；`targets/layout.py` 同理（只读旧路径）。
+- `names.py`：只用于证据区按源布局命名（`Analysis/Evidence/Decoded/`）和旧 manifest 读取；`targets/layout.py` 只读旧路径。
 - `targets/unity.py`、`targets/cocos.py`、`targets/prefabs.py`、`targets/common.py`：资源/Prefab/Scene/胶水路径改由 `LayoutPlanner` 提供。
 - `package.py`、`package_code.py`、`code_emit.py`、`cocos_code_handoff.py`、`unity_code_handoff.py`、`handoff_package.py`、`resource_package.py`：SourceRecovery/Analysis/Docs 路径与代码草稿命名。
 - `recover_unity.py`、`unity_bulk_prepare.py`、`unity_native.py`、`unity_handoff.py`、`bulk_handoff.py`、`providers/assetripper.py`：AssetRipper 导出后做一次带 `.meta` 的重定位（GUID 不变），再执行后续阶段。
@@ -403,7 +426,7 @@ CocosProject/
 
 ## 12. 验收
 
-1. 静态：两款游戏的完整输入各生成一次，第 8 节禁止项 0 命中；每个 Content 文件的类型目录与导入类型一致；同输入两次运行 `Mappings/assets.json` 字节相同。
+1. 静态：两款游戏的完整输入各生成一次，第 8 节禁止项 0 命中；每个 Content 文件的类型目录与导入类型一致；同输入两次运行 `Analysis/Mappings/` 中命名与来源映射字节相同。
 2. 身份：与冻结 dev3（肥鹅 manifest `b8dde1e1…`、向僵尸 `f2410ed9…`）比较，共有 sourceId 的 GUID 全部相等；`layout-migration.json` 覆盖全部移动项。
 3. 原生：在自有副本按既有原生窗口规则做一次 Unity 导入回读（代表子集：肥鹅 MainUi 与 1 个含 Spine/字体的窗口，向僵尸 1 个 UI 场景），Missing Script 0、引用回读一致。Creator 用 3.8.7 下方了样本做一次。
 4. 文档：生成工程 `Docs/PROJECT-STRUCTURE.md` 引用 `monkey-project/1.0.0` 并列出实际模块表。
@@ -434,3 +457,4 @@ CocosProject/
 ## 变更记录
 
 - 2026-10-25 初稿；同日确认 D1–D6，进入 `monkey` 分支实施。
+- 2026-10-25 实施细化（不改变 D1–D6）：两款游戏完整输入重放后补充——源路径任意位置的类型目录去掉；哈希文件名不当名字；共享 clip 按 owner 限定；Creator 不生成 `_untrimmed`；Unity 来源 Resources 键与 TMP 包资源保留；`.bytes` 按 GUID 引用证据移出；通用布局组件保持全局命名空间；`Analysis/Plans/` 分组；`output-paths.json` 移到导入器旁；`layout-preview` 以已完成转换为输入；`layout-migration` 为独立命令；配置表名只对 `Cfg/Config/Conf/Data/Table` 尾词统一为 `Table`。

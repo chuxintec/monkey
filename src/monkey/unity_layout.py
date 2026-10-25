@@ -8,7 +8,7 @@ names under Scripts/, and Plugins/TextMesh Pro stay where Unity expects them. Un
 import re
 import shutil
 from pathlib import Path,PurePosixPath
-from .io import read,write_json
+from .io import read,load,write_json
 from .layout import LayoutPlanner,casing,standard
 
 TYPE_ROOTS={'texture2d','sprite','material','monobehaviour','textasset','animationclip','animatorcontroller','animatoroverridecontroller','shader',
@@ -162,11 +162,24 @@ def apply(project,planned):
         if not any(folder.iterdir()):
             folder.rmdir();meta=Path(str(folder)+'.meta')
             if meta.exists():meta.unlink()
+    update_receipts(project,planned['moves'])
     return len(planned['moves'])
+
+
+def update_receipts(project,moves):
+    """Keep executable field-code locations usable while retaining their provider provenance."""
+    receipt=standard.find_analysis(project,'unity-code-quarantine.json')
+    if not receipt.is_file():return 0
+    body=load(read(receipt));mapping={r['source']:r['target'] for r in moves};changed=0
+    for row in body.get('schemaApplied',[]):
+        previous=row['path'];target=mapping.get(previous,previous)
+        if previous!=target:
+            row.setdefault('providerPath',previous);row['path']=target;changed+=1
+    if changed:write_json(receipt,body)
+    return changed
 
 
 def relocate(project,overrides=None):
     planned=plan(project,overrides);moved=apply(project,planned)
-    analysis=Path(project)/'Analysis';analysis.mkdir(exist_ok=True)
-    write_json(analysis/'unity-relocation.json',dict(planned,moved=moved))
-    return dict(moved=moved,layout=standard.VERSION,report='Analysis/unity-relocation.json')
+    write_json(Path(project)/standard.analysis('unity-relocation.json'),dict(planned,moved=moved))
+    return dict(moved=moved,layout=standard.VERSION,report='Analysis/Mappings/unity-relocation.json')

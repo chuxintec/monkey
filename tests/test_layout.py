@@ -23,11 +23,18 @@ FOODSTREET={
 
 
 class CasingTests(unittest.TestCase):
+    def test_pinyin_is_phrase_aware_and_keeps_file_extensions(self):
+        self.assertEqual(casing.pascal('重庆银行'),'ChongQingYinHang')
+        self.assertEqual(casing.snake('UI奖励板-1'),'ui_jiang_li_ban_1')
+        self.assertEqual(casing.safe_path('地图/木板.png'),'DiTu/MuBan.png')
+        self.assertEqual(casing.snake('女'),'nv')
+        self.assertFalse(casing.HAN.search(casing.pascal('鹅'*200)))
+
     def test_words_keep_letter_digit_runs_and_split_case_changes(self):
         self.assertEqual(casing.words('SpArea01'),['Sp','Area01'])
         self.assertEqual(casing.words('UIPanel'),['UI','Panel'])
         self.assertEqual(casing.words('Room7Door'),['Room7','Door'])
-        self.assertEqual(casing.words('鹅图标'),['鹅图标'])
+        self.assertEqual(casing.words('鹅图标'),['E','Tu','Biao'])
 
     def test_three_casings(self):
         self.assertEqual((casing.pascal('Fish_3'),casing.kebab('Fish_3'),casing.snake('Fish_3')),('Fish3','fish3','fish_3'))
@@ -45,13 +52,22 @@ class CasingTests(unittest.TestCase):
 
 
 class PlannerTests(unittest.TestCase):
+    def test_homophones_keep_distinct_stable_identities(self):
+        metadata={sid:dict(bundle='main',logicalPath='UI/'+name) for sid,name in [('a','工'),('b','公')]}
+        mappings=[]
+        for order in (['a','b'],['b','a']):
+            planner=LayoutPlanner('unity',metadata)
+            planner.reserve([(sid,'sprite','.png','',None,None) for sid in order])
+            mappings.append({sid:planner.path(sid,'sprite','.png') for sid in order})
+        self.assertEqual(mappings[0],mappings[1]);self.assertEqual(len(set(mappings[0].values())),2)
+
     def test_packaging_type_words_and_variants_leave_production_paths(self):
         p=LayoutPlanner('unity',FOODSTREET)
-        self.assertEqual(p.path('remoteAsset:fish','sprite','.png'),'Assets/Game/Content/Sprites/Element/Fish3/1005302.png')
-        self.assertEqual(p.path('remoteAsset:fish@original','sprite','.png'),'Assets/Game/Content/Sprites/Element/Fish3/1005302_untrimmed.png')
+        self.assertEqual(p.path('remoteAsset:fish','sprite','.png'),'Assets/Game/Content/Textures/Element/Fish3/1005302.png')
+        self.assertEqual(p.path('remoteAsset:fish@original','sprite','.png'),'Assets/Game/Content/Textures/Element/Fish3/1005302_untrimmed.png')
         self.assertEqual(p.path('remoteAsset:adorn','prefab','.prefab'),'Assets/Game/Content/Prefabs/House/Adorns/Room7/10070600.prefab')
         self.assertEqual(p.path('gameAsset:clip','animation','.anim'),'Assets/Game/Content/Animations/BigDay/PlayerGroup/appear4.anim')
-        self.assertEqual(p.path('resources:cocos3','sprite','.png'),'Assets/Game/Content/Sprites/UI/btn_ok.png')
+        self.assertEqual(p.path('resources:cocos3','sprite','.png'),'Assets/Game/Content/Textures/UI/btn_ok.png')
 
     def test_audio_is_never_an_image_and_is_split_by_category(self):
         p=LayoutPlanner('unity',FOODSTREET)
@@ -61,43 +77,43 @@ class PlannerTests(unittest.TestCase):
 
     def test_locale_bundles_become_localization_and_configs_become_tables(self):
         p=LayoutPlanner('unity',FOODSTREET)
-        self.assertEqual(p.path('zh-tw:label','cc.JsonAsset','.json'),'Assets/Game/Content/Localization/zh-Hant/Strings/Label.json')
-        self.assertEqual(p.path('zh:label','cc.JsonAsset','.json'),'Assets/Game/Content/Localization/zh-Hans/Strings/Label.json')
+        self.assertEqual(p.path('zh-tw:label','cc.JsonAsset','.json'),'Assets/Game/Content/Strings/ZhHant/Label.json')
+        self.assertEqual(p.path('zh:label','cc.JsonAsset','.json'),'Assets/Game/Content/Strings/ZhHans/Label.json')
         self.assertEqual(p.path('gameAsset:cfg','cc.JsonAsset','.json'),'Assets/Game/Content/Config/Common/AudioTable.json')
-        self.assertEqual(p.path('miniGameRes:level','cc.JsonAsset','.json'),'Assets/Game/Content/MiniGames/Rope3d/Config/Levels/Level2.json')
+        self.assertEqual(p.path('miniGameRes:level','cc.JsonAsset','.json'),'Assets/Game/Content/Config/MiniGames/Rope3d/Levels/Level2.json')
 
     def test_scenes_and_unknown_sources(self):
         p=LayoutPlanner('unity',FOODSTREET)
-        self.assertEqual(p.path('main:scene','scene',''),'Assets/Game/Scenes/Main.unity')
-        self.assertEqual(p.path('main:test','scene',''),'Assets/Game/Scenes/Tests/Room16Test.unity')
+        self.assertEqual(p.path('main:scene','scene',''),'Assets/Game/Content/Scenes/Common/Main.unity')
+        self.assertEqual(p.path('main:test','scene',''),'Assets/Game/Content/Scenes/Tests/Room16Test.unity')
         hashed=p.path('x:1','native','.png',metadata=dict(bundle='x',logicalPath='native/ab/abcd.png',nameProvenance='input-relative-path'))
         self.assertTrue(hashed.startswith('Assets/Game/Content/Textures/Unsorted/texture_'))
         unsafe=p.path('x:2','native','.png',metadata=dict(bundle='x',logicalPath='../escape'))
         self.assertIn('/Unsorted/',unsafe);self.assertNotIn('..',unsafe)
 
-    def test_creator_uses_lowercase_folders_and_same_modules(self):
+    def test_creator_uses_pascalcase_folders_and_same_modules(self):
         p=LayoutPlanner('creator',FOODSTREET)
-        self.assertEqual(p.path('remoteAsset:fish','sprite','.png'),'assets/art/sprites/element/fish3/1005302.png')
-        self.assertEqual(p.path('gameAsset:clip','animation','.anim'),'assets/animations/big-day/player-group/appear4.anim')
-        self.assertEqual(p.path('zh-tw:label','cc.JsonAsset','.json'),'assets/localization/zh-hant/strings/Label.json')
-        self.assertEqual(p.folder('spine:x',metadata=dict(bundle='spineAsset',logicalPath='SpineCook/House/Room9/r9_dianshi1')),'assets/art/spine/house/room9/r9-dianshi1')
+        self.assertEqual(p.path('remoteAsset:fish','sprite','.png'),'assets/resources/Textures/Element/Fish3/1005302.png')
+        self.assertEqual(p.path('gameAsset:clip','animation','.anim'),'assets/resources/Animations/BigDay/PlayerGroup/appear4.anim')
+        self.assertEqual(p.path('zh-tw:label','cc.JsonAsset','.json'),'assets/resources/Strings/ZhHant/Label.json')
+        self.assertEqual(p.folder('spine:x',metadata=dict(bundle='spineAsset',logicalPath='SpineCook/House/Room9/r9_dianshi1')),'assets/resources/Spine/House/Room9/R9Dianshi1')
 
     def test_collision_winner_is_independent_of_request_order(self):
-        meta={'b:2':dict(bundle='b',logicalPath='UI/Icon'),'a:1':dict(bundle='a',logicalPath='ui/icon'),'c:3':dict(bundle='c',logicalPath='Ui/ICON')}
+        meta={'b:2':dict(bundle='resources',logicalPath='UI/Icon'),'a:1':dict(bundle='resources',logicalPath='ui/icon'),'c:3':dict(bundle='resources',logicalPath='Ui/ICON')}
         requests=[(sid,'sprite','.png','',None,None) for sid in meta]
         first=LayoutPlanner('unity',meta);first.reserve(requests)
         second=LayoutPlanner('unity',meta);second.reserve(list(reversed(requests)))
         mapping=lambda p:{sid:p.path(sid,'sprite','.png') for sid in meta}
         self.assertEqual(mapping(first),mapping(second))
-        self.assertEqual(mapping(first)['a:1'],'Assets/Game/Content/Sprites/UI/icon.png')
+        self.assertEqual(mapping(first)['a:1'],'Assets/Game/Content/Textures/UI/icon.png')
         self.assertEqual(len({v.casefold() for v in mapping(first).values()}),3)
         self.assertEqual(first.report()['collisionPaths'],2)
 
     def test_hash_names_are_not_names_and_shared_clips_use_owner_qualifiers(self):
         p=LayoutPlanner('unity',{'m:1':dict(bundle='miniGameRes',logicalPath='Texture/cattle/Map/3942396cc7b0fad2b18e8909565e25fe'),
                                  'm:2':dict(bundle='miniGameRes',logicalPath='Texture/cattle/Map/0b44e06ac5a2a0899058be7d60c34733ba9f_zp1z_nk')})
-        self.assertRegex(p.path('m:1','sprite','.png'),r'^Assets/Game/Content/MiniGames/Cattle/Sprites/Map/sprite_[0-9a-f]{6}\.png$')
-        self.assertEqual(p.path('m:2','sprite','.png'),'Assets/Game/Content/MiniGames/Cattle/Sprites/Map/zp1z_nk.png')
+        self.assertRegex(p.path('m:1','sprite','.png'),r'^Assets/Game/Content/Textures/MiniGames/Cattle/Map/sprite_[0-9a-f]{6}\.png$')
+        self.assertEqual(p.path('m:2','sprite','.png'),'Assets/Game/Content/Textures/MiniGames/Cattle/Map/zp1z_nk.png')
         clip=dict(bundle='gameAsset',logicalPath='Anim/Badge/appear')
         q=LayoutPlanner('unity');q.reserve([('c@a','animation','.anim','',clip,'BadgeItem_icon'),('c@b','animation','.anim','',clip,'ShopBadge_icon')])
         self.assertEqual({q.path('c@a','animation','.anim'),q.path('c@b','animation','.anim')},
@@ -117,8 +133,8 @@ class PlannerTests(unittest.TestCase):
                                bundles={'events':dict(role='minigame')}))
         p=LayoutPlanner('unity',{'u:1':dict(bundle='game',logicalPath='uiraw/icon_item/a2_saodiji3'),
                                  'u:2':dict(bundle='events',logicalPath='Texture/Disco/bg')},overrides)
-        self.assertEqual(p.path('u:1','sprite','.png'),'Assets/Game/Content/Sprites/Icons/Item/street_sweeper.png')
-        self.assertEqual(p.path('u:2','sprite','.png'),'Assets/Game/Content/MiniGames/Disco/Sprites/Common/bg.png')
+        self.assertEqual(p.path('u:1','sprite','.png'),'Assets/Game/Content/Textures/Icons/Item/street_sweeper.png')
+        self.assertEqual(p.path('u:2','sprite','.png'),'Assets/Game/Content/Textures/MiniGames/Disco/Common/bg.png')
 
     def test_invalid_overrides_are_rejected(self):
         for bad in [dict(schemaVersion=2),dict(schemaVersion=1,extra=1),dict(schemaVersion=1,modules=[dict(match='../x',module='Y')]),

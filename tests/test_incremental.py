@@ -12,7 +12,7 @@ def candidate(root, files, profile='cocos-3.8.8', namespace='fixture'):
     for name,content in files.items():
         p=root/name;p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes(content)
     (root/'Analysis').mkdir(exist_ok=True)
-    write_json(root/'Analysis/source-map.json',dict(assets=[dict(path='assets/generated/a.txt',sourceId='original:42')],sourceRoots={}))
+    write_json(root/'Analysis/Mappings/source-map.json',dict(assets=[dict(path='assets/generated/a.txt',sourceId='original:42')],sourceRoots={}))
     finish(root,dict(schemaVersion=1,targetProfile=profile,namespace=namespace,diagnostics=[]))
     return root
 

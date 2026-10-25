@@ -9,6 +9,7 @@ import shutil
 from pathlib import Path
 from .io import safe,read,load,sha,write_json,inside
 from .sources.compiled import fail
+from .layout.standard import find_analysis
 
 ROLES={'metadata','source-binary','source-package','source-script','il2cpp-declarations','dummy-assembly','semantic-snapshot','asset-evidence','native-media','recovery-source'}
 
@@ -84,5 +85,5 @@ def attach(manifest,project,overrides=None):
             drafts.extend(recovered['types']);total_methods+=recovered['methods'];total_fields+=recovered['fields']
     report=dict(schemaVersion=1,manifestSha256=sha(read(manifest)),files=copied,types=drafts,declaredMethods=total_methods,declaredFields=total_fields,
                 methodsImplemented=0,sourceCodeExecuted=False,compiled='not_run',scope='explicit original evidence and metadata declarations; no invented method bodies')
-    write_json(project/'Analysis/code-evidence-handoff.json',report)
-    return dict(files=len(copied),bytes=sum(r['bytes']for r in copied),typesIndexed=len(drafts),typeDraftFiles=sum(t['status']=='declaration-draft'for t in drafts),declaredMethods=total_methods,declaredFields=total_fields,methodsImplemented=0,report='Analysis/code-evidence-handoff.json')
+    write_json(find_analysis(project,'code-evidence-handoff.json'),report)
+    return dict(files=len(copied),bytes=sum(r['bytes']for r in copied),typesIndexed=len(drafts),typeDraftFiles=sum(t['status']=='declaration-draft'for t in drafts),declaredMethods=total_methods,declaredFields=total_fields,methodsImplemented=0,report='Analysis/Code/code-evidence-handoff.json')

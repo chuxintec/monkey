@@ -2,6 +2,7 @@
 import re
 from pathlib import Path
 from .io import stage_document,read,load,write_json,sha
+from .layout.standard import find_analysis,analysis
 
 
 def script_identity(value):
@@ -83,7 +84,7 @@ def enrich(project,out,rows,code_index,tasks):
         aggregates.append(dict(taskId='view-'+sha(page.encode())[:16],module=page,rootCause='source-component-behavior',
                                sourceRefs=regions,bindings=links,codeState='draft_generated',nativeValidation='not_run',
                                nextAction='Restore this source view/module using its exact decoded objects and source regions; resolve shared dependencies before enabling behavior',
-                               allowedPaths=['Assets/Game/','assets/scripts/'],
+                               allowedPaths=['Assets/Game/','assets/Game/'],
                                verification=['native references/compile','affected view input','failure/unavailable behavior']))
     pool=sorted(set(by_code)-assigned)
     if pool:
@@ -91,11 +92,11 @@ def enrich(project,out,rows,code_index,tasks):
                                eligibleForDispatch=False,nextAction='Classify a coherent subset from dependency/resource evidence; this pool is not one Agent task per region',
                                allowedPaths=['SourceRecovery/Code/Drafts/'],verification=['module ownership and external wrapper context']))
     aggregates.extend(t for t in tasks if t['taskId'].startswith('resources-'))
-    write_json(project/'Analysis/agent-work-details.json',dict(schemaVersion=1,tasks=tasks))
-    write_json(project/'Analysis/agent-work.json',dict(schemaVersion=1,tasks=aggregates,
-               detailIndex='Analysis/agent-work-details.json',dispatchPolicy='coherent_module_batches_no_automatic_agents'))
-    write_json(project/'Analysis/code-index.json',dict(schemaVersion=1,modules=code_index))
-    write_json(project/'Analysis/component-code-bindings.json',dict(schemaVersion=1,bindings=bindings))
+    write_json(find_analysis(project,'agent-work-details.json'),dict(schemaVersion=1,tasks=tasks))
+    write_json(find_analysis(project,'agent-work.json'),dict(schemaVersion=1,tasks=aggregates,
+               detailIndex='Analysis/Tasks/agent-work-details.json',dispatchPolicy='coherent_module_batches_no_automatic_agents'))
+    write_json(find_analysis(project,'code-index.json'),dict(schemaVersion=1,modules=code_index))
+    write_json(find_analysis(project,'component-code-bindings.json'),dict(schemaVersion=1,bindings=bindings))
     from .names import Names,source_names
     naming=Names(source_names(inspected)) if inspected else Names()
     objects=[];files=_input_rows(out,inspected,rows) if inspected else {}
@@ -111,7 +112,7 @@ def enrich(project,out,rows,code_index,tasks):
                         state='decoded_only' if asset.get('document') else 'unresolved',nativeValidation='not_run')
             if asset.get('sourceDocument'):record['sourceDocument']=asset['sourceDocument']
             if asset.get('document'):
-                relative=naming.path(asset['sourceId'],'.json','Analysis/Decoded')
+                relative=naming.path(asset['sourceId'],'.json',analysis('Decoded'))
                 dest=project/relative;dest.parent.mkdir(parents=True,exist_ok=True)
                 write_json(dest,dict(schemaVersion=1,sourceId=asset['sourceId'],kind=asset.get('kind'),document=asset['document']))
                 record['decodedEvidence']=relative
@@ -122,7 +123,7 @@ def enrich(project,out,rows,code_index,tasks):
                 if asset['sourceId'] in node_assets:record['state']='normalized_node_graph'
                 if asset['sourceId'] in quarantined:record['state']='quarantined_graph'
             objects.append(record)
-    write_json(project/'Analysis/decoded-name-map.json',naming.report())
-    write_json(project/'Analysis/structured-objects.json',dict(schemaVersion=1,objects=objects))
+    write_json(find_analysis(project,'decoded-name-map.json'),naming.report())
+    write_json(find_analysis(project,'structured-objects.json'),dict(schemaVersion=1,objects=objects))
     return dict(codeRegionDetails=len(by_code),componentBindings=len(bindings),viewBatches=len(groups),unclassifiedRegions=len(pool),
                 aggregateTasks=len(aggregates),structuredObjects=len(objects))

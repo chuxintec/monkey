@@ -53,12 +53,12 @@ public static partial class MonkeyImporter
         var result=new BulkFinishResult {status="failed",unityVersion=Application.unityVersion,scenes=new BulkSceneResult[0],fonts=new BulkFontEvidence[0]};
         var scenes=new List<BulkSceneResult>();var fonts=new List<BulkFontEvidence>();
         try {
-            bulkClock=System.Diagnostics.Stopwatch.StartNew();bulkPlan=JsonUtility.FromJson<BulkFinishPlan>(File.ReadAllText("Analysis/bulk-finish-plan.json"));
+            bulkClock=System.Diagnostics.Stopwatch.StartNew();bulkPlan=JsonUtility.FromJson<BulkFinishPlan>(File.ReadAllText(AnalysisFile("Plans","bulk-finish-plan.json")));
             if(Application.unityVersion!="6000.6.2f1"||bulkPlan.budgetSeconds<1||bulkPlan.budgetSeconds>1500)throw new InvalidOperationException("Exact Editor/window contract differs");
             Application.logMessageReceived+=BulkError;
-            if(Hash(Paths.plan)!=bulkPlan.inputPlanSha256||Hash(PrefabPath)!=bulkPlan.candidatePrefabSha256||Hash("Analysis/editor-readback.json")!=bulkPlan.priorReadbackSha256)throw new InvalidOperationException("Frozen native inputs changed");
+            if(Hash(Paths.plan)!=bulkPlan.inputPlanSha256||Hash(PrefabPath)!=bulkPlan.candidatePrefabSha256||Hash(AnalysisFile("Readback","editor-readback.json"))!=bulkPlan.priorReadbackSha256)throw new InvalidOperationException("Frozen native inputs changed");
             result.inputPlanSha256=bulkPlan.inputPlanSha256;result.candidatePrefabSha256=bulkPlan.candidatePrefabSha256;result.priorReadbackSha256=bulkPlan.priorReadbackSha256;
-            var plan=JsonUtility.FromJson<Plan>(File.ReadAllText(Paths.plan));var old=JsonUtility.FromJson<Readback>(File.ReadAllText("Analysis/editor-readback.json"));
+            var plan=JsonUtility.FromJson<Plan>(File.ReadAllText(Paths.plan));var old=JsonUtility.FromJson<Readback>(File.ReadAllText(AnalysisFile("Readback","editor-readback.json")));
             // A fresh batch Editor starts with an untitled scene. Use the existing tiny saved bootstrap as context.
             EditorSceneManager.OpenScene(Paths.bootstrap,OpenSceneMode.Single);
             var nodeSpecs=plan.nodes.ToDictionary(n=>n.sourceId);var byPrefab=(plan.sourcePrefabs??new SourcePrefabSpec[0]).ToDictionary(p=>p.sourceId);var fontGuids=old.fonts.ToDictionary(f=>f.id,f=>f.guid);
@@ -120,6 +120,6 @@ public static partial class MonkeyImporter
             }
             BulkCheck();result.status=scenes.All(s=>s.status=="excluded"||s.status=="saved-reopened")&&fonts.All(f=>f.status=="configuration-verified"&&f.prefabUnchanged)?"completed":"partial";
         }catch(Exception error){result.status="failed";Debug.LogException(error);}
-        finally {Application.logMessageReceived-=BulkError;result.scenes=scenes.ToArray();result.fonts=fonts.ToArray();File.WriteAllText("Analysis/bulk-finish-readback.json",JsonUtility.ToJson(result,true));EditorApplication.Exit(result.status=="completed"?0:1);}
+        finally {Application.logMessageReceived-=BulkError;result.scenes=scenes.ToArray();result.fonts=fonts.ToArray();Directory.CreateDirectory("Analysis/Readback");File.WriteAllText(AnalysisFile("Readback","bulk-finish-readback.json"),JsonUtility.ToJson(result,true));EditorApplication.Exit(result.status=="completed"?0:1);}
     }
 }

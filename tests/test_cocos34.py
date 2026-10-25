@@ -76,7 +76,7 @@ class Creator34Tests(unittest.TestCase):
             report=convert_package(None,'both',root/'out',input_set_path=declaration)
             self.assertNotEqual(report['structuredRecovery']['status'],'failed',report['structuredRecovery'])
             ir=load(read(root/'out/Structured/normalize/ir.json'));self.assertEqual(len(ir['spriteFrames']),1);self.assertFalse(image.exists())
-            objects=load(read(root/'out/UnityProject/Analysis/structured-objects.json'))['objects'];source=next(a for a in objects if a['sourceId']=='main:'+TEXTURE)
+            objects=load(read(root/'out/UnityProject/Analysis/Evidence/structured-objects.json'))['objects'];source=next(a for a in objects if a['sourceId']=='main:'+TEXTURE)
             self.assertTrue(any('remote/main/native/'in x for x in source['sourceInputs']))
             self.assertFalse(any(d['code']=='INVALID_BUNDLE_TABLE'for d in report['diagnostics']))
 

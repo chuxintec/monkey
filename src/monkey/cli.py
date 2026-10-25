@@ -103,6 +103,14 @@ def main(argv=None):
     pick.add_argument('--preview',action='store_true')
     pick.add_argument('--plan')
     p.add_argument('--out',required=True)
+    p = sub.add_parser('layout-preview', help='Replay a finished conversion under a layout.json and list current -> previewed paths; writes no project')
+    p.add_argument('--conversion', required=True)
+    p.add_argument('--layout', help='Game layout.json to preview (docs/PROJECT-SPEC.md section 7)')
+    p.add_argument('--out', required=True)
+    p = sub.add_parser('layout-migration', help='Old candidate path -> new candidate path for every shared GUID/UUID, for AssetDatabase.MoveAsset in adopted projects')
+    p.add_argument('--from', dest='old', required=True)
+    p.add_argument('--to', dest='new', required=True)
+    p.add_argument('--out', required=True)
     p = sub.add_parser('project-model', help='Inspect explicit target asset path slots and identity without moving files')
     p.add_argument('--candidate', required=True)
     p.add_argument('--out', required=True)
@@ -258,6 +266,15 @@ def main(argv=None):
         if args.command == 'format-project':
             from .layout.standard import VERSION
             fail('FORMAT_RETIRED',args.project,'Post-export formatting is retired; convert again to get a '+VERSION+' project (docs/PROJECT-SPEC.md)')
+        if args.command == 'layout-preview':
+            from .layout import load_overrides
+            from .layout.records import preview
+            print(json.dumps(preview(args.conversion,args.out,load_overrides(args.layout)[0] if args.layout else None),ensure_ascii=False))
+            return 0
+        if args.command == 'layout-migration':
+            from .layout.records import migration
+            print(json.dumps(migration(args.old,args.new,args.out),ensure_ascii=False))
+            return 0
         if args.command == 'project-model':
             from .project_model import inspect as project_model
             print(json.dumps(project_model(args.candidate,args.out),ensure_ascii=False))

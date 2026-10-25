@@ -53,7 +53,7 @@ module.exports = {
 
             const project = JSON.parse(fs.readFileSync(within(root, 'package.json'), 'utf8'));
             if (manifest.targetProfile !== 'cocos-3.8.8' || project.creator.version !== '3.8.8' || Editor.App.version !== '3.8.8' || project.uuid !== plan.projectUuid || manifest.projectUuid !== project.uuid) throw Error('Wrong Creator/project');
-            if (fs.existsSync(within(root, outputPaths.scene)) || fs.existsSync(within(root, 'Analysis/editor-readback.json'))) throw Error('Native output exists; use a fresh candidate');
+            if (fs.existsSync(within(root, outputPaths.scene)) || fs.existsSync(within(root, 'Analysis/Readback/editor-readback.json')) || fs.existsSync(within(root, 'Analysis/editor-readback.json'))) throw Error('Native output exists; use a fresh candidate');
             // Creator import legitimately edits metas; all original content and glue must still match.
             for (const f of manifest.files) {
                 if (f.path.startsWith('assets/') && f.path.endsWith('.meta')) continue;
@@ -147,7 +147,7 @@ module.exports = {
                 }
                 return {...a};
             });
-            fs.writeFileSync(within(root,'Analysis/native-api-timing.json'),JSON.stringify({stage:'assets',apiTiming},null,2)+'\n',{flag:'wx'});
+            fs.mkdirSync(within(root,'Analysis/Readback'),{recursive:true});fs.writeFileSync(within(root,'Analysis/Readback/native-api-timing.json'),JSON.stringify({stage:'assets',apiTiming},null,2)+'\n',{flag:'wx'});
             execution.checkpoint('hierarchy',0,plan.nodes.length);
             const nativeDeadlineMs=execution.deadlineMs();
             const nativePlan={...plan,assets,nativeDeadlineMs,components:plan.components.filter(c=>c.convertible),animations:(plan.animations||[]).filter(a=>a.convertible)};
@@ -214,7 +214,7 @@ module.exports = {
             for(const folder of outputPaths.nativeRoots)if(fs.existsSync(within(root,folder)))collect(folder);
             const rb = {...saved, assets, sceneUuid:scene.uuid, creatorVersion:Editor.App.version, projectUuid:project.uuid,
                 manifestSha256:hash(manifestRaw), nativeFiles,apiTiming,codeEmission,numericCodeExercise:result.numericCodeExercise||[]};
-            fs.writeFileSync(within(root,'Analysis/editor-readback.json'),JSON.stringify(rb,null,2)+'\n',{flag:'wx'});
+            fs.mkdirSync(within(root,'Analysis/Readback'),{recursive:true});fs.writeFileSync(within(root,'Analysis/Readback/editor-readback.json'),JSON.stringify(rb,null,2)+'\n',{flag:'wx'});
             return {sceneUuid:scene.uuid,nodeCount:rb.nodeCount,editorValidation:'readback-recorded'};
         }
     }

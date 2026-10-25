@@ -94,8 +94,8 @@ class EgretBinaryTests(unittest.TestCase):
             with patch('monkey.egret_recovery.source_facts',return_value=dict(profile='fixture',sourceExecuted=False)):
                 result=convert(source,'unity6',root/'out',family='egret',source_profile='egret-custom-resource-plist-v1',format_profile='grea')
             self.assertTrue(result['completed']);self.assertEqual(result['sourceData']['parsedSourceFrames'],1);self.assertEqual(result['sourceSpriteFrames'],0)
-            project=root/'out/UnityProject';self.assertTrue((project/'Analysis/Egret/recovery.json').exists());self.assertEqual(result['format']['status'],'retired')
-            self.assertTrue(load(read(project/'Analysis/agent-work.json'))['tasks']);self.assertFalse(list((project/'Assets').rglob('*.bin')))
+            project=root/'out/UnityProject';self.assertTrue((project/'Analysis/Evidence/Egret/recovery.json').exists());self.assertEqual(result['format']['status'],'retired')
+            self.assertTrue(load(read(project/'Analysis/Tasks/agent-work.json'))['tasks']);self.assertFalse(list((project/'Assets').rglob('*.bin')))
 
     def test_unknown_source_callbacks_cannot_select_reviewed_profile(self):
         from monkey.egret_recovery import source_facts
@@ -148,7 +148,7 @@ class EgretBinaryTests(unittest.TestCase):
             with patch('monkey.egret_recovery.source_facts',return_value=dict(profile='fixture',sourceExecuted=False)),redirect_stdout(StringIO()):
                 exit_code=main(['convert','--input-set',str(inputs),'--target','unity6','--out',str(root/'out'),'--remote-manifest',str(remote),'--remote-cache-root',str(cache),'--format','grea','--offline'])
             self.assertEqual(exit_code,1);result=load(read(root/'out/conversion-result.json'));self.assertEqual(result['acquisition']['localVerifiedFiles'],1);self.assertEqual(result['acquisition']['downloadedFiles'],0)
-            self.assertEqual(result['sourceData']['sheetsWithLocalTexture'],1);self.assertTrue((root/'out/UnityProject/Analysis/acquisition.json').exists())
+            self.assertEqual(result['sourceData']['sheetsWithLocalTexture'],1);self.assertTrue((root/'out/UnityProject/Analysis/Ledger/acquisition.json').exists())
 
 
 class EuiClassRecordTests(unittest.TestCase):

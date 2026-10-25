@@ -34,3 +34,9 @@ Spine原生闭包适配尚未实现。原始PSD等文件留存上限128MiB，不
 ## 原始命名恢复（2026-10-23）
 
 只读参考用户自有AssetDeoce/pkg/decoder/decoder.go的Config.Paths[index][0]→assetPath/末段name逻辑（Manager/.runtime/vendor-reviews/AssetDeoce）；未运行Go或复制私有实现。monkey自己的bundle reader已读取logicalPath，本次独立Python共享Names分配器将它贯穿IR、target plans和native保存路径。中文保留，路径穿越拒绝用于输出并给明确unknown回退，真实大小写/Unicode/同类型冲突按语义类型再短ID消歧；原始JSON数值和源字节不改。GUID/UUID计算不依赖显示路径。
+
+## 2026-10-25 拼音命名及 BON 配置
+
+用户明确要求中文文件名转拼音，覆盖上述旧“中文保留”路径规则。采用固定外部依赖 pypinyin 0.55.0（MIT，PyPI 官方分发），无声调、ü 为 v，使用词组读音；共享路径分配器继续按源身份消歧并保留原名映射，不改 JSON 字段、显示文本或资源内部标识。
+
+BON tagged little-endian v1 的标签、字符串表及容器结构只读核对肥鹅原包静态 decoder 和既有 `Tools/static-bon-reader.py`；monkey 独立实现，无运行时 import 项目工具或硬编码私有路径。仅处理 `cc.BufferAsset` 的明确 Config 路径且本次输入含已识别 decoder 语义证据的来源。原 JS 不执行。解码拒绝截断、尾随字节、重复键、无效字符串引用、非字符串对象键、非有限数值和超预算；Binary/Date 明确 needs_adapter，避免丢失类型。每个顶层表单独输出 UTF-8 JSON，索引保留原始顶层键、源 SHA、完整字节消费、目标 SHA；空地区覆盖也明确记为零表。主配置、地区覆盖、语言表不擅自混合，保留原始二进制。

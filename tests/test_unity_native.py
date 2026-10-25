@@ -33,16 +33,16 @@ def fixture(root):
     emit('Packages/manifest.json',{'dependencies':{'com.unity.modules.imageconversion':'1.0.0'}})
     instance=dict(file='0',pathId='3')
     model=dict(classes=[dict(assembly='Game.dll',namespace='',name='Pool',targetSha256=h,sourceScript={'file':'0','pathId':'4'},fields=[dict(name='Items',csName='Items',csType='UnityEngine.Sprite[]')],instances=[instance])])
-    emit('Analysis/unity-code-model.json',model)
-    emit('Analysis/unity-code-quarantine.json',{'schemaApplied':[dict(path=script,sha256=h)]})
-    emit('Analysis/unity-typed-objects.json',dict(files=[dict(id='0',name='CAB-main',externals=[dict(fileId='1',path='archive:/CAB-dep/CAB-dep')])],objects=[
+    emit('Analysis/Code/unity-code-model.json',model)
+    emit('Analysis/Code/unity-code-quarantine.json',{'schemaApplied':[dict(path=script,sha256=h)]})
+    emit('Analysis/Evidence/unity-typed-objects.json',dict(files=[dict(id='0',name='CAB-main',externals=[dict(fileId='1',path='archive:/CAB-dep/CAB-dep')])],objects=[
         obj('1','GameObject',{'m_Component':[{'component':ptr('2')},{'component':ptr('3')}],'m_Name':'Pool','m_IsActive':True}),
         obj('2','Transform',dict(m_GameObject=ptr('1'),m_Father=ptr('0'),m_Children=[],m_LocalPosition=dict(x=0,y=0,z=0),m_LocalScale=dict(x=1,y=1,z=1),m_LocalRotation=dict(x=0,y=0,z=0,w=1))),
         obj('3','MonoBehaviour',dict(m_GameObject=ptr('1'),Items=[ptr('5','1')])),obj('4','MonoScript',{}),obj('9','AssetBundle',{})]))
     rd=dict(texture=ptr('7'),textureRect=dict(x=0,y=0,width=8,height=8),settingsRaw=67,downscaleMultiplier=1,alphaTexture=ptr('0'),secondaryTextures=[])
-    emit('Analysis/dependency-typed-0.json',dict(files=[dict(id='0',name='CAB-dep',externals=[])],objects=[obj('5','Sprite',dict(m_SpriteAtlas=ptr('6'),m_RenderDataKey=[1,2]),'hero'),
+    emit('Analysis/Evidence/dependency-typed-0.json',dict(files=[dict(id='0',name='CAB-dep',externals=[])],objects=[obj('5','Sprite',dict(m_SpriteAtlas=ptr('6'),m_RenderDataKey=[1,2]),'hero'),
         obj('6','SpriteAtlas',dict(m_IsVariant=False,m_RenderDataMap=[[[1,2],rd]]),'collection'),obj('7','Texture2D',dict(m_Width=8,m_Height=8),'atlas')]))
-    emit('Analysis/texture-hydration.json',dict(consumed=[dict(file='CAB-dep',pathId='7',normalization='BGRA-to-RGBA-no-flip-v1',rgbaRawSha256=sha(bytes([13,47,86,255])*56+bytes([255,0,0,255])+bytes([13,47,86,255])*7))]))
+    emit('Analysis/Readback/texture-hydration.json',dict(consumed=[dict(file='CAB-dep',pathId='7',normalization='BGRA-to-RGBA-no-flip-v1',rgbaRawSha256=sha(bytes([13,47,86,255])*56+bytes([255,0,0,255])+bytes([13,47,86,255])*7))]))
     seal(root)
     return root
 
@@ -63,7 +63,7 @@ class UnityNativeTests(unittest.TestCase):
 
     def test_missing_external_and_name_collisions_reject_before_editor(self):
         with tempfile.TemporaryDirectory() as t:
-            root=fixture(Path(t).resolve()/'candidate');path=root/'Analysis/dependency-typed-0.json'
+            root=fixture(Path(t).resolve()/'candidate');path=root/'Analysis/Evidence/dependency-typed-0.json'
             from monkey.unity_native import document
             d=document(path);d['files'][0]['name']='CAB-dep-near';write_json(path,d);seal(root)
             with self.assertRaisesRegex(ParseError,'dependency missing'):plan(root)
@@ -78,7 +78,7 @@ class UnityNativeTests(unittest.TestCase):
             with self.assertRaisesRegex(ParseError,'pixels differ'):plan(root)
         with tempfile.TemporaryDirectory() as t:
             root=fixture(Path(t).resolve()/'candidate');from monkey.unity_native import document
-            path=root/'Analysis/unity-typed-objects.json';d=document(path);d['objects'][2]['data']['Items']=[ptr('0')];write_json(path,d);seal(root)
+            path=root/'Analysis/Evidence/unity-typed-objects.json';d=document(path);d['objects'][2]['data']['Items']=[ptr('0')];write_json(path,d);seal(root)
             with self.assertRaisesRegex(ParseError,'Null or missing'):plan(root)
 
     def test_bundle_loading_identity_is_pinned_and_manual_changes_rejected(self):

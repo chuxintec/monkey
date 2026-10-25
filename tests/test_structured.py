@@ -43,7 +43,7 @@ class StructuredTests(unittest.TestCase):
             self.assertEqual(alias['redirectTarget'],'textures:'+TEXTURE)
             for name in ('UnityProject','CocosProject'):
                 project=root/'out'/name;m=load(read(project/'manifest.json'))
-                self.assertEqual(m['projectLayout'],'monkey-project/1.0.0')
+                self.assertEqual(m['projectLayout'],'monkey-project/2.0.0')
                 self.assertFalse([d for d in (m.get('diagnostics') or []) if d['code']=='LAYOUT_FORBIDDEN_NAME'])
                 self.assertEqual(m['validation']['editor'],'not_run')
                 if name=='UnityProject':
@@ -76,7 +76,7 @@ class StructuredTests(unittest.TestCase):
             self.assertEqual(recovery['normalized']['spriteFrames'],1)
             self.assertEqual(len(recovery['bundleIndexAliases']),1)
             self.assertEqual(recovery['bundleIndexAliases'][0]['selected'],'source/config.json')
-            indexed=load(read(root/'out/UnityProject/Analysis/cocos-assets.json'))['assets']
+            indexed=load(read(root/'out/UnityProject/Analysis/Mappings/cocos-assets.json'))['assets']
             self.assertEqual(len(indexed),len(load(read(config))['uuids']))
             self.assertEqual(len({(a['bundle'],a['index']) for a in indexed}),len(indexed))
             self.assertEqual(result['projects'][0]['coverage']['inputFiles'],sum(1 for base in (cache,config.parent) for p in base.rglob('*') if p.is_file()))

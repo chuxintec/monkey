@@ -5,6 +5,7 @@ from pathlib import Path
 from ..io import read,sha,inside,write_json,encoded
 from ..sources.compiled import fail,ParseError
 from ..normalize import open_texture
+from ..layout.standard import find_analysis,analysis_rel,ROOTS
 
 
 def binary_version(raw):
@@ -38,7 +39,7 @@ def atlas_pages(text):
     return pages
 
 
-def recover_closures(manifest,destination,previous=None,engine='unity'):
+def recover_closures(manifest,destination,previous=None,engine='unity',namespace='monkey-project',overrides=None):
     destination=Path(destination);assets={a['sourceId']:a for a in manifest['assets']}
     inputs={(i.get('bundle',manifest['bundle']),i['path']):i for i in manifest['inputs']}
     def resource(asset):
@@ -50,8 +51,9 @@ def recover_closures(manifest,destination,previous=None,engine='unity'):
     from ..names import source_names
     from ..layout import LayoutPlanner,casing
     from ..layout.standard import RECOVERY
-    # No Spine runtime is installed, so closures wait in SourceRecovery mirroring their future Content/Spine place (PROJECT-SPEC 6.3).
-    naming=LayoutPlanner(engine,source_names(manifest))
+    # Export real skeleton/atlas/page data under Content/Spine. Unity data is importable
+    # TextAsset evidence until a compatible licensed runtime is explicitly connected.
+    naming=LayoutPlanner(engine,source_names(manifest),overrides)
     old_rows={};old_root=None;old_owned={};decoded_pages=0;reused_pages=0
     if previous:
         from ..io import stage_manifest,load,safe
@@ -63,7 +65,7 @@ def recover_closures(manifest,destination,previous=None,engine='unity'):
             raw=read(inside(old_root,path),max_bytes=128*1024*1024)
             if path not in old_owned or sha(raw)!=old_owned[path]['sha256']:fail('REPLAN_STAGE_DRIFT',path,'Frozen Spine bytes changed')
             return raw
-        old_rows={r['sourceId']:r for r in load(old_bytes('Analysis/spine-closures.json'))['skeletons']}
+        old_rows={r['sourceId']:r for r in load(old_bytes(analysis_rel(old_root,'spine-closures.json')))['skeletons']}
     results=[]
     for asset in manifest['assets']:
         if asset.get('kind')!='sp.SkeletonData':continue
@@ -107,11 +109,12 @@ def recover_closures(manifest,destination,previous=None,engine='unity'):
                 image_raw,image_path=resource(texture)
                 prior=old_rows.get(asset['sourceId'])
                 if prior and prior['status']=='closure_recovered':
-                    atlas_file=next((f for f in prior['files'] if f['path'].endswith('.atlas')),None)
+                    atlas_file=next((f for f in prior['files'] if f['path'].endswith(('.atlas','.atlas.txt'))),None)
                     dependency=next((d for d in prior['dependencies'] if d['page']==name),None)
-                    page=next((f for f in prior['files'] if f['path'].endswith('/'+name)),None)
+                    page_name=dependency.get('targetPage',name) if dependency else name
+                    page=next((f for f in prior['files'] if f['path'].endswith('/'+page_name)),None)
                     if (prior.get('sourceSkeletonSha256')!=sha(raw) or atlas_file is None
-                            or sha(old_bytes(atlas_file['path']))!=sha(atlas.encode('utf-8'))
+                            or prior.get('sourceAtlasSha256',sha(old_bytes(atlas_file['path'])))!=sha(atlas.encode('utf-8'))
                             or dependency is None or dependency['sourceId']!=sid or dependency['sourceSha256']!=sha(image_raw) or page is None):
                         fail('REPLAN_SPINE_SOURCE_CHANGED',asset['sourceId'],'Frozen closure does not match current skeleton/atlas/texture identities')
                     files[name]=old_bytes(page['path']);reused_pages+=1
@@ -119,18 +122,50 @@ def recover_closures(manifest,destination,previous=None,engine='unity'):
                     image=open_texture(image_raw,Path(image_path).suffix.lower())
                     stream=BytesIO();image.save(stream,format='PNG');files[name]=stream.getvalue();decoded_pages+=1
                 dependencies.append(dict(page=name,sourceId=sid,sourceSha256=sha(image_raw)))
-            folder=naming.folder(asset['sourceId'],'spine',root=RECOVERY['unconverted'])
+            folder=naming.folder(asset['sourceId'],'spine',root=ROOTS[engine]['content'])
             stem=casing.snake(naming.record(asset['sourceId'],'spine','','folder')['stem'])
-            files={((stem+Path(name).suffix) if name in ('skeleton.bin','skeleton.json','source.atlas') else name):data for name,data in files.items()}
+            page_map={};claimed=set()
+            for name in names:
+                target=casing.safe_path(name)
+                if target.casefold() in claimed:
+                    p=Path(target);target=str(p.with_name(p.stem+'_'+sha(name.encode())[:10]+p.suffix))
+                if target.casefold() in claimed:fail('SPINE_PAGE_COLLISION',name,'Unresolved pinyin collision')
+                claimed.add(target.casefold());page_map[name]=target
+            # Replace only page declaration lines, never region/attachment names.
+            lines=atlas.splitlines(keepends=True)
+            for index,line in enumerate(lines[:-1]):
+                name=line.rstrip('\r\n')
+                if name in page_map and lines[index+1].startswith(('size:','format:')):
+                    lines[index]=page_map[name]+line[len(name):]
+            files['source.atlas']=''.join(lines).encode('utf-8')
+            compatible=bool(re.fullmatch(r'3\.8\.\d+',str(version)))
+            skeleton_suffix=('.skel' if engine=='creator' else '.skel.bytes') if skeleton_name.endswith('.bin') else ('.json' if engine=='unity' or compatible else '.json.txt')
+            atlas_name=stem+('.atlas' if engine=='creator' else '.atlas.txt')
+            files={(stem+skeleton_suffix if name==skeleton_name else atlas_name if name=='source.atlas' else page_map[name]):data for name,data in files.items()}
+            from ..targets import cocos,unity
+            atlas_uuid=cocos.identity(namespace,asset['sourceId']+'/atlas')
+            for dependency in dependencies:dependency['targetPage']=page_map[dependency['page']]
             for name,data in files.items():
                 path=inside(destination/folder,name);path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(data)
                 row['files'].append(dict(path=folder+'/'+name,sha256=sha(data),bytes=len(data)))
-            row.update(status='closure_recovered',dependencies=dependencies,sourceSkeletonSha256=sha(raw),
-                       remaining='Compatible licensed native runtime and importer required; no animation/playback acceptance')
+                identity=asset['sourceId']+('/atlas' if name==atlas_name else '/skeleton' if name==stem+skeleton_suffix else '/page/'+name)
+                if engine=='unity':
+                    Path(str(path)+'.meta').write_text('fileFormatVersion: 2\nguid: '+unity.guid(namespace,identity)+'\n',encoding='utf-8')
+                else:
+                    uid=cocos.identity(namespace,identity)
+                    if name==stem+skeleton_suffix and compatible:meta=cocos.meta(uid,'spine-data','1.2.7',dict(atlasUuid=atlas_uuid))
+                    elif name.endswith('.png'):meta=cocos.meta(uid,'image','1.0.27',dict(type='texture',fixAlphaTransparencyArtifacts=False,hasAlpha=True))
+                    else:meta=cocos.meta(uid,'*','1.0.0')
+                    write_json(Path(str(path)+'.meta'),meta)
+            row.update(status='closure_recovered',dependencies=dependencies,sourceSkeletonSha256=sha(raw),sourceAtlasSha256=sha(atlas.encode('utf-8')),
+                       nativeImportCandidate=engine=='creator' and compatible,
+                       skeletonPath=folder+'/'+stem+skeleton_suffix,atlasPath=folder+'/'+atlas_name,
+                       runtime='creator-builtin-3.8' if engine=='creator' and compatible else 'not_installed' if engine=='unity' else 'source_version_requires_adapter',
+                       remaining='File export only; native importer identity and playback require separate verification')
         except (ParseError,ValueError,OSError,KeyError,TypeError,StopIteration) as error:
             row.update(reason=getattr(error,'code','SPINE_SOURCE_UNSUPPORTED'),message=str(error))
         results.append(row)
     report=dict(schemaVersion=1,skeletons=results,closed=sum(r['status']=='closure_recovered' for r in results),
                 unresolved=sum(r['status']!='closure_recovered' for r in results),nativeValidation='not_run',naming=naming.report(),decodedPages=decoded_pages,reusedPages=reused_pages)
     (destination/'Analysis').mkdir(parents=True,exist_ok=True)
-    write_json(destination/'Analysis/spine-closures.json',report);return report
+    write_json(find_analysis(destination,'spine-closures.json'),report);return report

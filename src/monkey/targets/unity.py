@@ -7,6 +7,7 @@ from ..io import safe, inside, read, load, sha, encoded, new_output, finish, wri
 from ..sources.compiled import fail
 from ..layout import standard
 from ..layout.standard import VERSION
+from ..layout.standard import find_analysis
 
 PROFILE = 'unity-6000.6.2f1-ugui'
 
@@ -433,7 +434,7 @@ def export(plan_path, output):
         '导入成功后删除 '+standard.ROOTS['unity']['conversion']+' 仍保留原生可编辑资产；Player 不读取转换 JSON。\n'
         '真实编辑器/画面对照/业务尚未验证，见 Analysis。\n')
     from ..assets.animation import module_report
-    write_json(out/'Analysis/animation-module.json',module_report(p.get('animations',[])))
+    write_json(find_analysis(out,'animation-module.json'),module_report(p.get('animations',[])))
     groups={}
     module_names={n['sourceId'].split('#')[0]:n['name'] for n in p['nodes'] if n['parent'] is None}
     component_types={c['sourceId']:c['type'] for c in p['components']}
@@ -464,21 +465,21 @@ def export(plan_path, output):
     if p.get('animations') or any(d['code'].startswith('ANIMATION_') for d in p['diagnostics']):
         from ..assets.animation import handoff_task
         tasks.append(handoff_task(p['animations'],p['diagnostics']))
-    write_json(out/'Analysis/handoff.json',dict(schemaVersion=1,tasks=tasks,
+    write_json(find_analysis(out,'handoff.json'),dict(schemaVersion=1,tasks=tasks,
                verification=dict(static='pending',editor='not_run',visual='not_run',business='not_run')))
-    write_json(out/'Analysis/source-map.json',dict(assets=ownership,sourceRoots=p.get('sourceRoots',{}),sourceLocations=p.get('sourceLocations',{}),
+    write_json(find_analysis(out,'source-map.json'),dict(assets=ownership,sourceRoots=p.get('sourceRoots',{}),sourceLocations=p.get('sourceLocations',{}),
         fonts=[dict(sourceId=f['id'],target=f['fontPath'],atlas=f['path']) for f in p.get('bitmapFonts',[])]+[dict(sourceId=a['id'],target=str(Path(a['path']).with_suffix('.asset'))) for a in p['assets'] if a['kind']=='cc.TTFFont'],
         nodes=[dict(sourceId=n['sourceId'],target=standard.unity('previewPrefab'),name=n['name']) for n in p['nodes']],
         components=[dict(sourceId=c['sourceId'],node=c['node'],type=c['type'],convertible=c['convertible'],
             target=standard.unity('previewPrefab'),viewField={'cc.Sprite':'Images','cc.Label':'Labels','cc.Button':'Buttons'}.get(c['type']),
-            bindingEvidence='Actual indices and native fileIDs require Analysis/editor-readback.json') for c in p['components']]))
-    if p.get('bindings'):write_json(out/'Analysis/font-bindings.json',p['bindings'])
-    write_json(out/'Analysis/name-map.json',p.get('naming',{}))
+            bindingEvidence='Actual indices and native fileIDs require Analysis/Readback/editor-readback.json') for c in p['components']]))
+    if p.get('bindings'):write_json(find_analysis(out,'font-bindings.json'),p['bindings'])
+    write_json(find_analysis(out,'name-map.json'),p.get('naming',{}))
     report=dict(schemaVersion=1,toolVersion=__version__,targetProfile=PROFILE,namespace=p['namespace'],projectLayout=VERSION,
                 scopeMode=p.get('scopeMode','asset-selection'),
                 planSha256=sha(stage_bytes(plan_path)),sourceRoots=p.get('sourceRoots',{}),sourceManifestSha256=p.get('sourceManifestSha256'),diagnostics=p['diagnostics'],editorValidation='not_run',
                 visualValidation='not_run',businessValidation='not_run',galleryOnly=p['galleryOnly'])
-    write_json(out/'Analysis/candidate.json',report)
+    write_json(find_analysis(out,'candidate.json'),report)
     return finish(out,report)
 
 
@@ -536,7 +537,7 @@ def gallery_readback(instruction,readback):
     valid=instruction.get('galleryOnly')is True and not instruction.get('nodes')and not instruction.get('components')and not instruction.get('sourcePrefabs')and readback.get('nativeScope')=='resources-and-gallery-only'and readback.get('sourceGraphVerification')=='not_run'
     valid=valid and isinstance(rows,list)and len(actual)==len(rows)and set(actual)==set(expected)
     if valid:valid=all(actual[key].get('spriteGuid')==spec['guid']and actual[key].get('geometryVerified')is True for key,spec in expected.items())
-    return []if valid else[diagnostic('NATIVE_GALLERY_READBACK','Analysis/editor-readback.json','Resource-only preview must prove exact sprite identities/rects without claiming source graph restoration')]
+    return []if valid else[diagnostic('NATIVE_GALLERY_READBACK','Analysis/Readback/editor-readback.json','Resource-only preview must prove exact sprite identities/rects without claiming source graph restoration')]
 
 
 def verify(candidate, output, level='static'):
@@ -544,9 +545,9 @@ def verify(candidate, output, level='static'):
     from ..sources.containers import fingerprint
     native={};editor='not_run'
     if level=='editor':
-        readback_path=root/'Analysis/editor-readback.json'
+        readback_path=find_analysis(root,'editor-readback.json')
         if not readback_path.is_file():
-            diagnostics.append(diagnostic('EDITOR_NOT_RUN','Analysis/editor-readback.json','Run native import in the declared Editor first'))
+            diagnostics.append(diagnostic('EDITOR_NOT_RUN','Analysis/Readback/editor-readback.json','Run native import in the declared Editor first'))
         else:
             rb=load(read(readback_path,max_bytes=128*1024*1024),max_nodes=8_000_000)
             native={f['path']:f['sha256'] for f in rb.get('nativeFiles',[])}
@@ -564,7 +565,7 @@ def verify(candidate, output, level='static'):
                 resources=rb.get('tmpResources') or {}
                 expected_resources=instruction.get('tmpResources',{})
                 if resources.get('status')!='ready' or resources.get('completionProof') not in ('package-completed-event','preexisting-files') or any(resources.get(k)!=expected_resources.get(k) for k in ('packageName','packageVersion','resource')) or not all(resources.get(k) for k in ('archiveSha256','bitmapGuid','distanceGuid','mobileGuid','settingsGuid')):
-                    diagnostics.append(diagnostic('TMP_RESOURCES_NOT_VERIFIED','Analysis/tmp-resources.json','Exact installed package, essential resource import and native shader/settings identities are unverified'))
+                    diagnostics.append(diagnostic('TMP_RESOURCES_NOT_VERIFIED','Analysis/Readback/tmp-resources.json','Exact installed package, essential resource import and native shader/settings identities are unverified'))
             if instruction.get('sceneRoundtrip') and rb.get('sceneReopened') is not True:
                 diagnostics.append(diagnostic('SCENE_ROUNDTRIP_NOT_VERIFIED','Candidate.unity','Saved scene was not normally closed/reopened before native readback'))
             json_assets={a['id']:a for a in rb.get('jsonAssets',[])}
@@ -730,7 +731,7 @@ def verify(candidate, output, level='static'):
 def handoff(candidate, output):
     from ..sources.containers import fingerprint
     root=safe(candidate)
-    package=load(read(root/'Analysis/handoff.json'))
+    package=load(read(find_analysis(root,'handoff.json')))
     out=new_output(output,[root])
     package['candidateManifestSha256']=fingerprint(root/'manifest.json')
     write_json(out/'handoff.json',package)

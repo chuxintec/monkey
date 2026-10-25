@@ -1,5 +1,69 @@
 # monkey 项目计划与执行进度
 
+## 当前任务：向僵尸开炮全量导出核验、GitHub Release 与唯一安装入口（2026-10-25）
+
+本聊天用户直接授权：使用 monkey 测试向僵尸开炮、核验导出文件内容，随后提交 GitHub 并发布 Release，安装该 Release 作为本地唯一常规调用程序。发布版本沿用 PROJECT-SPEC 的 0.3.0.dev1（GitHub prerelease）；本条覆盖此前未获新版发布/安装授权的限制。原游戏/Sources/GREA只读；私有游戏原件、outputs、缓存与完整日志不入 GitHub。先完成原输入/目标文件字节、类型、GUID/引用、命名、可解析内容与代表样本原生核验，再制作分发、精确暂存、正常推送与 tag/release 回读，最后从 Release 附件安装并验证标准入口。工具已知范围与源缺口明确写发布说明，不声明完整游戏已还原。
+
+当前：源 Unity 2021.3.30f1 → Unity 6000.6.2f1；601 容器重新解析，887 原件 / 7,595 已取得纹理留存校验通过。425 精确 CDN 键仍 404，975 对象无结构，17,495 处未闭合引用已完整记账。发现并修复 JPEG 重编码造成的纹理像素差异，以精确水合源生成 PNG 并保留 GUID。312 项回归通过。最终候选 `outputs/zombie-release-lossless/UnityProject`，全量 Editor/Player/视觉/业务未验；叶 Prefab 原生入口因紧密图集不支持在启动前阻断。详细验收 `docs/validation/2026-10-25-zombie-release.md`，机器回执 `.private/zombie-release-20261025/`。完成候选最终哈希核验后按本轮授权发布 prerelease 并安装唯一入口。
+
+
+## 当前结果：统一类型目录与 Textures 合并已完成（2026-10-25）
+
+用户确认 Unity `Assets/Game/Content/<Type>/<Module>/`、Creator `assets/resources/<Type>/<Module>/`。两端统一只生成 Textures 类型目录；保持原 Sprite GUID/UUID 与裁切/边框信息，仅复用字节完全一致的附加完整纹理。Unity 去除 5,391 份、Creator 去除 5,415 份重复 PNG，合计减少 563,105,516 字节。17,201 输入逐项保留，两个目标各 356 音频、528 JSON、1,776 Spine 闭包及 214 Shader 来源文件齐全；1,694 源 Prefab 相对路径与名称一致。
+
+最终 Unity 自有副本验证器 0 诊断、保存重开通过（Editor partial 保留源缺口）；Creator 第五轮 editor pass/0 诊断，1,694 Prefab/24,784 节点/416 动画/356 正时长音频及八组动态探针完成回读。两端 528 JSON 实际导入类型、7,587 纹理映射与原字节已核对。Creator 1,768 SkeletonData 原生导入，另 8 套保留原始文本。所有本轮已知自有 Editor 进程已退出。
+
+本轮同时修复 Boot 父目录、全树 UI 探针开销、AudioClip 时长 API、源几何初始化/Prefab 再激活，以及 Creator 手动对齐递归更新禁用 Widget 的校验器问题。当前 308 项测试通过；失败版本与完整证据保留在 .private/unified-textures-20261025/。最新原生目录为 outputs/foodstreet-unified-textures-unity-native、outputs/foodstreet-unified-textures-creator-native-05；离线源为 outputs/foodstreet-unified-textures。旧导出清理完成：删除 12 个过时/失败导出目录及 5 份中间候选备份（17 个受控根），清理前目录占用约 193.34 GiB，文件逻辑字节 203,142,619,438。仅保留本轮离线双目标、Unity 原生、Creator 原生三个阶段；失败回执、manifest、关键助手源码与日志摘要已归档于 .private/unified-textures-20261025/retired-receipts/。
+
+未闭合：Creator 有 19 次 Tiled Sprite 渲染缓冲区分配错误；Unity 两个派生状态动画名超过 64 字节。结构/引用通过不等于视觉/业务/Player 完成；Shader 仍为来源代码、Unity Spine 播放及微信远端打包未验。工具未提交/发布，原游戏与 GREA 未修改；更大版本的其他门槛按后续计划继续，不能用本轮目录结果替代。详情见 [本轮核验](validation/2026-10-25-unified-textures.md)。
+
+## 历史：资源缺失与分区目录修复（2026-10-25）
+
+本聊天用户明确要求执行双端方案。已修 Creator AudioClip emit/目标覆盖判定；新增完整纹理与 Effect/GLSL 源文件目录、Spine 正式资源闭包；共享分区器与 PascalCase 路径、资源地址清单、Creator Bundle meta 已实现。双端新候选 outputs/foodstreet-resource-layout 导出完成；17,201 输入逐文件保留一致，356 音频/276 独立内容双端一致、原 Creator 少导的 259 种已补齐。各 7,587 完整纹理、1,776 Spine 闭包、38 Effect/214 源文件、528 JSON；静态 pass/0 诊断。12,164 共有资源文件名一致，中文路径及超长正式资源文件名均 0。1,517 跨包 redirect 已改为已解析，4 个未知索引单列。
+
+300 项全套通过；后续静态 Shader 名 MovieClip 误报修正与合成 WAV 双端测试共 18 布局 + 6 专项通过。Unity 6 自有副本正在执行原生导入，之后顺序 Creator 3.8.8；新工程通过前保留旧输出。微信分包/Player 未验证，Unity Addressables/AssetBundle 后端仅输出分组方案，未配置构建。验收 docs/validation/2026-10-25-resource-layout.md，机器证据 .private/resource-layout-20261025/。
+
+## 当前审计：Cocos / Unity 完整性与命名（2026-10-25）
+
+用户要求对比目录/文件、命名及原版漏导。本轮只读核验，未改工具/输出、未启动 Editor。独立遍历 17,201 源文件并核对两个候选及 Unity 原生副本保留字节：0 漏存、0 哈希错误。528 JSON/1,776 Spine 闭包一致；2,617 个不同 PNG 按声明裁切后像素全部一致。11,808 共有资源映射及 914 草稿主名一致，43 个模块目录差异均为 Creator 大小写/长度截断规则。
+
+发现待修复：Creator assets 仅 17 种音频，Unity 276 种；259 种内容只保留于 SourceRecovery。根因是 consumed_inputs 不区分目标能力而 Creator 无 AudioClip emit。另有实际文件名超 64 字节：Unity 候选 22、Creator 18、Unity 原生 36；两端各 18 草稿非 PascalCase。旧 1,521 missing_reference 实为 1,517 已解析跨包 redirect + 4 个未知 main UUID，不能当作 1,521 文件丢失。冻结输出与旧记录未改写；以后以此分类解读。
+
+完整报告 docs/validation/2026-10-25-export-parity-audit.md，机器证据 .private/export-parity-audit-20261025/summary.json。优先修 Creator 音频及目标覆盖状态、最终名称长度、缺失引用统计；本轮为审计交付，修复尚未实施。
+
+## 本轮完成：仅 monkey 导出 Cocos 3.8.8（2026-10-25）
+
+用户本聊天最初要求导出/导入，随后明确收窄为“仅使用 monkey 做导出 Cocos 3.8.8 测试”。已仅用 monkey convert --target cocos38 --offline 导出 outputs/foodstreet-creator388/CocosProject，并由 monkey verify --level static 验证通过、0 诊断。17,201 输入/884,709,704 字节均计入台账，528 配置 JSON，63,896 清单文件中文路径为 0；导入计划含 8,511 资产（8,472 SpriteFrame）、24,784 节点、1,694 源 Prefab 计划。导出 completed=true/status=partial，4 项已知源恢复警告保留；不将离线候选或计划计数称为实际原生还原。
+
+未启动 Creator、未执行导入/编译/运行、未使用其他转换器、未恢复肥鹅 Cocos 产品开发。原生脚本仅准备未执行；按用户最新范围记 not_run_by_user_scope。15 项相关离线测试通过。验收 docs/validation/2026-10-25-creator388-export.md；证据 .private/creator388-export-20261025/delivery.json。现有 Unity 最新输出保持。
+
+## 当前：中文路径拼音化与配置表补全（2026-10-25）
+
+用户本聊天直接要求修改中文命名文件并解决 JSON 配置表缺失。已在共享命名器、原始证据路径及 Spine 页图闭包实现拼音命名/同音冲突消歧；骨骼区域标识、源 JSON 键和值不改。新增带静态格式证据、完整字节消费和预算限制的 BON 解码/逐表 JSON 导出，覆盖原配置 10 包、528 个顶层值（含 236 张主表），主表/地区覆盖/语言数据独立保存。
+
+296 项测试通过，17,201 输入逐字节核验、528 JSON 与独立 BON Reader 重建对象完全一致；目标工程中文路径 0、1,776 Spine 页图闭包有效。旧候选 GUID 对比：600 路径迁移、8,775 保持、0 丢失、528 新配置。新输出 `outputs/foodstreet-unity6-pinyin` 与 `outputs/foodstreet-unity6-pinyin-native/UnityProject` 已完成 Unity 6000.6.2f1 原生验证：1,694 源 Prefab / 24,784 节点 / 8,952 Sprite，Missing Script 0、保存重开通过、验证器 0 诊断；528 配置 TextScriptImporter 实际导入并保留字节。静态 pass、Editor partial（既有源限制），配置运行时业务绑定/Player/视觉仍未验收。详情 [本轮验收](validation/2026-10-25-pinyin-config.md)，证据 `.private/pinyin-config-20261025/`。本地开发功能，未发布；不宣称所有引擎身份约束均可自动改名。旧两个输出已核验后清理，保留关键回执，实际释放 15.26 GiB；outputs 仅保留本轮两个阶段。
+
+## 上次交付：肥鹅资源重新导出完成（2026-10-25）
+
+用户自行删除全部旧 outputs 后要求全新导出。三处原始输入仍在，旧清理计划未执行。已使用当前 monkey 工作树生成 `outputs/foodstreet-unity6`，并在 `outputs/foodstreet-unity6-native-02/UnityProject` 完成 Unity 6000.6.2f1 全量原生导入。详情见 [重新导出验收](validation/2026-10-25-foodstreet-reexport.md)。
+
+17,201 项输入逐字节核验、8,952 张图片检查、914 份唯一草稿检查通过；实际 1,694 源 Prefab / 24,784 节点 / 8,952 Sprite，Missing Script 0，保存重开通过。子进程 exit 0，静态 pass，Editor partial，验证器 0 诊断。首轮 MiniGames 动画 allow-root 失败已修复，27 项定向测试通过；失败证据另存私有目录。原 1,521 缺失引用、16,630 源限制与业务/Player/视觉 not_run 继续保留。游戏工程未改，工具未发布。
+
+机器回执 `.private/foodstreet-reexport-20261025/delivery.json`；旧 outputs 历史路径已失效，不视为当前交付。版本整体尚未收口，不用本次肥鹅导出覆盖向僵尸缺脚本等未完成门槛。
+
+
+## 当前：0.3.0.dev1 工程布局重构接手（2026-10-25）
+
+用户直接要求接手 Claude 未完成开发。当前分支 `monkey`，基线 `2d4f528`；实施合同见 [PROJECT-SPEC](PROJECT-SPEC.md)，D1–D6 已记录确认。Claude 的六个提交及全部未提交改动保留，未重置或覆盖工作树。此节覆盖下面旧版本“当前/完成”措辞；旧证据继续归属原候选。
+
+- 已提交：布局规划器、Unity/Creator emitter 接入、代码草稿/Spine 闭包重排、Unity 来源同 GUID 重定位、真实输入命名规则修正。
+- 接手时未提交：Analysis 分组及兼容读取、工程文档/模块索引、layout-preview/layout-migration CLI 和多处 writer/test 接入。该组现已通过离线测试，但未作新版原生验证。
+- 本次修复：macOS Assets/assets 同目录重复扫描导致迁移清单重复和大小写错误；重复 GUID/UUID 显式拒绝；Creator 目录 meta 不当资产；仅新候选存在的资产增加逐项清单。README/USAGE/ARCHITECTURE 同步。
+- 验证：首次 284 项中 1 项失败；修复及增加反例后 286 项通过（12.207 秒），git diff --check 通过。日志 `.private/takeover-20261025/unittest.log`。这是工具离线测试，不是游戏或 Editor 验收。
+- 待完成：两款游戏完整输入重新生成/静态布局检查及确定性核验；与冻结 dev3 按身份比较 GUID/UUID 和移动覆盖；Unity/Creator 代表样本原生回读；按结果收口 SUPPORT-MATRIX/验收报告并更新版本号和本地分发。
+- 版本仍为 0.2.0.dev3，目标 0.3.0.dev1 尚未交付/发布。本次未启动 Editor、未修改肥鹅或冻结候选、未再次清理 output。
+
+
 完工/阻塞/交付与续推按[DIRECTOR-CONTINUATION](/Users/wangmeng/Documents/Manager/standards/DIRECTOR-CONTINUATION.md)执行；本聊天已原生核验人类授权`01a166b4-5c18-78f3-8cc2-c0d07dd46a20`，总监路由`01a14c8c-6402-7d03-bab8-ec7ea8051abf`。更新本PLAN后以稳定事件ID报告，已批准就绪下一包连续推进，不因报告或普通ACK停下。
 
 ## 当前：NativeFlow原生替换及局部增量已完成（2026-10-25）

@@ -56,7 +56,7 @@ def encoded(value):
 
 
 def write_json(path, value):
-    path.write_bytes(encoded(value))
+    path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(encoded(value))
 
 
 def stage_bytes(path):

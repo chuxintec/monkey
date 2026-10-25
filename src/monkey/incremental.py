@@ -7,13 +7,14 @@ from . import __version__
 from .io import safe, inside, read, load, sha, encoded, write_json, new_output, finish, diagnostic, stage_document
 from .sources.compiled import fail
 from .layout import standard
+from .layout.standard import find_analysis
 
 PROFILES={'unity-6000.6.2f1-ugui','cocos-3.8.8'}
 # monkey-project/1 has no manual folder: ownership is the manifest owner field (PROJECT-SPEC 4.1).
 CURRENT_ROOTS={'unity':('Assets/Game/','Assets/TextMesh Pro/','Packages/','ProjectSettings/','Analysis/','Docs/','SourceRecovery/'),
                'creator':('assets/','extensions/monkey-import/','settings/','Analysis/','Docs/','SourceRecovery/')}
 CURRENT_SCAN={'unity':(standard.ROOTS['unity']['content'],standard.ROOTS['unity']['scenes'],standard.ROOTS['unity']['conversion'],'Packages','ProjectSettings','Analysis'),
-              'creator':(*sorted({'assets/'+v.split('/')[0] for v in standard.CREATOR_TYPES.values()}|{'assets/localization','assets/mini-games','assets/scenes'}),
+              'creator':('assets/Game','assets/resources',
                          standard.ROOTS['creator']['conversion'],'Analysis')}
 
 
@@ -72,7 +73,7 @@ def check_content(root,files):
 
 def identities(root,m,files):
     # Logical source identity is deliberately separate from content hashes.
-    source_map=load(read(root/'Analysis/source-map.json'));mapping={}
+    source_map=load(read(find_analysis(root,'source-map.json')));mapping={}
     for a in source_map.get('assets',[]):
         path=a.get('path');sid=a.get('sourceId')
         if path and sid:mapping.setdefault(path,[]).append(sid);mapping.setdefault(path+'.meta',[]).append(sid)
@@ -162,7 +163,7 @@ def register(candidate,workspace):
     root,m,files,h=snapshot(candidate);ws,state,registry_path=workspace_paths(workspace)
     allowed=inside(ws,'outputs')
     if root==allowed or not root.is_relative_to(allowed):fail('UNREGISTERED_OUTPUT_ROOT',str(root),'Only this workspace outputs/<candidate> may be enrolled')
-    source_map=load(read(root/'Analysis/source-map.json'))
+    source_map=load(read(find_analysis(root,'source-map.json')))
     roots=m.get('sourceRoots',source_map.get('sourceRoots',{}))
     for src in roots.values():
         source=safe(src)
@@ -187,7 +188,7 @@ def _preview(target,candidate,expected_manifest,workspace):
     if (record['targetProfile'],record['namespace'])!=(d['targetProfile'],d['namespace']):fail('REGISTRY_MISMATCH',str(root),'Target lineage differs')
     incoming=snapshot(candidate)[0]
     if incoming==root or incoming.is_relative_to(root) or root.is_relative_to(incoming):fail('OUTPUT_OVERLAP',str(incoming),'Incoming candidate overlaps target')
-    incoming_map=load(read(incoming/'Analysis/source-map.json'))
+    incoming_map=load(read(find_analysis(incoming,'source-map.json')))
     for src in list(record['sourceRoots'].values())+list(incoming_map.get('sourceRoots',{}).values()):
         source=safe(src)
         if root==source or root.is_relative_to(source) or source.is_relative_to(root):fail('OUTPUT_OVERLAP',str(root),'Registered target now overlaps source')

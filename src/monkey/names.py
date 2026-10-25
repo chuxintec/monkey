@@ -4,6 +4,7 @@ import unicodedata
 from pathlib import PurePosixPath
 from collections import Counter
 from .io import sha
+from .layout.casing import romanize
 
 _KNOWN={'.png','.jpg','.jpeg','.ttf','.otf','.fnt','.prefab','.fire','.scene','.unity','.json','.bin','.skel','.atlas','.mp3','.ogg','.wav','.anim'}
 _DEVICE=re.compile(r'^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)',re.I)
@@ -44,9 +45,10 @@ class Names:
             reasons.append('unsafe-source-path-rejected');relative=None;provenance='unknown'
         if relative is None:
             relative='unknown--'+sha(base.encode())[:10];reasons.append('no-safe-source-name')
-        parts=[]
-        for part in [meta.get('bundle') or base.split(':')[0],*relative.split('/')]:
-            part=str(part);clean=unicodedata.normalize('NFC',part)
+        parts=[];source_parts=[str(p) for p in [meta.get('bundle') or base.split(':')[0],*relative.split('/')]]
+        for part in source_parts:
+            clean=romanize(part)
+            if clean!=part:reasons.append('han-to-pinyin')
             clean=re.sub(r'[<>:"/\\|?*\x00-\x1f]','_',clean).rstrip(' .') or '_unnamed'
             if _DEVICE.match(clean):
                 first,dot,last=clean.partition('.');clean=first+'_'+dot+last
@@ -60,8 +62,8 @@ class Names:
             parts=[parts[0],_trim(parts[-1],90)+'--'+sha('/'.join(parts).encode())[:8]];reasons.append('long-path')
         parent=prefix.rstrip('/');source_parent=parent
         directory_parts=parts if not suffix else parts[:-1]
-        for part in directory_parts:
-            source_parent+='/'+part
+        for index,part in enumerate(directory_parts):
+            source_parent+='/'+source_parts[index]
             if source_parent in self._directories:
                 parent=self._directories[source_parent];continue
             candidate=parent+'/'+part;canonical_dir=unicodedata.normalize('NFC',candidate).casefold()

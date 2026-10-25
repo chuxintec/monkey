@@ -7,6 +7,7 @@ from .sources.containers import fingerprint
 from .sources.compiled import fail
 from .signatures import phase_signatures
 from .names import source_names
+from .layout.standard import analysis_rel
 
 # Reviewed 838d05b geometry/pixel stage; only source-name metadata is added here.
 _NAMES_V1_FROM=('87e3c05e3e4c3398cc9b33cae2adb23ff114980b50af651c1ff08695817ab56e',
@@ -91,10 +92,10 @@ def reused_code(previous,selection,namespace,rows):
         raw=read(inside(root,relative),max_bytes=128*1024*1024)
         if relative not in owned or sha(raw)!=owned[relative]['sha256']:fail('REPLAN_STAGE_DRIFT',relative,'Recovered source evidence changed')
         return raw
-    previous_rows=load(checked('Analysis/resource-ledger.json'),max_nodes=8_000_000)['files']
+    previous_rows=load(checked(analysis_rel(root,'resource-ledger.json')),max_nodes=8_000_000)['files']
     if {r['path']:(r['sha256'],r['bytes']) for r in previous_rows}!={r['path']:(r['sha256'],r['bytes']) for r in rows}:
         fail('REPLAN_INPUT_CHANGED',str(old),'Current full input inventory differs from the frozen source cache')
-    modules=load(checked('Analysis/code-index.json'),max_nodes=8_000_000)['modules']
+    modules=load(checked(analysis_rel(root,'code-index.json')),max_nodes=8_000_000)['modules']
     for mod in modules:
         if mod.get('entryType')=='module_candidate':mod['source']=checked(mod['sourceEvidence']).decode('utf-8')
         for key in ('targetBindings','draft','sourceEvidence','source_recovered','translated_supported','compiled','behavior_verified'):mod.pop(key,None)

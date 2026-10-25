@@ -44,7 +44,7 @@ module.exports = {
                 const nodes=new Map();const sourceNodes=new Map(plan.nodes.map(n=>[n.sourceId,n]));const assets=new Map(plan.assets.map(a=>[a.sourceId,a]));
                 const native=new Map();
                 let loaded=0;
-                await batch.map(plan.assets,16,async a=>{checkTime(plan);native.set(a.sourceId,await loadAsset(a.kind==='sprite'?a.spriteFrameUuid:a.uuid,a.kind==='sprite'?cc.SpriteFrame:a.kind==='json'?cc.JsonAsset:cc.Font));jobs.progress('textures',++loaded,plan.assets.length);});
+                await batch.map(plan.assets,16,async a=>{checkTime(plan);native.set(a.sourceId,await loadAsset(a.kind==='sprite'?a.spriteFrameUuid:a.uuid,a.kind==='sprite'?cc.SpriteFrame:a.kind==='json'?cc.JsonAsset:a.kind==='audio'?cc.AudioClip:cc.Font));jobs.progress('textures',++loaded,plan.assets.length);});
                 let nodeProgress=0;
                 for(const n of plan.nodes) {
                     if(nodeProgress%256===0){jobs.progress('hierarchy',nodeProgress,plan.nodes.length);await new Promise(resolve=>setTimeout(resolve,0));}nodeProgress++;
@@ -123,7 +123,7 @@ module.exports = {
                     const assemblyId=relations.keep(plan,scene,nodes,{nativeRefs,animationAssets,numericCodeExercise,...describe(scene,plan)});
                     retained=true;return {assemblyId,nativeRefs,animationAssets,numericCodeExercise};
                 }
-                dynamic.settle(scene,nodes,plan);
+                dynamic.settle(scene,nodes,plan,null,true);
                 const nativeInitialNodes=dynamic.capture(nodes);
                 const asset=new cc.SceneAsset();asset.scene=scene;
                 jobs.progress('candidate-save',0,1);
@@ -183,6 +183,12 @@ module.exports = {
                 animations.push(motion.read(await loadAsset(info.uuid,cc.AnimationClip),spec));
             }
             const jsonAssets=[];
+            const audioAssets=[];
+            for(const a of plan.assets.filter(a=>a.kind==='audio')) {
+                const clip=await loadAsset(a.uuid,cc.AudioClip),duration=clip.getDuration();
+                if(!Number.isFinite(duration)||duration<0)throw Error('Native AudioClip duration unavailable');
+                audioAssets.push({sourceId:a.sourceId,uuid:clip._uuid,duration});
+            }
             for(const a of plan.assets.filter(a=>a.kind==='json')) {
                 const json=await loadAsset(a.uuid,cc.JsonAsset);jsonAssets.push({sourceId:a.sourceId,uuid:json._uuid,value:json.json});
             }
@@ -205,7 +211,8 @@ module.exports = {
                 if(!info)throw Error('Saved prefab identity absent');
                 sourcePrefabs.push(prefabs.read(templates.get(spec.sourceId),spec,plan,info,templates));
             }
-            return {dynamicUiProbes:dynamic.probe(plan,design),nativeInitialNodes:plan.nativeInitialNodes,sourcePrefabs,prefabInstances,jsonAssets,fontPages,animations,numericCodeBindings,nodeCount:saved.length,nodes:[...mapped].map(([sourceId,n])=>({sourceId,nodeUuid:n.uuid,name:n.name,
+            const dynamicUiProbes=await dynamic.probe(plan,design,(done,total)=>jobs.progress('native-readback',sourcePrefabs.length+done,sourcePrefabs.length+total));
+            return {dynamicUiProbes,nativeInitialNodes:plan.nativeInitialNodes,sourcePrefabs,prefabInstances,jsonAssets,audioAssets,fontPages,animations,numericCodeBindings,nodeCount:saved.length,nodes:[...mapped].map(([sourceId,n])=>({sourceId,nodeUuid:n.uuid,name:n.name,
                 position:[n.position.x,n.position.y,n.position.z],size:[n.getComponent(cc.UITransform).width,n.getComponent(cc.UITransform).height],
                 pivot:[n.getComponent(cc.UITransform).anchorX,n.getComponent(cc.UITransform).anchorY],scale:[n.scale.x,n.scale.y,n.scale.z],
                 rotation:[n.rotation.x,n.rotation.y,n.rotation.z,n.rotation.w],active:n.active,...prefabs.uiState(n,sourceNodes.get(sourceId))})),components:refs,labels,frames};

@@ -44,7 +44,7 @@ public static class SourceVerifier {
         int exitCode=1;
         try {
             if(Application.unityVersion!="6000.6.2f1")throw new Exception("Exact Unity 6000.6.2f1 required");
-            var spec=JsonUtility.FromJson<Spec>(File.ReadAllText("Analysis/native-check-spec.json"));
+            var spec=JsonUtility.FromJson<Spec>(File.ReadAllText(File.Exists("Analysis/Plans/native-check-spec.json")||!File.Exists("Analysis/native-check-spec.json")?"Analysis/Plans/native-check-spec.json":"Analysis/native-check-spec.json"));
             if(!spec.prefabPath.StartsWith("Assets/",StringComparison.Ordinal) || spec.prefabPath.Contains("..") || !spec.prefabPath.EndsWith(".prefab",StringComparison.Ordinal)) throw new Exception("Unsafe prefab path");
             if(spec.budgetSeconds<1 || spec.budgetSeconds>1200)throw new Exception("Invalid method budget");
             var started=DateTime.UtcNow;
@@ -131,7 +131,7 @@ public static class SourceVerifier {
             } else result.status="read_only_partial";
             exitCode=0;
         } catch(Exception error) { result.error=error.GetType().Name+": "+error.Message; }
-        Directory.CreateDirectory("Analysis");File.WriteAllText("Analysis/unity-source-readback.json",JsonUtility.ToJson(result,true));
+        Directory.CreateDirectory("Analysis/Readback");File.WriteAllText("Analysis/Readback/unity-source-readback.json",JsonUtility.ToJson(result,true));
         EditorApplication.Exit(exitCode);
     }
 }

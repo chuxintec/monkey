@@ -76,7 +76,7 @@ class BitmapAndUiTests(unittest.TestCase):
             with self.assertRaises(ParseError) as caught:plan(root/'ir/ir.json','test',root/'bad',root/'binding.json')
             self.assertEqual(caught.exception.code,'BINDING_REPLACES_EXPLICIT_FONT')
             plan(root/'ir/ir.json','test',root/'plan');export(root/'plan/plan.json',root/'unity')
-            tasks=load(read(root/'unity/Analysis/handoff.json'))['tasks']
+            tasks=load(read(root/'unity/Analysis/Tasks/handoff.json'))['tasks']
             self.assertTrue(all('rootCause' in t and 'module' in t for t in tasks))
 
     def test_source_backed_font_binding_and_stage_integrity(self):
@@ -105,9 +105,9 @@ class BitmapAndUiTests(unittest.TestCase):
             write_json(root/'binding.json',bind)
             result=plan(root/'ir/ir.json','test',root/'plan',root/'binding.json')
             self.assertTrue(next(c for c in result['components'] if c['type']=='cc.Label')['convertible'])
-            export(root/'plan/plan.json',root/'unity');self.assertTrue((root/'unity/Analysis/font-bindings.json').is_file())
+            export(root/'plan/plan.json',root/'unity');self.assertTrue((root/'unity/Analysis/Mappings/font-bindings.json').is_file())
             # Synthetic readback input must never turn a wrong-font claim into Editor pass.
-            write_json(root/'unity/Analysis/editor-readback.json',dict(status='imported',unityVersion='6000.6.2f1',missingScripts=0,
+            write_json(root/'unity/Analysis/Readback/editor-readback.json',dict(status='imported',unityVersion='6000.6.2f1',missingScripts=0,
                 diagnostics=[],nativeFiles=[],sprites=[],nodes=[],
                 fonts=[dict(id='synthetic:'+FONT,guid='original-font')],
                 labels=[dict(sourceId=label['sourceId'],text='A',fontGuid='substituted-font',fontSize=40,allCharactersPresent=True)]))

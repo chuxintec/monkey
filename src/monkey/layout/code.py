@@ -15,7 +15,7 @@ UNCLASSIFIED='Unclassified'
 def class_name(module):
     """The draft's type identifier, matching sources.code.drafts."""
     logical=module.get('name') or next((r.get('class_name') for r in module.get('rf',[]) if r.get('class_name')),None)
-    name=re.sub(r'[^A-Za-z0-9_]','_',logical or ('UnknownModule_'+'M'+sha(module['sourceId'].encode())[:20]))
+    name=re.sub(r'[^A-Za-z0-9_]','_',casing.romanize(logical) if logical else ('UnknownModule_'+'M'+sha(module['sourceId'].encode())[:20]))
     return 'Module_'+name if not name or name[0].isdigit() else name
 
 
@@ -51,8 +51,8 @@ class CodeLayout:
         """Paths for the module slice and its draft; the draft mirrors its future production location."""
         layer,module,reasons=self.classify(name,bound_module)
         creator=language=='ts' or language=='js'
-        folders=[casing.kebab(p) if creator else casing.pascal(p) for p in module]
-        draft_root=standard.RECOVERY['drafts']+('/TypeScript/'+layer.lower() if language=='ts' else '/JavaScript/'+layer.lower() if language=='js' else '/CSharp/'+layer)
+        folders=[casing.pascal(p) for p in module]
+        draft_root=standard.RECOVERY['drafts']+('/TypeScript/'+layer if language=='ts' else '/JavaScript/'+layer if language=='js' else '/CSharp/'+layer)
         draft=self._claim('/'.join([draft_root,*folders,name])+'.'+language,sid)
         source=self._claim('/'.join([standard.RECOVERY['modules'],*[casing.pascal(p) for p in module],name])+'.js',sid)
         record=dict(sourceId=sid,className=name,layer=layer,module='/'.join(module),namespace=self.namespace(layer,module),

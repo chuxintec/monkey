@@ -81,7 +81,7 @@ class CreatorNativeTests(unittest.TestCase):
                     kwargs['stdout'].write("Error: cc.Scheduler: Illegal target which doesn't have id\n");kwargs['stdout'].flush()
                     if completed:
                         plan_hash=fingerprint(root/'native/CocosProject/extensions/monkey-import/import-plan.json')
-                        native_creator.write_json(root/'native/CocosProject/Analysis/native-progress.json',dict(
+                        native_creator.write_json(root/'native/CocosProject/Analysis/Readback/native-progress.json',dict(
                             schemaVersion=1,status='completed',sourceManifestSha256=options['expected_manifest'],
                             planSha256=plan_hash,phase='complete',processed=1,total=1,elapsedSeconds=1,nativeResumeSupported=False))
                     return child
@@ -103,7 +103,7 @@ const execution=require(path.join(root,'extensions/monkey-import/execution.js'))
 (async()=>{
  try {await execution.start(async()=>{count++;if(mode==='failure')throw Error('real method failure');if(mode==='timeout')return new Promise(()=>{});});}
  catch(e){console.log(JSON.stringify({count,error:e.message}));return;}
- const p=path.join(root,'Analysis/native-progress.json');
+ const p=path.join(root,'Analysis/Readback/native-progress.json');
  console.log(JSON.stringify({count,progress:fs.existsSync(p)?JSON.parse(fs.readFileSync(p)):null}));
 })();
 ''')
@@ -125,6 +125,6 @@ const execution=require(path.join(root,'extensions/monkey-import/execution.js'))
             result=run('unready');self.assertEqual(result['count'],1);self.assertEqual(result['progress']['status'],'completed')
             result=run('bad-schema');self.assertEqual(result['count'],0);self.assertEqual(result['progress']['status'],'failed')
             result=run('failure');self.assertEqual(result['count'],1);self.assertEqual(result['progress']['status'],'failed')
-            failure=json.loads((candidate/'Analysis/native-error.json').read_text());self.assertEqual(failure['message'],'real method failure')
+            failure=json.loads((candidate/'Analysis/Readback/native-error.json').read_text());self.assertEqual(failure['message'],'real method failure')
             self.assertEqual(failure['sourceManifestSha256'],options['expected_manifest'])
             result=run('timeout');self.assertEqual(result['count'],1);self.assertEqual(result['progress']['status'],'budget_exhausted')

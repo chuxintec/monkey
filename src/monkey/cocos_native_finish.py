@@ -2,13 +2,14 @@
 from pathlib import Path
 from .io import safe,inside,read,load,sha,new_output,write_json
 from .sources.compiled import fail
+from .layout.standard import find_analysis,analysis_rel,find_output_paths
 
 
 def prepare(candidate,output,excluded=()):
-    root=safe(candidate);out=new_output(output,[root]);locations=load(read(root/'Analysis/output-paths.json'));plan_path=inside(root,locations['plan']);plan=load(read(plan_path,max_bytes=128*1024**2),max_nodes=16_000_000,max_depth=128)
-    rb_path=root/'Analysis/editor-readback.json';raw=read(rb_path,max_bytes=128*1024**2);rb=load(raw,max_nodes=16_000_000,max_depth=128)
+    root=safe(candidate);out=new_output(output,[root]);locations=load(read(find_output_paths(root)));plan_path=inside(root,locations['plan']);plan=load(read(plan_path,max_bytes=128*1024**2),max_nodes=16_000_000,max_depth=128)
+    rb_path=find_analysis(root,'editor-readback.json');raw=read(rb_path,max_bytes=128*1024**2);rb=load(raw,max_nodes=16_000_000,max_depth=128)
     if not rb.get('sceneReopened')or rb.get('missingScripts')!=0:fail('BULK_FINISH_BASE',str(root),'Require existing native saved/reopened source candidate')
-    structured=load(read(root/'Analysis/structured-objects.json',max_bytes=128*1024**2),max_nodes=16_000_000,max_depth=128)
+    structured=load(read(find_analysis(root,'structured-objects.json'),max_bytes=128*1024**2),max_nodes=16_000_000,max_depth=128)
     scenes=[]
     for asset in structured['objects']:
         if asset.get('kind')!='cc.SceneAsset':continue
@@ -37,8 +38,8 @@ def validated_preparation(candidate,preparation,expected_manifest):
     raw=read(prepared/'bulk-finish-plan.json');helper=read(prepared/'UnityBulkFinish.cs')
     if sha(raw)!=receipt.get('planSha256')or sha(helper)!=receipt.get('helperSha256')or sha(helper)!=sha(read(Path(__file__).parent/'targets/UnityBulkFinish.cs')):
         fail('BULK_FINISH_PREPARATION_CHANGED',str(prepared),'Prepared plan/helper differs from frozen current implementation')
-    plan=load(raw);locations=load(read(root/'Analysis/output-paths.json'))
-    for path,key in [(locations['plan'],'inputPlanSha256'),(locations['prefab'],'candidatePrefabSha256'),('Analysis/editor-readback.json','priorReadbackSha256')]:
+    plan=load(raw);locations=load(read(find_output_paths(root)))
+    for path,key in [(locations['plan'],'inputPlanSha256'),(locations['prefab'],'candidatePrefabSha256'),(analysis_rel(root,'editor-readback.json'),'priorReadbackSha256')]:
         if sha(read(inside(root,path),max_bytes=128*1024**2))!=plan[key]:fail('BULK_FINISH_INPUT_CHANGED',path,'Prepared native input changed')
     return root,plan,helper,locations
 
@@ -55,7 +56,7 @@ def execute(candidate,preparation,output,editor,expected_manifest,budget_seconds
     executable=safe(editor)
     if executable.name not in ('Unity','Unity.exe')or not executable.is_file()or not os.access(executable,os.X_OK):fail('BULK_FINISH_EDITOR',str(executable),'Explicit installed Editor executable required')
     root,plan,helper,locations=validated_preparation(candidate,preparation,expected_manifest)
-    helper_path=inside(root,(Path(locations['plan']).parent/'UnityBulkFinish.cs').as_posix());plan_path=root/'Analysis/bulk-finish-plan.json'
+    helper_path=inside(root,(Path(locations['plan']).parent/'UnityBulkFinish.cs').as_posix());plan_path=find_analysis(root,'bulk-finish-plan.json')
     previous_files={}
     if (root/'Temp/UnityLockfile').exists():fail('BULK_FINISH_EXISTING_STATE',str(root),'Never remove an Editor lock')
     if previous_execution:
@@ -64,10 +65,10 @@ def execute(candidate,preparation,output,editor,expected_manifest,budget_seconds
         if old.get('project')!=str(root)or old.get('processExited')is not True or old.get('status')!='partial'or old.get('historicalManifestUnchanged')is not True or old.get('nativeStatus')not in ('failed','partial')or any(r.get('savedReopened')or r.get('status')not in ('failed','excluded')for r in old_rb.get('scenes',[]))or any(r.get('status')!='configuration-verified'or r.get('prefabUnchanged')is not True for r in old_rb.get('fonts',[]))or old.get('sourceManifestSha256')!=expected_manifest:
             fail('BULK_FINISH_PREVIOUS_STATE',str(previous),'Only an exited, unchanged owned failure with no saved source Scene may be resumed')
         old_preparation=safe(old_spec['preparation']);old_plan=load(read(old_preparation/'bulk-finish-plan.json'));old_plan.update(budgetSeconds=old_spec['budgetSeconds'],deadlineUtc=old_spec['deadlineUtc'])
-        if sha(read(helper_path))!=old_spec['helperSha256']or load(read(plan_path))!=old_plan or read(root/'Analysis/bulk-finish-readback.json')!=failed:
+        if sha(read(helper_path))!=old_spec['helperSha256']or load(read(plan_path))!=old_plan or read(find_analysis(root,'bulk-finish-readback.json'))!=failed:
             fail('BULK_FINISH_PREVIOUS_CHANGED',str(root),'Prior helper/plan/failure evidence changed; no overwrite')
-        previous_files={helper_path:read(helper_path),plan_path:read(plan_path),root/'Analysis/bulk-finish-readback.json':failed}
-    elif any(p.exists()for p in [helper_path,plan_path,root/'Analysis/bulk-finish-readback.json']):fail('BULK_FINISH_EXISTING_STATE',str(root),'Explicit exact previous execution required; unknown files never overwritten')
+        previous_files={helper_path:read(helper_path),plan_path:read(plan_path),find_analysis(root,'bulk-finish-readback.json'):failed}
+    elif any(p.exists()for p in [helper_path,plan_path,find_analysis(root,'bulk-finish-readback.json')]):fail('BULK_FINISH_EXISTING_STATE',str(root),'Explicit exact previous execution required; unknown files never overwritten')
     for row in plan['scenes']:
         if row['status']=='export'and inside(root,row['path']).exists():fail('BULK_FINISH_EXISTING_SCENE',row['path'],'Source Scene already exists')
     out=new_output(output,[root,safe(preparation),executable]);plan.update(budgetSeconds=budget_seconds,deadlineUtc=stamp(deadline))
@@ -83,7 +84,7 @@ def execute(candidate,preparation,output,editor,expected_manifest,budget_seconds
         meta=helper_path.with_suffix('.cs.meta')
         if meta.exists():(archive/meta.name).write_bytes(read(meta))
         write_json(out/'previous-layer.json',dict(previousExecution=str(safe(previous_execution)),files=[dict(path=str(p.relative_to(root)),sha256=sha(body))for p,body in previous_files.items()]))
-        (root/'Analysis/bulk-finish-readback.json').unlink()
+        (find_analysis(root,'bulk-finish-readback.json')).unlink()
     helper_path.write_bytes(helper);write_json(plan_path,plan)
     # Source manifest/readback remain immutable historical records; new files form an additive layer.
     result=dict(spec,status='running',startedUtc=stamp(now()));child=None;interrupted=[];handlers={}
@@ -111,7 +112,7 @@ def execute(candidate,preparation,output,editor,expected_manifest,budget_seconds
         result.update(processExited=child is None or child.poll()is not None,exitCode=child.poll()if child else None,endedUtc=stamp(now()),status='partial')
         result['redactedLog']=redact_log(out/'editor.log')
         result['historicalManifestUnchanged']=sha(read(root/'manifest.json',max_bytes=128*1024**2))==expected_manifest
-        readback=root/'Analysis/bulk-finish-readback.json'
+        readback=find_analysis(root,'bulk-finish-readback.json')
         if readback.exists()and result['processExited']:
             body=load(read(readback));(out/'bulk-finish-readback.json').write_bytes(read(readback))
             result.update(nativeStatus=body.get('status'),scenes=[{k:r.get(k)for k in ('sourceId','status','sourceNodes','savedReopened','missingScripts','reason')}for r in body.get('scenes',[])],fontCases=len(body.get('fonts',[])))
@@ -122,11 +123,11 @@ def execute(candidate,preparation,output,editor,expected_manifest,budget_seconds
 
 def font_evidence(root,instruction,readback_path):
     """Accept an additive native proof only when frozen source/Prefab hashes match."""
-    path=root/'Analysis/bulk-finish-readback.json'
+    path=find_analysis(root,'bulk-finish-readback.json')
     if not path.is_file():return {}
     body=load(read(path))
     if body.get('status')!='completed':return {}
-    locations=load(read(root/'Analysis/output-paths.json'))
+    locations=load(read(find_output_paths(root)))
     if body.get('status')!='completed'or body.get('priorReadbackSha256')!=sha(read(readback_path,max_bytes=128*1024**2))or body.get('inputPlanSha256')!=sha(read(inside(root,locations['plan']),max_bytes=128*1024**2))or body.get('candidatePrefabSha256')!=sha(read(inside(root,locations['prefab']),max_bytes=128*1024**2)):
         fail('BULK_FONT_EVIDENCE_CHANGED',str(path),'Successful source/plan-bound native incremental proof required')
     prefabs={p['sourceId']:p for p in instruction.get('sourcePrefabs',[])};result={}

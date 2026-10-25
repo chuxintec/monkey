@@ -1,8 +1,8 @@
 #!/bin/sh
-# Repository-local entry point, independent of the caller's current directory.
-MONKEY_ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd) || exit 2
-if [ ! -x "$MONKEY_ROOT/.venv/bin/python" ]; then
-    echo 'monkey: create the project .venv and install this package first (see README.md)' >&2
+# Normal use always selects the installed release, never the mutable checkout.
+MONKEY_RELEASE="$HOME/.local/bin/monkey"
+if [ ! -x "$MONKEY_RELEASE" ]; then
+    echo 'monkey: install the GitHub Release first (see README.md); for explicit source development use .venv/bin/python -m monkey.cli' >&2
     exit 2
 fi
-exec "$MONKEY_ROOT/.venv/bin/python" -m monkey.cli "$@"
+exec "$MONKEY_RELEASE" "$@"

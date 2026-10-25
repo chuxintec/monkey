@@ -5,7 +5,7 @@ monkey distributes independent Python implementations adapted from GREA and the 
 - GREA adaptations: `GREA-MIT.txt`.
 - Acorn 8.15.0: `ACORN-MIT.txt`.
 
-Pillow12.2.0 is an external runtime dependency; texture2ddecoder1.0.6 is optional. Their distributions supply their own license texts. Node.js, Unity and Cocos Creator are external tools and are not bundled.
+Pillow12.2.0 and pypinyin0.55.0 (MIT, https://pypi.org/project/pypinyin/0.55.0/) are external runtime dependencies; texture2ddecoder1.0.6 is optional. Their distributions supply their own license texts. Node.js, Unity and Cocos Creator are external tools and are not bundled.
 
 No private game source/assets, editor binaries or AssetDeoce implementation are distributed. References to the user's AssetDeoce tool describe independently implemented behavior and do not assert that the private repository is MIT licensed. Exact algorithm origins, hashes and limitations are recorded in `docs/PROVENANCE.md`.
 

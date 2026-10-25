@@ -115,15 +115,15 @@ public static partial class MonkeyImporter
     public static void ReplaceAuditedLayouts() {
         var result=new LayoutPatchResult{status="failed",unityVersion=Application.unityVersion};var rows=new List<LayoutPatchAssetResult>();var probes=new List<DynamicUiResult>();var limitations=new List<string>();
         try {
-            layoutPatchClock=System.Diagnostics.Stopwatch.StartNew();layoutPatch=JsonUtility.FromJson<LayoutPatchPlan>(File.ReadAllText("Analysis/layout-patch-plan.json"));
+            layoutPatchClock=System.Diagnostics.Stopwatch.StartNew();layoutPatch=JsonUtility.FromJson<LayoutPatchPlan>(File.ReadAllText(AnalysisFile("Plans","layout-patch-plan.json")));
             if(Application.unityVersion!="6000.6.2f1"||layoutPatch.budgetSeconds<1||layoutPatch.budgetSeconds>900||layoutPatch.targets.Length!=50)throw new InvalidOperationException("Exact native subset/window contract differs");
-            result.planSha256=Hash("Analysis/layout-patch-plan.json");LayoutPatchCheck();
+            result.planSha256=Hash(AnalysisFile("Plans","layout-patch-plan.json"));LayoutPatchCheck();
             result.sourceRuntimeTypeAbsent=!AppDomain.CurrentDomain.GetAssemblies().Any(a=>a.GetType("NativeFlowLayoutGroup",false)!=null);
             if(!result.sourceRuntimeTypeAbsent||Hash(Paths.plan)!=layoutPatch.targetImportPlanSha256)throw new InvalidOperationException("Runtime type retired or import plan binding differs");
             var plan=JsonUtility.FromJson<Plan>(File.ReadAllText(Paths.plan));var specs=plan.components.ToDictionary(c=>c.sourceId);var groups=new HashSet<string>();
             LayoutPatchResult prior=null;
             if(layoutPatch.reusedAssets>0) {
-                if(string.IsNullOrEmpty(layoutPatch.priorReadbackPath)||!layoutPatch.priorReadbackPath.StartsWith("Analysis/layout-patch-history/",StringComparison.Ordinal)||layoutPatch.priorReadbackPath.Contains("..")||Hash(layoutPatch.priorReadbackPath)!=layoutPatch.priorReadbackSha256)throw new InvalidOperationException("Previous saved native evidence binding differs");
+                if(string.IsNullOrEmpty(layoutPatch.priorReadbackPath)||!(layoutPatch.priorReadbackPath.StartsWith("Analysis/Readback/layout-patch-history/",StringComparison.Ordinal)||layoutPatch.priorReadbackPath.StartsWith("Analysis/layout-patch-history/",StringComparison.Ordinal))||layoutPatch.priorReadbackPath.Contains("..")||Hash(layoutPatch.priorReadbackPath)!=layoutPatch.priorReadbackSha256)throw new InvalidOperationException("Previous saved native evidence binding differs");
                 prior=JsonUtility.FromJson<LayoutPatchResult>(File.ReadAllText(layoutPatch.priorReadbackPath));
                 if(!prior.sourceRuntimeTypeAbsent)throw new InvalidOperationException("Previous production runtime type was not retired");
             }
@@ -178,6 +178,6 @@ public static partial class MonkeyImporter
             if(!result.legacyReferencesAbsent||groups.Count!=6||result.reusedAssets!=layoutPatch.reusedAssets)throw new InvalidOperationException("Runtime closure, reuse count or representative native behavior coverage incomplete");
             result.status="completed";
         } catch(Exception error){result.reason=error.GetType().Name+": "+error.Message;Debug.LogException(error);}
-        finally {Application.logMessageReceived-=LayoutPatchLog;result.assets=rows.ToArray();result.probes=probes.ToArray();result.limitations=limitations.ToArray();File.WriteAllText("Analysis/layout-patch-readback.json",JsonUtility.ToJson(result,true));EditorApplication.Exit(result.status=="completed"?0:1);}
+        finally {Application.logMessageReceived-=LayoutPatchLog;result.assets=rows.ToArray();result.probes=probes.ToArray();result.limitations=limitations.ToArray();Directory.CreateDirectory("Analysis/Readback");File.WriteAllText(AnalysisFile("Readback","layout-patch-readback.json"),JsonUtility.ToJson(result,true));EditorApplication.Exit(result.status=="completed"?0:1);}
     }
 }

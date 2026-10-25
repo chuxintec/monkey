@@ -16,7 +16,7 @@ class RetiredFormatTests(unittest.TestCase):
             self.assertFalse(any(d['code']=='FORMAT_PROFILE_RETIRED' for d in none['diagnostics']))
             for name in ['UnityProject','CocosProject']:
                 plain=load(read(root/'none'/name/'manifest.json'));alias=load(read(root/'grea'/name/'manifest.json'))
-                self.assertEqual(plain['projectLayout'],'monkey-project/1.0.0');self.assertEqual(alias['projectLayout'],plain['projectLayout'])
+                self.assertEqual(plain['projectLayout'],'monkey-project/2.0.0');self.assertEqual(alias['projectLayout'],plain['projectLayout'])
                 # Analysis receipts embed each run's absolute source/output roots; everything else is byte-identical.
                 content=lambda m:{f['path']:f['sha256'] for f in m['files'] if not f['path'].startswith('Analysis/')}
                 self.assertEqual({f['path'] for f in plain['files']},{f['path'] for f in alias['files']});self.assertEqual(content(plain),content(alias))

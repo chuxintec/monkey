@@ -55,9 +55,9 @@ class BoundaryTests(unittest.TestCase):
                 dict(bundle='main',path=p.name,sha256=sha(p.read_bytes())) for p in source.iterdir()])
             result=recover_closures(manifest,root/'out');self.assertEqual(result['closed'],1)
             row=result['skeletons'][0];self.assertEqual(row['runtime'],'not_installed')
-            self.assertTrue(all(f['path'].startswith('SourceRecovery/Unconverted/Spine/') for f in row['files']),row['files'])
+            self.assertTrue(all(f['path'].startswith('Assets/Game/Content/Spine/') for f in row['files']),row['files'])
             files={Path(f['path']).name:root/'out'/f['path'] for f in row['files']}
-            self.assertEqual(next(p for n,p in files.items() if n.endswith('.bin')).read_bytes(),binary);self.assertEqual(next(p for n,p in files.items() if n.endswith('.atlas')).read_text(),atlas)
+            self.assertEqual(next(p for n,p in files.items() if n.endswith('.skel.bytes')).read_bytes(),binary);self.assertEqual(next(p for n,p in files.items() if n.endswith('.atlas.txt')).read_text(),atlas)
             inline={'skeleton':{'spine':'3.8-from-4.2.43'},'bones':[{'name':'root'}],'slots':[],'skins':{},'animations':{}}
             skeleton['native']=None;skeleton['document']['instances'][0]['_skeletonJson']=inline
             result=recover_closures(manifest,root/'inline')
@@ -73,6 +73,22 @@ class BoundaryTests(unittest.TestCase):
             with patch('monkey.assets.spine.open_texture',side_effect=AssertionError('pixel decode repeated')):
                 reused=recover_closures(manifest,root/'reused',previous=(root/'inline',sha((root/'inline/manifest.json').read_bytes())))
             self.assertEqual(reused['closed'],1,reused);self.assertEqual(reused['decodedPages'],0);self.assertEqual(reused['reusedPages'],1)
+            obj=skeleton['document']['instances'][0]
+            obj['_atlasText']=atlas.replace('page.png','鹅.png').replace('region','中文区域')
+            obj['textureNames']=['鹅.png'];skeleton['logicalPath']='Spine/木板'
+            chinese=recover_closures(manifest,root/'pinyin');self.assertEqual(chinese['closed'],1)
+            paths=[f['path'] for f in chinese['skeletons'][0]['files']]
+            from monkey.layout.casing import HAN
+            self.assertFalse(any(HAN.search(p) for p in paths))
+            atlas_path=next(p for p in paths if p.endswith('.atlas.txt'))
+            atlas_text=(root/'pinyin'/atlas_path).read_text()
+            self.assertIn('中文区域',atlas_text)
+            self.assertEqual(atlas_pages(atlas_text),['E.png'])
+            self.assertTrue((root/'pinyin'/Path(atlas_path).parent/'E.png').is_file())
+            finish(root/'pinyin',dict(schemaVersion=1,diagnostics=[]))
+            with patch('monkey.assets.spine.open_texture',side_effect=AssertionError('pixel decode repeated')):
+                chinese_reuse=recover_closures(manifest,root/'pinyin-reuse',previous=(root/'pinyin',sha((root/'pinyin/manifest.json').read_bytes())))
+            self.assertEqual(chinese_reuse['closed'],1,chinese_reuse)
             manifest['assets']=[skeleton];result=recover_closures(manifest,root/'missing')
             self.assertEqual(result['unresolved'],1);self.assertEqual(result['skeletons'][0]['reason'],'SPINE_TEXTURE_MISSING')
 

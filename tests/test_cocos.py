@@ -38,7 +38,7 @@ class CreatorTests(unittest.TestCase):
         self.assertIn('amount=-2',text)
         with tempfile.TemporaryDirectory() as temp:
             r=Path(temp).resolve();self.build(r);cocos.export(r/'plan/plan.json',r/'candidate')
-            write_json(r/'candidate/Analysis/editor-readback.json',dict(creatorVersion='3.8.8',projectUuid='wrong',assets=[],nodeCount=1))
+            write_json(r/'candidate/Analysis/Readback/editor-readback.json',dict(creatorVersion='3.8.8',projectUuid='wrong',assets=[],nodeCount=1))
             self.assertEqual(cocos.verify(r/'candidate',r/'verify','editor')['editorValidation'],'fail')
 
     def test_independent_prefab_plan_preserves_source_name_and_is_not_native_evidence(self):
@@ -50,11 +50,11 @@ class CreatorTests(unittest.TestCase):
             self.assertEqual(spec['rootNamePolicy'],'creator-asset-basename-v1')
             self.assertEqual(spec['nativeRootName'],Path(spec['path']).stem)
             self.assertEqual(spec['sourceRootName'],next(n['name'] for n in p['nodes'] if n['sourceId']==spec['root']))
-            self.assertEqual(spec['path'],'assets/prefabs/ui/Fixture.prefab')
+            self.assertEqual(spec['path'],'assets/resources/Prefabs/UI/Fixture.prefab')
             cocos.export(r/'plan/plan.json',r/'candidate')
             instruction=load(read(r/'candidate/extensions/monkey-import/import-plan.json'))
             self.assertEqual(instruction['sourcePrefabs'],p['sourcePrefabs'])
-            self.assertEqual(instruction['outputPaths']['prefabs'],'assets')
+            self.assertEqual(instruction['outputPaths']['prefabs'],'assets/resources')
             self.assertFalse((r/'candidate'/spec['path']).exists())
             checked=cocos.verify(r/'candidate',r/'verify','editor')
             self.assertEqual(checked['editorValidation'],'not_run')
@@ -75,7 +75,7 @@ class CreatorTests(unittest.TestCase):
             native=load(read(r/'candidate/extensions/monkey-import/import-plan.json'));font=next(a for a in native['assets'] if a['kind']=='bitmap')
             atlas=next(a for a in native['assets'] if a['sourceId']==font['atlas'])
             fnt=r/'candidate'/font['path'];page=re.search(r'page id=0 file="([^"]+)"',fnt.read_text())[1]
-            self.assertTrue(font['path'].startswith('assets/fonts/'),font['path'])
+            self.assertTrue(font['path'].startswith('assets/resources/Fonts/'),font['path'])
             self.assertTrue(page.endswith('_page0.png'),page)
             self.assertEqual(fnt.parent,(r/'candidate'/atlas['path']).parent)
             self.assertEqual(page,Path(page).name)
@@ -86,7 +86,7 @@ class CreatorTests(unittest.TestCase):
             u=unity.plan(r/'ir/ir.json','bitmap-adjacency',r/'unity-plan')
             unity.export(r/'unity-plan/plan.json',r/'unity')
             spec=u['bitmapFonts'][0]
-            write_json(r/'unity/Analysis/editor-readback.json',dict(status='imported',unityVersion='6000.6.2f1',missingScripts=0,
+            write_json(r/'unity/Analysis/Readback/editor-readback.json',dict(status='imported',unityVersion='6000.6.2f1',missingScripts=0,
                 diagnostics=[],nativeFiles=[],nodes=[],sprites=[],labels=[],fonts=[dict(id=spec['id'],guid='font',
                     glyphCount=len(spec['glyphs']),pointSize=spec['pointSize'],lineHeight=spec['lineHeight'],atlasGuid='',materialAtlasGuid='')]))
             checked=unity.verify(r/'unity',r/'unity-checked','editor')
@@ -110,7 +110,7 @@ class CreatorTests(unittest.TestCase):
     def test_native_scene_identity_without_geometry_is_not_accepted(self):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp).resolve();plan=self.build(root);cocos.export(root/'plan/plan.json',root/'candidate')
-            write_json(root/'candidate/Analysis/editor-readback.json',dict(creatorVersion='3.8.8',projectUuid='wrong',
+            write_json(root/'candidate/Analysis/Readback/editor-readback.json',dict(creatorVersion='3.8.8',projectUuid='wrong',
                 nodeCount=len(plan['nodes']),nodes=[dict(sourceId=n['sourceId'],nodeUuid='id') for n in plan['nodes']],assets=[],nativeFiles=[]))
             result=cocos.verify(root/'candidate',root/'checked','editor')
             self.assertIn('SCENE_GEOMETRY_MISMATCH',{d['code'] for d in result['diagnostics']})

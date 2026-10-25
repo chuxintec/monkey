@@ -7,6 +7,7 @@ from pathlib import Path
 from .io import safe,inside,read,load,sha,new_output,write_json
 from .providers.assetripper import fingerprint
 from .sources.compiled import fail
+from .layout.standard import find_analysis,find_output_paths
 
 LIMIT=128*1024**2
 
@@ -55,9 +56,9 @@ def audit(candidate,output,expected_manifest):
     root=safe(candidate);manifest_raw=read(root/'manifest.json',max_bytes=LIMIT)
     if sha(manifest_raw)!=expected_manifest:fail('LAYOUT_PATCH_BASE_CHANGED',str(root),'Exact frozen base manifest required')
     manifest=load(manifest_raw,max_nodes=16_000_000,max_depth=128)
-    paths=load(read(root/'Analysis/output-paths.json'));plan_raw=read(inside(root,paths['plan']),max_bytes=LIMIT);plan=load(plan_raw,max_nodes=16_000_000,max_depth=128)
-    rb=load(read(root/'Analysis/editor-readback.json',max_bytes=LIMIT),max_nodes=16_000_000,max_depth=128)
-    structured=load(read(root/'Analysis/structured-objects.json',max_bytes=LIMIT),max_nodes=16_000_000,max_depth=128)
+    paths=load(read(find_output_paths(root)));plan_raw=read(inside(root,paths['plan']),max_bytes=LIMIT);plan=load(plan_raw,max_nodes=16_000_000,max_depth=128)
+    rb=load(read(find_analysis(root,'editor-readback.json'),max_bytes=LIMIT),max_nodes=16_000_000,max_depth=128)
+    structured=load(read(find_analysis(root,'structured-objects.json'),max_bytes=LIMIT),max_nodes=16_000_000,max_depth=128)
     assets={a['sourceId']:a for a in structured['objects']};nodes={n['sourceId']:n for n in plan['nodes']};native={n['sourceId']:n for n in rb['nodes']}
     prefabs={p['sourceId']:p for p in plan['sourcePrefabs']};native_prefabs={p['sourceId']:p for p in rb['sourcePrefabs']}
     flow_path='Assets/Generated/Views/NativeFlowLayoutGroup.cs';flow_guid=re.search(rb'^guid: ([0-9a-f]{32})$',read(inside(root,flow_path+'.meta')),re.M)[1].decode()
@@ -152,8 +153,8 @@ def resume_state(previous_execution,source,report,targets):
     previous=safe(result['candidate']);prepared=safe(result['preparation']);receipt=load(read(prepared/'preparation.json'))
     if receipt['source']!=str(source)or receipt['auditSha256']!=report['auditSha256']or fingerprint(prepared/'preparation.json')!=result['preparationSha256']:
         fail('LAYOUT_RESUME_PROVENANCE',str(run),'Exact same frozen source/audit and previous preparation required')
-    plan_raw=read(previous/'Analysis/layout-patch-plan.json',max_bytes=LIMIT)
-    prior_plan=load(plan_raw,max_nodes=16_000_000,max_depth=128);locations=load(read(previous/'Analysis/output-paths.json'))
+    plan_raw=read(find_analysis(previous,'layout-patch-plan.json'),max_bytes=LIMIT)
+    prior_plan=load(plan_raw,max_nodes=16_000_000,max_depth=128);locations=load(read(find_output_paths(previous)))
     previous_helper=inside(previous,(Path(locations['plan']).parent/'UnityLayoutPatch.cs').as_posix())
     if fingerprint(previous_helper)!=receipt['helperSha256']or fingerprint(inside(previous,locations['plan']))!=prior_plan['targetImportPlanSha256']:
         fail('LAYOUT_RESUME_CODE_CHANGED',str(previous),'Previous helper and import plan must retain their exact owned hashes')
@@ -161,7 +162,7 @@ def resume_state(previous_execution,source,report,targets):
     # Reusing geometry evidence after a runtime adapter change requires a new review.
     for template,relative in [('UnityImporter.cs',(Path(locations['plan']).parent/'MonkeyImporter.cs').as_posix()),('UnityDynamicUi.cs','Assets/Monkey/Editor/UnityDynamicUi.cs'),('IntrinsicGridLayoutGroup.cs','Assets/Game/Presentation/Recovery/IntrinsicGridLayoutGroup.cs')]:
         if read(inside(previous,relative))!=read(Path(__file__).parent/'targets'/template):fail('LAYOUT_RESUME_RUNTIME_CHANGED',relative,'Runtime/common conversion code differs; do not reuse prior native geometry without scoped review')
-    native_raw=read(previous/'Analysis/layout-patch-readback.json',max_bytes=LIMIT);native=load(native_raw,max_nodes=16_000_000,max_depth=128)
+    native_raw=read(find_analysis(previous,'layout-patch-readback.json'),max_bytes=LIMIT);native=load(native_raw,max_nodes=16_000_000,max_depth=128)
     if sha(plan_raw)!=result['executedPlanSha256']or native.get('planSha256')!=sha(plan_raw)or native_raw!=read(run/'layout-patch-readback.json',max_bytes=LIMIT)or not native.get('sourceRuntimeTypeAbsent'):
         fail('LAYOUT_RESUME_EVIDENCE',str(run),'Exact prior plan/readback/runtime-type proof required')
     if len({r['path']for r in native['assets']})!=len(native['assets']):fail('LAYOUT_RESUME_DUPLICATE_ASSET',str(run),'Prior asset evidence contains duplicate identities')
@@ -182,11 +183,11 @@ def prepare(audit_directory,output,previous_execution=None):
     report_path=safe(audit_directory)/'layout-audit.json';report=load(read(report_path,max_bytes=LIMIT),max_nodes=16_000_000,max_depth=128)
     root=safe(report['source'])
     if fingerprint(root/'manifest.json')!=report['sourceManifestSha256']:fail('LAYOUT_PATCH_BASE_CHANGED',str(root),'Frozen base changed')
-    paths=load(read(root/'Analysis/output-paths.json'));raw_plan=read(inside(root,paths['plan']),max_bytes=LIMIT)
+    paths=load(read(find_output_paths(root)));raw_plan=read(inside(root,paths['plan']),max_bytes=LIMIT)
     if sha(raw_plan)!=report['importPlanSha256']:fail('LAYOUT_PATCH_BASE_CHANGED',str(root),'Frozen import plan changed')
-    plan=load(raw_plan,max_nodes=16_000_000,max_depth=128);contract=load(read(root/'Analysis/native-identity-contract.json',max_bytes=LIMIT),max_nodes=16_000_000,max_depth=128)
+    plan=load(raw_plan,max_nodes=16_000_000,max_depth=128);contract=load(read(find_analysis(root,'native-identity-contract.json'),max_bytes=LIMIT),max_nodes=16_000_000,max_depth=128)
     source_objects={p['sourceId']:{r['sourceId']:r for r in p['objects']}for p in contract['prefabs']};targets=[]
-    readback=load(read(root/'Analysis/editor-readback.json',max_bytes=LIMIT),max_nodes=16_000_000,max_depth=128)
+    readback=load(read(find_analysis(root,'editor-readback.json'),max_bytes=LIMIT),max_nodes=16_000_000,max_depth=128)
     baselines={p['sourceId']:p['nodes']for p in readback['sourcePrefabs']};global_baseline={n['sourceId']:n for n in readback['nodes']}
     nodes={n['sourceId']:n for n in plan['nodes']}
     def selected(cases):
@@ -232,11 +233,11 @@ def prepare(audit_directory,output,previous_execution=None):
     if prior:
         if flow.exists()or Path(str(flow)+'.meta').exists()or read(archive/'NativeFlowLayoutGroup.cs.txt')!=read(inside(root,report['flowScriptPath'])):
             fail('LAYOUT_RESUME_RUNTIME',str(project),'Exact retired source archive required; legacy runtime must stay absent')
-        history=project/'Analysis/layout-patch-history';history.mkdir(exist_ok=True)
+        history=find_analysis(project,'layout-patch-history');history.mkdir(exist_ok=True)
         previous_readback=history/(sha(prior['readback'])+'.readback.json');previous_readback.write_bytes(prior['readback'])
         (history/(sha(prior['plan'])+'.plan.json')).write_bytes(prior['plan'])
         (history/(sha(prior['execution'])+'.execution.json')).write_bytes(prior['execution'])
-        (project/'Analysis/layout-patch-readback.json').unlink()
+        (find_analysis(project,'layout-patch-readback.json')).unlink()
     else:
         (archive/'NativeFlowLayoutGroup.cs.txt').write_bytes(read(flow));(archive/'NativeFlowLayoutGroup.cs.meta.txt').write_bytes(read(Path(str(flow)+'.meta')))
     (archive/'NativeLinearLayoutGroup-parent-context.cs.txt').write_bytes(read(project/'Assets/Generated/Views/NativeLinearLayoutGroup.cs'))
@@ -260,8 +261,8 @@ def prepare(audit_directory,output,previous_execution=None):
     Path(str(helper_target)+'.meta').write_text('fileFormatVersion: 2\nguid: '+uuid.uuid5(uuid.NAMESPACE_URL,'monkey/native-layout-patch/editor-v1').hex+'\n')
     patch_plan=dict(schemaVersion=1,source=str(root),sourceManifestSha256=report['sourceManifestSha256'],auditSha256=fingerprint(report_path),targetImportPlanSha256=fingerprint(inside(project,paths['plan'])),flowScriptGuid=report['flowScriptGuid'],targets=targets,deadlineUtc='set-at-execution',budgetSeconds=900)
     if prior:patch_plan.update(priorReadbackPath=previous_readback.relative_to(project).as_posix(),priorReadbackSha256=sha(prior['readback']),reusedAssets=prior['assets'])
-    write_json(project/'Analysis/layout-patch-plan.json',patch_plan)
-    write_json(out/'preparation.json',dict(schemaVersion=1,status='prepared',source=str(root),candidate=str(project),sourceManifestSha256=report['sourceManifestSha256'],auditSha256=fingerprint(report_path),patchPlanSha256=fingerprint(project/'Analysis/layout-patch-plan.json'),helperSha256=fingerprint(helper),targets=len(targets),sourcePrefabs=len(report['prefabs']),sourceComponents=len(report['cases']),reusedAssets=prior['assets']if prior else 0,newTargetAssets=len(targets)-(prior['assets']if prior else 0),previousExecution=prior['run']if prior else None,editor='not_run',clone='APFS-copy-on-write-independent-inodes',legacyRuntimeCodeRetired=True))
+    write_json(find_analysis(project,'layout-patch-plan.json'),patch_plan)
+    write_json(out/'preparation.json',dict(schemaVersion=1,status='prepared',source=str(root),candidate=str(project),sourceManifestSha256=report['sourceManifestSha256'],auditSha256=fingerprint(report_path),patchPlanSha256=fingerprint(find_analysis(project,'layout-patch-plan.json')),helperSha256=fingerprint(helper),targets=len(targets),sourcePrefabs=len(report['prefabs']),sourceComponents=len(report['cases']),reusedAssets=prior['assets']if prior else 0,newTargetAssets=len(targets)-(prior['assets']if prior else 0),previousExecution=prior['run']if prior else None,editor='not_run',clone='APFS-copy-on-write-independent-inodes',legacyRuntimeCodeRetired=True))
     return dict(status='prepared',candidate=str(project),targets=len(targets),report=str(out/'preparation.json'))
 
 
@@ -273,11 +274,11 @@ def execute(preparation,output,editor,budget_seconds,deadline_utc,window_end_utc
     prepared=safe(preparation);receipt=load(read(prepared/'preparation.json'));root=inside(prepared,'UnityProject');source=safe(receipt['source'])
     if receipt.get('status')!='prepared'or receipt.get('candidate')!=str(root)or source==root:
         fail('LAYOUT_PREPARATION_IDENTITY',str(prepared),'Exact independent prepared candidate required')
-    plan_path=root/'Analysis/layout-patch-plan.json';plan_raw=read(plan_path,max_bytes=LIMIT);plan=load(plan_raw,max_nodes=16_000_000,max_depth=128)
-    locations=load(read(root/'Analysis/output-paths.json'));helper=inside(root,(Path(locations['plan']).parent/'UnityLayoutPatch.cs').as_posix())
+    plan_path=find_analysis(root,'layout-patch-plan.json');plan_raw=read(plan_path,max_bytes=LIMIT);plan=load(plan_raw,max_nodes=16_000_000,max_depth=128)
+    locations=load(read(find_output_paths(root)));helper=inside(root,(Path(locations['plan']).parent/'UnityLayoutPatch.cs').as_posix())
     if sha(plan_raw)!=receipt['patchPlanSha256']or fingerprint(helper)!=receipt['helperSha256']or fingerprint(inside(root,locations['plan']))!=plan['targetImportPlanSha256']:
         fail('LAYOUT_PREPARATION_CHANGED',str(root),'Prepared helper, patch plan or import plan changed')
-    if fingerprint(source/'manifest.json')!=receipt['sourceManifestSha256']or (root/'Analysis/layout-patch-readback.json').exists():
+    if fingerprint(source/'manifest.json')!=receipt['sourceManifestSha256']or (find_analysis(root,'layout-patch-readback.json')).exists():
         fail('LAYOUT_EXECUTION_STATE',str(root),'Frozen base changed or candidate already executed; do not reuse a failed native layer')
     protected={str(source/'manifest.json'):receipt['sourceManifestSha256']}
     for target in plan['targets']:
@@ -326,7 +327,7 @@ def execute(preparation,output,editor,budget_seconds,deadline_utc,window_end_utc
         for number,handler in handlers.items():signal.signal(number,handler)
         result.update(status='partial',processExited=child is None or child.poll()is not None,exitCode=child.poll()if child else None,endedUtc=stamp(now()),redactedLog=redact_log(out/'editor.log'))
         result['frozenSourceUnchanged']=all(fingerprint(Path(p))==digest for p,digest in protected.items());write_json(out/'source-protected-hashes.json',protected)
-        native=root/'Analysis/layout-patch-readback.json'
+        native=find_analysis(root,'layout-patch-readback.json')
         if native.is_file()and result['processExited']:
             body=load(read(native,max_bytes=LIMIT),max_nodes=16_000_000,max_depth=128);(out/'layout-patch-readback.json').write_bytes(read(native,max_bytes=LIMIT))
             result.update(nativeStatus=body.get('status'),nativeReason=body.get('reason'),assets=len(body.get('assets',[])),probes=len(body.get('probes',[])))
@@ -355,8 +356,8 @@ def finish(execution,output):
     if result.get('status')!='completed'or not result.get('processExited')or result.get('exitCode')!=0 or not result.get('frozenSourceUnchanged'):
         fail('LAYOUT_NATIVE_NOT_COMPLETE',str(run),'Successful exited native subset evidence required')
     root=safe(result['candidate']);prepared=safe(result['preparation']);receipt=load(read(prepared/'preparation.json'));source=safe(receipt['source'])
-    plan_path=root/'Analysis/layout-patch-plan.json';plan=load(read(plan_path,max_bytes=LIMIT),max_nodes=16_000_000,max_depth=128)
-    native_path=root/'Analysis/layout-patch-readback.json';native_raw=read(native_path,max_bytes=LIMIT);native=load(native_raw,max_nodes=16_000_000,max_depth=128)
+    plan_path=find_analysis(root,'layout-patch-plan.json');plan=load(read(plan_path,max_bytes=LIMIT),max_nodes=16_000_000,max_depth=128)
+    native_path=find_analysis(root,'layout-patch-readback.json');native_raw=read(native_path,max_bytes=LIMIT);native=load(native_raw,max_nodes=16_000_000,max_depth=128)
     if fingerprint(plan_path)!=result['executedPlanSha256']or read(run/'layout-patch-readback.json',max_bytes=LIMIT)!=native_raw or native.get('planSha256')!=result['executedPlanSha256']or native.get('status')!='completed'or not native.get('sourceRuntimeTypeAbsent')or not native.get('legacyReferencesAbsent'):
         fail('LAYOUT_NATIVE_CHANGED',str(root),'Exact successful plan/readback/runtime-closure binding required')
     original=read(source/'manifest.json',max_bytes=LIMIT)
@@ -396,9 +397,9 @@ def finish(execution,output):
                  probeLimitations=native.get('limitations',[]),
                  parentScope='Existing NativeLinearLayoutGroup and shared child-change notification base retained; no source flow recurrence is shipped',
                  consumerGuard='Check every old path/hash and all legacy-script references in the actual game before applying or deleting the retired script; manual changes require merge; this command never writes a game project')
-    write_json(root/'Analysis/layout-patch-summary.json',summary)
+    write_json(find_analysis(root,'layout-patch-summary.json'),summary)
     text=['# Native layout incremental candidate','',
-          'This independent candidate replaces an audited layout subset of frozen dev3. Source limits, business drafts and Player/pixel parity status are unchanged. Original readbacks are historical; Analysis/layout-patch-readback.json is the new separately bound native evidence.','',
+          'This independent candidate replaces an audited layout subset of frozen dev3. Source limits, business drafts and Player/pixel parity status are unchanged. Original readbacks are historical; Analysis/Readback/layout-patch-readback.json is the new separately bound native evidence.','',
           'Unity GridLayoutGroup supplies sizing/wrapping/placement; the heterogeneous questionnaire uses HorizontalLayoutGroup. Disabled layouts retain authored RectTransforms and remain disabled. Exact nested template evidence supplies the two zero-dimension cases; unresolved nested content is still a separate recovery gap.','',
           'IntrinsicGridLayoutGroup changes only layout priority and empty vertical metrics. It contains no child placement/wrapping recurrence. The existing Linear helper/notification parent remains outside this scoped Flow fix. Original source and license remain in SourceRecovery/RetiredLayout and frozen history; no legal determination is made.','',
           'Before adoption, verify old hashes and every legacy script reference in the actual game; merge manual differences. Runtime source removal is permitted only after all referencing objects have been replaced. Native GameObject/RectTransform IDs and unrelated component IDs remain stable; changed layout component IDs have explicit mappings. No game was modified by this tool.','',
@@ -438,7 +439,7 @@ def bundle(delta_directory,output):
         fail('LAYOUT_BUNDLE_IDENTITY',str(root),'Exact successfully frozen candidate required')
     manifest=load(read(root/'manifest.json',max_bytes=LIMIT),max_nodes=16_000_000,max_depth=128)
     indexed={r['path']:r for r in manifest['files']};assets={r['path']:r for r in delta['assetMappings']}
-    plan=load(read(root/'Analysis/layout-patch-plan.json',max_bytes=LIMIT),max_nodes=16_000_000,max_depth=128)
+    plan=load(read(find_analysis(root,'layout-patch-plan.json'),max_bytes=LIMIT),max_nodes=16_000_000,max_depth=128)
     runtime=next(p for p in indexed if p.endswith('/IntrinsicGridLayoutGroup.cs'))
     retired={'Assets/Generated/Views/NativeFlowLayoutGroup.cs','Assets/Generated/Views/NativeFlowLayoutGroup.cs.meta'}
     wanted=set(assets)|{runtime}|retired;changes={r['path']:r for r in delta['changes']}
@@ -457,7 +458,7 @@ def bundle(delta_directory,output):
         operation.update(expectedMetaSha256=indexed[meta]['sha256'],guid=assets[path]['guid']if path in assets else re.search(rb'^guid: ([0-9a-f]{32})$',read(inside(root,meta)),re.M)[1].decode())
     for name in ['NativeFlowLayoutGroup.cs.txt','NativeFlowLayoutGroup.cs.meta.txt','NativeLinearLayoutGroup-parent-context.cs.txt','cocos-layout-mit.txt','README.md']:
         copy('SourceRecovery/RetiredLayout/'+name,'SourceAttribution/'+name)
-    for relative in ['Analysis/layout-patch-readback.json','Analysis/layout-patch-summary.json','Docs/NATIVE-LAYOUT-PATCH.md','Docs/PROJECT-STRUCTURE.md']:
+    for relative in ['Analysis/Readback/layout-patch-readback.json','Analysis/Readback/layout-patch-summary.json','Docs/NATIVE-LAYOUT-PATCH.md','Docs/PROJECT-STRUCTURE.md']:
         copy(relative,'Evidence/'+relative)
     package=dict(schemaVersion=1,status='verified-layout-delta-not-applied',baseManifestSha256=delta['sourceManifestSha256'],candidateManifestSha256=delta['candidateManifestSha256'],
         operations=operations,payload=files,sourcePrefabs=48,assets=50,componentMappings=189,reusedNativeAssets=delta.get('reusedNativeAssets',0),assetMappings=delta['assetMappings'],retiredScriptGuid=plan['flowScriptGuid'],

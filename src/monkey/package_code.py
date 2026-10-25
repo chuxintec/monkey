@@ -2,6 +2,7 @@
 import shutil
 from .io import safe,read,load,sha,write_json,new_output,stage_manifest,stage_document,inside,finish,diagnostic
 from .sources.compiled import fail
+from .layout.standard import find_analysis,analysis_out
 
 
 def declaration(path, language='ts'):
@@ -38,14 +39,14 @@ def prepare(recovered, spec, namespace, output, root_namespace='Game'):
     out=new_output(output);source=out/'OriginalModule.js';source.write_bytes(raw);(out/'OriginalContract.json').write_bytes(declaration_raw)
     inspect(source,out/'Model',data['moduleName'])
     emit(source,out/'Model/code-model.json',out/'Emitted',[data['numericField']],spec.get('language','ts'),namespace,root_namespace)
-    contract=load(read(out/'Emitted/Analysis/code-contract.json'))
+    contract=load(read(out/'Emitted/Analysis/Code/code-contract.json'))
     if contract['presentation']['kind']!='label-adapter' or contract['presentation']['sourceRegistration']['identity']!=data['registrationId']:
         fail('PACKAGE_CODE_BASE',module['sourceId'],'Only source-proven native Label adapters currently bind automatically')
     methods=contract['methods'];setters=[m['name']for m in methods if m['semantic']['kind']=='write-instance-field'];getters=[m['name']for m in methods if m['semantic']['kind']=='read-instance-field']
     if len(setters)!=1 or len(getters)!=1:
         fail('PACKAGE_CODE_METHOD_PAIR',module['sourceId'],'Native numeric exercise requires one evidenced setter and getter')
     report=dict(schemaVersion=1,sourceModule=module['sourceId'],sourceModuleSha256=sha(raw),declarationSha256=spec['sha256'],
-                contractSha256=sha(read(out/'Emitted/Analysis/code-contract.json')),numericMethods=dict(setter=setters[0],getter=getters[0]),
+                contractSha256=sha(read(out/'Emitted/Analysis/Code/code-contract.json')),numericMethods=dict(setter=setters[0],getter=getters[0]),
                 implementedMethods=contract['implementedMethods'],pendingMethods=len(contract['pendingMethods']),binding='not_run',sourceExecuted=False)
     write_json(out/'package-code.json',report)
     return out
@@ -54,7 +55,7 @@ def prepare(recovered, spec, namespace, output, root_namespace='Game'):
 def project_ir(ir_path, inspected, emission, output):
     from .code_presentation import label_components
     if load(read(emission/'package-code.json')).get('kind')=='static-number-methods-v1':return ir_path,stage_document(ir_path/'ir.json')
-    ir=stage_document(ir_path/'ir.json');contract=load(read(emission/'Emitted/Analysis/code-contract.json'));report=load(read(emission/'package-code.json'))
+    ir=stage_document(ir_path/'ir.json');contract=load(read(emission/'Emitted/Analysis/Code/code-contract.json'));report=load(read(emission/'package-code.json'))
     identity=contract['presentation']['sourceRegistration']['identity']
     expected={c['sourceId'] for c in ir['components']if c['type']==identity}
     if not expected:fail('PACKAGE_CODE_BINDINGS',identity,'No matching serialized original components in supplied object graphs')
@@ -83,7 +84,7 @@ def project_ir(ir_path, inspected, emission, output):
 
 def install(emission, project, profile, manifest, plan):
     from .targets import unity
-    contract_path=emission/'Emitted/Analysis/code-contract.json';contract=load(read(contract_path));prefix='Unity/'if profile==unity.PROFILE else'Cocos/'
+    contract_path=emission/'Emitted/Analysis/Code/code-contract.json';contract=load(read(contract_path));prefix='Unity/'if profile==unity.PROFILE else'Cocos/'
     script=None
     for row in contract['files']:
         original=row['path'].startswith('SourceRecovery/Code/Source/Emission/')
@@ -96,11 +97,11 @@ def install(emission, project, profile, manifest, plan):
         if not original and rel.endswith(('.cs','.ts','.js')):
             if script is not None:fail('PACKAGE_CODE_TARGET',rel,'Expected one target script')
             script=rel
-    shutil.copy2(contract_path,project/'Analysis/code-contract.json')
+    shutil.copy2(contract_path,analysis_out(project,'code-contract.json'))
     binding_report=load(read(emission/'package-code.json'))
     binding_report['sourceBindings']=[dict(sourceId=c['sourceId'],node=c['node'],state='planned_native_import'if c['convertible']else'blocked_presentation_adapter')for c in plan['components']if c.get('codeClassName')==contract['className']]
-    write_json(project/'Analysis/package-code.json',binding_report)
-    shutil.copy2(emission/'OriginalContract.json',project/'Analysis/numeric-code-declaration.json')
+    write_json(find_analysis(project,'package-code.json'),binding_report)
+    shutil.copy2(emission/'OriginalContract.json',analysis_out(project,'numeric-code-declaration.json'))
     manifest['codeEmission']=dict(kind=contract.get('kind','numeric-call-subdomain-v1'),binding=contract['binding'],language='csharp'if profile==unity.PROFILE else contract.get('cocosCodeLanguage','ts'),sourceContractSha256=sha(read(contract_path)),
         scriptPath=script,scriptGuid=contract['nativeIdentity']['unityScriptGuid']if profile==unity.PROFILE else None,
         scriptUuid=contract['nativeIdentity']['creatorScriptUuid']if profile!=unity.PROFILE else None,sourceRegistration=contract['presentation']['sourceRegistration'])
@@ -108,19 +109,19 @@ def install(emission, project, profile, manifest, plan):
 
 def enrich_handoff(project):
     """Describe emitted static calls without pretending they are scene components."""
-    path=project/'Analysis/package-code.json'
+    path=find_analysis(project,'package-code.json')
     if not path.exists()or load(read(path)).get('kind')!='static-number-methods-v1':return None
-    contract=load(read(project/'Analysis/code-contract.json'));report=load(read(path))
+    contract=load(read(find_analysis(project,'code-contract.json')));report=load(read(path))
     methods=[dict(name=m['name'],parameters=[p['name']for p in m['parameters']],sourceBytes=m['sourceBytes'],sourceSha256=m['sourceSha256'])for m in contract['methods']]
     task=dict(taskId='static-numeric-utility',module=contract['className'],sourceRefs=[report['sourceModule']],
               codeState='implemented-evidenced-number-subdomain',binding=report['binding'],sourceBindings=[],
               implementedMethods=methods,pendingMethods=[m['name']for m in contract['pendingMethods']],callDomain=contract['callDomain'],
-              targetScript='manifest.json#/codeEmission/scriptPath',contract='Analysis/code-contract.json',
-              allowedPaths=['Assets/Game/Domain/','assets/scripts/domain/'],
+              targetScript='manifest.json#/codeEmission/scriptPath',contract='Analysis/Code/code-contract.json',
+              allowedPaths=['Assets/Game/Domain/','assets/Game/Domain/'],
               nextAction='Review static Number-call contract before using these methods; recover vector/object methods separately from exact preserved source',
               verification=['compile generated target script','Number boundary and rounding vectors','target Player/runtime before gameplay integration'],
               validation=dict(compile='not_run',numericCalls='not_run',player='not_run',business='not_run'))
-    work=load(read(project/'Analysis/agent-work.json'));work['tasks'].append(task);write_json(project/'Analysis/agent-work.json',work)
+    work=load(read(find_analysis(project,'agent-work.json')));work['tasks'].append(task);write_json(find_analysis(project,'agent-work.json'),work)
     invocation=contract['codeNamespace']+'.'+contract['className'] if (project/'ProjectSettings').exists()else contract['className']
     lines=['# Static numeric utility', '',f'Class: `{invocation}`. Resolve the current script from `manifest.json` → `codeEmission.scriptPath`; this pointer stays valid after formatting.',
            '',f"{len(methods)} source methods emitted, {len(contract['pendingMethods'])} pending. Binding: `{report['binding']}`. No source constructor or helper executes, and no source component is wired by this utility.", '',
@@ -128,7 +129,7 @@ def enrich_handoff(project):
            'Accepted calls: '+contract['callDomain']['accepted']+'.', 'Excluded calls: '+contract['callDomain']['excluded']+'.',
            'Rounding: '+contract['callDomain']['rounding']+'. Do not replace unclamped interpolation with an engine clamp or reassociate arithmetic.', '',
            'Pending original methods: '+', '.join('`'+m['name']+'`'for m in contract['pendingMethods'])+'.',
-           'Exact source ranges, SHA256, helper context and method mappings: `../Analysis/code-contract.json`. Original module, reviewed helper and typeof dependency: `../SourceRecovery/Original/`.',
+           'Exact source ranges, SHA256, helper context and method mappings: `../Analysis/Code/code-contract.json`. Original module, reviewed helper and typeof dependency: `../SourceRecovery/Original/`.',
            'This generated candidate has no compile, numeric runtime, Player or gameplay acceptance yet. External validation receipts must name this candidate and exact code hashes.','']
     (project/'Docs/STATIC-NUMERIC-UTILITY.md').write_text('\n'.join(lines),encoding='utf-8')
     start=project/'Docs/START-HERE.md';start.write_text(start.read_text(encoding='utf-8')+'\nAn evidenced static utility is available: [calls, domain and pending methods](STATIC-NUMERIC-UTILITY.md). Its generated methods are separate from the uncompiled original code drafts.\n',encoding='utf-8')

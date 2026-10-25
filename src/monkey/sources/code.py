@@ -52,9 +52,8 @@ def drafts(module, module_id, namespace='Game.Gameplay.Unclassified'):
     """Named source members for AI editing; no fabricated unified Invoke API."""
     import re
     token='M'+sha(module_id.encode())[:20]
-    logical=module.get('name')or next((r.get('class_name')for r in module.get('rf',[])if r.get('class_name')),None)
-    name=re.sub(r'[^A-Za-z0-9_]','_',logical or ('UnknownModule_'+token))
-    if not name or name[0].isdigit():name='Module_'+name
+    from ..layout.code import class_name
+    name=class_name(dict(module,sourceId=module_id))
     members=module.get('syntax',{}).get('members',{})
     methods=members.get('methods',[]);fields=members.get('fields',[])
     if not methods:methods=[dict(f,static=True,ownerAlias=None)for f in members.get('functions',[])]

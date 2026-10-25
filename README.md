@@ -1,25 +1,30 @@
 # monkey
 
-已发布预发布 `v0.2.0.dev1` 保持冻结；当前独立本地修复候选为 `0.2.0.dev2`，新增 Unity 字段语义校验与精确对象身份的离线计划入口。接入、失败隔离及限制见 [UNITY-FIELD-PLAN](docs/UNITY-FIELD-PLAN.md)，本地候选不是新 Release。
+当前版本 **0.3.0.dev1**，采用 [monkey-project/1 工程规范](docs/PROJECT-SPEC.md)。本版本以 GitHub prerelease 交付，旧版本保持冻结；资源候选、原生导入、画面及业务验收分别记录。
 
-本地v0.2开发中：fresh package `convert`默认`--format none`，可选`--format grea`（先完整导出、再typed后处理，Unformatted保留基线），支持顺序`--native`；Unity源包已接入受限叶Prefab的公开native与grea路径保护，见[Unity源验证](docs/providers/UNITY-SOURCE-NATIVE.md)；不代表通用Scene/已导入工程迁移。代码具名子集与原生接线、格式范围及真实证据分别见[CODE-SUBSET](docs/CODE-SUBSET.md)、[FORMATTING](docs/FORMATTING.md)。下文v0.1发布事实对应不可变Release，不把开发分支当新发布。
+新输出直接生成规范目录；`--format none|grea` 保留为弃用兼容参数。`convert --layout layout.json` 可使用游戏级命名覆盖；`layout-preview` 预览已完成转换的路径变化，`layout-migration` 按 GUID/UUID 生成旧候选到新候选的迁移清单。进度和未验证项见 [PLAN](docs/PLAN.md)，用法见 [USAGE](docs/USAGE.md)。
+
+开发版现在默认将中文输出路径转为拼音，保留源名映射、同音消歧和资源 GUID；肥鹅 BON 配置自动逐表导出 JSON，入口为目标工程 `Docs/CONFIGURATION.md`。这些功能包含在本版 wheel 中。
 
 开发版`convert --numeric-code-contract numeric.json`可在同一命令里发现精确源模块、生成有据C#/默认TypeScript，再格式化。现有Label数值调用子域支持原组件绑定；新增静态数值方法子集按调用合同生成独立工具类。声明格式和分层验证见[CODE-SUBSET](docs/CODE-SUBSET.md)，未知业务方法继续保留待补。
 
-Python 驱动的原包恢复工程命令行工具。产品目标：Cocos各版本原包→Unity6/Cocos3.8.8/both；Unity、Laya/LayaAir、Egret、自研及其他引擎原包→Unity6。按来源逐步实现；结构化reader当前覆盖已验证的Cocos2.4.15子集，开发分支新增Cocos2.4.11、2.1.2/3.8.7资源子集、Unity显式Bundle/WebData来源，以及其他引擎原图gallery出口（原节点/方法范围见支持矩阵）。wxapkg/APK/已取得资源集合一键生成独立工程，含全部输入资源、恢复源码与目标代码初稿，交给AI继续开发。当前正式工具版本为 **v0.1（Python 包 0.1.0）**。开发预发布为 [`v0.2.0.dev1`](https://github.com/chuxintec/monkey/releases/tag/v0.2.0.dev1)，支持矩阵已包含3.4.1资源/源图与真实追加Prefab关系、3.8.7嵌套/动态UI及有据C#/TS/JS代码子集；以GitHub prerelease交付；仍非稳定全兼容版本。已验证的原生资源恢复范围和业务缺口见下文；其他源引擎按 [v0.2 设计](docs/V0.2-PLAN.md)推进。
+Python 驱动的原包恢复工程命令行工具。产品目标：Cocos各版本原包→Unity6/Cocos3.8.8/both；Unity、Laya/LayaAir、Egret、自研及其他引擎原包→Unity6。按来源逐步实现；结构化reader当前覆盖已验证的Cocos2.4.15子集，开发分支新增Cocos2.4.11、2.1.2/3.8.7资源子集、Unity显式Bundle/WebData来源，以及其他引擎原图gallery出口（原节点/方法范围见支持矩阵）。wxapkg/APK/已取得资源集合一键生成独立工程，含全部输入资源、恢复源码与目标代码初稿，交给AI继续开发。当前预发布为 [`v0.3.0.dev1`](https://github.com/chuxintec/monkey/releases/tag/v0.3.0.dev1)，仍非所有引擎与版本全兼容。具体恢复范围见 [支持矩阵](docs/SUPPORT-MATRIX.md)。
 
+
+本版完成向僵尸开炮 601 容器的全量导出与内容核查，补齐所有缺失 GUID 统计及精确纹理的无损 PNG 输出。核验范围和已知源缺件见 [本版验收](docs/validation/2026-10-25-zombie-release.md)。
 ## 安装与依赖
 
-Python 3.11+（本次实测3.14.7），基础依赖固定Pillow12.2.0。发布附件提供wheel和源码分发包：
+Python 3.11+。从 [GitHub Release](https://github.com/chuxintec/monkey/releases/tag/v0.3.0.dev1) 下载 wheel、`SHA256SUMS` 与安装脚本，核对哈希后安装：
 
 ```sh
-python3 -m venv .venv
-.venv/bin/python -m pip install ./monkey_native-0.1.0-py3-none-any.whl
-.venv/bin/monkey --version
-.venv/bin/monkey capabilities --json
+python3 install_release.py --wheel monkey_native-0.3.0.dev1-py3-none-any.whl --sha256 <SHA256SUMS中的wheel哈希>
+monkey --version
+monkey capabilities --json
 ```
 
-源码使用`bin/monkey`；安装包使用环境内`monkey`，两者同一CLI。JS模块静态解析需要已安装的Node.js；Acorn解析器和许可证随包提供。可选ASTC解码器固定texture2ddecoder1.0.6。原生导入需已有Unity6000.6.2f1或Creator3.8.8；工具不自动安装编辑器，也不把编辑器/游戏原件打入发行包。
+唯一日常入口为 `~/.local/bin/monkey`，需将 `~/.local/bin` 加入 PATH。版本隔离在 `~/.local/share/monkey/releases/`，`current` 只在安装校验成功后切换。仓库 `bin/monkey` 也转发到此 Release，不回退运行源码。显式开发使用 `.venv/bin/python -m monkey.cli`。
+
+基础依赖固定 Pillow 12.2.0、pypinyin 0.55.0，安装脚本同时安装 ASTC extra（texture2ddecoder 1.0.6），不修改系统 Python。JS 静态解析需要已安装 Node.js；Acorn 和许可证随包提供。Unity 来源完整导出需已有 UnityPy 与 AssetRipper，使用明确 provider 路径；原生导入需 Unity 6000.6.2f1 或 Creator 3.8.8。编辑器、provider 和游戏原件不随工具发行。
 
 ## 一条命令转换
 
@@ -82,7 +87,7 @@ Creator的静态显示尺寸策略会保留源节点烘焙尺寸：Label以原�
 
 当前可运行 `convert / catalog / inspect / normalize / plan / export / verify / handoff / diff / register / apply / preflight / native-import`。Unity 6000.6.2f1/uGUI 2.6.0与Creator 3.8.8均已用真实3源图/76节点代表样本完成原字体、3独立Prefab和Scene保存重载、几何与引用核对；Unity另有8个Label字形核对及编辑保存重开。full14单命令已完成两端各1694独立Prefab、24784节点的保存重开及完整几何/引用强回读，差异诊断均为0；Unity保留源行为缺口为partial，Creator原生资源层pass。详见[全量实际回执](docs/validation/2026-10-24-full14-single-command.md)。代表样本不等于所有来源版本、原版画面或游戏业务通过。已实现登记生成区的差异预览和expected-manifest受控apply，人工区保持独立，移除项保留而不自动删除。
 
-## 本地使用
+## 源码开发（显式使用开发环境）
 
 ```sh
 python3 -m venv .venv
@@ -92,7 +97,7 @@ python3 -m venv .venv
 .venv/bin/python -m unittest discover -s tests -v
 ```
 
-Python 最低 3.11，本次实际验证为 macOS arm64 / Python 3.14.7。Pillow 固定 12.2.0；ASTC 是可选、固定版本的 texture2ddecoder 1.0.6，不安装该 extra 时会输出 dependency_missing。没有全局安装、模型调用或网络服务。
+Python 最低 3.11，本次实际验证为 macOS arm64 / Python 3.14.7。Pillow 固定 12.2.0，pypinyin 固定 0.55.0；ASTC 是可选、固定版本的 texture2ddecoder 1.0.6，不安装该 extra 时会输出 dependency_missing。不修改系统 Python，不调用模型服务。
 
 合成 demo 会创建图集、来源索引、规范化图像、Unity 候选和静态报告，不含原游戏文件。`--ui` 另演示缺失字体和待处理组件，结果应为 partial。已有目录一律拒绝覆盖。
 
@@ -103,3 +108,11 @@ Python 最低 3.11，本次实际验证为 macOS arm64 / Python 3.14.7。Pillow 
 - [算法与依赖来源](docs/PROVENANCE.md)
 
 私有真实输入和样本只在 `.private/`，候选在 `outputs/`，均被 Git 忽略；GREA 和肥鹅工程保持只读。源身份与转换 IR 仅存在离线 Analysis/Editor 指令中，Player 只使用原生 Unity 对象和 UI 引用。
+
+### 双端资源目录与完整性（2026-10-25）
+
+`--target both` 共用 sourceId 与命名规则：Unity 为 `Assets/Game/Content/<Type>/<Module>/`，Creator 为 `assets/resources/<Type>/<Module>/`。目录统一 PascalCase，中文路径转拼音；源包与采集容器只留台账。详情见 [PROJECT-SPEC](docs/PROJECT-SPEC.md) 和 [USAGE](docs/USAGE.md)。
+
+正式资源区包含已解析音频、完整纹理、SpriteFrame 图片、Spine 数据闭包与 Shader 来源代码，原件仍保留于 SourceRecovery。Scene/Prefab/Animation 由原生导入阶段生成。Shader 源文件、Spine 数据与原生渲染/播放分别验收；本轮不配置远端分组或构建。
+
+图片统一使用 `Textures/<Module>/`，不再生成 Sprites 目录。保留 Sprite 导入设置与引用；仅合并字节一致且无独立绑定要求的附加完整纹理，尺寸/裁切不同的图片不强行删除。`resource-catalog.json` 记录纹理别名；Spine/字体页图仍留在对应闭包旁。

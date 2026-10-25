@@ -8,6 +8,7 @@ from .sources.compiled import fail
 from .targets import cocos
 from .preflight import validate_progress
 from .native import now,stamp,utc,redact_log
+from .layout.standard import find_analysis
 
 
 def source(candidate,expected):
@@ -64,7 +65,7 @@ def native_import(candidate,output,editor,expected_manifest,budget_seconds,deadl
             while process.poll() is None:
                 if interrupted or now()>=deadline:
                     stopped='operator_interrupted' if interrupted else 'internal_deadline';break
-                progress=project/'Analysis/native-progress.json'
+                progress=find_analysis(project,'native-progress.json')
                 if progress.exists():
                     raw=load(read(progress,max_bytes=65536))
                     if raw.get('sourceManifestSha256')!=expected_manifest:raise ValueError('Native manifest binding differs')
@@ -101,7 +102,7 @@ def native_import(candidate,output,editor,expected_manifest,budget_seconds,deadl
             lifecycle_error=any('cc.Scheduler: Illegal target which doesn' in line for line in stream)
         if lifecycle_error:
             result.update(status='partial',reason='NATIVE_CREATOR_LIFECYCLE_ERROR')
-    failure=project/'Analysis/native-error.json'
+    failure=find_analysis(project,'native-error.json')
     if failure.exists():
         data=load(read(failure,max_bytes=65536));result['nativeError']=str(data.get('message',''))[:4096]
     result.update(endedUtc=stamp(now()),redactedLog=redact_log(console))

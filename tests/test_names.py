@@ -20,8 +20,8 @@ class NameTests(unittest.TestCase):
             'b:7':dict(bundle='b',logicalPath='ui/icon'),
         }
         names=Names(metadata)
-        a=names.path('b:1','.png','images');self.assertEqual(a,'images/游戏/界面/图标/鹅.png')
-        original=names.path('b:1@original','.png','images');self.assertEqual(original,'images/游戏/界面/图标/鹅.original.png')
+        a=names.path('b:1','.png','images');self.assertEqual(a,'images/YouXi/JieMian/TuBiao/E.png')
+        original=names.path('b:1@original','.png','images');self.assertEqual(original,'images/YouXi/JieMian/TuBiao/E.original.png')
         self.assertNotEqual(names.path('b:2','.png','images'),a)
         self.assertNotIn('--',names.path('b:3','.png','images'))
         safe=names.path('b:4','.json','data');self.assertNotIn('..',safe);self.assertIn('unknown--',safe)
@@ -32,7 +32,7 @@ class NameTests(unittest.TestCase):
         self.assertEqual(names.report()['collisionPaths'],2)
         self.assertNotEqual(Path(upper).parent.name.casefold(),Path(lower).parent.name.casefold())
         self.assertEqual(Names().path('con','.ttf','fonts',metadata=dict(bundle='main',logicalPath='CON.ttf')),'fonts/main/CON_.ttf')
-        self.assertEqual(names.path('b:1','','spine'),'spine/游戏/界面/图标/鹅')
+        self.assertEqual(names.path('b:1','','spine'),'spine/YouXi/JieMian/TuBiao/E')
         self.assertEqual(Names().path('id','.js','code',metadata=dict(bundle='main',logicalPath='scripts/game.js')),'code/main/scripts/game.js')
 
     def test_verified_source_reuse_does_not_run_reader_or_decode_and_refuses_drift(self):
@@ -47,8 +47,8 @@ class NameTests(unittest.TestCase):
             self.assertNotEqual(second['structuredRecovery']['status'],'failed')
             self.assertFalse(second['sourceStageReuse']['pixelDecoderExecuted'])
             self.assertEqual((root/'first/Structured/normalize/ir.json').read_bytes(),original)
-            plan=load(read(root/'second/UnityProject/Analysis/name-map.json'))
-            self.assertTrue(any(r['target']=='Assets/Game/Content/Sprites/UI/panel.png' for r in plan['records']))
+            plan=load(read(root/'second/UnityProject/Analysis/Mappings/name-map.json'))
+            self.assertTrue(any(r['target']=='Assets/Game/Content/Textures/UI/panel.png' for r in plan['records']))
             added=root/'source/new.js';added.write_text('unexecuted source change')
             with self.assertRaises(ParseError) as changed:
                 convert_package(None,'both',root/'changed',input_set_path=declaration,reuse_source_stages=root/'first')

@@ -8,6 +8,7 @@ import shutil
 from .io import safe,read,load,sha,new_output,write_json
 from .sources.compiled import fail
 from .code_emit import name
+from .layout.standard import find_analysis
 
 # Reviewed literal createClass / defineProperty table implementation. Other
 # helpers need their own source proof; a method-table shape alone is insufficient.
@@ -92,9 +93,9 @@ def emit(source,model_path,helper,dependencies,output,selected,language='ts',nam
     cs += ['}','}'];target += ['}']
     if language=='js':target += [f'export {{ {class_name} }};']
     source_id=registrations[0]['identity'];script_guid=guid(namespace,'code/'+source_id+'/'+class_name);script_uuid=identity(namespace,'code/'+source_id+'/'+class_name)
-    files={f'Unity/Assets/Game/Domain/Math/{class_name}.cs':'\n'.join(cs)+'\n',f'Cocos/assets/scripts/domain/math/{class_name}.{language}':'\n'.join(target)+'\n',
+    files={f'Unity/Assets/Game/Domain/Math/{class_name}.cs':'\n'.join(cs)+'\n',f'Cocos/assets/Game/Domain/Math/{class_name}.{language}':'\n'.join(target)+'\n',
            f'Unity/Assets/Game/Domain/Math/{class_name}.cs.meta':'fileFormatVersion: 2\nguid: '+script_guid+'\n',
-           f'Cocos/assets/scripts/domain/math/{class_name}.{language}.meta':__import__('json').dumps(meta(script_uuid,'typescript'if language=='ts'else'javascript','4.0.24'),indent=2)+'\n',
+           f'Cocos/assets/Game/Domain/Math/{class_name}.{language}.meta':__import__('json').dumps(meta(script_uuid,'typescript'if language=='ts'else'javascript','4.0.24'),indent=2)+'\n',
            'SourceRecovery/Code/Source/Emission/'+class_name+'.js':raw,'SourceRecovery/Code/Source/Emission/ReviewedBabelHelpers.js':helper_raw,'SourceRecovery/Code/Source/Emission/ReviewedTypeofHelper.js':typeof_source}
     if language=='js':files['Cocos/assets/package.json']='{"type":"module"}\n'
     for path,body in files.items():
@@ -107,7 +108,7 @@ def emit(source,model_path,helper,dependencies,output,selected,language='ts',nam
                                   excluded='Non-number/omitted arguments, constructors, helper side effects, mutable global intrinsics, vector/object methods',rounding='one binary64 operation per source operator; no fused contraction'),
                   presentation=dict(kind='static-utility',sourceRegistration=registrations[0]),nativeIdentity=dict(unityScriptGuid=script_guid,creatorScriptUuid=script_uuid),
                   binding='static-calls-only-no-component-binding',compiled='not_run',business='not_run',files=[dict(path=p,sha256=sha(v if isinstance(v,bytes)else v.encode()))for p,v in files.items()])
-    (out/'Analysis').mkdir();write_json(out/'Analysis/code-contract.json',contract)
+    (out/'Analysis').mkdir();write_json(find_analysis(out,'code-contract.json'),contract)
     return contract
 
 
@@ -138,7 +139,7 @@ def prepare(recovered,spec,namespace,output,root_namespace='Game'):
     inspect(source,out/'Model',data['moduleName'])
     contract=emit(source,out/'Model/code-model.json',helper_source,module['dependencies'],out/'Emitted',data['methods'],spec.get('language','ts'),namespace,context,typeof_raw,root_namespace)
     report=dict(schemaVersion=1,kind=KIND,sourceModule=module['sourceId'],sourceModuleSha256=sha(raw),helperModule=helper['sourceId'],helperModuleSha256=sha(helper_raw),
-                declarationSha256=spec['sha256'],contractSha256=sha(read(out/'Emitted/Analysis/code-contract.json')),implementedMethods=contract['implementedMethods'],pendingMethods=len(contract['pendingMethods']),
+                declarationSha256=spec['sha256'],contractSha256=sha(read(out/'Emitted/Analysis/Code/code-contract.json')),implementedMethods=contract['implementedMethods'],pendingMethods=len(contract['pendingMethods']),
                 binding='static-calls-only-no-component-binding',sourceExecuted=False)
     write_json(out/'package-code.json',report)
     return out

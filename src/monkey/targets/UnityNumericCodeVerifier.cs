@@ -40,7 +40,7 @@ public static class NumericCodeVerifier {
     public static void Run() {
         var result=new Result{unityVersion=Application.unityVersion};int exit=1;GameObject contents=null;
         try {
-            var spec=JsonUtility.FromJson<Spec>(File.ReadAllText("Analysis/numeric-code-spec.json"));
+            var spec=JsonUtility.FromJson<Spec>(File.ReadAllText(File.Exists("Analysis/Plans/numeric-code-spec.json")||!File.Exists("Analysis/numeric-code-spec.json")?"Analysis/Plans/numeric-code-spec.json":"Analysis/numeric-code-spec.json"));
             var start=DateTime.UtcNow;var deadline=DateTime.Parse(spec.deadlineUtc,null,DateTimeStyles.AdjustToUniversal);
             Action checkpoint=()=>{if(spec.budgetSeconds<1||spec.budgetSeconds>1200||DateTime.UtcNow>=deadline||(DateTime.UtcNow-start).TotalSeconds>spec.budgetSeconds)throw new TimeoutException("Numeric code deadline");};checkpoint();
             if(!spec.prefabPath.StartsWith("Assets/",StringComparison.Ordinal)||spec.prefabPath.Contains("..")||!spec.prefabPath.EndsWith(".prefab",StringComparison.Ordinal)||spec.bindings.Length==0)throw new Exception("Unsafe binding spec");
@@ -101,7 +101,7 @@ public static class NumericCodeVerifier {
             result.missingScripts=contents.GetComponentsInChildren<Transform>(true).Sum(t=>GameObjectUtility.GetMonoBehavioursWithMissingScriptCount(t.gameObject));if(result.missingScripts!=0)throw new Exception("Missing scripts");
             result.reopened=true;result.status="numeric_subset_binding_verified";exit=0;
         } catch(Exception error) {result.error=error.ToString();}
-        finally {if(contents!=null)PrefabUtility.UnloadPrefabContents(contents);Directory.CreateDirectory("Analysis");File.WriteAllText("Analysis/numeric-code-readback.json",JsonUtility.ToJson(result,true));}
+        finally {if(contents!=null)PrefabUtility.UnloadPrefabContents(contents);Directory.CreateDirectory("Analysis/Readback");File.WriteAllText("Analysis/Readback/numeric-code-readback.json",JsonUtility.ToJson(result,true));}
         EditorApplication.Exit(exit);
     }
 }

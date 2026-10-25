@@ -3,6 +3,7 @@ import re
 from pathlib import Path
 from .io import safe,inside,read,load,sha,new_output,write_json
 from .sources.compiled import fail
+from .layout.standard import find_analysis,find_output_paths
 
 
 def number(meta,key):
@@ -49,9 +50,9 @@ def prefab_object_ids(body,spec,node_specs):
 
 def export(candidate,output):
     root=safe(candidate);manifest_raw=read(root/'manifest.json',max_bytes=128*1024**2);manifest=load(manifest_raw,max_nodes=16_000_000,max_depth=128)
-    raw=read(root/'Analysis/editor-readback.json',max_bytes=128*1024**2);rb=load(raw,max_nodes=16_000_000,max_depth=128)
-    source=load(read(root/'Analysis/source-map.json',max_bytes=128*1024**2),max_nodes=16_000_000,max_depth=128)
-    locations=load(read(root/'Analysis/output-paths.json'));plan_path=inside(root,locations['plan']);plan=load(read(plan_path,max_bytes=128*1024**2),max_nodes=16_000_000,max_depth=128)
+    raw=read(find_analysis(root,'editor-readback.json'),max_bytes=128*1024**2);rb=load(raw,max_nodes=16_000_000,max_depth=128)
+    source=load(read(find_analysis(root,'source-map.json'),max_bytes=128*1024**2),max_nodes=16_000_000,max_depth=128)
+    locations=load(read(find_output_paths(root)));plan_path=inside(root,locations['plan']);plan=load(read(plan_path,max_bytes=128*1024**2),max_nodes=16_000_000,max_depth=128)
     if rb.get('status')not in ('partial','passed')or not rb.get('sceneReopened'):fail('NATIVE_CONTRACT_READBACK',str(root),'Existing saved/reopened native readback required')
     by_id={r['sourceId']:r for r in source['assets']};specs={r['id']:r for r in plan['textures']};old_hashes={f['path']:f['sha256']for f in rb['nativeFiles']};sprites=[];by_guid={}
     for native in rb['sprites']:
@@ -80,7 +81,7 @@ def export(candidate,output):
             if not candidates or any(c['actualSpriteFileId']!=fid.decode()for c in candidates):fail('NATIVE_CONTRACT_SPRITE_PPTR',prefab['path'],'Prefab Sprite pointer not in actual native Sprite identity set')
             refs.append(dict(guid=key,fileId=fid.decode(),sourceSpriteIds=[c['sourceId']for c in candidates]))
         prefabs.append(dict(sourceId=prefab['sourceId'],path=prefab['path'],guid=prefab['guid'],sha256=sha(body),savedReloaded=prefab['savedReloaded'],referencesVerified=prefab['referencesVerified'],objects=objects,spriteReferences=refs))
-    scenes=[];finish_path=root/'Analysis/bulk-finish-readback.json'
+    scenes=[];finish_path=find_analysis(root,'bulk-finish-readback.json')
     if finish_path.exists():
         finish=load(read(finish_path))
         if finish.get('status')!='completed'or finish.get('priorReadbackSha256')!=sha(raw)or finish.get('inputPlanSha256')!=sha(read(plan_path,max_bytes=128*1024**2)):fail('NATIVE_CONTRACT_SCENE_READBACK',str(finish_path),'Exact successful native incremental proof required')

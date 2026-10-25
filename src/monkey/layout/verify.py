@@ -24,10 +24,14 @@ def scan(paths,texts=None):
         for i,folder in enumerate(folders):
             low=folder.lower()
             parent=folders[i-1].lower() if i else ''
-            if low=='resources':break  # Resources.Load keys keep their source spelling (PROJECT-SPEC 4.2)
+            if folder=='Resources':break  # Preserve existing Unity Resources.Load keys.
             if parent=='audio' and low in ('music','sfx','voice'):continue
-            # A locale bundle directly under a type folder is the legacy bundle-as-folder layout.
-            if low in TRACE_DIRS or low in SOURCE_DIRS or (low in LOCALE_DIRS and parent in TYPE_DIRS):
+            # A shader closure's final folder is an asset name, not a source
+            # type container (e.g. the actual effect named MovieClip).
+            if (i==len(folders)-1 and 'shaders' in [p.lower() for p in folders[:i]]
+                    and low in SOURCE_DIRS and low not in TRACE_DIRS
+                    and (name=='EffectDescription.json' or re.fullmatch(r'program\d+_glsl[134]\.(vert|frag)\.glsl',name))):continue
+            if low in TRACE_DIRS or low in SOURCE_DIRS:
                 gaps.append(diagnostic('LAYOUT_FORBIDDEN_NAME',path,'Source trace folder in production area: '+folder));break
         stem=PurePosixPath(name).stem
         if _HEX.search(stem.lower()):gaps.append(diagnostic('LAYOUT_FORBIDDEN_NAME',path,'GUID-shaped file name'))

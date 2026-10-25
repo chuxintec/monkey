@@ -111,7 +111,7 @@ class AcquisitionTests(unittest.TestCase):
             seen=[]
             def native(candidate,output,editor,identity,*args):
                 self.assertEqual(fingerprint(candidate/'manifest.json'),identity)
-                self.assertEqual(json.loads((candidate/'Analysis/acquisition.json').read_text())['summary']['downloadedFiles'],1)
+                self.assertEqual(json.loads((candidate/'Analysis/Ledger/acquisition.json').read_text())['summary']['downloadedFiles'],1)
                 seen.append(candidate)
                 return dict(processExited=True,nativeProgress=dict(status='completed'),verification=dict(editor='pass',diagnostics=0))
             stream=io.StringIO()
@@ -137,8 +137,8 @@ class AcquisitionTests(unittest.TestCase):
             acquired=dict(receipt=receipt,summary=dict(availableFiles=1))
             asset.write_bytes(b'tampered')
             with self.assertRaises(ParseError):acquisition.attach(conversion,root/'candidate',acquired)
-            self.assertFalse((project/'Analysis/acquisition.json').exists())
+            self.assertFalse((project/'Analysis/Ledger/acquisition.json').exists())
             asset.write_bytes(b'owned content')
             acquisition.attach(conversion,root/'candidate',acquired)
             self.assertEqual(conversion['projects'][0]['manifestSha256'],fingerprint(manifest))
-            self.assertEqual(json.loads((project/'Analysis/acquisition.json').read_text())['summary']['availableFiles'],1)
+            self.assertEqual(json.loads((project/'Analysis/Ledger/acquisition.json').read_text())['summary']['availableFiles'],1)

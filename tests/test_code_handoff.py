@@ -12,7 +12,7 @@ class CodeHandoffLayoutTests(unittest.TestCase):
         source=root/'game.wxapkg';source.write_bytes(wxpackage(files()))
         convert_package(source,'unity',root/'out')
         project=root/'out/UnityProject'
-        modules=[m for m in load(read(project/'Analysis/code-index.json'))['modules'] if m.get('entryType')=='module_candidate']
+        modules=[m for m in load(read(project/'Analysis/Code/code-index.json'))['modules'] if m.get('entryType')=='module_candidate']
         facts=root/'facts.json'
         write_json(facts,dict(records=[dict(id=m['sourceId'],sha256=m['sha256'],members=dict(fields=[],functions=[],
             methods=[dict(name='onOpen',parameters=[],static=False,ownerAlias='t',sourceBytes=dict(start=0,end=1),sourceSha256='0'*64)])) for m in modules]))

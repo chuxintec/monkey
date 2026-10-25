@@ -29,32 +29,9 @@ flowchart TD
   V --> H[AI工作包与未支持清单]
 ```
 
-## 建议目录
+## 工程布局与实现目录
 
-```text
-monkey/
-  pyproject.toml
-  src/monkey/
-    cli.py                   # 唯一CLI入口
-    contracts/               # IR、报告、目标profile和升级
-    sources/cocos24/          # 源工程与发布资源reader分开
-    sources/cocos38/          # 后续显式支持，不猜格式
-    assets/                  # 图集、SpriteFrame、字体、音频、Spine描述
-    graph/                   # ID、引用闭包、变更与未支持项
-    targets/unity/           # 目标映射与导入计划
-    targets/cocos38/         # 目标meta/资源/节点映射
-    safety/                  # 路径、预算、候选、hash、冲突
-    reports/                 # 汇总、预览索引、AI交接
-  adapters/unity/Editor/      # 小型C#导入/保存/回读
-  adapters/cocos/             # Creator原生导入与保存薄扩展
-  schemas/                   # 由合同维护的JSON Schema
-  tests/fixtures/             # 自造最小样本，无原游戏私有内容
-  docs/
-  .private/                  # 私有真实样本与源映射，不进Git
-  outputs/                   # 候选及验证产物，不进Git
-```
-
-不是每个目录第一天都建空框架；按首个完整切片实现需要的模块。避免统一框架先行而没有可见产物。
+生成工程的唯一布局规范为 [PROJECT-SPEC](PROJECT-SPEC.md)，当前标识 `monkey-project/1.0.0`。`src/monkey/layout/` 负责规划、身份稳定命名、覆盖表、验证及文档/迁移记录；`layout/standard.py` 统一路径，旧候选通过兼容读取保留。此次只重构目标工程布局，不重排 monkey 自身的源码架构。
 
 ## 数据合同
 

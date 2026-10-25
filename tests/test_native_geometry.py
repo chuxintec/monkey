@@ -51,7 +51,7 @@ class NativeGeometryTests(unittest.TestCase):
             inspect(source,[2],root/'inspect');normalize(root/'inspect/source-manifest.json',root/'ir')
             plan=unity.plan(root/'ir/ir.json','prefab-proof',root/'plan');unity.export(root/'plan/plan.json',root/'candidate')
             spec=plan['sourcePrefabs'][0];prefab=root/'candidate'/spec['path'];prefab.parent.mkdir(parents=True,exist_ok=True);prefab.write_bytes(b'native-receipt-negative-fixture')
-            write_json(root/'candidate/Analysis/editor-readback.json',dict(status='partial',unityVersion='6000.6.2f1',
+            write_json(root/'candidate/Analysis/Readback/editor-readback.json',dict(status='partial',unityVersion='6000.6.2f1',
                 nativeFiles=[dict(path=spec['path'],sha256=sha(prefab.read_bytes()))],sourcePrefabs=[dict(sourceId=spec['sourceId'],
                 path=spec['path'],guid='valid-count-only',nodeCount=spec['nodeCount'],missingScripts=0)],nodes=[],sprites=[],fonts=[],labels=[],diagnostics=[],missingScripts=0))
             report=unity.verify(root/'candidate',root/'checked','editor');codes={d['code'] for d in report['diagnostics']}

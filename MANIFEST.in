@@ -8,3 +8,5 @@ prune .private
 prune outputs
 prune dist
 recursive-include src/monkey *.cjs
+
+include scripts/install_release.py

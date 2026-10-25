@@ -15,6 +15,7 @@ from .io import safe, inside, read, load, write_json, new_output, sha, stage_man
 from .inputs import input_set
 from .sources.containers import relative, fingerprint, MAX_FILE
 from .sources.compiled import fail
+from .layout.standard import find_analysis
 
 MAX_TOTAL=1024*1024*1024
 
@@ -163,9 +164,9 @@ def attach(conversion,output,acquired):
         if actual!=expected:fail('REMOTE_CONVERSION_CHANGED',str(project),'Unknown generated files')
         for item in data['files']:
             if fingerprint(inside(project,item['path']))!=item['sha256']:fail('REMOTE_CONVERSION_CHANGED',item['path'],'Generated content changed')
-        target=project/'Analysis/acquisition.json'
+        target=find_analysis(project,'acquisition.json')
         if target.exists():fail('REMOTE_CONVERSION_CHANGED',str(target),'Acquisition evidence already exists')
         write_json(target,dict(receipt,preAcquisitionConversionSha256=original))
-        data['files'].append(dict(path='Analysis/acquisition.json',sha256=fingerprint(target),bytes=target.stat().st_size,owner='generated'))
+        data['files'].append(dict(path='Analysis/Ledger/acquisition.json',sha256=fingerprint(target),bytes=target.stat().st_size,owner='generated'))
         data['acquisition']=acquired['summary'];write_json(manifest,data);row['manifestSha256']=fingerprint(manifest)
     conversion['acquisition']=acquired['summary'];write_json(record,conversion)

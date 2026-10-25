@@ -97,6 +97,11 @@ public static partial class MonkeyImporter
         public string editableProbe="Assets/Game/Scenes/Preview/EditableProbe.prefab";
         public string[] nativeRoots={"Assets/Game/Content","Assets/Game/Scenes","Assets/Game/Presentation","Assets/Game/Domain","Assets/TextMesh Pro"},metaRoots={"Assets/Game/Editor/Conversion"};
     }
+    // Analysis receipts are grouped by purpose (monkey-project/1); an older candidate may still hold the flat file.
+    internal static string AnalysisFile(string group,string name) {
+        var current="Analysis/"+group+"/"+name;var legacy="Analysis/"+name;
+        return File.Exists(current)||!File.Exists(legacy)?current:legacy;
+    }
     static OutputPaths outputPaths;
     static OutputPaths Paths {
         get {
@@ -139,13 +144,13 @@ public static partial class MonkeyImporter
             firstEngineError=BitConverter.ToString(hash.ComputeHash(System.Text.Encoding.UTF8.GetBytes(condition+"\n"+stack))).Replace("-","").ToLowerInvariant();
         // Keep messages/stack in the private Editor log, never copy authentication or user text into telemetry.
         try {
-            Directory.CreateDirectory("Analysis");
-            File.WriteAllText("Analysis/native-engine-error.json",JsonUtility.ToJson(new EngineErrorResult {
+            Directory.CreateDirectory("Analysis/Readback");
+            File.WriteAllText("Analysis/Readback/native-engine-error.json",JsonUtility.ToJson(new EngineErrorResult {
                 planSha256=nativeProgress.planSha256,phase=nativeProgress.phase,logType=type.ToString(),errorSha256=firstEngineError},true));
         } catch { /* The captured flag still stops work if telemetry cannot be written. */ }
     }
     static void CheckEngineErrors() {
-        if(firstEngineError!=null)throw new InvalidOperationException("NATIVE_ENGINE_ERROR_RECORDED: inspect the private Editor log and Analysis/native-engine-error.json");
+        if(firstEngineError!=null)throw new InvalidOperationException("NATIVE_ENGINE_ERROR_RECORDED: inspect the private Editor log and Analysis/Readback/native-engine-error.json");
     }
 
     static bool asyncRunning,asyncBatch,packagePending,tmpImportCompleted;
@@ -257,8 +262,8 @@ public static partial class MonkeyImporter
     }
     static void WriteNativeProgress(string status) {
         nativeProgress.status=status;nativeProgress.elapsedSeconds=nativeClock.Elapsed.TotalSeconds;
-        Directory.CreateDirectory("Analysis");
-        const string path="Analysis/native-progress.json";const string temporary=path+".tmp";
+        Directory.CreateDirectory("Analysis/Readback");
+        const string path="Analysis/Readback/native-progress.json";const string temporary=path+".tmp";
         File.WriteAllText(temporary,JsonUtility.ToJson(nativeProgress,true));
         if(File.Exists(path))File.Replace(temporary,path,null);else File.Move(temporary,path);
     }
@@ -370,7 +375,7 @@ public static partial class MonkeyImporter
         tmpResourceResult.status="ready";WriteTmpResourceResult();NativeCheckpoint("tmp-resources",1,1);
     }
     static void WriteTmpResourceResult() {
-        Directory.CreateDirectory("Analysis");File.WriteAllText("Analysis/tmp-resources.json",JsonUtility.ToJson(tmpResourceResult,true));
+        Directory.CreateDirectory("Analysis/Readback");File.WriteAllText("Analysis/Readback/tmp-resources.json",JsonUtility.ToJson(tmpResourceResult,true));
     }
 
     static void ValidateEditorContext() {
@@ -393,7 +398,7 @@ public static partial class MonkeyImporter
         ValidateEditorContext();
         var plan = JsonUtility.FromJson<Plan>(File.ReadAllText(Paths.plan));
         var diagnostics = new List<string>();
-        foreach(var directory in new[]{Path.GetDirectoryName(PrefabPath),Path.GetDirectoryName(ScenePath),Paths.artRoot,Paths.controllersRoot,Paths.materialsRoot,"Analysis"})
+        foreach(var directory in new[]{Path.GetDirectoryName(PrefabPath),Path.GetDirectoryName(ScenePath),Path.GetDirectoryName(BootstrapPath),Path.GetDirectoryName(Paths.editableProbe),Paths.artRoot,Paths.controllersRoot,Paths.materialsRoot,"Analysis/Readback"})
             Directory.CreateDirectory(directory);
         foreach(var font in plan.bitmapFonts)Directory.CreateDirectory(Path.GetDirectoryName(font.fontPath));
         foreach(var animation in plan.animations.Where(a=>a.convertible))Directory.CreateDirectory(Path.GetDirectoryName(animation.path));
@@ -816,7 +821,7 @@ public static partial class MonkeyImporter
         readback.editableRoundtrip=CheckEditableClone();
         readback.colorSpace=QualitySettings.activeColorSpace.ToString();
         try {
-            var preview="Analysis/native-page.png";
+            var preview="Analysis/Readback/native-page.png";
             Capture(instance.GetComponent<Canvas>(),scene,(int)plan.designSize[0],(int)plan.designSize[1],preview);
             readback.previewPath=preview;readback.previewSha256=Hash(preview);
         }
@@ -827,10 +832,10 @@ public static partial class MonkeyImporter
             .OrderBy(path=>path,StringComparer.Ordinal).Select(path=>new FileResult {
                 path=path.Replace('\\','/'), sha256=Hash(path)
             }).ToArray();
-        Directory.CreateDirectory("Analysis");
-        File.WriteAllText("Analysis/editor-readback.json",JsonUtility.ToJson(readback,true));
+        Directory.CreateDirectory("Analysis/Readback");
+        File.WriteAllText("Analysis/Readback/editor-readback.json",JsonUtility.ToJson(readback,true));
         nativeProgress.phase="complete";nativeProgress.processed=1;nativeProgress.total=1;WriteNativeProgress(readback.status=="imported"?"completed":"completed_partial");
-        Debug.Log("Monkey native import: "+readback.status+"; readback Analysis/editor-readback.json");
+        Debug.Log("Monkey native import: "+readback.status+"; readback Analysis/Readback/editor-readback.json");
         if (previous.IsValid()) SceneManager.SetActiveScene(previous);
         // Keep the candidate scene open for editing; no global SaveAssets, no other scenes saved.
     }

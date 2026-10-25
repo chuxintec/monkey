@@ -8,6 +8,7 @@ from ..sources.compiled import fail
 from .common import input_ir, tasks,native_color_nodes
 from ..layout import standard
 from ..layout.standard import VERSION
+from ..layout.standard import find_analysis
 
 PROFILE='cocos-3.8.8'
 
@@ -39,10 +40,10 @@ def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None,la
     from ..layout import LayoutPlanner
     overrides,overrides_sha=layout or ({},None)
     naming=LayoutPlanner('creator',ir.get('sourceNames'),overrides)
-    planned={'sprite':'sprite','ttf':'cc.TTFFont','json':'cc.JsonAsset'}
+    planned={'sprite':'sprite','ttf':'cc.TTFFont','json':'cc.JsonAsset','audio':'cc.AudioClip'}
     # Creator trims natively from the original image, so no untrimmed duplicate is emitted (PROJECT-SPEC 5.4).
     naming.reserve([(f['sourceId'],'sprite','.png','',None,None) for f in ir['spriteFrames']]
-        +[(a['sourceId'],a['kind'],{'cc.TTFFont':'.ttf','cc.JsonAsset':'.json'}[a['kind']],'',None,None) for a in ir['assets'] if a['kind'] in ('cc.TTFFont','cc.JsonAsset')]
+        +[(a['sourceId'],a['kind'],Path(a['path']).suffix if a['kind']=='cc.AudioClip' else {'cc.TTFFont':'.ttf','cc.JsonAsset':'.json'}[a['kind']],'',None,None) for a in ir['assets'] if a['kind'] in ('cc.TTFFont','cc.JsonAsset','cc.AudioClip')]
         +[r for f in ir.get('bitmapFonts',[]) for r in ((f['sourceId']+'@atlas','bitmap-atlas','.png','',None,None),(f['sourceId'],'bitmap','.fnt','',None,None))])
     diagnostics=list(ir['diagnostics']);assets=[];copies=[]
     def add(sid,relative,kind,suffix,**fields):
@@ -57,6 +58,7 @@ def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None,la
     for a in ir['assets']:
         if a['kind']=='cc.TTFFont':add(a['sourceId'],a['path'],'ttf','.ttf',fontCoverage=a.get('fontCoverage'))
         elif a['kind']=='cc.JsonAsset':add(a['sourceId'],a['path'],'json','.json')
+        elif a['kind']=='cc.AudioClip':add(a['sourceId'],a['path'],'audio',Path(a['path']).suffix)
         else:diagnostics.append(diagnostic('ASSET_HANDOFF',a['sourceId'],'Creator native subset has no mapping for '+a['kind'],a['sourceId']))
     font_by_id={}
     for f in ir.get('bitmapFonts',[]):
@@ -179,6 +181,7 @@ def export(plan_path,output):
         if a['kind']=='sprite':m=meta(a['uuid'],'image','1.0.27',dict(type='sprite-frame',fixAlphaTransparencyArtifacts=False,hasAlpha=True))
         elif a['kind']=='ttf':m=meta(a['uuid'],'ttf-font','1.0.1')
         elif a['kind']=='json':m=meta(a['uuid'],'json','2.0.1')
+        elif a['kind']=='audio':m=meta(a['uuid'],'audio-clip','1.0.0',dict(downloadMode=0))
         else:m=meta(a['uuid'],'bitmap-font','1.0.6',dict(fontSize=a['pointSize'],textureUuid=by_id[a['atlas']]['uuid']))
         write_json(Path(str(target)+'.meta'),m)
     project_id=identity(p['namespace'],'project')
@@ -206,8 +209,8 @@ def export(plan_path,output):
     instruction['uiDrivenFields']={sid:{key:sorted(axes)for key,axes in fields.items()}for sid,fields in driven_fields(instruction).items()}
     write_json(instruction_path,instruction)
     from ..assets.animation import module_report
-    write_json(out/'Analysis/animation-module.json',module_report(p.get('animations',[])))
-    write_json(out/'Analysis/source-map.json',dict(assets=p['assets'],sourcePrefabs=p.get('sourcePrefabs',[]),nodes=[dict(sourceId=n['sourceId'],target=standard.creator('previewScene')) for n in p['nodes']],
+    write_json(find_analysis(out,'animation-module.json'),module_report(p.get('animations',[])))
+    write_json(find_analysis(out,'source-map.json'),dict(assets=p['assets'],sourcePrefabs=p.get('sourcePrefabs',[]),nodes=[dict(sourceId=n['sourceId'],target=standard.creator('previewScene')) for n in p['nodes']],
         components=[dict(sourceId=c['sourceId'],node=c['node'],nativeType=c['nativeType']) for c in p['components']],
         sourceRoots=p['sourceRoots'],sourceLocations=p['sourceLocations'],subresources='actual UUIDs require native importer readback'))
     handoff_tasks=tasks(p['components'],[d for d in p['diagnostics'] if not d['code'].startswith('ANIMATION_')],standard.creator('previewScene'),'assets/')
@@ -217,20 +220,20 @@ def export(plan_path,output):
         handoff_tasks.append(dict(taskId='creator-prefab-root-names',module='creator-prefabs',rootCause='native-prefab-root-name-compatibility',
             sourceRefs=[s['sourceId'] for s in normalized],gaps=[dict(code='CREATOR_PREFAB_ROOT_NAME_POLICY',
                 message='Creator normalizes root names to asset basenames. Source names remain in Scene/source-map; review name-dependent business code.')],
-            generatedTargets=['Analysis/source-map.json'],allowedPaths=['assets/'],verificationScope=['native root-name policy','name-dependent business code'],rootNames=normalized))
+            generatedTargets=['Analysis/Mappings/source-map.json'],allowedPaths=['assets/'],verificationScope=['native root-name policy','name-dependent business code'],rootNames=normalized))
     if p.get('animations') or any(d['code'].startswith('ANIMATION_') for d in p['diagnostics']):
         from ..assets.animation import handoff_task
         handoff_tasks.append(handoff_task(p['animations'],p['diagnostics']))
-    write_json(out/'Analysis/handoff.json',dict(schemaVersion=1,tasks=handoff_tasks,
+    write_json(find_analysis(out,'handoff.json'),dict(schemaVersion=1,tasks=handoff_tasks,
         verification=dict(static='pending',editor='not_run',visual='not_run',business='not_run')))
-    if p['bindings']:write_json(out/'Analysis/font-bindings.json',p['bindings'])
+    if p['bindings']:write_json(find_analysis(out,'font-bindings.json'),p['bindings'])
     (out/'README.md').write_text('Creator 3.8.8 isolated candidate. Layout '+VERSION+' (monkey docs/PROJECT-SPEC.md).\nOpen only in an authorized resource window.\nRun Monkey/Import isolated candidate once after assets import. Existing outputs are refused.\nNative scene and child UUIDs require Editor; no source engine interpreter ships.\n')
-    write_json(out/'Analysis/name-map.json',p.get('naming',{}))
+    write_json(find_analysis(out,'name-map.json'),p.get('naming',{}))
     report=dict(schemaVersion=1,toolVersion=__version__,targetProfile=PROFILE,namespace=p['namespace'],projectUuid=project_id,projectLayout=VERSION,
         scopeMode=p.get('scopeMode','asset-selection'),
         sourceManifestSha256=p['sourceManifestSha256'],sourceRoots=p['sourceRoots'],planSha256=sha(stage_bytes(path)),diagnostics=p['diagnostics'],
         editorValidation='not_run',visualValidation='not_run',businessValidation='not_run',subresourceValidation='pending-native-import')
-    write_json(out/'Analysis/candidate.json',report);return finish(out,report)
+    write_json(find_analysis(out,'candidate.json'),report);return finish(out,report)
 
 
 def verify(candidate,output,level='static'):
@@ -239,7 +242,7 @@ def verify(candidate,output,level='static'):
     if m.get('targetProfile')!=PROFILE:fail('UNSUPPORTED_CANDIDATE',str(root),'Expected Creator profile')
     native={};editor='not_run'
     if level=='editor':
-        rb_path=root/'Analysis/editor-readback.json'
+        rb_path=find_analysis(root,'editor-readback.json')
         if not rb_path.exists():diagnostics.append(diagnostic('EDITOR_NOT_RUN',str(rb_path),'Run native importer in declared Creator first'))
         else:
             rb=load(read(rb_path,max_bytes=128*1024*1024),max_nodes=8_000_000);native={f['path']:f['sha256'] for f in rb.get('nativeFiles',[])}
@@ -247,6 +250,7 @@ def verify(candidate,output,level='static'):
             expected_assets={a['sourceId']:a for a in plan['assets']}
             actual_assets={a['sourceId']:a for a in rb.get('assets',[])}
             json_assets={a['sourceId']:a for a in rb.get('jsonAssets',[])}
+            audio_assets={a['sourceId']:a for a in rb.get('audioAssets',[])}
             good=rb.get('creatorVersion')=='3.8.8' and rb.get('projectUuid')==m['projectUuid'] and rb.get('manifestSha256')==fingerprint(root/'manifest.json')
             good=good and set(expected_assets)==set(actual_assets) and rb.get('nodeCount')==len(plan['nodes'])
             for sid,a in expected_assets.items():
@@ -255,6 +259,10 @@ def verify(candidate,output,level='static'):
                 if a['kind']=='json':
                     actual_json=json_assets.get(sid,{})
                     good=good and actual_json.get('uuid')==a['uuid'] and 'value' in actual_json and actual_json['value']==load(read(root/a['path']))
+                if a['kind']=='audio':
+                    audio=audio_assets.get(sid,{})
+                    if audio.get('uuid')!=a['uuid'] or not isinstance(audio.get('duration'),(int,float)):
+                        good=False;diagnostics.append(diagnostic('AUDIO_READBACK_MISMATCH',sid,'Expected a native AudioClip readback'))
             labels={v['sourceId']:v for v in rb.get('labels',[])}
             if plan.get('bitmapPageReadback')=='sprite-frame-v1':
                 font_pages={f['sourceId']:f for f in rb.get('fontPages',[])}
