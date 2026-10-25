@@ -4,6 +4,9 @@ from pathlib import Path
 from ..io import safe, read, sha, load, new_output, write_json
 from .compiled import fail
 
+from ..unity_parse_limits import parse_limits as resolve_limits,reader_fingerprint,MAX_DOCUMENT_NODES
+from ..unity_payloads import validate_payloads
+
 PROFILE = 'unity-serialized-unitypy-1.25.3'
 MAX_BYTES = 128 * 1024 * 1024
 
@@ -20,9 +23,10 @@ def container_kind(header):
     return None
 
 
-def inspect(source, provider_python, output, budget_seconds=120, schema_manifest=None):
+def inspect(source, provider_python, output, budget_seconds=120, schema_manifest=None, parse_limits=None):
     if not 1 <= budget_seconds <= 1200:
         fail('UNITY_PROVIDER_BUDGET', '$', 'Expected 1..1200 seconds')
+    limits=resolve_limits(parse_limits)
     source = safe(source)
     if not source.is_file():
         fail('UNITY_INPUT_FILE', str(source), 'Expected one explicit serialized file or AssetBundle')
@@ -41,11 +45,10 @@ def inspect(source, provider_python, output, budget_seconds=120, schema_manifest
                    providerPythonSha256=sha(read(python,max_bytes=MAX_BYTES)), budgetSeconds=budget_seconds,
                    sourceCodeExecuted=False, editor='not_run', processExited=False)
     write_json(out/'inspection.json',receipt)
-    arguments = [str(source),str(out/'typed-objects.json')]
-    if pool:
-        write_json(out/'schema-job.json',dict(source=str(source),schemaPool=pool))
-        receipt['schemaManifestSha256'] = pool['sourceManifestSha256']
-        arguments = ['--inspect-with-schemas',str(out/'schema-job.json'),str(out/'typed-objects.json')]
+    write_json(out/'schema-job.json',dict(source=str(source),schemaPool=pool,parseLimits=limits,readerContractSha256=reader_fingerprint()))
+    receipt.update(parseLimits=limits,readerContractSha256=reader_fingerprint())
+    if pool:receipt['schemaManifestSha256']=pool['sourceManifestSha256']
+    arguments=['--inspect-with-schemas',str(out/'schema-job.json'),str(out/'typed-objects.json')]
     with (out/'provider.log').open('wb') as log:
         process = subprocess.Popen([str(requested_python), '-I', '-B', str(Path(__file__).with_name('unity_worker.py')),*arguments],
                                    cwd=out, stdout=log, stderr=subprocess.STDOUT)
@@ -61,9 +64,13 @@ def inspect(source, provider_python, output, budget_seconds=120, schema_manifest
         receipt['processExited'] = process.poll() is not None
     if receipt.get('exitCode') == 0:
         typed_raw = read(out/'typed-objects.json', max_bytes=MAX_BYTES)
-        typed = load(typed_raw,max_nodes=8_000_000)
+        typed = load(typed_raw,max_nodes=MAX_DOCUMENT_NODES,max_depth=128)
         if typed.get('schemaVersion') != 1 or typed.get('source') != {k:receipt['source'][k] for k in ('bytes','sha256')}:
             fail('UNITY_PROVIDER_RECEIPT',str(out),'Provider source identity differs')
+        validate_payloads(out,typed)
+        if typed.get('parseLimits')!=limits:fail('UNITY_PROVIDER_LIMITS',str(out),'Parser policy changed')
+        receipt['parseUsage']=typed['parseUsage']
+        receipt['performance']=load(read(out/'reader-runtime.json'))
         receipt.update(status='partial' if typed['summary']['unparsed'] else 'inspected',
                        summary=typed['summary'], typedObjectsSha256=sha(typed_raw), provider=typed['provider'])
     elif receipt['status'] == 'started':

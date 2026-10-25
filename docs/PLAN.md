@@ -1,10 +1,19 @@
 # monkey 项目计划与执行进度
 
-## 当前任务：向僵尸开炮全量导出核验、GitHub Release 与唯一安装入口（2026-10-25）
+## 当前任务：解析预算优化与向僵尸开炮复测（2026-10-26）
+
+用户直接要求按优化方案修改并复测。开发候选 0.3.0.dev2；已安装 0.3.0.dev1 Release 保持冻结，开发显式使用 .venv/bin/python -m monkey.cli。本轮不覆盖旧 tag/包，不自动发布新版。新增类型树精确绑定的字体字节 / AssetBundle 预加载引用表流式块读取与哈希闭包；单对象及单包预算显式可配置，统计用量，所有权与复用绑定覆盖参数、读取器合同及块文件。先回归，再独立重读 601 原容器，比较原 939 预算缺口，并检验新导出的块闭包和内容；另 36 类型不匹配与 CDN 404 分开记录。原游戏 / GREA 只读，输出在 monkey 内。
+
+
+本轮已完成：318 项回归通过，601 原容器 / 81,580 对象完整复测，未解析由 975 降至 36，939 个预算缺口全部恢复（933 MonoBehaviour、4 Font、2 AssetBundle）。既有 80,605 个已解析对象字段值等价，75,244 个生产资产/代码/meta 文件与旧候选逐字节相同。8 个重点大数组 38,465,356 字节通过独立原包读取对比；完整工程 25 个大字段 / 1,116 块 / 49,480,972 字节自包含。技能表现包实际内联值 5,725,048；严格结构检查与所有原始 SHA 保留。
+
+新全量工程 `outputs/zombie-parser-optimized/UnityProject`，164,599 文件 / 3,267,184,074 字节，manifest `631e0e39edf2e6f941c2b21a4e3daed70a3d0824eef76f17ae5b9fc4af440cd2` 已最终全文件核验；887 原件及 7,595 纹理留存完整。生产资源保持 37,635；源目录条目新增 2,177，但不算新原生资产。剩余 36 个结构不匹配和既有 CDN/业务/原生缺口单列。验收 `docs/validation/2026-10-26-unity-parser-budget.md`，机器回执 `.private/zombie-parser-20261026/delivery.json`。开发候选 0.3.0.dev2 未发布，正常安装入口仍为冻结 Release 0.3.0.dev1。
+
+## 已完成：向僵尸开炮全量导出核验、GitHub Release 与唯一安装入口（2026-10-25）
 
 本聊天用户直接授权：使用 monkey 测试向僵尸开炮、核验导出文件内容，随后提交 GitHub 并发布 Release，安装该 Release 作为本地唯一常规调用程序。发布版本沿用 PROJECT-SPEC 的 0.3.0.dev1（GitHub prerelease）；本条覆盖此前未获新版发布/安装授权的限制。原游戏/Sources/GREA只读；私有游戏原件、outputs、缓存与完整日志不入 GitHub。先完成原输入/目标文件字节、类型、GUID/引用、命名、可解析内容与代表样本原生核验，再制作分发、精确暂存、正常推送与 tag/release 回读，最后从 Release 附件安装并验证标准入口。工具已知范围与源缺口明确写发布说明，不声明完整游戏已还原。
 
-当前：源 Unity 2021.3.30f1 → Unity 6000.6.2f1；601 容器重新解析，887 原件 / 7,595 已取得纹理留存校验通过。425 精确 CDN 键仍 404，975 对象无结构，17,495 处未闭合引用已完整记账。发现并修复 JPEG 重编码造成的纹理像素差异，以精确水合源生成 PNG 并保留 GUID。312 项回归通过。最终候选 `outputs/zombie-release-lossless/UnityProject`，全量 Editor/Player/视觉/业务未验；叶 Prefab 原生入口因紧密图集不支持在启动前阻断。详细验收 `docs/validation/2026-10-25-zombie-release.md`，机器回执 `.private/zombie-release-20261025/`。已完成发行与本地安装：GitHub 私有仓库正常快进 main，tag / prerelease `v0.3.0.dev1` 固定产品提交 `3d0915b676e12927f532636f713bdf72659f6344`；wheel SHA256 `16f4b62c9759b36628403eb489168806439ddc4c53b709600d1adab91f37f9ab`。GitHub API、ls-remote、附件重新下载均核对一致。`~/.local/bin/monkey` 是 PATH 中唯一入口，仓库 bin/monkey 转发到同一安装版；138 产品文件与 wheel 一致，无 editable 安装。实际安装版已重新解析向僵尸代表原包，并在源码目录外完成双目标转换与静态 pass。最终候选 163,483 文件 / 3,307,505,149 字节，manifest `ab8c00b29dd8a894ca6ba5e9af9df4b60c1be6fbc70ab06c5a6e1d4fa6862143`；7,727 图片全部有像素、Alpha8 或原件字节证明，0 无据图片、0 搬移/meta 错误。已归档回执并删除两份旧测试导出约 8.22 GB。
+当前：源 Unity 2021.3.30f1 → Unity 6000.6.2f1；601 容器重新解析，887 原件 / 7,595 已取得纹理留存校验通过。425 精确 CDN 键仍 404，975 对象未解析（后续分类为 939 预算限制、36 结构读取不匹配），17,495 处未闭合引用已完整记账。发现并修复 JPEG 重编码造成的纹理像素差异，以精确水合源生成 PNG 并保留 GUID。312 项回归通过。最终候选 `outputs/zombie-release-lossless/UnityProject`，全量 Editor/Player/视觉/业务未验；叶 Prefab 原生入口因紧密图集不支持在启动前阻断。详细验收 `docs/validation/2026-10-25-zombie-release.md`，机器回执 `.private/zombie-release-20261025/`。已完成发行与本地安装：GitHub 私有仓库正常快进 main，tag / prerelease `v0.3.0.dev1` 固定产品提交 `3d0915b676e12927f532636f713bdf72659f6344`；wheel SHA256 `16f4b62c9759b36628403eb489168806439ddc4c53b709600d1adab91f37f9ab`。GitHub API、ls-remote、附件重新下载均核对一致。`~/.local/bin/monkey` 是 PATH 中唯一入口，仓库 bin/monkey 转发到同一安装版；138 产品文件与 wheel 一致，无 editable 安装。实际安装版已重新解析向僵尸代表原包，并在源码目录外完成双目标转换与静态 pass。最终候选 163,483 文件 / 3,307,505,149 字节，manifest `ab8c00b29dd8a894ca6ba5e9af9df4b60c1be6fbc70ab06c5a6e1d4fa6862143`；7,727 图片全部有像素、Alpha8 或原件字节证明，0 无据图片、0 搬移/meta 错误。已归档回执并删除两份旧测试导出约 8.22 GB。
 
 
 ## 当前结果：统一类型目录与 Textures 合并已完成（2026-10-25）

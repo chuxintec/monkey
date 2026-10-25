@@ -37,6 +37,15 @@ class UnityRouteTests(unittest.TestCase):
                 status=main([*argv,'--native','--unity-editor',str(editor)])
             self.assertEqual(status,1);self.assertEqual(finish.call_args.args[2],'grea')
 
+    def test_cli_passes_explicit_parse_limits(self):
+        with tempfile.TemporaryDirectory() as t:
+            root=Path(t).resolve();source=root/'source';source.write_bytes(b'UnityFS\0test')
+            result=dict(status='partial',completed=True,resultKind='candidate',sourceFamily='unity',projects=[],diagnostics=[],format={})
+            argv=['convert','--source',str(source),'--target','unity6','--provider-python','/known/python','--asset-ripper','/known/provider','--out',str(root/'out'),
+                  '--unity-object-value-limit','100000','--unity-container-value-limit','6000000']
+            with patch('monkey.recover_unity.convert',return_value=result) as converted,contextlib.redirect_stdout(io.StringIO()):main(argv)
+            self.assertEqual(converted.call_args.kwargs['parse_limits'],dict(objectValues=100000,containerValues=6000000))
+
     def test_similar_or_truncated_signatures_do_not_classify(self):
         from monkey.sources.unity_serialized import container_kind
         for header in (b'UnityWebData1.0',b'UnityWebData1.1\0',b'UnityWebData',b'prefixUnityFS\0'):

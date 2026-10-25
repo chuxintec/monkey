@@ -1,6 +1,8 @@
 # monkey
 
-当前版本 **0.3.0.dev1**，采用 [monkey-project/1 工程规范](docs/PROJECT-SPEC.md)。本版本以 GitHub prerelease 交付，旧版本保持冻结；资源候选、原生导入、画面及业务验收分别记录。
+当前源码开发候选为 **0.3.0.dev2**：新增 Unity 字体/引用表分块读取和可配置解析预算，详见 [解析预算](docs/providers/UNITY-PARSE-BUDGETS.md)。已安装的 `0.3.0.dev1` Release 保持冻结；开发验证显式使用 `.venv/bin/python -m monkey.cli`。
+
+当前已发布版本 **0.3.0.dev1**，采用 [monkey-project/1 工程规范](docs/PROJECT-SPEC.md)。本版本以 GitHub prerelease 交付，旧版本保持冻结；资源候选、原生导入、画面及业务验收分别记录。
 
 新输出直接生成规范目录；`--format none|grea` 保留为弃用兼容参数。`convert --layout layout.json` 可使用游戏级命名覆盖；`layout-preview` 预览已完成转换的路径变化，`layout-migration` 按 GUID/UUID 生成旧候选到新候选的迁移清单。进度和未验证项见 [PLAN](docs/PLAN.md)，用法见 [USAGE](docs/USAGE.md)。
 

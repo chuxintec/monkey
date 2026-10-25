@@ -4,16 +4,19 @@ import subprocess
 from pathlib import Path
 from .io import safe, read, load, sha, write_json
 from .sources.compiled import fail
+from .unity_parse_limits import parse_limits as resolve_limits,reader_fingerprint
+from .unity_payloads import load_typed,validate_payloads,copy_payloads
 
 
-def inspect_all(rows, provider_python, output, schema_pool, budget):
+def inspect_all(rows, provider_python, output, schema_pool, budget, parse_limits=None):
+    limits=resolve_limits(parse_limits)
     out=safe(output);stage=out/'BatchInspection';stage.mkdir()
-    job=dict(schemaVersion=1,schemaPool=schema_pool,files=[])
+    job=dict(schemaVersion=1,schemaPool=schema_pool,files=[],parseLimits=limits,readerContractSha256=reader_fingerprint())
     for index,row in enumerate(rows):
         job['files'].append(dict(row,inspection=str(out/('SourceInspection' if index==0 else 'DependencyInspection-'+str(index-1)))))
     write_json(stage/'job.json',job)
     worker=Path(__file__).parent/'sources/unity_worker.py'
-    result=stage/'batch.json';receipt=dict(status='started',workerSha256=sha(read(worker)),containers=len(rows),processExited=False)
+    result=stage/'batch.json';receipt=dict(status='started',workerSha256=reader_fingerprint(),parseLimits=limits,containers=len(rows),processExited=False)
     with (stage/'provider.log').open('wb')as log:
         p=subprocess.Popen([str(provider_python),'-I','-B',str(worker),'--inspect-batch',str(stage/'job.json'),str(result)],cwd=stage,stdout=log,stderr=subprocess.STDOUT)
         receipt['pid']=p.pid;write_json(stage/'execution.json',receipt)
@@ -35,6 +38,8 @@ def inspect_all(rows, provider_python, output, schema_pool, budget):
             fail('UNITY_BATCH_SOURCE',record['path'],'A container failed inspection or changed; see batch.json')
         typed=Path(record['inspection'])/'typed-objects.json'
         if sha(read(typed,max_bytes=128*1024**2))!=r['typedObjectsSha256']:fail('UNITY_BATCH_TYPED_CHANGED',str(typed),'Typed snapshot differs')
+        document=load_typed(typed);validate_payloads(typed.parent,document)
+        if r.get('parseLimits')!=limits or document.get('parseLimits')!=limits:fail('UNITY_BATCH_LIMITS',str(typed),'Parse limits differ')
         receipts.append((Path(record['path']),r))
     receipt.update(status='inspected',schemaBundlesRead=body['schemaBundlesRead'],containersInspected=body['containersInspected'])
     write_json(stage/'execution.json',receipt)
@@ -46,7 +51,8 @@ def merged_model_inputs(inspections, output, manifest_sha):
     out=safe(output);out.mkdir();files=[];objects=[];names={};embedded={};borrowed={};aliases=[];sources=[]
     for index,(path,receipt)in enumerate(inspections):
         stage=out.parent/('SourceInspection'if index==0 else'DependencyInspection-'+str(index-1))
-        data=load(read(stage/'typed-objects.json',max_bytes=128*1024**2),max_nodes=16_000_000,max_depth=128)
+        data=load_typed(stage/'typed-objects.json')
+        validate_payloads(stage,data)
         mapping={};skipped=set();sources.append(receipt['source'])
         for f in data['files']:
             name=f['name'];digest=f.get('serializedFileSha256')
@@ -83,25 +89,27 @@ def scope_rows(source, pool):
     return rows,aliases
 
 
-def inspect_set(source,manifest,provider_python,output,budget=600,schema_manifest=None):
+def inspect_set(source,manifest,provider_python,output,budget=600,schema_manifest=None,parse_limits=None):
     from .unity_schemas import frozen_pool
     from .io import new_output
+    limits=resolve_limits(parse_limits)
     pool=frozen_pool(manifest);schemas=frozen_pool(schema_manifest)if schema_manifest else pool
     rows,aliases=scope_rows(source,pool);out=new_output(output,[source,safe(manifest),*[Path(r['path'])for r in pool['files']]])
     write_json(out/'all-inputs.json',dict(schemaVersion=1,files=rows,aliases=aliases,manifestSha256=pool['sourceManifestSha256']))
-    result=inspect_all(rows,provider_python,out,schemas,budget)
+    result=inspect_all(rows,provider_python,out,schemas,budget,limits)
     summary=dict(containers=len(result),parsed=sum(r['summary']['parsed']for _,r in result),unparsed=sum(r['summary']['unparsed']for _,r in result),
                  externalTextureTokens=sum(r['summary'].get('externalTextureTokens',0)for _,r in result),invalidInlineTextures=sum(r['summary'].get('invalidInlineTextures',0)for _,r in result))
     receipt=dict(schemaVersion=1,status='partial'if summary['unparsed']else'inspected',summary=summary,sourceCodeExecuted=False,native='not_run',scope='all explicitly frozen unique containers')
     write_json(out/'inspection-set.json',receipt);return receipt
 
 
-def reuse_inspections(rows, previous, output, schema_pool):
+def reuse_inspections(rows, previous, output, schema_pool, parse_limits=None):
     """Verify a complete batch receipt and copy snapshots, never reparse source bodies."""
-    previous=safe(previous);out=safe(output)
+    previous=safe(previous);out=safe(output);limits=resolve_limits(parse_limits)
     job=load(read(previous/'BatchInspection/job.json'));execution=load(read(previous/'BatchInspection/execution.json'))
-    if execution.get('status')!='inspected'or execution.get('workerSha256')!=sha(read(Path(__file__).parent/'sources/unity_worker.py')):
+    if execution.get('status')!='inspected'or execution.get('workerSha256')!=reader_fingerprint():
         fail('UNITY_BATCH_REUSE_WORKER',str(previous),'Successful same-worker snapshot required')
+    if job.get('parseLimits')!=limits or job.get('readerContractSha256')!=reader_fingerprint():fail('UNITY_BATCH_REUSE_LIMITS',str(previous),'Reader policy differs; inspect afresh')
     if job.get('schemaPool')!=schema_pool or len(job.get('files',[]))!=len(rows):fail('UNITY_BATCH_REUSE_INPUT',str(previous),'Exact schema/input set differs')
     result=[];records=[]
     for index,(expected,old)in enumerate(zip(rows,job['files'])):
@@ -112,7 +120,11 @@ def reuse_inspections(rows, previous, output, schema_pool):
         receipt=load(read(stage/'inspection.json'));body=read(stage/'typed-objects.json',max_bytes=128*1024**2)
         if receipt.get('status')not in ('inspected','partial')or not receipt.get('sourceUnchanged')or sha(body)!=receipt.get('typedObjectsSha256'):
             fail('UNITY_BATCH_REUSE_TYPED',str(stage),'Receipt or snapshot changed')
+        document=load_typed(stage/'typed-objects.json')
+        if document.get('parseLimits')!=limits or receipt.get('parseLimits')!=limits:fail('UNITY_BATCH_REUSE_LIMITS',str(stage),'Snapshot limits differ')
+        validate_payloads(stage,document)
         (out/name).mkdir();(out/name/'typed-objects.json').write_bytes(body);write_json(out/name/'inspection.json',receipt)
+        copy_payloads(stage,out/name,document)
         result.append((Path(expected['path']),receipt));records.append(dict(path=expected['path'],inspection=str(out/name),receipt=receipt))
     stage=out/'BatchInspection';stage.mkdir();write_json(stage/'execution.json',dict(execution,reusedFrom=str(previous)))
     write_json(stage/'job.json',dict(job,files=[dict(row,inspection=str(out/('SourceInspection'if i==0 else'DependencyInspection-'+str(i-1))))for i,row in enumerate(rows)]))

@@ -3,6 +3,8 @@ import json
 import shutil
 from pathlib import Path
 from . import __version__
+from .unity_parse_limits import parse_limits as resolve_limits,MAX_DOCUMENT_NODES
+from .unity_payloads import load_typed,copy_payloads
 from .io import safe,read,load,sha,new_output,write_json
 from .sources.compiled import fail
 from .sources.unity_serialized import inspect as inspect_unity,container_kind
@@ -12,7 +14,8 @@ from .unity_code_model import model as code_model
 CODE_SUFFIXES={'.cs','.dll','.js','.jsc','.wasm','.lua','.so','.dylib'}
 
 
-def convert(source,output,provider_python,asset_ripper,budget_seconds=600,dependencies=None,texture_cache=None,schema_manifest=None,quarantine_invalid_textures=False,dependency_manifest=None,export_scope="reachable",code_evidence=None,reuse_inspection=None,prepared_textures=None,reuse_export=None,layout_path=None):
+def convert(source,output,provider_python,asset_ripper,budget_seconds=600,dependencies=None,texture_cache=None,schema_manifest=None,quarantine_invalid_textures=False,dependency_manifest=None,export_scope="reachable",code_evidence=None,reuse_inspection=None,prepared_textures=None,reuse_export=None,layout_path=None,parse_limits=None):
+    limits=resolve_limits(parse_limits)
     if not 30<=budget_seconds<=7200:fail('UNITY_EXPORT_BUDGET','$','Expected 30..7200 seconds')
     if export_scope not in ('reachable','all'):fail('UNITY_EXPORT_SCOPE','$','Expected reachable or all')
     if export_scope=='all' and not dependency_manifest:fail('UNITY_EXPORT_SCOPE','$','All scope requires an explicit frozen dependency manifest')
@@ -59,12 +62,12 @@ def convert(source,output,provider_python,asset_ripper,budget_seconds=600,depend
         dependencies=[Path(r['path'])for r in chosen]
         rows=[primary,*chosen]
         write_json(out/'all-inputs.json',dict(schemaVersion=1,files=rows,aliases=aliases,manifestSha256=dependency_pool['sourceManifestSha256']))
-        batch=reuse_inspections(rows,reuse_inspection,out,schema_pool)if reuse_inspection else inspect_all(rows,requested_python,out,schema_pool,min(budget_seconds,1200))
+        batch=reuse_inspections(rows,reuse_inspection,out,schema_pool,limits)if reuse_inspection else inspect_all(rows,requested_python,out,schema_pool,min(budget_seconds,1200),limits)
         inspected=batch[0][1]
         report.update(exportScope='all',declaredContainers=1+len(dependency_pool['files']),uniqueContainers=len(rows),byteIdenticalAliases=len(aliases),
                       inputFiles=len(rows),inputBytes=sum(r['bytes']for r in rows))
     else:
-        inspected=inspect_unity(source,requested_python,out/'SourceInspection',min(budget_seconds,120),schema_manifest=schema_manifest)
+        inspected=inspect_unity(source,requested_python,out/'SourceInspection',min(budget_seconds,120),schema_manifest=schema_manifest,parse_limits=limits)
     report['sourceInspection']={k:inspected.get(k) for k in ('status','source','summary','provider','typedObjectsSha256','sourceUnchanged','processExited')}
     if not inspected.get('sourceUnchanged') or not inspected.get('processExited') or inspected['status'] not in ('inspected','partial'):
         report['status']='failed';save();return report
@@ -73,7 +76,7 @@ def convert(source,output,provider_python,asset_ripper,budget_seconds=600,depend
         from .unity_dependencies import resolve
         typed_raw=read(out/'SourceInspection/typed-objects.json',max_bytes=128*1024*1024)
         if sha(typed_raw)!=inspected['typedObjectsSha256']:fail('UNITY_DEPENDENCY_SOURCE_CHANGED',str(out),'Primary typed inspection changed')
-        lookup=resolve(load(typed_raw,max_nodes=8_000_000),dependency_pool,dependency_manifest,requested_python,out/'DependencyLookup',min(budget_seconds,600))
+        lookup=resolve(load(typed_raw,max_nodes=MAX_DOCUMENT_NODES,max_depth=128),dependency_pool,dependency_manifest,requested_python,out/'DependencyLookup',min(budget_seconds,600))
         report['dependencyLookup']=lookup
         dependencies=[Path(r['path'])for r in lookup['dependencies']]
         report.update(inputFiles=1+len(dependencies),inputBytes=source.stat().st_size+sum(r['bytes']for r in lookup['dependencies']))
@@ -84,7 +87,7 @@ def convert(source,output,provider_python,asset_ripper,budget_seconds=600,depend
         if dependency_pool:
             expected=next(r for r in dependency_pool['files']if r['path']==str(path))
             if path.stat().st_size!=expected['bytes']or fingerprint(path)!=expected['sha256']:fail('UNITY_DEPENDENCY_SOURCE_CHANGED',str(path),'Selected dependency changed after indexing')
-        extra=inspect_unity(path,requested_python,out/('DependencyInspection-'+str(index)),min(budget_seconds,120),schema_manifest=schema_manifest)
+        extra=inspect_unity(path,requested_python,out/('DependencyInspection-'+str(index)),min(budget_seconds,120),schema_manifest=schema_manifest,parse_limits=limits)
         inspections.append((path,extra))
         if extra['status'] not in ('inspected','partial') or not extra.get('sourceUnchanged') or not extra.get('processExited'):
             report['status']='failed';save();return report
@@ -203,6 +206,9 @@ def convert(source,output,provider_python,asset_ripper,budget_seconds=600,depend
     for index,stage in enumerate(quarantines):shutil.copy2(stage['report'],analysis('invalid-texture-quarantine-'+str(index)+'.json'))
     write_json(analysis('texture-hydration.json'),dict(schemaVersion=1,stages=hydrations,consumed=list(consumed.values())))
     for index,(_,extra) in enumerate(inspections[1:]):shutil.copy2(out/('DependencyInspection-'+str(index))/'typed-objects.json',analysis('dependency-typed-'+str(index)+'.json'))
+    for index,_ in enumerate(inspections):
+        stage=out/('SourceInspection' if index==0 else 'DependencyInspection-'+str(index-1))
+        copy_payloads(stage,analysis('unity-typed-objects.json').parent,load_typed(stage/'typed-objects.json'))
     if consumed:
         from .io import inside
         pool=load(read(safe(texture_cache)));cache_rows={r['logicalPath']:r for r in pool['files']}

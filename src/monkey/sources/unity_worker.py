@@ -5,6 +5,7 @@ import json
 import math
 import re
 import sys
+import time
 from collections import Counter
 from pathlib import Path
 
@@ -12,12 +13,23 @@ from pathlib import Path
 if not __package__:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from monkey.unity_semantics import validate_component
+from monkey.unity_parse_limits import parse_limits as resolve_limits,reader_fingerprint
+from monkey.unity_payloads import StreamedArray,PayloadWriter,read_streamed,write_document
 
 PROVIDER_VERSION = '1.25.3'
 MAX_BYTES = 128 * 1024 * 1024
 MAX_OBJECTS = 250_000
 MAX_VALUES = 250_000
-MAX_TYPED_VALUES = 4_000_000
+MAX_TYPED_VALUES = 8_000_000
+
+
+def runtime_stats(start):
+    try:
+        import resource
+        peak=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        if sys.platform!='darwin':peak*=1024
+    except ImportError:peak=None
+    return dict(elapsedSeconds=round(time.monotonic()-start,3),peakRssBytes=peak,peakScope='worker-lifetime')
 
 
 def digest(raw):
@@ -30,21 +42,22 @@ def identifier(value):
     return str(value)
 
 
-def portable(value, refs, location='$', depth=0, counter=None):
+def portable(value, refs, location='$', depth=0, counter=None, max_values=None):
     """PPtr fields are typed strings; arbitrary large integers are lossless tagged values."""
     if counter is None:
         counter = [0]
     counter[0] += 1
-    if counter[0] > MAX_VALUES or depth > 96:
+    if counter[0] > (MAX_VALUES if max_values is None else max_values) or depth > 96:
         raise ValueError('Typed value budget exceeded')
+    if isinstance(value, StreamedArray):return value.descriptor
     if isinstance(value, dict):
         if set(value) == {'m_FileID', 'm_PathID'}:
             file_id, path_id = identifier(value['m_FileID']), identifier(value['m_PathID'])
             refs.append(dict(location=location, fileId=file_id, pathId=path_id))
             return {'$type': 'UnityPPtr', 'fileId': file_id, 'pathId': path_id}
-        return {str(k): portable(v, refs, location + '/' + str(k), depth+1, counter) for k, v in value.items()}
+        return {str(k): portable(v, refs, location + '/' + str(k), depth+1, counter, max_values) for k, v in value.items()}
     if isinstance(value, (list, tuple)):
-        return [portable(v, refs, location + '/' + str(i), depth+1, counter) for i, v in enumerate(value)]
+        return [portable(v, refs, location + '/' + str(i), depth+1, counter, max_values) for i, v in enumerate(value)]
     if isinstance(value, bytes):
         return {'$type': 'bytes', 'base64': base64.b64encode(value).decode(), 'sha256': digest(value), 'bytes': len(value)}
     if isinstance(value, str):
@@ -53,7 +66,7 @@ def portable(value, refs, location='$', depth=0, counter=None):
             return value
         except UnicodeEncodeError:
             # UnityPy uses surrogateescape for arbitrary binary TextAsset bodies.
-            return portable(value.encode('utf-8', errors='surrogateescape'), refs, location, depth+1, counter)
+            return portable(value.encode('utf-8', errors='surrogateescape'), refs, location, depth+1, counter, max_values)
     if type(value) is int:
         return {'$type': 'integer', 'decimal': str(value)} if abs(value) > (1 << 53)-1 else value
     if isinstance(value, float) and not math.isfinite(value):
@@ -137,10 +150,12 @@ def schema_pool(assets, job, all_schemas=False):
     return matches
 
 
-def inspect_bytes(raw, schema_job=None, schema_cache=None):
+def inspect_bytes(raw, schema_job=None, schema_cache=None, parse_limits=None, payload_root=None):
     import UnityPy
     if UnityPy.__version__ != PROVIDER_VERSION:
         raise RuntimeError('Expected UnityPy ' + PROVIDER_VERSION)
+    limits=resolve_limits(parse_limits or dict(objectValues=MAX_VALUES,containerValues=MAX_TYPED_VALUES))
+    writer=PayloadWriter(payload_root,digest(raw)) if payload_root else None
     env = UnityPy.load(raw)  # bytes only: no source-side sibling or cache discovery
     assets = env.assets
     if not assets:
@@ -172,8 +187,12 @@ def inspect_bytes(raw, schema_job=None, schema_cache=None):
                 row.update(typeTreeSource='exact-frozen-bundle', borrowedSchemaId=shape_id,
                     schemaProvenance=dict(identity=list(type_identity(asset,obj.serialized_type)), layoutSha256=exact['sha256'],
                         sourceManifestSha256=schema_job['sourceManifestSha256'], sources=exact['sources']))
+            counter=[0];mark=len(writer.files) if writer else 0;blocks=[]
+            row['parseMetrics']=dict(containerValuesBefore=typed_values)
             try:
-                typed = obj.read_typetree(nodes=exact['node'], check_read=True) if exact else obj.read_typetree(check_read=True)
+                streamed=read_streamed(obj,writer,file_id)
+                if streamed is not None:typed,blocks=streamed
+                else:typed = obj.read_typetree(nodes=exact['node'], check_read=True) if exact else obj.read_typetree(check_read=True)
                 if obj.type.name == 'MonoBehaviour':
                     node = exact['node'] if exact else (obj.serialized_type.node if obj.serialized_type else None)
                     if node is None:
@@ -185,27 +204,31 @@ def inspect_bytes(raw, schema_job=None, schema_cache=None):
                     validate_component(schema_node(node), typed, header)
                     row['semanticValidation'] = dict(status='passed', header='independent-native-prefix',
                                                       fields='schema-shape', fieldValues='not-cross-checked', writable=False)
-                counter=[0]
-                converted=portable(typed,row['references'],counter=counter)
+                converted=portable(typed,row['references'],counter=counter,max_values=limits['objectValues'])
                 typed_values+=counter[0]
-                if typed_values>MAX_TYPED_VALUES:
+                if typed_values>limits['containerValues']:
                     typed_values-=counter[0]
                     raise ValueError('Aggregate portable value budget exceeded; original object hash retained')
                 row['data']=converted
+                if blocks:row['payloads']=blocks
                 if obj.type.name=='Texture2D' and isinstance(typed,dict):row['texturePayload']=texture_payload(typed)
                 name = typed.get('m_Name') if isinstance(typed,dict) else None
                 row['name'] = name if isinstance(name,str) and not any(0xd800 <= ord(c) <= 0xdfff for c in name) else None
                 row['status'] = 'parsed'
             except Exception as error:
                 # No relaxed read, zero-fill, guessed schema or source assembly execution.
+                if writer:writer.rollback(mark)
                 row['status'] = 'unparsed'
+                row.pop('payloads',None)
                 row.pop('data', None)
                 row.pop('semanticValidation', None)
                 row['references'] = []
                 row['error'] = dict(type=type(error).__name__, message=str(error).splitlines()[0][:240])
+            row['parseMetrics'].update(inlineValues=counter[0],streamedValues=sum(b['length']for b in blocks)if row['status']=='parsed'else 0)
             objects.append(row)
     return dict(schemaVersion=1, sourceFamily='unity', provider=dict(name='UnityPy',version=PROVIDER_VERSION),
-                identifierEncoding='signed-int64-decimal-string-v1', files=files, objects=objects, embeddedSchemas=schemas, borrowedSchemas=borrowed_schemas,
+                parseLimits=limits,parseUsage=dict(inlineValues=typed_values,payloadBytes=writer.total if writer else 0,payloadChunks=len(writer.files)if writer else 0),
+                payloadFiles=writer.files if writer else [],identifierEncoding='signed-int64-decimal-string-v1', files=files, objects=objects, embeddedSchemas=schemas, borrowedSchemas=borrowed_schemas,
                 summary=dict(serializedFiles=len(files), objects=len(objects),
                              parsed=sum(o['status']=='parsed' for o in objects),
                              unparsed=sum(o['status']=='unparsed' for o in objects), borrowedSchemaParsed=sum(o['status']=='parsed' and o['typeTreeSource']=='exact-frozen-bundle' for o in objects), externalTextureTokens=sum(o.get('texturePayload',{}).get('kind')=='external-key-token-candidate' for o in objects), invalidInlineTextures=sum(o.get('texturePayload',{}).get('kind')=='invalid-inline-etc1' for o in objects), types=dict(Counter(o['type'] for o in objects))),
@@ -349,7 +372,8 @@ def inspect_batch(job_path, output):
     """Read each frozen schema bundle once, then inspect every explicit container."""
     import UnityPy
     if UnityPy.__version__ != PROVIDER_VERSION: raise RuntimeError('Expected UnityPy '+PROVIDER_VERSION)
-    job=json.loads(job_path.read_text());pool=job.get('schemaPool');rows=job['files']
+    job=json.loads(job_path.read_text());pool=job.get('schemaPool');rows=job['files'];limits=resolve_limits(job.get('parseLimits'))
+    if job.get('readerContractSha256')!=reader_fingerprint():raise ValueError('Reader contract changed before execution')
     if not 1 <= len(rows) <= 2001: raise ValueError('Batch container budget')
     cache=schema_pool([],pool,all_schemas=True) if pool else {}
     reports=[];total=0
@@ -360,16 +384,16 @@ def inspect_batch(job_path, output):
         dest=Path(row['inspection']);dest.mkdir(exist_ok=False)
         receipt=dict(schemaVersion=1,status='started',source=dict(path=str(source),bytes=len(raw),sha256=digest(raw)),
                      processExited=True,sourceCodeExecuted=False)
+        started=time.monotonic()
         try:
-            typed=inspect_bytes(raw,pool,schema_cache=cache)
+            typed=inspect_bytes(raw,pool,schema_cache=cache,parse_limits=limits,payload_root=dest)
             typed['source']={k:receipt['source'][k] for k in ('bytes','sha256')}
-            encoded=json.dumps(typed,ensure_ascii=False,allow_nan=False,separators=(',',':')).encode()
-            if len(encoded)>MAX_BYTES:raise ValueError('Batch typed document exceeds128MiB')
-            (dest/'typed-objects.json').write_bytes(encoded)
+            typed_hash=write_document(dest/'typed-objects.json',typed)
             receipt.update(status='partial' if typed['summary']['unparsed'] else 'inspected',
-                           summary=typed['summary'],provider=typed['provider'],typedObjectsSha256=digest(encoded))
+                           summary=typed['summary'],provider=typed['provider'],typedObjectsSha256=typed_hash,parseLimits=limits,parseUsage=typed['parseUsage'],readerContractSha256=reader_fingerprint())
         except Exception as error:
             receipt.update(status='failed',error=dict(type=type(error).__name__,message=str(error)[:300]))
+        receipt['performance']=runtime_stats(started)
         receipt['sourceUnchanged']=digest(source.read_bytes())==row['sha256']
         (dest/'inspection.json').write_text(json.dumps(receipt,indent=2)+'\n')
         reports.append(dict(path=str(source),inspection=str(dest),receipt=receipt))
@@ -379,22 +403,22 @@ def inspect_batch(job_path, output):
 
 
 def main():
-    schema_job = None
+    schema_job = None;limits=None
     if sys.argv[1] == '--inspect-with-schemas':
         job = json.loads(Path(sys.argv[2]).read_text())
         source, output = Path(job['source']), Path(sys.argv[3])
-        schema_job = job['schemaPool']
+        schema_job = job['schemaPool'];limits=resolve_limits(job.get('parseLimits'))
+        if job.get('readerContractSha256')!=reader_fingerprint():raise ValueError('Reader contract changed before execution')
     else: source, output = map(Path, sys.argv[1:])
     with source.open('rb') as stream:
         raw = stream.read(MAX_BYTES+1)
     if len(raw) > MAX_BYTES:
         raise ValueError('Input byte budget exceeded')
-    data = inspect_bytes(raw, schema_job)
+    started=time.monotonic()
+    data = inspect_bytes(raw, schema_job,parse_limits=limits,payload_root=output.parent)
     data['source'] = dict(bytes=len(raw), sha256=digest(raw))
-    encoded = (json.dumps(data,ensure_ascii=False,allow_nan=False,separators=(',',':'))+'\n').encode()
-    if len(encoded) > MAX_BYTES:
-        raise ValueError('Typed output byte budget exceeded')
-    output.write_bytes(encoded)
+    write_document(output,data)
+    (output.parent/'reader-runtime.json').write_text(json.dumps(runtime_stats(started)))
 
 
 if __name__ == '__main__':

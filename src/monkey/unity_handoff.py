@@ -4,6 +4,7 @@ import re
 from pathlib import Path
 from .io import read,load,sha,write_json
 from .layout.standard import find_analysis
+from .unity_payloads import load_typed
 
 
 def reference_gaps(project):
@@ -46,7 +47,7 @@ def inventory(project,inspections,exported,relocation=None):
         if guid:guids[guid].append(row)
     roots=[];objects=0;unparsed=0;containers=[]
     for index,(source,receipt)in enumerate(inspections):
-        stage=project.parent/('SourceInspection'if index==0 else'DependencyInspection-'+str(index-1));d=load(read(stage/'typed-objects.json',max_bytes=128*1024**2),max_nodes=16_000_000,max_depth=128)
+        stage=project.parent/('SourceInspection'if index==0 else'DependencyInspection-'+str(index-1));d=load_typed(stage/'typed-objects.json')
         files={f['id']:f for f in d['files']};objects+=len(d['objects']);unparsed+=sum(o['status']!='parsed'for o in d['objects'])
         containers.append(dict(source=receipt['source'],disposition='submitted-to-native-provider',nativeProviderStatus=exported['status']))
         for o in d['objects']:

@@ -12,17 +12,18 @@ import time
 import urllib.parse
 import urllib.request
 from pathlib import Path
+from .unity_parse_limits import MAX_DOCUMENT_NODES
 from .io import safe,inside,read,load,sha,write_json,new_output
 from .sources.compiled import fail
 from .sources.unity_worker import astc_header
 
 
 def requests(inspection):
-    root=safe(inspection);batch=load(read(root/'BatchInspection/batch.json',max_bytes=128*1024**2),max_nodes=16_000_000,max_depth=128);wanted={}
+    root=safe(inspection);batch=load(read(root/'BatchInspection/batch.json',max_bytes=128*1024**2),max_nodes=MAX_DOCUMENT_NODES,max_depth=128);wanted={}
     for row in batch['files']:
         receipt=row['receipt'];stage=Path(row['inspection']);raw=read(stage/'typed-objects.json',max_bytes=128*1024**2)
         if sha(raw)!=receipt['typedObjectsSha256']:fail('UNITY_TEXTURE_TYPED_CHANGED',str(stage),'Frozen typed shard changed')
-        data=load(raw,max_nodes=16_000_000,max_depth=128);files={f['id']:f['name']for f in data['files']}
+        data=load(raw,max_nodes=MAX_DOCUMENT_NODES,max_depth=128);files={f['id']:f['name']for f in data['files']}
         for obj in data['objects']:
             token=obj.get('texturePayload',{})
             if token.get('kind')!='external-key-token-candidate':continue

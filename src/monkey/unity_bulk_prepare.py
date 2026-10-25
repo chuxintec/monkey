@@ -4,18 +4,21 @@ from pathlib import Path
 from .io import safe,read,load,sha,new_output,write_json
 from .sources.compiled import fail
 from .providers.assetripper import fingerprint
+from .unity_parse_limits import reader_fingerprint
+from .unity_payloads import load_typed,validate_payloads
 
 
 def prepare(inspection,texture_cache,capture,provider_python,output,budget=1200,resume=False):
     if type(budget)is not int or not 30<=budget<=1500:fail('UNITY_BULK_PREPARE_BUDGET','$','Expected30..1500 seconds')
     old=safe(inspection);manifest=safe(texture_cache);cap=safe(capture);requested=Path(provider_python).absolute();python=safe(requested.resolve(strict=True));out=safe(output)
     summary=load(read(old/'BatchInspection/execution.json'));batch=load(read(old/'BatchInspection/batch.json',max_bytes=128*1024**2),max_nodes=16_000_000,max_depth=128)
-    if summary.get('status')!='inspected'or summary.get('workerSha256')!=fingerprint(Path(__file__).parent/'sources/unity_worker.py'):fail('UNITY_BULK_INSPECTION_DRIFT',str(old),'Frozen same-reader successful batch required; no reparse fallback')
+    if summary.get('status')!='inspected'or summary.get('workerSha256')!=reader_fingerprint():fail('UNITY_BULK_INSPECTION_DRIFT',str(old),'Frozen same-reader successful batch required; no reparse fallback')
     if not 1<=len(batch.get('files',[]))<=2000:fail('UNITY_BULK_CONTAINER_COUNT',str(old),'Expected1..2000 explicit inspected containers')
     sources=[]
     for index,row in enumerate(batch['files']):
         receipt=row['receipt'];path=safe(row['path']);typed=old/('SourceInspection'if index==0 else'DependencyInspection-'+str(index-1))/'typed-objects.json'
         if fingerprint(typed)!=receipt['typedObjectsSha256']or fingerprint(path)!=receipt['source']['sha256']or not receipt.get('sourceUnchanged'):fail('UNITY_BULK_INSPECTION_DRIFT',str(path),'Frozen source/typed bytes changed')
+        validate_payloads(typed.parent,load_typed(typed))
         sources.append(dict(index=index,path=str(path),bytes=path.stat().st_size,sha256=receipt['source']['sha256'],typedSha256=receipt['typedObjectsSha256'],needsTextures=bool(receipt['summary'].get('externalTextureTokens')),invalidInline=receipt['summary'].get('invalidInlineTextures',0)))
     pool=load(read(manifest));cache=[];seen=set();total=0
     if pool.get('schemaVersion')!=1 or not isinstance(pool.get('files'),list)or not 1<=len(pool['files'])<=10000:fail('UNITY_BULK_TEXTURE_POOL',str(manifest),'Explicit <=10000 texture pool required')

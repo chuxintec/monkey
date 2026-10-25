@@ -3,6 +3,7 @@ from pathlib import Path
 from unittest.mock import patch
 from monkey.io import sha,write_json
 from monkey.unity_bulk_prepare import prepare
+from monkey.unity_parse_limits import reader_fingerprint
 from monkey.sources.compiled import ParseError
 
 
@@ -10,7 +11,7 @@ class BulkPreparationTests(unittest.TestCase):
     def fixture(self,root):
         inspection=root/'inspection';(inspection/'BatchInspection').mkdir(parents=True);(inspection/'SourceInspection').mkdir();source=root/'source.bundle';source.write_bytes(b'fixed-source');typed=inspection/'SourceInspection/typed-objects.json';typed.write_text('{}');(inspection/'all-inputs.json').write_text('{}')
         worker=Path(__file__).resolve().parents[1]/'src/monkey/sources/unity_worker.py'
-        write_json(inspection/'BatchInspection/execution.json',dict(status='inspected',workerSha256=sha(worker.read_bytes())))
+        write_json(inspection/'BatchInspection/execution.json',dict(status='inspected',workerSha256=reader_fingerprint()))
         write_json(inspection/'BatchInspection/batch.json',dict(files=[dict(path=str(source),receipt=dict(typedObjectsSha256=sha(typed.read_bytes()),source=dict(sha256=sha(source.read_bytes())),sourceUnchanged=True,summary=dict(externalTextureTokens=1)))]))
         cache=root/'cache.txt';cache.write_bytes(b'cached');manifest=root/'textures.json';write_json(manifest,dict(schemaVersion=1,files=[dict(path=str(cache),logicalPath='Assets/Textures/astc/32/known.hash.txt',bytes=6,sha256=sha(b'cached'))]))
         capture=root/'capture.json';write_json(capture,dict(requestedKeys=2,capturedKeys=1,poolEntries=1,failures=[dict(logicalPath='Assets/Textures/astc/32/missing.hash.txt',status='failed',reason='HTTPError: HTTP Error 404: Not Found')]))
