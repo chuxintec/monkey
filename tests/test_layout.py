@@ -93,6 +93,16 @@ class PlannerTests(unittest.TestCase):
         self.assertEqual(len({v.casefold() for v in mapping(first).values()}),3)
         self.assertEqual(first.report()['collisionPaths'],2)
 
+    def test_hash_names_are_not_names_and_shared_clips_use_owner_qualifiers(self):
+        p=LayoutPlanner('unity',{'m:1':dict(bundle='miniGameRes',logicalPath='Texture/cattle/Map/3942396cc7b0fad2b18e8909565e25fe'),
+                                 'm:2':dict(bundle='miniGameRes',logicalPath='Texture/cattle/Map/0b44e06ac5a2a0899058be7d60c34733ba9f_zp1z_nk')})
+        self.assertRegex(p.path('m:1','sprite','.png'),r'^Assets/Game/Content/MiniGames/Cattle/Sprites/Map/sprite_[0-9a-f]{6}\.png$')
+        self.assertEqual(p.path('m:2','sprite','.png'),'Assets/Game/Content/MiniGames/Cattle/Sprites/Map/zp1z_nk.png')
+        clip=dict(bundle='gameAsset',logicalPath='Anim/Badge/appear')
+        q=LayoutPlanner('unity');q.reserve([('c@a','animation','.anim','',clip,'BadgeItem_icon'),('c@b','animation','.anim','',clip,'ShopBadge_icon')])
+        self.assertEqual({q.path('c@a','animation','.anim'),q.path('c@b','animation','.anim')},
+                         {'Assets/Game/Content/Animations/Badge/appear.anim','Assets/Game/Content/Animations/Badge/appear_shop_badge_icon.anim'})
+
     def test_case_variant_folders_merge_into_one_spelling(self):
         p=LayoutPlanner('unity',{'a:1':dict(bundle='a',logicalPath='floorAndWall/x'),'a:2':dict(bundle='a',logicalPath='FloorAndWall/y')})
         one,two=p.path('a:1','sprite','.png'),p.path('a:2','sprite','.png')

@@ -1,4 +1,5 @@
 """LayoutPlanner: the only allocator of generated asset paths (PROJECT-SPEC 4-5). Identity GUIDs stay path-independent."""
+import re
 import unicodedata
 from collections import Counter
 from ..io import sha
@@ -7,6 +8,7 @@ from . import casing,classify,semantic,standard
 PASCAL_TYPES={'prefab','scene','config','strings','data','atlas','controller','font-asset'}
 VARIANTS={'original':'untrimmed','atlas':'page0'}
 MAX_PATH_BYTES=180
+_HASHED=re.compile(r'[0-9a-f]{32}|[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}')
 
 
 def _fold(path):return unicodedata.normalize('NFC',path).casefold()
@@ -51,6 +53,10 @@ class LayoutPlanner:
             stem=(typ.replace('-','_'))+'_'+sha(base.encode())[:6];folders=[self.roots['unsorted']];reasons.append('no-safe-source-name')
             raw_folders=folders
         else:raw_folders=None
+        if _HASHED.search(stem.lower()):
+            # A content hash is not a name (PROJECT-SPEC 5.5): keep any readable remainder and the module, else name by type.
+            stem=re.sub(r'[0-9a-fA-F]{32,}','',stem).strip('_-. ') if not _HASHED.fullmatch(stem.lower()) else ''
+            stem=stem or (typ.replace('-','_'))+'_'+sha(base.encode())[:6];reasons.append('hash-source-name')
         name=self._stem(typ,stem)
         if typ=='config':
             lowered=name.lower()

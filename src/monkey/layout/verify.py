@@ -7,7 +7,8 @@ from . import semantic,standard
 TRACE_DIRS=semantic.TRACE_WORDS
 SOURCE_DIRS=semantic.SOURCE_ONLY_WORDS
 LOCALE_DIRS=set(semantic.LOCALES)-{'zh-hans','zh-hant'}
-TYPE_DIRS={v.rsplit('/',1)[-1].lower() for v in [*standard.UNITY_TYPES.values(),*standard.CREATOR_TYPES.values()]}
+# Font family folders may legitimately be named like a locale (an 'En' font), so fonts are not a bundle-as-folder position.
+TYPE_DIRS={v.rsplit('/',1)[-1].lower() for v in [*standard.UNITY_TYPES.values(),*standard.CREATOR_TYPES.values()]}-{'fonts'}
 EXEMPT=('assets/game/editor/conversion/','assets/plugins/','assets/thirdparty/','assets/textmesh pro/','assets/game/scripts/')
 _HEX=re.compile(r'[0-9a-f]{32}')
 _HASHED_CODE=re.compile(r'-[0-9a-f]{6,}\.(cs|ts|js)$')

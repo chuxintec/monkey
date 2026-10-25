@@ -102,6 +102,10 @@ def plan_clips(ir,namespace,profile,selection=None,naming=None):
     known={c['sourceId'] for c in clips};selection=set(selection or known)
     if selection-known:fail('UNKNOWN_ANIMATION_SELECTION','$',str(sorted(selection-known)))
     nodes={n['sourceId']:n for n in ir['nodes']};out=[];gaps=[]
+    def owner_name(owner,root):
+        # A clip shared by many owners is qualified by owner prefab and node before any hash (PROJECT-SPEC 5.4).
+        page=(ir.get('sourceNames',{}).get(owner['node'].split('#',1)[0],{}).get('logicalPath') or '').rsplit('/',1)[-1]
+        return (page+'_' if page else '')+str(root['name'])
     for clip in clips:
         if clip['sourceId'] not in selection:continue
         owners=[c for c in ir['components'] if c['type']=='cc.Animation' and clip['sourceId'] in c.get('clips',[]) and c.get('node') in nodes]
@@ -136,7 +140,7 @@ def plan_clips(ir,namespace,profile,selection=None,naming=None):
                 tracks=[t for t in tracks if counts[(t['node'],t['property'])]==1]
             out.append(dict(id=clip['sourceId']+'@'+owner['sourceId'],name=clip['name'],root=owner['node'],duration=clip['duration'],sample=clip['sample'],
                 wrap=clip['wrap'],tracks=tracks,convertible=bool(tracks) and clip['timingSupported'],partial=clip['partial'] or len(tracks)!=len(clip['tracks']),
-                events=clip['events'],path=None,autoPlay=False,owner=root['name']))
+                events=clip['events'],path=None,autoPlay=False,owner=owner_name(owner,root)))
     if naming is None:
         from ..layout import LayoutPlanner
         naming=LayoutPlanner('unity' if profile.startswith('unity-') else 'creator',ir.get('sourceNames'))

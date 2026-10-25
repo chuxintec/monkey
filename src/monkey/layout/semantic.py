@@ -90,8 +90,9 @@ def derive(meta,overrides=None):
         folders=replaced;reasons.append('layout-override:'+rule)
     else:
         folders=strip_leading(folders,overrides.get('stripSegments') or [])
-    dropped=[f for f in folders if f.lower() in TRACE_WORDS|SOURCE_ONLY_WORDS]
-    if dropped:folders=[f for f in folders if f.lower() not in TRACE_WORDS|SOURCE_ONLY_WORDS];reasons.append('trace-segment-dropped')
+    # The target is type-first, so type-grouping and trace folders anywhere in the source path are redundant.
+    dropped={w for w in TYPE_WORDS|TRACE_WORDS|SOURCE_ONLY_WORDS}
+    if any(f.lower() in dropped for f in folders):folders=[f for f in folders if f.lower() not in dropped];reasons.append('type-or-trace-segment-dropped')
     if role=='minigame' and folders:
         minigame=folders[0];folders=strip_leading(folders[1:],overrides.get('stripSegments') or [])
     elif role=='minigame':

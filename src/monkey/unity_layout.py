@@ -17,6 +17,8 @@ TYPE_ROOTS={'texture2d','sprite','material','monobehaviour','textasset','animati
 KEEP_ROOTS=('Assets/Plugins/','Assets/textmesh pro/','Assets/TextMesh Pro/','Assets/Game/')
 YAML_SUFFIXES={'.prefab','.unity','.asset','.mat','.controller','.overridecontroller','.anim','.spriteatlas','.mixer','.lighting','.physicsmaterial2d','.shadervariants','.playable'}
 CLASS_KINDS={'213':'sprite','43':'model','48':'shader','49':'data','687078895':'atlas','74':'animation','91':'controller','221':'controller','134':'data','62':'data'}
+# Package runtime files found by Resources name (TextMesh Pro); never treated as game tables.
+PACKAGE_RESOURCES={'tmp settings','linebreaking leading characters','linebreaking following characters'}
 SPINE_TAILS=('_SkeletonData.asset','_Atlas.asset','.skel.bytes','.skel','.json','.atlas.txt','.atlas.bytes','.atlas','_Material.mat','_Controller.controller')
 _GUID=re.compile(rb'guid: ([0-9a-f]{32})')
 
@@ -128,7 +130,7 @@ def plan(project,overrides=None):
         if parts[1]=='Editor':
             move(relative,standard.RECOVERY['source']+'/Provider/'+'/'.join(parts[1:]),'evidence','provider-editor-code');continue
         kind=kind_of(path,relative);guid=_meta_guid(path)
-        if path.suffix.lower()=='.bytes' and guid not in referenced:
+        if path.suffix.lower()=='.bytes' and guid not in referenced and path.stem.lower() not in PACKAGE_RESOURCES:
             section=standard.RECOVERY['source']+'/Provider' if path.stem.lower().endswith('.dll') else standard.RECOVERY['config']
             move(relative,section+'/'+casing.safe_path('/'.join(parts[1:])),'evidence','unreferenced-raw-table');continue
         lowered=[p.lower() for p in parts]
