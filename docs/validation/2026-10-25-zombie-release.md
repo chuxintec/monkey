@@ -35,3 +35,13 @@
 最终全量候选入口为 `outputs/zombie-release-lossless/UnityProject`。
 
 完整机器证据在本地 `.private/zombie-release-20261025/`；发行身份和安装验收见其中 release/install 回执。完整原包和日志不进入发行包。
+
+## 发布及安装实际回读
+
+GitHub prerelease: https://github.com/chuxintec/monkey/releases/tag/v0.3.0.dev1 。发布产品提交 `3d0915b676e12927f532636f713bdf72659f6344`，源码 tree `037669123b2ff6b5efda8f57e41332b3c1f2cee4`。本节为发布后文档回执，不移动 tag 或替换附件。wheel SHA256 `16f4b62c9759b36628403eb489168806439ddc4c53b709600d1adab91f37f9ab`；138 产品文件在提交、wheel、sdist 与实际安装中一致。GitHub API / ls-remote 和实际下载附件已读回一致。
+
+最终 frozen candidate：163,483 文件，3,307,505,149 字节；manifest SHA256 `ab8c00b29dd8a894ca6ba5e9af9df4b60c1be6fbc70ab06c5a6e1d4fa6862143`。全部清单文件重新计算哈希通过。7,727 图片分类核验为：7,604 外置 ASTC 精确 RGBA（含 2 个修复 PNG），74 内置 ASTC 精确 RGBA，5 字体 Alpha8 通道，44 原件字节；无未证明图片。五张字体图不以未定义 RGB 通道代替 Alpha8 原语义，仍不宣称材质/字体运行画面已验。
+
+实际安装路径 `~/.local/share/monkey/releases/0.3.0.dev1`，PATH 唯一 `~/.local/bin/monkey`；仓库 bin/monkey 同样读取安装版。实际 Release 安装程序已从 GitHub 下载且校验 SHA；无 editable path。安装版在源码目录外的合成来源完成 Unity / Creator 两端转换和静态验证，并实际重新解析向僵尸 3,122 字节原包。
+
+两份已被无损候选替代的全量导出在确认完整所有权与哈希后清理，删除逻辑大小 8,223,964,242 字节；manifest、转换结果与冻结回执留在 `.private/zombie-release-20261025/superseded/`。保留最终全量候选及当前可复验来源阶段，不触碰原游戏项目。

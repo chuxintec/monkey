@@ -4,7 +4,7 @@
 
 本聊天用户直接授权：使用 monkey 测试向僵尸开炮、核验导出文件内容，随后提交 GitHub 并发布 Release，安装该 Release 作为本地唯一常规调用程序。发布版本沿用 PROJECT-SPEC 的 0.3.0.dev1（GitHub prerelease）；本条覆盖此前未获新版发布/安装授权的限制。原游戏/Sources/GREA只读；私有游戏原件、outputs、缓存与完整日志不入 GitHub。先完成原输入/目标文件字节、类型、GUID/引用、命名、可解析内容与代表样本原生核验，再制作分发、精确暂存、正常推送与 tag/release 回读，最后从 Release 附件安装并验证标准入口。工具已知范围与源缺口明确写发布说明，不声明完整游戏已还原。
 
-当前：源 Unity 2021.3.30f1 → Unity 6000.6.2f1；601 容器重新解析，887 原件 / 7,595 已取得纹理留存校验通过。425 精确 CDN 键仍 404，975 对象无结构，17,495 处未闭合引用已完整记账。发现并修复 JPEG 重编码造成的纹理像素差异，以精确水合源生成 PNG 并保留 GUID。312 项回归通过。最终候选 `outputs/zombie-release-lossless/UnityProject`，全量 Editor/Player/视觉/业务未验；叶 Prefab 原生入口因紧密图集不支持在启动前阻断。详细验收 `docs/validation/2026-10-25-zombie-release.md`，机器回执 `.private/zombie-release-20261025/`。完成候选最终哈希核验后按本轮授权发布 prerelease 并安装唯一入口。
+当前：源 Unity 2021.3.30f1 → Unity 6000.6.2f1；601 容器重新解析，887 原件 / 7,595 已取得纹理留存校验通过。425 精确 CDN 键仍 404，975 对象无结构，17,495 处未闭合引用已完整记账。发现并修复 JPEG 重编码造成的纹理像素差异，以精确水合源生成 PNG 并保留 GUID。312 项回归通过。最终候选 `outputs/zombie-release-lossless/UnityProject`，全量 Editor/Player/视觉/业务未验；叶 Prefab 原生入口因紧密图集不支持在启动前阻断。详细验收 `docs/validation/2026-10-25-zombie-release.md`，机器回执 `.private/zombie-release-20261025/`。已完成发行与本地安装：GitHub 私有仓库正常快进 main，tag / prerelease `v0.3.0.dev1` 固定产品提交 `3d0915b676e12927f532636f713bdf72659f6344`；wheel SHA256 `16f4b62c9759b36628403eb489168806439ddc4c53b709600d1adab91f37f9ab`。GitHub API、ls-remote、附件重新下载均核对一致。`~/.local/bin/monkey` 是 PATH 中唯一入口，仓库 bin/monkey 转发到同一安装版；138 产品文件与 wheel 一致，无 editable 安装。实际安装版已重新解析向僵尸代表原包，并在源码目录外完成双目标转换与静态 pass。最终候选 163,483 文件 / 3,307,505,149 字节，manifest `ab8c00b29dd8a894ca6ba5e9af9df4b60c1be6fbc70ab06c5a6e1d4fa6862143`；7,727 图片全部有像素、Alpha8 或原件字节证明，0 无据图片、0 搬移/meta 错误。已归档回执并删除两份旧测试导出约 8.22 GB。
 
 
 ## 当前结果：统一类型目录与 Textures 合并已完成（2026-10-25）
