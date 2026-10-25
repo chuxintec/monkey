@@ -16,7 +16,8 @@ SOURCE_ONLY_WORDS={'texture','image','images','prefab','anim','anims','animation
     'configs','material','shader','movieclip','uiraw','sprite','gameasset','remoteasset','spineasset','subpackages','raw-assets','minigameres',
     'texture2d','monobehaviour','textasset','animatorcontroller','audioclip','mesh'}
 KNOWN_SUFFIXES={'.png','.jpg','.jpeg','.webp','.ttf','.otf','.fnt','.prefab','.fire','.scene','.unity','.json','.bin','.skel','.atlas',
-    '.mp3','.ogg','.wav','.m4a','.anim','.mat','.controller','.asset','.txt','.bytes','.mp4','.shader','.fbx','.tga','.psd'}
+    '.mp3','.ogg','.wav','.m4a','.anim','.mat','.controller','.asset','.txt','.bytes','.mp4','.shader','.fbx','.tga','.psd',
+    '.overridecontroller','.spriteatlas','.mixer','.lighting','.shadervariants','.physicsmaterial2d','.cginc','.hlsl','.shadergraph','.exr','.ttf','.otf'}
 
 
 def split_logical(meta):

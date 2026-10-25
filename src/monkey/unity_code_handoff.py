@@ -56,8 +56,12 @@ def declarations(raw, root, assemblies):
     return dict(types=records,methods=methods,fields=fields,methodsImplemented=0)
 
 
-def attach(manifest,project):
-    manifest,data,rows=declared(manifest);out=project/'SourceRecovery/OriginalCode';out.mkdir(parents=True)
+def attach(manifest,project,overrides=None):
+    manifest,data,rows=declared(manifest);out=project/'SourceRecovery/Code/Source';out.mkdir(parents=True,exist_ok=True)
+    from .layout import LayoutPlanner
+    planner=LayoutPlanner('unity',overrides=overrides)
+    for existing in (project/'Assets').rglob('*'):
+        if existing.is_file():planner.claim(existing.relative_to(project).as_posix())
     copied=[];drafts=[];total_methods=0;total_fields=0
     selected=data.get('assemblies',[])
     if not isinstance(selected,list)or any(not isinstance(n,str)or not re.fullmatch('[A-Za-z0-9_.-]+',n)for n in selected):fail('UNITY_CODE_ASSEMBLIES',str(manifest),'Explicit exact assembly names required')
@@ -70,12 +74,13 @@ def attach(manifest,project):
             payload=read(path,max_bytes=128*1024**2);suffix=path.suffix.lower()
             good=(suffix=='.png'and payload.startswith(b'\x89PNG\r\n\x1a\n'))or(suffix in('.jpg','.jpeg')and payload.startswith(b'\xff\xd8'))or(suffix=='.mp3'and(payload.startswith(b'ID3')or len(payload)>1 and payload[0]==255 and payload[1]&224==224))
             if not good:fail('UNITY_MEDIA_FORMAT',str(path),'Declared native media signature differs; keep unrecognized bytes as evidence')
-            native=inside(project,'Assets/Game/Imported/SourceMedia/'+row['sha256'][:16]+'-'+path.name);native.parent.mkdir(parents=True,exist_ok=True)
+            target=planner.path(row['sha256'],'native',suffix,metadata=dict(bundle='',logicalPath=path.stem))
+            native=inside(project,target);native.parent.mkdir(parents=True,exist_ok=True)
             if not native.exists():shutil.copy2(path,native)
             if sha(read(native,max_bytes=128*1024**2))!=row['sha256']:fail('UNITY_MEDIA_COPY_CHANGED',str(native),'Media copy differs')
         copied.append(dict(role=row['role'],sha256=row['sha256'],bytes=row['bytes'],path=dest.relative_to(project).as_posix(),nativePath=native.relative_to(project).as_posix()if native else None,nativeIdentity='pending-editor-import'if native else'not-applicable'))
         if row['role']=='il2cpp-declarations':
-            recovered=declarations(read(path,max_bytes=128*1024**2),project/'SourceRecovery/CodeDrafts/Il2Cpp',selected)
+            recovered=declarations(read(path,max_bytes=128*1024**2),project/'SourceRecovery/Code/Drafts/Il2Cpp',selected)
             drafts.extend(recovered['types']);total_methods+=recovered['methods'];total_fields+=recovered['fields']
     report=dict(schemaVersion=1,manifestSha256=sha(read(manifest)),files=copied,types=drafts,declaredMethods=total_methods,declaredFields=total_fields,
                 methodsImplemented=0,sourceCodeExecuted=False,compiled='not_run',scope='explicit original evidence and metadata declarations; no invented method bodies')

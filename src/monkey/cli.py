@@ -375,7 +375,6 @@ def main(argv=None):
                 with safe_source(source_file).open('rb') as stream:unity_source=container_kind(stream.read(16)) is not None
             if unity_source:
                 if args.numeric_code_contract or args.cocos_code_language!='ts':parser.error('Numeric JS code contracts/language selection require Cocos package sources')
-                if args.format=='grea' and not args.native:parser.error('Unity source --format grea requires --native for typed AssetDatabase moves')
                 if args.native and args.offline:parser.error('--native cannot combine with --offline')
                 if args.native and (not args.unity_editor or args.creator_editor):parser.error('Unity source --native requires only --unity-editor')
                 if not args.native and any((args.native_out,args.unity_editor,args.creator_editor,args.native_budget_seconds!=1200)):parser.error('native options require --native')
@@ -408,7 +407,7 @@ def main(argv=None):
                     acquired=acquire(remote_settings,args.offline)
                     inputs=merge(acquired,**{k:inputs[k]for k in ('texture_cache','dependency_manifest','dependencies')})
                 from .recover_unity import convert as convert_unity
-                result=convert_unity(args.source,args.out,args.provider_python,args.asset_ripper,args.provider_budget_seconds,schema_manifest=args.unity_schema_manifest,quarantine_invalid_textures=args.unity_quarantine_invalid_textures,export_scope=args.unity_export_scope,code_evidence=args.unity_code_evidence,reuse_inspection=args.unity_reuse_inspection,prepared_textures=args.unity_prepared_textures,reuse_export=args.unity_reuse_provider_export,**inputs)
+                result=convert_unity(args.source,args.out,args.provider_python,args.asset_ripper,args.provider_budget_seconds,schema_manifest=args.unity_schema_manifest,quarantine_invalid_textures=args.unity_quarantine_invalid_textures,export_scope=args.unity_export_scope,code_evidence=args.unity_code_evidence,reuse_inspection=args.unity_reuse_inspection,prepared_textures=args.unity_prepared_textures,reuse_export=args.unity_reuse_provider_export,layout_path=args.layout,**inputs)
                 if acquired:
                     from .unity_acquisition import attach
                     attach(result,args.out,acquired)

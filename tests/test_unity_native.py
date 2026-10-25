@@ -52,11 +52,12 @@ def seal(root):
 
 
 class UnityNativeTests(unittest.TestCase):
-    def test_exact_source_reference_and_typed_moves_preserve_names_and_guid(self):
+    def test_exact_source_reference_preserves_names_and_guid_and_grea_alias_moves_nothing(self):
         with tempfile.TemporaryDirectory() as t:
             root=fixture(Path(t).resolve()/'candidate');p=plan(root,'grea');s=p['spec']
             self.assertEqual(s['expectedArrayLengths'],[1]);self.assertEqual(s['expectedSprites'][0]['fileId'],'21300000')
-            self.assertEqual([m['to']for m in s['formatMoves']],['Assets/Game/Content/Images/Sprites/hero.asset','Assets/Game/Content/Images/Textures/atlas.png'])
+            # Relocation into monkey-project/1 happens at conversion; the native proof never moves assets.
+            self.assertEqual(s['formatMoves'],[])
             self.assertEqual(s['expectedSprites'][0]['textureGuid'],'5'*32)
             self.assertEqual(len(p['nativeIdentitySeals']),5)
 
@@ -83,25 +84,9 @@ class UnityNativeTests(unittest.TestCase):
     def test_bundle_loading_identity_is_pinned_and_manual_changes_rejected(self):
         with tempfile.TemporaryDirectory() as t:
             root=fixture(Path(t).resolve()/'candidate');meta=root/'Assets/Sprites/hero.asset.meta';meta.write_text(meta.read_text().replace('assetBundleName: ','assetBundleName: original.ab'));seal(root)
-            p=plan(root,'grea');self.assertEqual(len(p['spec']['formatMoves']),1);self.assertEqual(len(p['pinned']),1)
+            p=plan(root,'grea');self.assertEqual(p['spec']['formatMoves'],[]);self.assertEqual(len(p['pinned']),1)
             (root/'Assets/Pool.prefab').write_text('modified')
             with self.assertRaisesRegex(ParseError,'Owned file changed'):plan(root)
-
-    def test_format_promotion_keeps_baseline_nested_evidence_and_removes_only_own_probe(self):
-        from monkey.unity_native import promote_formatted,owned
-        with tempfile.TemporaryDirectory() as t:
-            parent=Path(t).resolve();root=fixture(parent/'UnityProject')
-            nested=root/'SourceRecovery/Library/original.bin';nested.parent.mkdir(parents=True);nested.write_bytes(b'original');seal(root)
-            identity=owned(root)[0];native=parent/'native/UnityProject';shutil.copytree(root,native)
-            helper=native/'Assets/Editor/Monkey/UnitySourceVerifier.cs';helper.parent.mkdir(parents=True);helper.write_text('own helper')
-            probe=native/'Assets/MonkeyRecoveryVerification';probe.mkdir();(probe/'Pool.prefab').write_text('own probe')
-            cache=native/'Library/generated';cache.parent.mkdir();cache.write_text('engine cache')
-            proof=dict(status='resource_subset_verified',format=dict(profile='grea',applied=True,moved=0,pinned=2))
-            promote_formatted(root,native,proof)
-            self.assertEqual(owned(parent/'Unformatted/UnityProject')[0],identity)
-            self.assertEqual((root/'SourceRecovery/Library/original.bin').read_bytes(),b'original')
-            self.assertFalse((root/'Library').exists());self.assertFalse((root/'Assets/Editor').exists());self.assertFalse((root/'Assets/MonkeyRecoveryVerification').exists())
-            owned(root)
 
     def test_unsupported_native_scope_retains_successful_base_conversion(self):
         with tempfile.TemporaryDirectory() as t:
@@ -111,6 +96,7 @@ class UnityNativeTests(unittest.TestCase):
             with patch('monkey.unity_native.execute',side_effect=ParseError('UNSUPPORTED','$','multiple classes')):
                 result=finish_conversion(conversion,settings,'grea')
             self.assertTrue(result['completed']);self.assertEqual(result['nativeExecution']['status'],'blocked');self.assertFalse((root/'native').exists())
+            self.assertEqual(result['format']['status'],'retired')
 
 
 if __name__=='__main__':unittest.main()

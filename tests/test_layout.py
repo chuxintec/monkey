@@ -122,7 +122,7 @@ class ForbiddenNameTests(unittest.TestCase):
         legacy=['Assets/Game/Content/Images/Sprites/remoteAsset/Texture/Element/Fish_3/1005302.original.png',
                 'Assets/Game/Content/Materials/002aba30c8bc53ce83ca705ea6b1b7fb.mat',
                 'Assets/Game/Content/Config/Recovered/zh-tw/Config/label.json',
-                'Assets/Generated/Views/Candidate.prefab','Assets/Texture2D/6.png','Assets/Resources/config/AudioCfg.bytes',
+                'Assets/Generated/Views/Candidate.prefab','Assets/Texture2D/6.png','Assets/uiraw/battle/a.asset',
                 'assets/art/images/Original/main/a.png']
         self.assertEqual(len({d['location'] for d in scan(legacy)}),len(legacy))
         p=LayoutPlanner('unity',FOODSTREET)

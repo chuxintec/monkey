@@ -5,7 +5,9 @@ from pathlib import Path
 from .io import read,load,sha,write_json
 
 
-def inventory(project,inspections,exported):
+def inventory(project,inspections,exported,relocation=None):
+    # Container paths name the provider export; relocated files are matched through their original export path.
+    origin={new:old for old,new in (relocation or {}).items()}
     native=[];by_path={};guids=collections.defaultdict(list)
     for p in sorted((project/'Assets').rglob('*')):
         if not p.is_file()or p.suffix.lower()in ('.meta','.cs','.dll','.asmdef','.asmref','.js','.wasm'):continue
@@ -15,7 +17,7 @@ def inventory(project,inspections,exported):
             found=re.findall(rb'^guid: ([0-9a-f]{32})\r?$',read(meta),re.M)
             if len(found)==1:guid=found[0].decode()
         row=dict(path=rel,bytes=p.stat().st_size,sha256=sha(read(p,max_bytes=128*1024**2)),guid=guid,kind=p.suffix.lower()or'extensionless',nativeImport='not_run')
-        native.append(row);by_path.setdefault(rel.casefold(),[]).append(row)
+        native.append(row);by_path.setdefault(origin.get(rel,rel).casefold(),[]).append(row)
         if guid:guids[guid].append(row)
     roots=[];objects=0;unparsed=0;containers=[]
     for index,(source,receipt)in enumerate(inspections):
@@ -47,7 +49,8 @@ This is a bulk Unity 6 editable resource candidate. Open ProjectSettings/Project
 Read Analysis/full-resource-handoff.json first: actual native files/GUIDs, original logical assets and unmapped items are separate.
 SourceRecovery/Original retains every unique explicitly supplied container. Lookup/schema copies are evidence, not extra native assets.
 Analysis/all-typed-objects.json (when present) preserves exact source file/pathID, references and parsed fields across the full input set.
-Analysis/unity-code-model.json contains proven named field classes; SourceRecovery/OriginalCode and CodeDrafts retain original code and metadata signatures/TODOs.
+Analysis/unity-code-model.json contains proven named field classes; SourceRecovery/Code/Source and Code/Drafts retain original code and metadata signatures/TODOs.
+Analysis/unity-relocation.json maps every provider export path to its monkey-project/1 location with the same GUID.
 Metadata-only declarations do not contain recovered business logic; uncompiled drafts remain outside Assets. Do not count empty or unsupported methods as working behavior.
 Repair missing script/package/Shader/Spine dependencies using their exact source identities. Never resolve collisions by first matching name or replace unknown logic with fake rewards.
 Native import/compile, Editor save/reload, Player and gameplay are separate gates; current native state is not_run unless an independent receipt says otherwise.

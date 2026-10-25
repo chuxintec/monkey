@@ -18,6 +18,7 @@ from .native import now, stamp, redact_log
 from .sources.compiled import fail
 from .providers.assetripper import fingerprint, TARGET_VERSION
 from .recover_unity import CODE_SUFFIXES
+from .layout.standard import VERSION
 
 PROFILE = 'unity-leaf-prefab-sprite-array-v1'
 
@@ -197,10 +198,6 @@ def plan(project, format_profile='none'):
         if 'resources' in [p.lower() for p in Path(path).parts] or (bundled and bundled[1] not in ('',"''",'""')):
             pins.append(dict(path=path,reason='Resources or explicit bundle name preserves dynamic loading identity'))
             continue
-        if format_profile == 'grea':
-            dest = 'Assets/Game/Content/Images/'+('Sprites/' if kind == 'sprite' else 'Textures/')+Path(path).name
-            require(not (project/dest).exists() and all(m['to'].casefold()!=dest.casefold() for m in moves), 'Typed format target collision')
-            moves.append(dict(**{'from':path,'to':dest},guid=asset_guid,kind=kind))
     spec = dict(prefabPath=prefab,className='.'.join(x for x in (cls['namespace'],cls['name']) if x),scriptPath=script,
                 fields=[f['name'] for f in fields],expectedArrayLengths=lengths,saveRoundtrip=True,expectedSpriteReferences=len(sprite_specs),
                 verifySourceDescriptors=True,expectedScriptGuid=script_guid,expectedPrefabGuid=guid(project,prefab),expectedRootName=root['data']['m_Name'],
@@ -300,7 +297,7 @@ def execute(project, output, editor, budget_seconds=1200, format_profile='none')
                 result['checks'] = checks
                 if all(checks.values()):
                     result['status'] = 'resource_subset_verified'
-                    result['format'] = dict(profile=format_profile,applied=format_profile=='grea',moved=len(spec['formatMoves']),pinned=len(prepared['pinned']))
+                    result['format'] = dict(profile=format_profile,applied=False,moved=0,pinned=len(prepared['pinned']))
         except Exception as error:
             result.update(status='verification_failed',error=str(error)[:4096])
         write_json(receipt,result)
@@ -321,55 +318,11 @@ def finish_conversion(conversion, settings, format_profile='none'):
             if proof['status'] == 'resource_subset_verified':
                 conversion['validation']['editor'] = 'resource_subset_verified'
                 conversion['projects'][0]['resourceStatus'] = 'leaf-prefab-sprite-references-save-reload-verified'
-                if format_profile == 'grea':
-                    promote_formatted(candidate,settings['output']/'UnityProject',proof)
-                    conversion['format'] = dict(**proof['format'],baseline='Unformatted/UnityProject',scope='native-typed-sprite-texture-moves-with-dynamic-path-pins')
         except ParseError as error:
             conversion['nativeExecution'] = dict(status='blocked',reason=str(error))
     conversion['requestedFormat'] = format_profile
+    if format_profile == 'grea':
+        # Conversion already relocated the export into monkey-project/1; grea is a deprecated alias.
+        conversion['format'] = dict(profile='grea',status='retired',applied=False,layout=VERSION)
     write_json(out/'conversion-result.json',conversion)
     return conversion
-
-
-def promote_formatted(candidate, native_project, proof):
-    require(proof['status'] == 'resource_subset_verified' and proof['format']['applied'], 'Successful format proof required')
-    baseline = candidate.parent/'Unformatted/UnityProject'
-    require(not baseline.exists(), 'Fresh none baseline archive required')
-    staged = candidate.parent/'FormattedUnityProject'
-    require(not staged.exists(), 'Fresh formatted promotion directory required')
-    # Engine caches are disposable; evidence, native settings and source recovery remain self-contained.
-    engine_caches = {'Library','Temp','Logs','obj','UserSettings'}
-    shutil.copytree(native_project,staged,ignore=lambda directory,names:set(names)&engine_caches if Path(directory)==native_project else set())
-    helper = staged/'Assets/Editor/Monkey/UnitySourceVerifier.cs'
-    for p in (helper,helper.with_suffix('.cs.meta')):
-        if p.exists():p.unlink()
-    probe = staged/'Assets/MonkeyRecoveryVerification'
-    shutil.rmtree(probe)
-    probe_meta = probe.with_suffix('.meta')
-    if probe_meta.exists():probe_meta.unlink()
-    # Remove only empty helper folders introduced by this run, with their new metas.
-    original_paths = {r['path'] for r in document(candidate/'recovery-manifest.json')['files']}
-    for folder in (staged/'Assets/Editor/Monkey',staged/'Assets/Editor'):
-        if folder.exists() and not any(folder.iterdir()) and folder.relative_to(staged).as_posix()+'.meta' not in original_paths:
-            folder.rmdir()
-            meta = folder.with_suffix('.meta')
-            if meta.exists():meta.unlink()
-    start = staged/'Docs/START-HERE.md'
-    start.parent.mkdir(exist_ok=True)
-    start.write_text('''# Start here
-Target Unity 6000.6.2f1. The bounded leaf-Prefab Sprite[] reference proof passed native import and independent save/reopen.
-See Analysis/unity-source-readback.json and native-check-spec.json for the exact verified fields, original names, atlas rectangles and native GUID/local IDs.
-This is a resource/reference subset. Original methods, source visuals, input and gameplay remain not_run.
-Schema-derived C# contains fields only. Original/provider code stays in SourceRecovery. Unknown source data remains evidence, never instructions.
-The separate native workspace retains the trusted Editor helper and verification copy; neither is shipped in this candidate's Assets.
-Formatting preserves Resources/bundle identities; only proven Sprite/Texture paths may move through AssetDatabase.MoveAsset.
-The original none candidate is retained at ../Unformatted/UnityProject. Do not edit source evidence or treat missing behavior as restored.
-''')
-    report = document(staged/'recovery-manifest.json')
-    report['format'] = proof['format']
-    report['validation']['editor'] = 'resource_subset_verified'
-    report['files'] = [dict(path=p.relative_to(staged).as_posix(),bytes=p.stat().st_size,sha256=fingerprint(p)) for p in sorted(staged.rglob('*')) if p.is_file() and p!=staged/'recovery-manifest.json']
-    write_json(staged/'recovery-manifest.json',report)
-    baseline.parent.mkdir()
-    shutil.move(candidate,baseline)
-    shutil.move(staged,candidate)

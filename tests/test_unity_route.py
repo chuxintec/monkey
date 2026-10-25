@@ -23,15 +23,16 @@ class UnityRouteTests(unittest.TestCase):
             convert.assert_called_once()
             self.assertFalse((root/'out').exists())
 
-    def test_public_unity_native_grea_routes_to_bounded_stage_and_needs_editor(self):
+    def test_public_unity_grea_alias_no_longer_requires_native_and_routes_unchanged(self):
         with tempfile.TemporaryDirectory() as t:
             root=Path(t).resolve();source=root/'game.ab';source.write_bytes(b'UnityFS\0dummy')
             providers=root/'providers';providers.mkdir();provider=providers/'provider';provider.write_text('provider')
             editor=root/'Unity';editor.write_text('not executed')
             result=dict(status='partial',completed=False,resultKind='candidate',projects=[],diagnostics=[],format=dict(profile='none',applied=False))
             argv=['convert','--source',str(source),'--target','unity6','--out',str(root/'out'),'--provider-python',str(provider),'--asset-ripper',str(provider),'--format','grea']
-            with contextlib.redirect_stderr(io.StringIO()),self.assertRaises(SystemExit):main(argv)
-            self.assertFalse((root/'out').exists())
+            # --format grea is a deprecated alias: conversion already writes monkey-project/1, so no --native is required.
+            with patch('monkey.recover_unity.convert',return_value=result) as converted,contextlib.redirect_stdout(io.StringIO()):main(argv)
+            self.assertTrue(converted.called)
             with patch('monkey.recover_unity.convert',return_value=result),patch('monkey.unity_native.finish_conversion',return_value=result)as finish,contextlib.redirect_stdout(io.StringIO()):
                 status=main([*argv,'--native','--unity-editor',str(editor)])
             self.assertEqual(status,1);self.assertEqual(finish.call_args.args[2],'grea')
