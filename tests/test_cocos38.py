@@ -36,7 +36,7 @@ class Creator38Tests(unittest.TestCase):
             self.assertTrue(frame['sourceId'].endswith('@f9941'));self.assertTrue(frame['sourceResourceEvidence']['sourceTexture'].endswith('@6c48a'))
             self.assertEqual(frame['textureRef'],'main:'+TEXTURE)
             self.assertEqual(ir['nodes'][0]['sourceGeometryProfile'],'cocos-3.8.7-node-ui-v1')
-            for name,plan in [('UnityProject','Assets/Monkey/Editor/import-plan.json'),('CocosProject','extensions/monkey-import/import-plan.json')]:
+            for name,plan in [('UnityProject','Assets/Game/Editor/Conversion/import-plan.json'),('CocosProject','extensions/monkey-import/import-plan.json')]:
                 data=load(read(root/'out'/name/plan));self.assertEqual(len(data['nodes']),1)
                 self.assertTrue((root/'out'/name/'manifest.json').exists())
             self.assertEqual(load(read(root/'out/Structured/inspect/source-manifest.json'))['sourceVersion'],'3.8.7')

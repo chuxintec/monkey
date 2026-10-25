@@ -81,8 +81,8 @@ def preflight(candidate,output,log=None,progress=None):
         diagnostics.extend(diagnostic(f['code'],'native-startup-log',f['message']) for f in observation['findings'])
     native_progress=None
     if progress:
-        from .targets.layout import lookup
-        plan_path=inside(root,lookup('Assets/Monkey/Editor/import-plan.json',manifest))
+        from .layout import locate
+        plan_path=inside(root,locate(manifest,'importPlan'))
         native_progress=validate_progress(load(read(safe(progress),max_bytes=65536)),fingerprint(plan_path))
         diagnostics.append(diagnostic('NATIVE_PROGRESS_UNVERIFIED',native_progress['phase'],
             'Reported state '+native_progress['status']+'; progress is not native readback or permission to resume in place'))

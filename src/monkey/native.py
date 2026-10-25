@@ -7,7 +7,7 @@ from .io import safe,inside,stage_manifest,read,load,sha,write_json,new_output
 from .sources.containers import fingerprint
 from .sources.compiled import fail
 from .targets import unity
-from .targets.layout import lookup
+from .layout import locate
 from .preflight import validate_progress
 
 
@@ -31,10 +31,10 @@ def source(candidate,expected_manifest):
     for record in manifest['files']:
         if fingerprint(inside(root,record['path']))!=record['sha256']:
             fail('NATIVE_SOURCE_DRIFT',record['path'],'Candidate changed; no launch')
-    adapter=inside(root,lookup('Assets/Monkey/Editor/MonkeyImporter.cs',manifest))
+    adapter=inside(root,locate(manifest,'importer'))
     if not adapter.exists() or 'public static void ImportBatchAsync()' not in adapter.read_text():
         fail('NATIVE_ASYNC_ENTRYPOINT_MISSING',str(root),'Regenerate with the async native adapter')
-    plan=inside(root,lookup('Assets/Monkey/Editor/import-plan.json',manifest))
+    plan=inside(root,locate(manifest,'importPlan'))
     return root,manifest,fingerprint(plan)
 
 

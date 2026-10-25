@@ -19,7 +19,7 @@ class CodeEmitTests(unittest.TestCase):
             (cc/'package.json').write_text('{"type":"module","exports":"./index.js"}')
             (cc/'index.js').write_text('export class Label { string="untouched"; }; export const _decorator={ccclass:name=>ctor=>ctor};')
             test=runtime/'test.mjs';test.write_text('''import assert from 'node:assert/strict';
-import { Meter } from './assets/generated/scripts/Meter.js';
+import { Meter } from './assets/scripts/domain/state/Meter.js';
 const a=new Meter(),b=new Meter(); assert.equal(a.getValue(),undefined);
 for(const value of [0,-0,1,Number.MAX_VALUE,NaN,Infinity,-Infinity]) { a.initValue(value); assert.ok(Object.is(a.getValue(),value)); assert.equal(b.getValue(),undefined); assert.equal(a.string,undefined); }
 assert.equal(typeof a.asyncValue,'undefined');assert.equal(typeof a.arrow,'undefined');''')
@@ -31,7 +31,8 @@ assert.equal(typeof a.asyncValue,'undefined');assert.equal(typeof a.arrow,'undef
             root=Path(temp).resolve();source=root/'source.js'
             source.write_text('cc._RF.push({},"rf-meter","Meter");(function(Base){function M(){};return extend(M,Base),M.prototype.initValue=function(e){this.value=e;},M.prototype.getValue=function(){return this.value;},M.prototype.onEnable=function(e){this.value=e;};})(cc.Label);')
             inspect(source,root/'model','Meter');result=emit(source,root/'model/code-model.json',root/'emit',['value'])
-            self.assertEqual((result['implementedMethods'],result['pendingMethods']),(2,1));code=(root/'emit/Cocos/assets/generated/scripts/Meter.ts').read_text();self.assertNotIn('onEnable',code)
+            self.assertEqual((result['implementedMethods'],result['pendingMethods']),(2,1));code=(root/'emit/Cocos/assets/scripts/presentation/ui/Meter.ts').read_text();self.assertNotIn('onEnable',code)
+            self.assertIn('namespace Game.Presentation.UI {',(root/'emit/Unity/Assets/Game/Presentation/UI/Meter.cs').read_text())
             contract=json.loads((root/'emit/Analysis/code-contract.json').read_text());self.assertEqual(contract['presentation']['kind'],'label-adapter');self.assertEqual(contract['pendingMethods'][0]['targetStatus'],'pending-engine-lifecycle-contract')
 
     def test_modified_facts_and_conflicting_type_contract_are_rejected_before_output(self):

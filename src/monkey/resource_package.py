@@ -84,7 +84,8 @@ def convert(source,target,output,namespace='monkey-project',offline=False,input_
                 rect=[0,0,w,h],rotated=False,originalSize=[w,h],offset=[0,0],trimOrigin=[0,0],capInsets=[0,0,0,0],
                 capInsetsOrder=['left','top','right','bottom'],colorSpace='unknown',premultipliedAlpha='unknown',
                 derivation='full-original-image-preview; not-source-frame-metadata',originalImageSha256=digest))
-            ir['sourceNames'][sid]=dict(bundle=family,logicalPath=name,sourceType='native-image',nameProvenance='original-container-path; derived-image-preview')
+            bundle,_,logical=name.partition('/')
+            ir['sourceNames'][sid]=dict(bundle=bundle,logicalPath=logical,sourceType='native-image',nameProvenance='original-container-path; derived-image-preview')
         if egret:
             from .egret_recovery import materialize_frames
             materialized=materialize_frames(egret,images,normalized,ir,namespace);report['sourceSpriteFrames']=materialized['sourceSpriteFrames']

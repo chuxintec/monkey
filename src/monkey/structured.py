@@ -28,7 +28,7 @@ def validated_ir(stage):
     return derived,ir
 
 
-def recover(tree, roots, configs, source_profile, out, profiles, namespace, code_emission=None):
+def recover(tree, roots, configs, source_profile, out, profiles, namespace, code_emission=None, layout=None):
     from . import __version__
     stage=out/'Structured';stage.mkdir(exist_ok=True)
     result=dict(schemaVersion=1,status='pending',sourceProfile=source_profile,stages=[],projects={})
@@ -119,10 +119,13 @@ def recover(tree, roots, configs, source_profile, out, profiles, namespace, code
             if (plan_path.parent/'manifest.json').exists():
                 check_signature(key+'-plan')
                 plan=stage_document(plan_path)
+                from .layout import VERSION
                 if plan.get('sourceIrSha256')!=sha(stage_bytes(ir_path/'ir.json')) or plan.get('namespace')!=namespace:
                     raise ValueError('Target plan input/namespace changed; retained without overwrite')
+                if plan.get('projectLayout')!=VERSION or plan.get('layoutOverridesSha256')!=(layout or ({},None))[1]:
+                    raise ValueError('Target plan layout or layout.json changed; retained without overwrite')
                 result.setdefault('reused',[]).append(dict(stage=key+'-plan',sha256=sha(stage_bytes(plan_path))))
-            else:plan=adapter.plan(ir_path/'ir.json',namespace,plan_path.parent)
+            else:plan=adapter.plan(ir_path/'ir.json',namespace,plan_path.parent,layout=layout)
             temporary=stage/'Emitted'/key
             if temporary.exists():
                 import uuid
@@ -137,7 +140,7 @@ def recover(tree, roots, configs, source_profile, out, profiles, namespace, code
             result['projects'][profile]=dict(path=key,plan=str((stage/(key+'-plan')/'plan.json').relative_to(out)),
                        sourceObjects=len(inspected['assets']),nodes=len(ir['nodes']),components=len(plan['components']),
                        convertibleComponents=sum(c['convertible'] for c in plan['components']),
-                       nativeValidation='not_run',layout='native-export-v1',formatProfile='none',namespace=namespace)
+                       nativeValidation='not_run',layout=plan.get('projectLayout'),formatProfile='none',namespace=namespace)
         result['status']='partial'
     except (ValueError,OSError,KeyError,TypeError,IndexError) as error:
         result.update(status='failed',reason=getattr(error,'code','STRUCTURED_RECOVERY_FAILED'),message=str(error))

@@ -70,3 +70,15 @@ def _limit(value):
 
 def folder(text,engine):
     return kebab(text) if engine=='creator' else pascal(text)
+
+
+def safe_path(path):
+    """Source-layout evidence path (SourceRecovery/Original): sanitized segments, original spelling and case kept."""
+    parts=[]
+    for part in str(path).split('/'):
+        clean=_UNSAFE.sub('_',unicodedata.normalize('NFC',part)).rstrip(' .') if part not in ('','.','..') else '_'
+        clean=clean or '_'
+        if _DEVICE.match(clean.split('.')[0]):clean='_'+clean
+        if len(clean.encode())>120:clean=clean.encode()[:100].decode('utf-8',errors='ignore')+'_'+sha(clean.encode())[:8]
+        parts.append(clean)
+    return '/'.join(parts)

@@ -18,12 +18,52 @@ def script_identity(value):
     return value
 
 
-def enrich(project,out,rows,code_index,tasks):
-    project=Path(project).resolve();out=Path(out).resolve()
-    stage=out/'Structured'
+def _structured(out):
+    stage=Path(out).resolve()/'Structured'
     normalized=stage/'validated-ir' if (stage/'validated-ir/manifest.json').exists() else stage/'normalize'
     ir=stage_document(normalized/'ir.json') if (normalized/'manifest.json').exists() else None
     inspected=stage_document(stage/'inspect/source-manifest.json') if (stage/'inspect/manifest.json').exists() else None
+    return ir,inspected
+
+
+def _input_rows(out,inspected,rows):
+    """Inspected asset -> its input ledger rows (import document and native payload)."""
+    by_tree={r['inputRoot']+'/'+r['localPath']:r for r in rows};result={}
+    for asset in inspected['assets']:
+        prefix=Path(inspected['sourceRoots'][asset.get('bundle',inspected['bundle'])]).relative_to(Path(out).resolve()/'InputTree').as_posix()
+        prefix=''if prefix=='.'else prefix+'/'
+        result[asset['sourceId']]={k:by_tree.get(prefix+asset[k]) for k in ('importPath','native') if asset.get(k)}
+    return result
+
+
+def structured_names(out):
+    ir,_=_structured(out)
+    return (ir or {}).get('sourceNames',{})
+
+
+def consumed_inputs(out,rows):
+    """Input rows whose payload a normalized native object already carries; their raw copy is evidence, not content."""
+    ir,inspected=_structured(out)
+    if not ir or not inspected:return set()
+    carried={f['sourceId'] for f in ir['spriteFrames']}|{f['textureRef'] for f in ir['spriteFrames']}|{a['sourceId'] for a in ir['assets']}
+    files=_input_rows(out,inspected,rows)
+    return {row['sourceId'] for sid in carried for key,row in files.get(sid,{}).items() if key=='native' and row}
+
+
+def bound_pages(out,modules):
+    """Module sourceId -> source pages whose components name exactly that script identity."""
+    ir,_=_structured(out);lookup={};pages={}
+    for mod in modules:
+        for rf in mod.get('rf',[]):lookup.setdefault(script_identity(rf.get('identity')),[]).append(mod['sourceId'])
+    for c in (ir or {}).get('components',[]):
+        matches=sorted(set(lookup.get(script_identity(c['type']),[])))
+        if len(matches)==1:pages.setdefault(matches[0],set()).add(c['sourceId'].split('#')[0])
+    return pages
+
+
+def enrich(project,out,rows,code_index,tasks):
+    project=Path(project).resolve();out=Path(out).resolve()
+    ir,inspected=_structured(out)
     lookup={};by_code={m['sourceId']:m for m in code_index if m.get('entryType')=='module_candidate'}
     for mod in by_code.values():
         for rf in mod.get('rf',[]):lookup.setdefault(script_identity(rf.get('identity')),[]).append(mod['sourceId'])
@@ -49,7 +89,7 @@ def enrich(project,out,rows,code_index,tasks):
     if pool:
         aggregates.append(dict(taskId='code-unclassified-pool',module='unclassified-source-context',sourceRefs=pool,
                                eligibleForDispatch=False,nextAction='Classify a coherent subset from dependency/resource evidence; this pool is not one Agent task per region',
-                               allowedPaths=['SourceRecovery/CodeDrafts/'],verification=['module ownership and external wrapper context']))
+                               allowedPaths=['SourceRecovery/Code/Drafts/'],verification=['module ownership and external wrapper context']))
     aggregates.extend(t for t in tasks if t['taskId'].startswith('resources-'))
     write_json(project/'Analysis/agent-work-details.json',dict(schemaVersion=1,tasks=tasks))
     write_json(project/'Analysis/agent-work.json',dict(schemaVersion=1,tasks=aggregates,
@@ -58,7 +98,7 @@ def enrich(project,out,rows,code_index,tasks):
     write_json(project/'Analysis/component-code-bindings.json',dict(schemaVersion=1,bindings=bindings))
     from .names import Names,source_names
     naming=Names(source_names(inspected)) if inspected else Names()
-    objects=[];by_tree={r['inputRoot']+'/'+r['localPath']:r for r in rows}
+    objects=[];files=_input_rows(out,inspected,rows) if inspected else {}
     frames={a['sourceId'] for a in ir['spriteFrames']} if ir else set()
     texture_sources={a['textureRef'] for a in ir['spriteFrames']} if ir else set()
     native={a['sourceId'] for a in ir['assets']} if ir else set()
@@ -66,11 +106,7 @@ def enrich(project,out,rows,code_index,tasks):
     quarantined={a['sourceId'] for a in ir.get('quarantinedAssets',[])} if ir else set()
     if inspected:
         for asset in inspected['assets']:
-            source_root=Path(inspected['sourceRoots'][asset.get('bundle',inspected['bundle'])])
-            prefix=source_root.relative_to(out/'InputTree').as_posix()
-            prefix=''if prefix=='.'else prefix+'/'
-            file_rows=[by_tree.get(prefix+asset[k]) for k in ('importPath','native') if asset.get(k)]
-            source_ids=[r['sourceId'] for r in file_rows if r]
+            source_ids=[r['sourceId'] for r in files[asset['sourceId']].values() if r]
             record=dict(sourceId=asset['sourceId'],kind=asset.get('kind'),sourceInputs=source_ids,logicalPath=asset.get('logicalPath'),
                         state='decoded_only' if asset.get('document') else 'unresolved',nativeValidation='not_run')
             if asset.get('sourceDocument'):record['sourceDocument']=asset['sourceDocument']

@@ -19,7 +19,7 @@ class LayoutPlanner:
         self.default_locale=self.overrides.get('defaultLocale') or 'zh-Hans'
         self.types=standard.UNITY_TYPES if engine=='unity' else standard.CREATOR_TYPES
         self.roots=standard.ROOTS[engine]
-        self.records=[];self._claims={};self._allocated={};self._dirs={};self._pending={}
+        self.records=[];self._claims={};self._allocated={};self._dirs={};self._pending={};self._by_key={}
 
     # -- naming -------------------------------------------------------------------------------------------
     def _meta(self,sid,metadata):
@@ -80,9 +80,15 @@ class LayoutPlanner:
         if len(target.encode())>MAX_PATH_BYTES:
             keep='/'.join(parts[:3])
             target=keep+'/'+casing._limit(name+'_'+sha(target.encode())[:6])+(ext or '');reasons.append('long-path')
+        cased=module if raw_folders is not None or typ in ('font','font-asset') else self._folders(module)
         record=dict(sourceId=meta.get('sourceId',base),identity=sid,kind=kind,type=typ,bundle=d['bundle'],originalPath=meta.get('logicalPath'),
-            sourceName=meta.get('sourceName'),provenance=d['provenance'],locale=d['locale'],minigame=d['minigame'],reasons=reasons)
+            sourceName=meta.get('sourceName'),provenance=d['provenance'],locale=d['locale'],minigame=d['minigame'],
+            module=([casing.folder(d['minigame'],self.engine)] if d['minigame'] else [])+cased,reasons=reasons)
         return target,record
+
+    def module_of(self,sid,kind='prefab',metadata=None):
+        """Cased module folders an object would live under, e.g. the prefab module that binds a script."""
+        return self.describe(sid,kind,'.prefab' if kind=='prefab' else '',metadata=metadata)[1]['module']
 
     # -- allocation ---------------------------------------------------------------------------------------
     def claim(self,path,owner='existing'):
@@ -126,8 +132,11 @@ class LayoutPlanner:
             else:raise ValueError('Unresolved deterministic name collision: '+target)
             record['reasons']=sorted(set(record['reasons'])|{'name-collision'})
         self._claims[_fold(target)]=key;self._allocated[key]=target
-        record['target']=target;self.records.append(record)
+        record['target']=target;self.records.append(record);self._by_key[key]=record
         return target
+
+    def record(self,sid,kind,suffix,variant=''):
+        return self._by_key.get((sid,kind,suffix,variant))
 
     def path(self,sid,kind,suffix,variant='',metadata=None,qualifier=None):
         key=(sid,kind,suffix,variant)

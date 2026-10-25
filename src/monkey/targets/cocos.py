@@ -6,6 +6,8 @@ from .. import __version__
 from ..io import safe, inside, read, load, sha, write_json, new_output, finish, diagnostic, stage_document, stage_bytes,stage_manifest
 from ..sources.compiled import fail
 from .common import input_ir, tasks,native_color_nodes
+from ..layout import standard
+from ..layout.standard import VERSION
 
 PROFILE='cocos-3.8.8'
 
@@ -31,14 +33,20 @@ def bitmap_text(font,atlas_name,face="MonkeySourceBitmap"):
     return ('\n'.join(lines)+'\n').encode()
 
 
-def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None):
+def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None,layout=None):
     path,ir,bindings,receipt,resource,resolve=input_ir(ir_path,bindings_path)
     if ir.get('sourceProfile')in ('generic-image-resources-v1','egret-custom-resource-plist-v1'):fail('SOURCE_TARGET_UNSUPPORTED',str(ir_path),'Non-Cocos sources target Unity 6 only')
-    from ..names import Names
-    naming=Names(ir.get('sourceNames'))
+    from ..layout import LayoutPlanner
+    overrides,overrides_sha=layout or ({},None)
+    naming=LayoutPlanner('creator',ir.get('sourceNames'),overrides)
+    planned={'sprite':'sprite','ttf':'cc.TTFFont','json':'cc.JsonAsset'}
+    # Creator trims natively from the original image, so no untrimmed duplicate is emitted (PROJECT-SPEC 5.4).
+    naming.reserve([(f['sourceId'],'sprite','.png','',None,None) for f in ir['spriteFrames']]
+        +[(a['sourceId'],a['kind'],{'cc.TTFFont':'.ttf','cc.JsonAsset':'.json'}[a['kind']],'',None,None) for a in ir['assets'] if a['kind'] in ('cc.TTFFont','cc.JsonAsset')]
+        +[r for f in ir.get('bitmapFonts',[]) for r in ((f['sourceId']+'@atlas','bitmap-atlas','.png','',None,None),(f['sourceId'],'bitmap','.fnt','',None,None))])
     diagnostics=list(ir['diagnostics']);assets=[];copies=[]
     def add(sid,relative,kind,suffix,**fields):
-        raw=resource(relative);uid=identity(namespace,sid);target=naming.path(sid,suffix,'assets/generated/art')
+        raw=resource(relative);uid=identity(namespace,sid);target=naming.path(sid,fields.get('role')=='bitmap-atlas-page' and 'bitmap-atlas' or planned[kind],suffix)
         item=dict(sourceId=sid,uuid=uid,path=target,kind=kind,sha256=sha(raw),**fields)
         assets.append(item);copies.append(dict(source=relative,target=target,sha256=sha(raw)))
         return item
@@ -46,8 +54,6 @@ def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None):
         # Already physically unrotated pixels; no raw atlas rotation is guessed in target metadata.
         add(f['sourceId'],f['originalImage'],'sprite','.png',size=f['rect'][2:4],trimOrigin=f['trimOrigin'],originalSize=f['originalSize'],
             offset=f['offset'],border=f['capInsets'],subresource='spriteFrame')
-        add(f['sourceId']+'@original',f['originalImage'],'sprite','.png',size=f['originalSize'],
-            originalSize=f['originalSize'],offset=[0,0],border=[0,0,0,0],subresource='spriteFrame')
     for a in ir['assets']:
         if a['kind']=='cc.TTFFont':add(a['sourceId'],a['path'],'ttf','.ttf',fontCoverage=a.get('fontCoverage'))
         elif a['kind']=='cc.JsonAsset':add(a['sourceId'],a['path'],'json','.json')
@@ -56,7 +62,7 @@ def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None):
     for f in ir.get('bitmapFonts',[]):
         atlas=add(f['sourceId']+'@atlas',f['atlasImage'],'sprite','.png',size=f['atlasSize'],originalSize=f['atlasSize'],
                   offset=[0,0],border=[0,0,0,0],subresource='spriteFrame',role='bitmap-atlas-page')
-        uid=identity(namespace,f['sourceId']);target=naming.path(f['sourceId'],'.fnt','assets/generated/art')
+        uid=identity(namespace,f['sourceId']);target=naming.path(f['sourceId'],'bitmap','.fnt')
         raw=bitmap_text(f,Path(atlas['path']).name,Path(target).stem)
         assets.append(dict(sourceId=f['sourceId'],uuid=uid,path=target,kind='bitmap',sha256=sha(raw),
                            atlas=atlas['sourceId'],pointSize=f['pointSize'],glyphCount=len(f['glyphs']),kerningCount=len(f['kernings'])))
@@ -128,16 +134,16 @@ def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None):
         if roots.get(link['owner'])==link['root']:
             fail('CREATOR_ROOT_PREFAB_INHERITANCE_PENDING',link['root'],'Root inheritance needs a dedicated Creator asset contract; nested instances are supported, Unity emits a native Variant')
     by_node={n['sourceId']:n for n in ir['nodes']}
+    naming.reserve([(prefab['sourceId'],'prefab','.prefab','',None,None) for prefab in prefabs])
     for prefab in prefabs:
-        prefab['path']=naming.path(prefab['sourceId'],'.prefab','assets/generated/prefabs')
+        prefab['path']=naming.path(prefab['sourceId'],'prefab','.prefab')
         prefab['rootNamePolicy']='creator-asset-basename-v1'
         prefab['sourceRootName']=by_node[prefab['root']]['name']
         prefab['nativeRootName']=Path(prefab['path']).stem
     from .common import reject_layout_conflicts
     diagnostics.extend(reject_layout_conflicts(components))
     from ..assets.animation import plan_clips
-    animations,animation_gaps=plan_clips(ir,namespace,PROFILE,animation_selection)
-    naming.records.extend(a['nameEvidence'] for a in animations)
+    animations,animation_gaps=plan_clips(ir,namespace,PROFILE,animation_selection,naming)
     if animation_selection:
         unselected={c['sourceId'] for c in ir.get('animationClips',[]) if c['sourceId'] not in animation_selection}
         diagnostics=[d for d in diagnostics if d.get('sourceId') not in unselected]
@@ -147,7 +153,7 @@ def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None):
         raw=c.pop('text',None)
         raw=raw.encode() if raw is not None else resource(c['source'])
         dest=f'resources/{i:04d}'+Path(c['target']).suffix;(out/dest).write_bytes(raw);c['source']=dest
-    result=dict(schemaVersion=1,toolVersion=__version__,targetProfile=PROFILE,namespace=namespace,
+    result=dict(schemaVersion=1,toolVersion=__version__,targetProfile=PROFILE,namespace=namespace,projectLayout=VERSION,layoutOverridesSha256=overrides_sha,
         scopeMode=ir.get('scopeMode','asset-selection'),
         sourceIrSha256=sha(stage_bytes(path)),sourceManifestSha256=ir['sourceManifestSha256'],sourceManifestPath=ir.get('sourceManifestPath'),
         sourceRoots=ir.get('sourceRoots',{}),sourceLocations=ir.get('sourceLocations',{}),bindings=receipt,
@@ -161,10 +167,10 @@ def export(plan_path,output):
     if p.get('targetProfile')!=PROFILE or p.get('schemaVersion')!=1:fail('UNSUPPORTED_PLAN',str(path),'Expected Creator schema 1')
     # Preflight everything before output creation.
     for c in p['copies']:
-        if not c['target'].startswith('assets/generated/art/') or sha(read(inside(path.parent,c['source'])))!=c['sha256']:
+        if not c['target'].startswith(standard.ROOTS['creator']['content']+'/') or sha(read(inside(path.parent,c['source'])))!=c['sha256']:
             fail('SOURCE_CHANGED',c['target'],'Invalid plan resource')
     out=new_output(output,[path.parent,*p.get('sourceRoots',{}).values()])
-    for folder in ['assets/generated/art','assets/generated/animations','assets/generated/views','assets/generated/prefabs','assets/manual','extensions/monkey-import','Analysis']:
+    for folder in ['assets',standard.ROOTS['creator']['conversion'],'Analysis']:
         (out/folder).mkdir(parents=True,exist_ok=True)
     by_path={a['path']:a for a in p['assets']};by_id={a['sourceId']:a for a in p['assets']}
     for c in p['copies']:
@@ -191,7 +197,7 @@ def export(plan_path,output):
     write_json(ext/'package.json',dict(package_version=2,version='0.2.0',name='monkey-import',main='./main.js',
         contributions=dict(scene=dict(script='./scene.js'),menu=[dict(path='Monkey',label='Import isolated candidate',message='import-candidate')],
                            messages={'import-candidate':dict(methods=['importCandidate'])})))
-    write_json(ext/'import-plan.json',{k:p[k] for k in ['schemaVersion','targetProfile','designSize','assets','nodes','components'] }|dict(projectUuid=project_id,animations=p.get('animations',[]),sourcePrefabs=p.get('sourcePrefabs',[]),prefabInstances=p.get('prefabInstances',[]),prefabRelationshipReadback='creator-native-fileid-v1',uiGeometryReadback='native-ui-layout-roundtrip-v1',sceneGeometryReadback='full-local-v1',bitmapPageReadback='sprite-frame-v1',spriteMeshReadback='native-rect-mesh-v1'))
+    write_json(ext/'import-plan.json',{k:p[k] for k in ['schemaVersion','targetProfile','designSize','assets','nodes','components'] }|dict(projectUuid=project_id,animations=p.get('animations',[]),sourcePrefabs=p.get('sourcePrefabs',[]),prefabInstances=p.get('prefabInstances',[]),prefabRelationshipReadback='creator-native-fileid-v1',uiGeometryReadback='native-ui-layout-roundtrip-v1',sceneGeometryReadback='full-local-v1',bitmapPageReadback='sprite-frame-v1',spriteMeshReadback='native-rect-mesh-v1',outputPaths=standard.creator_output_paths()))
     from .dynamic_ui import driven_fields
     instruction_path=ext/'import-plan.json';instruction=load(instruction_path.read_bytes())
     instruction['uiStateProbeVersion']=2
@@ -201,26 +207,26 @@ def export(plan_path,output):
     write_json(instruction_path,instruction)
     from ..assets.animation import module_report
     write_json(out/'Analysis/animation-module.json',module_report(p.get('animations',[])))
-    write_json(out/'Analysis/source-map.json',dict(assets=p['assets'],sourcePrefabs=p.get('sourcePrefabs',[]),nodes=[dict(sourceId=n['sourceId'],target='assets/generated/views/Candidate.scene') for n in p['nodes']],
+    write_json(out/'Analysis/source-map.json',dict(assets=p['assets'],sourcePrefabs=p.get('sourcePrefabs',[]),nodes=[dict(sourceId=n['sourceId'],target=standard.creator('previewScene')) for n in p['nodes']],
         components=[dict(sourceId=c['sourceId'],node=c['node'],nativeType=c['nativeType']) for c in p['components']],
         sourceRoots=p['sourceRoots'],sourceLocations=p['sourceLocations'],subresources='actual UUIDs require native importer readback'))
-    handoff_tasks=tasks(p['components'],[d for d in p['diagnostics'] if not d['code'].startswith('ANIMATION_')],'assets/generated/views/Candidate.scene','assets/manual/')
+    handoff_tasks=tasks(p['components'],[d for d in p['diagnostics'] if not d['code'].startswith('ANIMATION_')],standard.creator('previewScene'),'assets/')
     normalized=[dict(sourceId=s['sourceId'],path=s['path'],sourceRootName=s['sourceRootName'],nativeRootName=s['nativeRootName'])
                 for s in p.get('sourcePrefabs',[]) if s.get('rootNamePolicy')=='creator-asset-basename-v1' and s['sourceRootName']!=s['nativeRootName']]
     if normalized:
         handoff_tasks.append(dict(taskId='creator-prefab-root-names',module='creator-prefabs',rootCause='native-prefab-root-name-compatibility',
             sourceRefs=[s['sourceId'] for s in normalized],gaps=[dict(code='CREATOR_PREFAB_ROOT_NAME_POLICY',
                 message='Creator normalizes root names to asset basenames. Source names remain in Scene/source-map; review name-dependent business code.')],
-            generatedTargets=['Analysis/source-map.json'],allowedPaths=['assets/manual/'],verificationScope=['native root-name policy','name-dependent business code'],rootNames=normalized))
+            generatedTargets=['Analysis/source-map.json'],allowedPaths=['assets/'],verificationScope=['native root-name policy','name-dependent business code'],rootNames=normalized))
     if p.get('animations') or any(d['code'].startswith('ANIMATION_') for d in p['diagnostics']):
         from ..assets.animation import handoff_task
         handoff_tasks.append(handoff_task(p['animations'],p['diagnostics']))
     write_json(out/'Analysis/handoff.json',dict(schemaVersion=1,tasks=handoff_tasks,
         verification=dict(static='pending',editor='not_run',visual='not_run',business='not_run')))
     if p['bindings']:write_json(out/'Analysis/font-bindings.json',p['bindings'])
-    (out/'README.md').write_text('Creator 3.8.8 isolated candidate. Open only in an authorized resource window.\nRun Monkey/Import isolated candidate once after assets import. Existing outputs are refused.\nNative scene and child UUIDs require Editor; no source engine interpreter ships.\n')
+    (out/'README.md').write_text('Creator 3.8.8 isolated candidate. Layout '+VERSION+' (monkey docs/PROJECT-SPEC.md).\nOpen only in an authorized resource window.\nRun Monkey/Import isolated candidate once after assets import. Existing outputs are refused.\nNative scene and child UUIDs require Editor; no source engine interpreter ships.\n')
     write_json(out/'Analysis/name-map.json',p.get('naming',{}))
-    report=dict(schemaVersion=1,toolVersion=__version__,targetProfile=PROFILE,namespace=p['namespace'],projectUuid=project_id,
+    report=dict(schemaVersion=1,toolVersion=__version__,targetProfile=PROFILE,namespace=p['namespace'],projectUuid=project_id,projectLayout=VERSION,
         scopeMode=p.get('scopeMode','asset-selection'),
         sourceManifestSha256=p['sourceManifestSha256'],sourceRoots=p['sourceRoots'],planSha256=sha(stage_bytes(path)),diagnostics=p['diagnostics'],
         editorValidation='not_run',visualValidation='not_run',businessValidation='not_run',subresourceValidation='pending-native-import')
@@ -229,9 +235,7 @@ def export(plan_path,output):
 
 def verify(candidate,output,level='static'):
     root=safe(candidate);m=stage_manifest(root);diagnostics=[]
-    from .layout import translate
     from ..sources.containers import fingerprint
-    path_for=lambda p:m.get('pathMap',{}).get(p,p)if m.get('pathMappingMode')=='exact'else translate(p,m.get('pathMap',{}))
     if m.get('targetProfile')!=PROFILE:fail('UNSUPPORTED_CANDIDATE',str(root),'Expected Creator profile')
     native={};editor='not_run'
     if level=='editor':
@@ -303,7 +307,7 @@ def verify(candidate,output,level='static'):
             from ..code_validation import numeric as verify_numeric
             code_gaps=verify_numeric(plan['components'],rb.get('numericCodeBindings'),'cocos','scene',rb.get('numericCodeExercise',[]))
             if code_gaps:good=False;diagnostics.extend(code_gaps)
-            good=good and path_for('assets/generated/views/Candidate.scene') in native and bool(rb.get('sceneUuid'))
+            good=good and standard.locate(m,'previewScene','creator') in native and bool(rb.get('sceneUuid'))
             actual_prefabs={v['sourceId']:v for v in rb.get('sourcePrefabs',[])}
             expected_prefabs={v['sourceId']:v for v in plan.get('sourcePrefabs',[])}
             if set(actual_prefabs)!=set(expected_prefabs):good=False
@@ -358,6 +362,9 @@ def verify(candidate,output,level='static'):
         if c['convertible']:
             for field in ['font','spriteFrame']:
                 if c.get(field) is not None and c[field] not in ids:diagnostics.append(diagnostic('MISSING_REFERENCE',c['sourceId'],'Missing '+field))
+    if standard.current(m):
+        from ..layout.verify import scan
+        diagnostics.extend(scan([f['path'] for f in m['files']]))
     if any(d['code'] in ('GENERATED_FILE_CHANGED','NATIVE_FILE_CHANGED') for d in diagnostics) and editor=='pass':editor='fail'
     out=new_output(output,[root]);report=dict(schemaVersion=1,toolVersion=__version__,diagnostics=diagnostics,
         staticValidation='conflict' if any(d['code']!='EDITOR_NOT_RUN' for d in diagnostics) else 'pass',editorValidation=editor,

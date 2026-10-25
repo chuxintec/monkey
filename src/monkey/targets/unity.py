@@ -5,6 +5,8 @@ import uuid
 from .. import __version__
 from ..io import safe, inside, read, load, sha, encoded, new_output, finish, write_json, diagnostic, stage_document, stage_bytes, stage_manifest
 from ..sources.compiled import fail
+from ..layout import standard
+from ..layout.standard import VERSION
 
 PROFILE = 'unity-6000.6.2f1-ugui'
 
@@ -83,7 +85,17 @@ def cross_axis_mapping(layout, parent, children):
     return None
 
 
-def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None):
+def untrimmed_frames(ir):
+    """Untrimmed sprite variants exist only for Sprites that reference them (PROJECT-SPEC 5.4)."""
+    aliases=ir.get('aliases',{})
+    def resolve(value):
+        seen=set()
+        while value in aliases and value not in seen:seen.add(value);value=aliases[value]
+        return value
+    return {resolve(c['spriteFrame']) for c in ir['components'] if c['type']=='cc.Sprite' and c.get('spriteFrame') and c.get('trim',True) is False}
+
+
+def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None,layout=None):
     ir_path = safe(ir_path)
     ir = stage_document(ir_path)
     if ir.get('schemaVersion') != 1 or ir.get('sourceProfile') not in ('cocos-2.4.15-bundle','cocos-2.4.15-project','cocos-3.8.7-bundle','cocos-3.4.1-bundle','cocos-2.4.11-bundle','cocos-2.1.2-resource','generic-image-resources-v1','egret-custom-resource-plist-v1'):
@@ -114,37 +126,45 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
         if set(label_bindings)-known_ids:fail('UNKNOWN_BINDING_COMPONENT',str(bindings_path),'Binding references unknown Label')
         binding_receipt=dict(sha256=sha(raw),**binding)
         diagnostics=[d for d in diagnostics if not (d.get('sourceId') in label_bindings and d['message'].startswith('system font requires'))]
-    from ..names import Names
-    naming=Names(ir.get('sourceNames'))
+    from ..layout import LayoutPlanner
+    overrides,overrides_sha=layout or ({},None)
+    naming=LayoutPlanner('unity',ir.get('sourceNames'),overrides)
+    untrimmed=untrimmed_frames(ir);suffix=lambda relative:Path(relative).suffix.lower()
+    naming.reserve([(f['sourceId'],'sprite',suffix(f['image']),'',None,None) for f in ir['spriteFrames']]
+        +[(f['sourceId']+'@original','sprite',suffix(f['originalImage']),'',None,None) for f in ir['spriteFrames'] if f['sourceId'] in untrimmed]
+        +[(a['sourceId'],a['kind'],suffix(a['path']),'',None,None) for a in ir['assets']]
+        +[(a['sourceId'],'font-asset','.asset','',None,None) for a in ir['assets'] if a['kind']=='cc.TTFFont']
+        +[r for f in ir.get('bitmapFonts',[]) for r in ((f['sourceId']+'@atlas','bitmap-atlas',suffix(f['atlasImage']),'',None,None),(f['sourceId'],'font-asset','.asset','',None,None))])
     textures, copies = [], []
-    def resource(relative, identity, role):
+    def resource(relative, identity, role, kind):
         source = inside(ir_path.parent, relative)
         if relative not in expected or sha(read(source)) != expected[relative]:
             fail('SOURCE_CHANGED', relative, 'Normalized asset differs from output manifest')
-        target = naming.path(identity,source.suffix.lower(),'Assets/Generated/Art')
+        target = naming.path(identity,kind,source.suffix.lower())
         copies.append(dict(source=relative,target=target,sha256=expected[relative],sourceId=identity,role=role,
                            guid=guid(namespace,identity)))
         return target
     for frame in ir['spriteFrames']:
         sid = frame['sourceId']
         left,top,right,bottom = frame['capInsets']
-        textures.append(dict(id=sid, path=resource(frame['image'],sid,'sprite'),
+        textures.append(dict(id=sid, path=resource(frame['image'],sid,'sprite','sprite'),
                              border=[left,bottom,right,top], size=frame['rect'][2:4],
                              originalSize=frame['originalSize'],offset=frame['offset']))
-        textures.append(dict(id=sid+'@original',path=resource(frame['originalImage'],sid+'@original','sprite'),
-                             border=[0,0,0,0],size=frame['originalSize'],originalSize=frame['originalSize'],offset=[0,0]))
+        if sid in untrimmed:
+            textures.append(dict(id=sid+'@original',path=resource(frame['originalImage'],sid+'@original','sprite','sprite'),
+                                 border=[0,0,0,0],size=frame['originalSize'],originalSize=frame['originalSize'],offset=[0,0]))
     assets=[]
     for asset in ir['assets']:
-        item=dict(id=asset['sourceId'],kind=asset['kind'],path=resource(asset['path'],asset['sourceId'],'native'),fontCoverage=asset.get('fontCoverage'))
-        if asset['kind']=='cc.TTFFont':item['fontAssetPath']=naming.path(asset['sourceId'],'.asset','Assets/Generated/Art')
+        item=dict(id=asset['sourceId'],kind=asset['kind'],path=resource(asset['path'],asset['sourceId'],'native',asset['kind']),fontCoverage=asset.get('fontCoverage'))
+        if asset['kind']=='cc.TTFFont':item['fontAssetPath']=naming.path(asset['sourceId'],'font-asset','.asset')
         assets.append(item)
     bitmap_fonts=[]
     for font in ir.get('bitmapFonts',[]):
         item={k:v for k,v in font.items() if k!='atlasImage'}
         item['id']=font['sourceId']
         item['atlasGuid']=guid(namespace,font['sourceId']+'@atlas')
-        item['path']=resource(font['atlasImage'],font['sourceId']+'@atlas','bitmap-atlas')
-        item['fontPath']=naming.path(font['sourceId'],'.asset','Assets/Generated/Art')
+        item['path']=resource(font['atlasImage'],font['sourceId']+'@atlas','bitmap-atlas','bitmap-atlas')
+        item['fontPath']=naming.path(font['sourceId'],'font-asset','.asset')
         bitmap_fonts.append(item)
     resource_ids = {a['id'] for a in assets if a['kind']=='cc.TTFFont'}|{f['id'] for f in bitmap_fonts}
     sprite_ids = {s['id'] for s in textures}
@@ -295,11 +315,21 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
         if c['type']=='cc.LabelOutline' and c['convertible'] and not any(x['type']=='cc.Label' and x['node']==c['node'] and x['convertible'] for x in components):
             c['convertible']=False
             diagnostics.append(diagnostic('MISSING_OUTLINE_LABEL',c['sourceId'],'Label dependency could not be converted',c['sourceId']))
+    # Editor-created controllers/materials are named by owning prefab module and node, never by GUID (PROJECT-SPEC 5.5).
+    def owned(component,tail):
+        asset=component['node'].split('#',1)[0];meta=dict(ir.get('sourceNames',{}).get(asset,{}))
+        logical=meta.get('logicalPath') or '';parent,_,owner=logical.rpartition('/')
+        meta.update(sourceId=component['sourceId'],logicalPath=(parent+'/' if parent else '')+str(by_node.get(component['node'],{}).get('name') or 'node')+tail)
+        return meta,owner or None
+    native_assets=[(c,'controller','.controller','_button') if c['type']=='cc.Button' else (c,'material','.mat','_outline') for c in components
+                   if c['convertible'] and (c['type']=='cc.Button' and c.get('transition')==3 or c['type']=='cc.LabelOutline')]
+    naming.reserve([(c['sourceId'],kind,suffix,'',*owned(c,tail)) for c,kind,suffix,tail in native_assets])
+    for c,kind,suffix,tail in native_assets:
+        c['controllerPath' if kind=='controller' else 'materialPath']=naming.path(c['sourceId'],kind,suffix,metadata=owned(c,tail)[0])
     from .common import reject_layout_conflicts
     diagnostics.extend(reject_layout_conflicts(components))
     from ..assets.animation import plan_clips
-    animations,animation_gaps=plan_clips(ir,namespace,PROFILE,animation_selection)
-    naming.records.extend(a['nameEvidence'] for a in animations)
+    animations,animation_gaps=plan_clips(ir,namespace,PROFILE,animation_selection,naming)
     if animation_selection:
         unselected={c['sourceId'] for c in ir.get('animationClips',[]) if c['sourceId'] not in animation_selection}
         diagnostics=[d for d in diagnostics if d.get('sourceId') not in unselected]
@@ -308,7 +338,8 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
     source_prefabs,prefab_gaps=plan_prefabs(ir,components)
     from .prefabs import native_relationships
     source_prefabs,prefab_instances=native_relationships(ir,source_prefabs,components)
-    for prefab in source_prefabs:prefab['path']=naming.path(prefab['sourceId'],'.prefab','Assets/Generated/Views/Sources')
+    naming.reserve([(prefab['sourceId'],'prefab','.prefab','',None,None) for prefab in source_prefabs])
+    for prefab in source_prefabs:prefab['path']=naming.path(prefab['sourceId'],'prefab','.prefab')
     diagnostics.extend(prefab_gaps)
     out = new_output(output,[ir_path.parent])
     (out/'resources').mkdir()
@@ -321,7 +352,7 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
     for node in nodes:
         if node.get('sourceGeometryProfile'):
             diagnostics.append(diagnostic('COCOS3_UNITY_LAYER_HANDOFF',node['sourceId'],'Original layer bits retained as provenance; native uGUI uses target UI layer 5, source camera visibility is pending',node['sourceId']))
-    result=dict(schemaVersion=1,toolVersion=__version__,targetProfile=PROFILE,namespace=namespace,
+    result=dict(schemaVersion=1,toolVersion=__version__,targetProfile=PROFILE,namespace=namespace,projectLayout=VERSION,layoutOverridesSha256=overrides_sha,
                 sourcePrefabs=source_prefabs,prefabInstances=prefab_instances,naming=naming.report(),
                 scopeMode=ir.get('scopeMode','asset-selection'),
                 sourceIrSha256=sha(stage_bytes(ir_path)),sourceManifestPath=ir.get('sourceManifestPath'),sourceManifestSha256=ir['sourceManifestSha256'],
@@ -349,11 +380,10 @@ def export(plan_path, output):
     for c in p['copies']:
         if sha(read(inside(plan_path.parent,c['source'])))!=c['sha256']:
             fail('SOURCE_CHANGED',c['source'],'Plan resource differs')
-        if not c['target'].startswith('Assets/Generated/Art/'):
+        if not c['target'].startswith(standard.ROOTS['unity']['content']+'/'):
             fail('UNSAFE_TARGET',c['target'],'Unexpected target root')
     out=new_output(output,[plan_path.parent])
-    for folder in ['Assets/Generated/Art','Assets/Generated/Animations','Assets/Generated/Controllers','Assets/Generated/Views','Assets/Generated/Scenes',
-                   'Assets/Monkey/Editor','Assets/Manual','Packages','ProjectSettings','Analysis']:
+    for folder in [standard.ROOTS['unity']['conversion'],'Packages','ProjectSettings','Analysis']:
         (out/folder).mkdir(parents=True,exist_ok=True)
     ownership=[]
     for c in p['copies']:
@@ -363,24 +393,16 @@ def export(plan_path, output):
             metadata+='TextureImporter:\n  serializedVersion: 13\n  externalObjects: {}\n  textureType: 0\n  textureShape: 1\n  alphaSource: 0\n  alphaIsTransparency: 1\n'
         Path(str(target)+'.meta').write_text(metadata,encoding='utf-8')
         ownership.append(dict(path=c['target'],sourceId=c['sourceId'],guid=c['guid']))
-    view_path=out/'Assets/Generated/Views/MonkeyCandidateView.cs'
-    view_path.write_bytes(files('monkey.targets').joinpath('MonkeyCandidateView.cs').read_bytes())
-    Path(str(view_path)+'.meta').write_text('fileFormatVersion: 2\nguid: '+guid(p['namespace'],'native-view-script')+'\n')
-    grid_path=out/'Assets/Generated/Views/IntrinsicGridLayoutGroup.cs'
-    grid_path.write_bytes(files('monkey.targets').joinpath('IntrinsicGridLayoutGroup.cs').read_bytes())
-    Path(str(grid_path)+'.meta').write_text('fileFormatVersion: 2\nguid: '+guid(p['namespace'],'intrinsic-grid-script')+'\n')
-    numeric_path=out/'Assets/Monkey/Editor/MonkeyNumericCode.cs'
-    numeric_path.write_bytes(files('monkey.targets').joinpath('UnityNumericCode.cs').read_bytes())
-    Path(str(numeric_path)+'.meta').write_text('fileFormatVersion: 2\nguid: '+guid(p['namespace'],'numeric-code-editor')+'\n')
-    instances_path=out/'Assets/Monkey/Editor/MonkeyPrefabInstances.cs'
-    instances_path.write_bytes(files('monkey.targets').joinpath('UnityPrefabInstances.cs').read_bytes())
-    Path(str(instances_path)+'.meta').write_text('fileFormatVersion: 2\nguid: '+guid(p['namespace'],'prefab-instances-editor')+'\n')
-    for filename,relative in [('NativeLinearLayoutGroup.cs','Assets/Generated/Views/'),('NativeRectConstraints.cs','Assets/Generated/Views/'),('NativeTextLineBox.cs','Assets/Generated/Views/'),('UnityDynamicUi.cs','Assets/Monkey/Editor/')]:
-        dest=out/relative/filename;dest.write_bytes(files('monkey.targets').joinpath(filename).read_bytes())
-        Path(str(dest)+'.meta').write_text('fileFormatVersion: 2\nguid: '+guid(p['namespace'],'native-ui/'+filename)+'\n')
-    adapter=files('monkey.targets').joinpath('UnityImporter.cs').read_bytes()
-    adapter_path=out/'Assets/Monkey/Editor/MonkeyImporter.cs';adapter_path.write_bytes(adapter)
-    Path(str(adapter_path)+'.meta').write_text('fileFormatVersion: 2\nguid: '+guid(p['namespace'],'editor-adapter')+'\n')
+    # Shipped sources keep their GUID keys across layouts; only their location follows monkey-project/1.
+    for template,relative,key in [('ContentPreviewView.cs',standard.unity('previewView'),'native-view-script'),
+            ('IntrinsicGridLayoutGroup.cs',standard.UNITY_LAYOUT_DIR+'/IntrinsicGridLayoutGroup.cs','intrinsic-grid-script'),
+            ('UnityNumericCode.cs',standard.unity('numericCode'),'numeric-code-editor'),
+            ('UnityPrefabInstances.cs',standard.unity('prefabInstances'),'prefab-instances-editor'),
+            *[(name,standard.UNITY_LAYOUT_DIR+'/'+name,'native-ui/'+name) for name in ('NativeLinearLayoutGroup.cs','NativeRectConstraints.cs','NativeTextLineBox.cs')],
+            ('UnityDynamicUi.cs',standard.unity('dynamicUi'),'native-ui/UnityDynamicUi.cs'),
+            ('UnityImporter.cs',standard.unity('importer'),'editor-adapter')]:
+        dest=out/relative;dest.parent.mkdir(parents=True,exist_ok=True);dest.write_bytes(files('monkey.targets').joinpath(template).read_bytes())
+        Path(str(dest)+'.meta').write_text('fileFormatVersion: 2\nguid: '+guid(p['namespace'],key)+'\n')
     # Only the typed, finite import instruction subset is sent to the Editor.
     instruction={key:p.get(key,[]) for key in ('designSize','pixelsPerUnit','textures','assets','bitmapFonts','nodes','components','galleryOnly','animations','sourcePrefabs','prefabInstances')}
     instruction['tmpResources']=dict(packageName='com.unity.ugui',packageVersion='2.6.0',resource='Package Resources/TMP Essential Resources.unitypackage',importMode='package-completion-callback')
@@ -399,15 +421,16 @@ def export(plan_path, output):
     if p['galleryOnly']:
         instruction['galleryReadback']='exact-sprite-and-rect-v1'
         instruction['textures']=[dict(t,guid=guid(p['namespace'],t['id']))for t in instruction['textures']]
-    write_json(out/'Assets/Monkey/Editor/import-plan.json',instruction)
+    write_json(out/standard.unity('importPlan'),instruction)
+    write_json(out/standard.unity('outputPaths'),standard.unity_output_paths())
     write_json(out/'Packages/manifest.json',dict(dependencies={'com.unity.ugui':'2.6.0',
                'com.unity.modules.ui':'1.0.0','com.unity.modules.imgui':'1.0.0','com.unity.modules.animation':'1.0.0'}))
     (out/'ProjectSettings/ProjectVersion.txt').write_text('m_EditorVersion: 6000.6.2f1\n')
-    (out/'Assets/Manual/README.md').write_text('AI/人工业务代码区。生成区默认不覆盖；缺口见工程根 Analysis/handoff.json。\n')
-    (out/'README.md').write_text('Unity 原生资源/UI候选，非可玩游戏。\n\n打开后执行 Tools > Monkey > Import Candidate。\n'
+    (out/'README.md').write_text('Unity 原生资源/UI候选，非可玩游戏。目录规范 '+VERSION+'（monkey docs/PROJECT-SPEC.md）。\n\n'
+        '打开后执行 Tools > Monkey > Import Candidate。\n'
         '仅首次导入新候选；已生成 Prefab/Scene 存在时拒绝覆盖。\n'
         '或用独立 batchmode -projectPath 此目录 -executeMethod MonkeyImporter.ImportBatch。\n'
-        '导入成功后删除 Assets/Monkey 仍保留原生可编辑资产；Player 不读取转换 JSON。\n'
+        '导入成功后删除 '+standard.ROOTS['unity']['conversion']+' 仍保留原生可编辑资产；Player 不读取转换 JSON。\n'
         '真实编辑器/画面对照/业务尚未验证，见 Analysis。\n')
     from ..assets.animation import module_report
     write_json(out/'Analysis/animation-module.json',module_report(p.get('animations',[])))
@@ -435,8 +458,8 @@ def export(plan_path, output):
             sourceRefs=sorted({str(d.get('sourceId') or d.get('location')) for d in gaps}),
             sourceManifest=dict(path=p.get('sourceManifestPath'),sha256=p.get('sourceManifestSha256')),
             sourceLocations=[dict(location=d.get('location'),sourceId=d.get('sourceId')) for d in gaps],
-            gaps=gaps,generatedTargets=['Assets/Generated/Views/Candidate.prefab'],
-            allowedPaths=['Assets/Manual/'],dependencies=['matching original evidence'],
+            gaps=gaps,generatedTargets=[standard.unity('previewPrefab')],
+            allowedPaths=[standard.ROOTS['unity']['game']+'/'],dependencies=['matching original evidence'],
             verificationScope=['affected UI module in real Editor','source reference comparison']))
     if p.get('animations') or any(d['code'].startswith('ANIMATION_') for d in p['diagnostics']):
         from ..assets.animation import handoff_task
@@ -445,13 +468,13 @@ def export(plan_path, output):
                verification=dict(static='pending',editor='not_run',visual='not_run',business='not_run')))
     write_json(out/'Analysis/source-map.json',dict(assets=ownership,sourceRoots=p.get('sourceRoots',{}),sourceLocations=p.get('sourceLocations',{}),
         fonts=[dict(sourceId=f['id'],target=f['fontPath'],atlas=f['path']) for f in p.get('bitmapFonts',[])]+[dict(sourceId=a['id'],target=str(Path(a['path']).with_suffix('.asset'))) for a in p['assets'] if a['kind']=='cc.TTFFont'],
-        nodes=[dict(sourceId=n['sourceId'],target='Assets/Generated/Views/Candidate.prefab',name=n['name']) for n in p['nodes']],
+        nodes=[dict(sourceId=n['sourceId'],target=standard.unity('previewPrefab'),name=n['name']) for n in p['nodes']],
         components=[dict(sourceId=c['sourceId'],node=c['node'],type=c['type'],convertible=c['convertible'],
-            target='Assets/Generated/Views/Candidate.prefab',viewField={'cc.Sprite':'Images','cc.Label':'Labels','cc.Button':'Buttons'}.get(c['type']),
+            target=standard.unity('previewPrefab'),viewField={'cc.Sprite':'Images','cc.Label':'Labels','cc.Button':'Buttons'}.get(c['type']),
             bindingEvidence='Actual indices and native fileIDs require Analysis/editor-readback.json') for c in p['components']]))
     if p.get('bindings'):write_json(out/'Analysis/font-bindings.json',p['bindings'])
     write_json(out/'Analysis/name-map.json',p.get('naming',{}))
-    report=dict(schemaVersion=1,toolVersion=__version__,targetProfile=PROFILE,namespace=p['namespace'],
+    report=dict(schemaVersion=1,toolVersion=__version__,targetProfile=PROFILE,namespace=p['namespace'],projectLayout=VERSION,
                 scopeMode=p.get('scopeMode','asset-selection'),
                 planSha256=sha(stage_bytes(plan_path)),sourceRoots=p.get('sourceRoots',{}),sourceManifestSha256=p.get('sourceManifestSha256'),diagnostics=p['diagnostics'],editorValidation='not_run',
                 visualValidation='not_run',businessValidation='not_run',galleryOnly=p['galleryOnly'])
@@ -518,9 +541,7 @@ def gallery_readback(instruction,readback):
 
 def verify(candidate, output, level='static'):
     root=safe(candidate);m=stage_manifest(root);diagnostics=[]
-    from .layout import lookup
     from ..sources.containers import fingerprint
-    path_for=lambda p:lookup(p,m)
     native={};editor='not_run'
     if level=='editor':
         readback_path=root/'Analysis/editor-readback.json'
@@ -535,7 +556,7 @@ def verify(candidate, output, level='static'):
                 file=inside(root,relative)
                 if not file.is_file() or fingerprint(file)!=expected:
                     diagnostics.append(diagnostic('NATIVE_FILE_CHANGED',relative,'Native file differs from saved readback'))
-            instruction=load(read(root/path_for('Assets/Monkey/Editor/import-plan.json'),max_bytes=128*1024*1024),max_nodes=8_000_000)
+            instruction=load(read(root/standard.locate(m,'importPlan'),max_bytes=128*1024*1024),max_nodes=8_000_000)
             diagnostics.extend(gallery_readback(instruction,rb))
             from ..code_validation import numeric as verify_numeric
             diagnostics.extend(verify_numeric(instruction['components'],rb.get('numericCodeBindings'),'unity','scene',rb.get('numericCodeExercise',[])))
@@ -599,7 +620,7 @@ def verify(candidate, output, level='static'):
                 if not node_geometry_matches(actual,spec,instruction.get('transformReadback')=='full-local-v1'):
                     diagnostics.append(diagnostic('NODE_READBACK_MISMATCH',spec['sourceId'],'Saved RectTransform differs from plan'))
             if not rb.get('editableRoundtrip'):
-                diagnostics.append(diagnostic('EDITABLE_ROUNDTRIP_NOT_VERIFIED','Assets/Generated/Views/EditableProbe.prefab','Native edit/save/reopen proof is absent or failed'))
+                diagnostics.append(diagnostic('EDITABLE_ROUNDTRIP_NOT_VERIFIED',standard.locate(m,'editableProbe'),'Native edit/save/reopen proof is absent or failed'))
             by_font={f['id']:f for f in rb.get('fonts',[])}
             for spec in instruction.get('bitmapFonts',[]):
                 actual=by_font.get(spec['id'])
@@ -660,8 +681,7 @@ def verify(candidate, output, level='static'):
                     binding=view_refs.get(spec['sourceId'])
                     if not binding or not binding.get('bound') or binding.get('index',-1)<0 or not binding.get('prefabFileId'):
                         diagnostics.append(diagnostic('VIEW_REFERENCE_READBACK_MISMATCH',spec['sourceId'],'Serialized native View reference or fileID is missing'))
-            for required in ('Assets/Generated/Views/Candidate.prefab','Assets/Generated/Scenes/Candidate.unity'):
-                required=path_for(required)
+            for required in (standard.locate(m,'previewPrefab'),standard.locate(m,'previewScene')):
                 if required not in native:
                     diagnostics.append(diagnostic('NATIVE_ARTIFACT_MISSING',required,'No saved native artifact hash'))
             from ..assets.animation import verify_native
@@ -689,16 +709,19 @@ def verify(candidate, output, level='static'):
                 if value in guids:
                     diagnostics.append(diagnostic('DUPLICATE_TARGET_GUID',str(path.relative_to(root)),'GUID duplicates '+guids[value]))
                 guids[value]=str(path.relative_to(root))
-    instruction=load(read(root/path_for('Assets/Monkey/Editor/import-plan.json'),max_bytes=128*1024*1024),max_nodes=8_000_000)
+    instruction=load(read(root/standard.locate(m,'importPlan'),max_bytes=128*1024*1024),max_nodes=8_000_000)
     for item in instruction['textures']+instruction['assets']:
         if not inside(root,item['path']).is_file():
             diagnostics.append(diagnostic('TARGET_REFERENCE_MISSING',item['path'],'Import resource does not exist'))
-    adapter=root/path_for('Assets/Monkey/Editor/MonkeyImporter.cs')
+    adapter=root/standard.locate(m,'importer')
     if not adapter.is_file() or list((root/'Assets').rglob('ir.json')):
         diagnostics.append(diagnostic('TARGET_LAYOUT_INVALID','Assets','Missing Editor adapter or runtime IR found'))
+    if standard.current(m):
+        from ..layout.verify import scan
+        diagnostics.extend(scan([f['path'] for f in m['files']]))
     out=new_output(output,[root])
     result=dict(schemaVersion=1,toolVersion=__version__,candidateManifestSha256=fingerprint(root/'manifest.json'),
-                diagnostics=diagnostics,staticValidation='conflict' if any(d['code'] in ('GENERATED_FILE_CHANGED','DUPLICATE_TARGET_GUID','TARGET_REFERENCE_MISSING','TARGET_LAYOUT_INVALID','NATIVE_FILE_CHANGED','ASSIGNED_NATIVE_IDENTITY_CHANGED') for d in diagnostics) else 'pass',
+                diagnostics=diagnostics,staticValidation='conflict' if any(d['code'] in ('GENERATED_FILE_CHANGED','DUPLICATE_TARGET_GUID','TARGET_REFERENCE_MISSING','TARGET_LAYOUT_INVALID','NATIVE_FILE_CHANGED','ASSIGNED_NATIVE_IDENTITY_CHANGED','LAYOUT_FORBIDDEN_NAME') for d in diagnostics) else 'pass',
                 editorValidation=editor,visualValidation='not_run',businessValidation='not_run')
     write_json(out/'verification.json',result)
     return finish(out,result)

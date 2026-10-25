@@ -82,8 +82,12 @@ def _input_entries(unit):
     return entries(unit['path'])
 
 
-def convert_package(source, target, output, namespace='monkey-project',offline=False,input_set_path=None,resume_state=None,reuse_source_stages=None,format_profile='none',code_contract=None,cocos_code_language='ts'):
+def convert_package(source, target, output, namespace='monkey-project',offline=False,input_set_path=None,resume_state=None,reuse_source_stages=None,format_profile='none',code_contract=None,cocos_code_language='ts',layout_path=None):
     if format_profile not in ('none','grea'):fail('FORMAT_PROFILE',str(format_profile),'Expected none or grea')
+    from .layout import load_overrides,VERSION as LAYOUT_VERSION
+    overrides,overrides_sha=load_overrides(safe(layout_path) if layout_path else None)
+    if resume_state and resume_state['report'].get('layout',{}).get('overridesSha256')!=overrides_sha:
+        fail('RESUME_LAYOUT_CHANGED',str(layout_path),'layout.json differs from the resumed conversion; use a fresh output')
     from .inputs import input_set
     code_spec=None
     if code_contract:
@@ -94,13 +98,14 @@ def convert_package(source, target, output, namespace='monkey-project',offline=F
     source=safe(input_set_path or source)
     roots=selection['inputs'] if selection else [dict(id='source',path=source,config=None)]
     profiles=[unity.PROFILE,cocos.PROFILE] if target=='both' else [TARGETS[target]]
-    out=safe(output) if resume_state else new_output(output,[source,*[r['path'] for r in roots],*([safe(code_contract)]if code_spec else [])]);stage='inventory'
+    out=safe(output) if resume_state else new_output(output,[source,*[r['path'] for r in roots],*([safe(code_contract)]if code_spec else []),*([safe(layout_path)] if layout_path else [])]);stage='inventory'
     report=dict(schemaVersion=1,toolVersion=__version__,status='partial',workflowStatus='partial' if offline else 'needs_action',resultKind='candidate',
                 completed=False,mode='package',namespace=namespace,sourceKind='input-set' if selection else 'directory' if source.is_dir() else source.suffix.lower()[1:],
                 gameIdentity=dict(appId='unknown',appVersion='unknown',validation='not_verified'),
                 inputContainerSha256=None if source.is_dir() else fingerprint(source),
                 inputSet=dict(sha256=selection['sha256'],identityStatus=selection['identityStatus'],frozenRelationVerified=selection['frozenRelationVerified'],maxInputBytes=selection['maxInputBytes']) if selection else None,
-                diagnostics=[],validation=dict(editor='not_run',visual='not_run',business='not_run'),projects=[])
+                diagnostics=[],validation=dict(editor='not_run',visual='not_run',business='not_run'),projects=[],
+                layout=dict(version=LAYOUT_VERSION,overridesSha256=overrides_sha,rootNamespace=overrides.get('rootNamespace') or 'Game'))
     try:
         cache_summaries=[]
         for unit in roots:
@@ -190,7 +195,7 @@ def convert_package(source, target, output, namespace='monkey-project',offline=F
         if code_spec:
             stage='source-code-emission'
             from .package_code import prepare
-            code_emission=prepare(recovered,code_spec,namespace,out/'CodeEmission')
+            code_emission=prepare(recovered,code_spec,namespace,out/'CodeEmission',overrides.get('rootNamespace') or 'Game')
             report['codeEmission']=load(read(code_emission/'package-code.json'))
         # Resolve physical source records for each literal UUID/logical resource key.
         stage='asset-index';asset_index=[];bundles={};by_stem={}
@@ -255,7 +260,7 @@ def convert_package(source, target, output, namespace='monkey-project',offline=F
             from .replan import reuse_source_stages as reuse_stages
             report['sourceStageReuse']=reuse_stages(reuse_source_stages,out,selection,namespace)
         from .structured import recover
-        structured=recover(tree,roots,configs,source_profile,out,profiles,namespace,code_emission=code_emission)
+        structured=recover(tree,roots,configs,source_profile,out,profiles,namespace,code_emission=code_emission,layout=(overrides,overrides_sha))
         report['structuredRecovery']=structured
         if code_spec and (structured['status']=='failed' or set(structured.get('projects',{}))!=set(profiles)):
             fail('PACKAGE_CODE_BINDING_INCOMPLETE','Structured/recovery.json','Declared code projection was not exported for every requested target; retain failure evidence')
@@ -270,7 +275,10 @@ def convert_package(source, target, output, namespace='monkey-project',offline=F
         report['sourceInputExclusions']=[dict(path=row['path'],sha256=row['sha256'],reason=excluded_names[Path(row['localPath']).name]['code'])
                                          for row in rows if Path(row['localPath']).name in excluded_names]
         stage='target-workspaces'
-        from .names import Names as OutputNames
+        from .layout import LayoutPlanner,casing
+        from .layout import standard as layout_standard
+        from .layout.code import CodeLayout,class_name
+        from .handoff_package import consumed_inputs,bound_pages,structured_names
         row_by_path={r['path']:r for r in rows};file_metadata={}
         for indexed in sorted(asset_index,key=lambda a:(a['bundle'],str(a.get('logicalKey')),a['sourceId'])):
             logical=indexed.get('logicalKey')
@@ -279,32 +287,53 @@ def convert_package(source, target, output, namespace='monkey-project',offline=F
                 source_row=row_by_path[path]
                 if source_row['category'] in ('Images','Fonts','Audio','Spine'):
                     file_metadata.setdefault(source_row['sha256'],dict(bundle=indexed['bundle'],logicalPath=logical[0],sourceType=indexed.get('sourceType')))
+        consumed=consumed_inputs(out,rows);pages=bound_pages(out,recovered);page_names=structured_names(out)
+        kinds={'Images':'native','Audio':'native','Fonts':'cc.TTFFont'}
+        def evidence_path(record):
+            # Raw inputs keep their source layout as byte-exact evidence (PROJECT-SPEC 6.3).
+            section='source' if record['category']=='Code' else 'excluded' if record['disposition']=='filtered' else 'original'
+            return layout_standard.RECOVERY[section]+'/'+casing.safe_path(record['inputRoot']+'/'+record['localPath'])
+        def native_id(project,path,engine):
+            meta=project/(path+'.meta')
+            if not meta.is_file():return None
+            if engine=='unity':return next((l[6:] for l in meta.read_text(encoding='utf-8').splitlines() if l.startswith('guid: ')),None)
+            return load(read(meta)).get('uuid')
         for profile in profiles:
+            engine='unity' if profile==unity.PROFILE else 'creator'
             project=out/('UnityProject' if profile==unity.PROFILE else 'CocosProject')
             native_manifest=stage_manifest(project) if (project/'manifest.json').exists() else {}
             if not project.exists():
                 project.mkdir();_base(project,profile,namespace)
-            dispositions=[];seen={};targets={};content_paths={};naming=OutputNames();module_naming=OutputNames()
+            naming=LayoutPlanner(engine,overrides=overrides);structured_content={}
+            for f in native_manifest.get('files',[]):
+                naming.claim(f['path'])
+                if f['path'].startswith(('Assets/','assets/')) and not f['path'].endswith('.meta'):structured_content.setdefault(f['sha256'],f['path'])
+            dispositions=[];seen={};targets={};content_paths={};prepared=[];evidence_claims={}
             for row in rows:
                 raw=read(spool/row['sha256'],max_bytes=MAX_FILE);record=dict(row);category=row['category'];digest=row['sha256']
                 if sha(raw)!=digest:fail('SOURCE_CHANGED',row['path'],'Inventory cache changed')
                 excluded=excluded_names.get(Path(row['localPath']).name)
                 if excluded:record.update(disposition='filtered',reason=excluded['message'],sourceSelection='excluded-version-mismatch')
-                direct=record['disposition']=='copied'
-                if direct:
-                    folder=('Assets/Game/Content/'+category if profile==unity.PROFILE else
-                            'assets/fonts' if category=='Fonts' else 'assets/audio' if category=='Audio' else 'assets/art/images')
-                    prefix=folder+'/Original'
-                else:
-                    section='SourceCode' if category=='Code' else 'Excluded' if record['disposition']=='filtered' else 'Unconverted'
-                    prefix='SourceRecovery/'+section+'/'+category
-                content_key=(category,digest,row['suffix'],'runtime'if direct else 'source')
+                if record['disposition']=='copied' and row['sourceId'] in consumed:
+                    record.update(disposition='unconverted',reason='Payload carried by a normalized native object; raw input retained as evidence')
                 metadata=file_metadata.get(digest) or dict(bundle=row['inputRoot'],logicalPath=row['localPath'],nameProvenance='input-relative-path')
-                if content_key in content_paths:
-                    dest=content_paths[content_key]
-                    naming.records.append(dict(sourceId=row['sourceId'],identity=row['sourceId'],originalPath=metadata.get('logicalPath'),sourceName=metadata.get('sourceName'),provenance='config.paths' if digest in file_metadata else 'input-relative-path',target=dest,reasons=['content-deduplicated']))
+                prepared.append((row,record,raw,record['disposition']=='copied',metadata))
+            naming.reserve([(row['sourceId'],kinds[row['category']],row['suffix'],'',metadata,None)
+                            for row,record,raw,direct,metadata in prepared if direct and row['sha256'] not in structured_content])
+            for row,record,raw,direct,metadata in prepared:
+                category=row['category'];digest=row['sha256']
+                content_key=(category,digest,row['suffix'],'runtime'if direct else evidence_path(record).split('/',2)[1])
+                if direct and digest in structured_content:
+                    dest=structured_content[digest];targets.setdefault(dest,native_id(project,dest,engine))
+                    record.update(duplicateOf=dest,disposition='deduplicated',reason='Identical bytes already emitted as a structured native asset')
+                    record.update(target=dest,targetId=targets.get(dest),targetState='pending_native_import');dispositions.append(record);continue
+                if content_key in content_paths:dest=content_paths[content_key]
                 else:
-                    dest=naming.path(row['sourceId'],row['suffix'],prefix,metadata=metadata)
+                    if direct:dest=naming.path(row['sourceId'],kinds[category],row['suffix'],metadata=metadata)
+                    else:
+                        dest=evidence_path(record);folded=dest.casefold()
+                        if evidence_claims.get(folded,dest)!=dest:dest=naming._suffixed(dest,sha(row['sourceId'].encode())[:6]);folded=dest.casefold()
+                        evidence_claims[folded]=dest
                     content_paths[content_key]=dest
                 if dest in seen:
                     record['duplicateOf']=seen[dest];record['disposition']='deduplicated'
@@ -324,18 +353,22 @@ def convert_package(source, target, output, namespace='monkey-project',offline=F
                 record.update(target=dest,targetId=targets.get(dest),targetState='pending_native_import' if direct else 'excluded_from_runtime')
                 dispositions.append(record)
             code_index=[];tasks=[]
+            content=layout_standard.ROOTS[engine]['content']+'/'+naming.types['prefab']+'/'
+            known=[casing.pascal(f['path'][len(content):].split('/',1)[0]) for f in native_manifest.get('files',[]) if f['path'].startswith(content) and '/' in f['path'][len(content):]]
+            code_layout=CodeLayout(engine,overrides,known);page_layout=LayoutPlanner(engine,page_names,overrides)
             for mod in recovered:
                 record={k:v for k,v in mod.items() if k!='source'}
                 if code_emission and mod['sourceId']==report['codeEmission']['sourceModule']:
                     record['codeEmission']=dict(report['codeEmission'],scriptPath=native_manifest.get('codeEmission',{}).get('scriptPath'),status='static_numeric_utility_no_component_binding'if report['codeEmission'].get('kind')=='static-number-methods-v1'else'numeric_subdomain_planned_native_import')
                 if 'source' in mod:
-                    token,cs,ts=drafts(mod,mod['sourceId'])
-                    meta=dict(bundle=mod.get('sourceFile','source').split('/')[0],sourceName=mod.get('name'))
-                    evidence=module_naming.path(mod['sourceId'],'.js','SourceRecovery/Modules',metadata=meta)
-                    draft=module_naming.path(mod['sourceId'],'.cs' if profile==unity.PROFILE else '.ts','SourceRecovery/CodeDrafts/'+('CSharp' if profile==unity.PROFILE else 'TypeScript'),metadata=meta)
+                    bound={tuple(page_layout.module_of(page)) for page in pages.get(mod['sourceId'],())}
+                    placed=code_layout.place(mod['sourceId'],class_name(mod),list(next(iter(bound))) if len(bound)==1 else None,'cs' if engine=='unity' else 'ts')
+                    token,cs,ts=drafts(mod,mod['sourceId'],placed['namespace'])
+                    evidence,draft=placed['sourceEvidence'],placed['draft']
                     _write(project,evidence,mod['source'].encode())
                     _write(project,draft,(cs if profile==unity.PROFILE else ts).encode())
-                    record.update(sourceEvidence=evidence,draft=draft,status='draft_generated',source_recovered=True,
+                    record.update(sourceEvidence=evidence,draft=draft,layer=placed['layer'],codeModule=placed['module'],namespace=placed['namespace'],
+                                  placement=placed['reasons'],status='draft_generated',source_recovered=True,
                                   translated_supported=False,compiled=False,behavior_verified=False)
                     tasks.append(dict(taskId=token,module=mod.get('name'),sourceId=mod['sourceId'],source=evidence,draft=draft,
                                       contract=mod.get('syntax',{}),dependencies=mod['dependencies'],
@@ -345,7 +378,7 @@ def convert_package(source, target, output, namespace='monkey-project',offline=F
                 code_index.append(record)
             (project/'Analysis').mkdir(exist_ok=True)
             write_json(project/'Analysis/package-name-map.json',naming.report())
-            write_json(project/'Analysis/module-name-map.json',module_naming.report())
+            write_json(project/'Analysis/module-name-map.json',code_layout.report())
             states=dict(Counter(r['disposition'] for r in dispositions))
             coverage=dict(inputFiles=len(rows),accountedFiles=len(dispositions),inputBytes=report['inputBytes'],
                           accountedBytes=sum(r['bytes'] for r in dispositions),dispositions=states,
@@ -485,7 +518,7 @@ Neither target requires monkey, Python, the source tree, the other target or the
         raise
 
 
-def resume_package(output,input_set_path,offline=False):
+def resume_package(output,input_set_path,offline=False,layout_path=None):
     """Reuse hashed source stages, archive unchanged candidates, never overwrite manual work."""
     import uuid
     from .inputs import input_set
@@ -581,6 +614,6 @@ def resume_package(output,input_set_path,offline=False):
 
     target='both' if len(checked)==2 else prior['projects'][0]['targetProfile']
     state=dict(rows=rows,configs=configs,recovered=recovered,report=prior,receiptSha256=sha(raw_receipt),backup=str(backup.relative_to(out)))
-    result=convert_package(None,target,out,namespace,offline,input_set_path,state)
+    result=convert_package(None,target,out,namespace,offline,input_set_path,state,layout_path=layout_path)
     write_json(out/'resume-journal.json',dict(schemaVersion=1,status='completed',priorReceiptSha256=sha(raw_receipt),backup=state['backup']))
     return result

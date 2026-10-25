@@ -1,6 +1,6 @@
 """One source graph per native Prefab, with explicit graph and reference boundaries."""
 from collections import defaultdict
-from ..io import sha,diagnostic
+from ..io import diagnostic
 from ..sources.compiled import fail
 
 
@@ -18,7 +18,7 @@ def plan_prefabs(ir,components):
         if crossing:
             gaps.append(diagnostic('PREFAB_EXTERNAL_NODE_REFERENCE',source,'Native node references cross source graph: '+','.join(crossing),source));continue
         plans.append(dict(sourceId=source,root=roots[0]['sourceId'],nodes=sorted(ids),nodeCount=len(ids),
-                          path='Assets/Generated/Views/Sources/'+sha(source.encode())[:24]+'.prefab',
+                          path=None,
                           nativeValidation='not_run'))
     return plans,gaps
 

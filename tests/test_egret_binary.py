@@ -94,7 +94,7 @@ class EgretBinaryTests(unittest.TestCase):
             with patch('monkey.egret_recovery.source_facts',return_value=dict(profile='fixture',sourceExecuted=False)):
                 result=convert(source,'unity6',root/'out',family='egret',source_profile='egret-custom-resource-plist-v1',format_profile='grea')
             self.assertTrue(result['completed']);self.assertEqual(result['sourceData']['parsedSourceFrames'],1);self.assertEqual(result['sourceSpriteFrames'],0)
-            project=root/'out/UnityProject';self.assertTrue((project/'Analysis/Egret/recovery.json').exists());self.assertEqual(result['format']['status'],'applied')
+            project=root/'out/UnityProject';self.assertTrue((project/'Analysis/Egret/recovery.json').exists());self.assertEqual(result['format']['status'],'retired')
             self.assertTrue(load(read(project/'Analysis/agent-work.json'))['tasks']);self.assertFalse(list((project/'Assets').rglob('*.bin')))
 
     def test_unknown_source_callbacks_cannot_select_reviewed_profile(self):

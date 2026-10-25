@@ -10,6 +10,11 @@ SUBASSET_TAILS={'spriteframe','texture','sprite-frame'}
 LOCALES={'en':'en','zh':'zh-Hans','zh-cn':'zh-Hans','zh-hans':'zh-Hans','cn':'zh-Hans','zh-tw':'zh-Hant','tw':'zh-Hant','zh-hk':'zh-Hant',
     'zh-hant':'zh-Hant','jp':'ja','ja':'ja','kr':'ko','ko':'ko','fr':'fr','de':'de','es':'es','pt':'pt','ru':'ru','th':'th','vi':'vi'}
 MINIGAME_BUNDLES={'minigameres','minigame','minigames'}
+# Never valid production folders (PROJECT-SPEC 8): source traces and source-only type/package words.
+TRACE_WORDS={'original','recovered','recovery','source','sources','generated','monkey','manual','bulkinitial','imported','sourcemedia','unformatted'}
+SOURCE_ONLY_WORDS={'texture','image','images','prefab','anim','anims','animationclip','spinecook','uispine','sound','sounds','music','font',
+    'configs','material','shader','movieclip','uiraw','sprite','gameasset','remoteasset','spineasset','subpackages','raw-assets','minigameres',
+    'texture2d','monobehaviour','textasset','animatorcontroller','audioclip','mesh'}
 KNOWN_SUFFIXES={'.png','.jpg','.jpeg','.webp','.ttf','.otf','.fnt','.prefab','.fire','.scene','.unity','.json','.bin','.skel','.atlas',
     '.mp3','.ogg','.wav','.m4a','.anim','.mat','.controller','.asset','.txt','.bytes','.mp4','.shader','.fbx','.tga','.psd'}
 
@@ -84,6 +89,8 @@ def derive(meta,overrides=None):
         folders=replaced;reasons.append('layout-override:'+rule)
     else:
         folders=strip_leading(folders,overrides.get('stripSegments') or [])
+    dropped=[f for f in folders if f.lower() in TRACE_WORDS|SOURCE_ONLY_WORDS]
+    if dropped:folders=[f for f in folders if f.lower() not in TRACE_WORDS|SOURCE_ONLY_WORDS];reasons.append('trace-segment-dropped')
     if role=='minigame' and folders:
         minigame=folders[0];folders=strip_leading(folders[1:],overrides.get('stripSegments') or [])
     elif role=='minigame':

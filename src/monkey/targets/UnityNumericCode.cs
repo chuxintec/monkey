@@ -10,7 +10,9 @@ public static class MonkeyNumericCode {
     [Serializable] public class Result { public string sourceId,sourceScriptIdentity,scriptGuid,componentFileId,labelFileId,fileIdOwner; public bool bound,uninitialized,numberBoundaries,instancesIndependent,textUnchanged; }
     static Type TypeFor(MonkeyImporter.ComponentSpec spec) {
         if(!System.Text.RegularExpressions.Regex.IsMatch(spec.codeClassName??"","^[A-Za-z_][A-Za-z0-9_]*$"))throw new Exception("Invalid generated class name");
-        var matches=AppDomain.CurrentDomain.GetAssemblies().Select(assembly=>assembly.GetType("Monkey.Recovered."+spec.codeClassName,false)).Where(type=>type!=null).ToArray();
+        var space=string.IsNullOrEmpty(spec.codeNamespace)?"Monkey.Recovered":spec.codeNamespace;
+        if(!System.Text.RegularExpressions.Regex.IsMatch(space,"^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)*$"))throw new Exception("Invalid generated namespace");
+        var matches=AppDomain.CurrentDomain.GetAssemblies().Select(assembly=>assembly.GetType(space+"."+spec.codeClassName,false)).Where(type=>type!=null).ToArray();
         if(matches.Length!=1||!typeof(MonoBehaviour).IsAssignableFrom(matches[0]))throw new Exception("Generated numeric class not registered");return matches[0];
     }
     static MethodInfo[] Methods(Type type,MonkeyImporter.ComponentSpec spec) {

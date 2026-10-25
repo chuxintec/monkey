@@ -3,7 +3,7 @@ import json
 import sys
 from . import __version__
 from .sources.bundle import inspect, PROFILE
-from .sources.compiled import ParseError
+from .sources.compiled import ParseError, fail
 from .sources.project import inspect as inspect_project, catalog, PROFILE as PROJECT_PROFILE
 from .normalize import normalize
 from .targets.unity import plan, export, verify, handoff, PROFILE as UNITY_PROFILE
@@ -20,7 +20,8 @@ def main(argv=None):
     cap.add_argument('--json', action='store_true')
     p = sub.add_parser('convert', help='Convert a source project into an isolated native project candidate')
     p.add_argument('--source', help='Local wxapkg/APK, resource/project directory, project.json or bundle config.json')
-    p.add_argument('--format',choices=['none','grea'],default=None,help='Optional post-export layout; default none. Fresh package conversion only.')
+    p.add_argument('--format',choices=['none','grea'],default=None,help='Deprecated: every output already uses monkey-project/1; grea is accepted as an alias.')
+    p.add_argument('--layout',help='Game layout.json: module/rename/bundle-role overrides for monkey-project/1 paths (docs/PROJECT-SPEC.md section 7)')
     p.add_argument('--source-family', choices=['auto','cocos','unity','laya','layaair','egret','eraget','custom','other'], default='auto')
     p.add_argument('--provider-python', help='Existing Python with UnityPy 1.25.3 for Unity source conversion')
     p.add_argument('--asset-ripper', help='Existing exact AssetRipper 2.0.0 provider executable')
@@ -95,7 +96,7 @@ def main(argv=None):
     p.add_argument('--out', required=True)
     p.add_argument('--budget-seconds', type=int, default=120)
     p.add_argument('--bundle-manifest',help='Inspect every unique container in the explicit frozen bundle pool in one worker')
-    p = sub.add_parser('format-project',help='Preview or apply a typed GREA layout into a fresh unimported Unity/Creator candidate')
+    p = sub.add_parser('format-project',help='Retired: new outputs are already monkey-project/1 (docs/PROJECT-SPEC.md)')
     p.add_argument('--project',required=True)
     p.add_argument('--profile',choices=['grea'],default='grea')
     pick=p.add_mutually_exclusive_group(required=True)
@@ -255,9 +256,8 @@ def main(argv=None):
             print(json.dumps(result,ensure_ascii=False))
             return 0 if result['status']=='inspected' else 1
         if args.command == 'format-project':
-            from .formatting import preview as format_preview,apply as format_apply
-            result=format_preview(args.project,args.out)if args.preview else format_apply(args.project,args.plan,args.out)
-            print(json.dumps(result,ensure_ascii=False));return 0 if args.preview else 1
+            from .layout.standard import VERSION
+            fail('FORMAT_RETIRED',args.project,'Post-export formatting is retired; convert again to get a '+VERSION+' project (docs/PROJECT-SPEC.md)')
         if args.command == 'project-model':
             from .project_model import inspect as project_model
             print(json.dumps(project_model(args.candidate,args.out),ensure_ascii=False))
@@ -434,7 +434,7 @@ def main(argv=None):
                         args.dependency_source,args.evidence_source,args.animation,args.source_profile,args.namespace,args.package,args.reuse_source_stages)):
                     parser.error('package resume accepts --resume, --input-set and optional --offline only')
                 from .package import resume_package
-                result=resume_package(args.resume,args.input_set,args.offline)
+                result=resume_package(args.resume,args.input_set,args.offline,layout_path=args.layout)
                 print(json.dumps(dict(status=result['workflowStatus'],resultKind=result['resultKind'],completed=result['completed'],
                                       projects=result['projects'],report=str(Path(args.resume).resolve()/'conversion-result.json')),ensure_ascii=False))
                 return 1
@@ -470,7 +470,7 @@ def main(argv=None):
                     acquired=acquire(remote_settings,args.offline);conversion_input_set=str(acquired['inputSet'])
                     if args.reuse_source_stages and Path(conversion_input_set).resolve()!=Path(args.input_set).resolve():
                         raise ValueError('New acquired files require fresh source stages; acquired evidence is preserved')
-                result=convert_package(args.source,args.target,args.out,args.namespace or 'monkey-project',args.offline,conversion_input_set,reuse_source_stages=args.reuse_source_stages,format_profile=args.format or 'none',code_contract=args.numeric_code_contract,cocos_code_language=args.cocos_code_language)
+                result=convert_package(args.source,args.target,args.out,args.namespace or 'monkey-project',args.offline,conversion_input_set,reuse_source_stages=args.reuse_source_stages,format_profile=args.format or 'none',code_contract=args.numeric_code_contract,cocos_code_language=args.cocos_code_language,layout_path=args.layout)
                 if acquired:
                     from .acquisition import attach
                     attach(result,args.out,acquired)

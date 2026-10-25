@@ -6,15 +6,27 @@ import uuid
 from . import __version__
 from .io import safe, inside, read, load, sha, encoded, write_json, new_output, finish, diagnostic, stage_document
 from .sources.compiled import fail
+from .layout import standard
 
 PROFILES={'unity-6000.6.2f1-ugui','cocos-3.8.8'}
+# monkey-project/1 has no manual folder: ownership is the manifest owner field (PROJECT-SPEC 4.1).
+CURRENT_ROOTS={'unity':('Assets/Game/','Assets/TextMesh Pro/','Packages/','ProjectSettings/','Analysis/','Docs/','SourceRecovery/'),
+               'creator':('assets/','extensions/monkey-import/','settings/','Analysis/','Docs/','SourceRecovery/')}
+CURRENT_SCAN={'unity':(standard.ROOTS['unity']['content'],standard.ROOTS['unity']['scenes'],standard.ROOTS['unity']['conversion'],'Packages','ProjectSettings','Analysis'),
+              'creator':(*sorted({'assets/'+v.split('/')[0] for v in standard.CREATOR_TYPES.values()}|{'assets/localization','assets/mini-games','assets/scenes'}),
+                         standard.ROOTS['creator']['conversion'],'Analysis')}
 
 
-def manual(profile,relative):
+def _engine(profile):return 'unity' if profile.startswith('unity-') else 'creator'
+
+
+def manual(profile,relative,current=False):
+    if current:return False
     return relative.startswith('Assets/Manual/' if profile.startswith('unity-') else 'assets/manual/')
 
 
-def managed(profile,relative):
+def managed(profile,relative,current=False):
+    if current:return relative in ('README.md','AGENTS.md','package.json','tsconfig.json') or relative.startswith(CURRENT_ROOTS[_engine(profile)])
     if manual(profile,relative):return False
     prefixes=('Assets/Generated/','Assets/Monkey/Editor/','Packages/','ProjectSettings/','Analysis/') if profile.startswith('unity-') else ('assets/generated/','extensions/monkey-import/','Analysis/')
     return relative in ('README.md','package.json') or relative.startswith(prefixes)
@@ -24,7 +36,7 @@ def snapshot(candidate):
     root=safe(candidate);raw=read(root/'manifest.json');m=load(raw)
     if m.get('schemaVersion')!=1 or m.get('targetProfile') not in PROFILES or not isinstance(m.get('namespace'),str) or not m['namespace']:
         fail('UNSUPPORTED_CANDIDATE',str(root),'Expected versioned monkey target manifest')
-    files={};total=0
+    files={};total=0;current=standard.current(m)
     for f in m['files']:
         relative=f['path']
         if not isinstance(relative,str) or '\\' in relative or any(x in ('','..','.') for x in relative.split('/')):
@@ -36,11 +48,11 @@ def snapshot(candidate):
             fail('INVALID_HASH',relative,'Expected SHA-256')
         if type(f.get('bytes')) is not int or f['bytes']<0:fail('INVALID_MANIFEST',relative,'Invalid byte count')
         total+=f['bytes'];files[relative]=f
-        if not (managed(m['targetProfile'],relative) or manual(m['targetProfile'],relative)):
+        if not (managed(m['targetProfile'],relative,current) or manual(m['targetProfile'],relative,current)):
             fail('UNMANAGED_PATH',relative,'File is outside target ownership boundary')
-        if f['owner']=='manual' and not manual(m['targetProfile'],relative):
+        if not current and f['owner']=='manual' and not manual(m['targetProfile'],relative):
             fail('MANUAL_BOUNDARY',relative,'Manual ownership is confined to the declared manual area')
-        if manual(m['targetProfile'],relative) and f['owner']=='generated':
+        if not current and manual(m['targetProfile'],relative) and f['owner']=='generated':
             fail('MANUAL_BOUNDARY',relative,'Generator cannot own manual work')
     if total>256*1024*1024 or len(files)>20000:fail('OUTPUT_BUDGET',str(root),'Candidate exceeds budget')
     return root,m,files,sha(raw)
@@ -89,7 +101,9 @@ def diff_data(before,after):
         entries.append(dict(path=p,state=state,beforeSha256=old['sha256'] if old else None,afterSha256=new['sha256'] if new else None,
                             **ids.get(p,old_ids.get(p))))
     # Unknown files in generated boundaries are human/engine work, never silently adopted.
-    prefixes=('Assets/Generated','Assets/Monkey/Editor','Packages','ProjectSettings','Analysis') if b['targetProfile'].startswith('unity-') else ('assets/generated','extensions/monkey-import','Analysis')
+    current=standard.current(b)
+    if current:prefixes=CURRENT_SCAN[_engine(b['targetProfile'])]
+    else:prefixes=('Assets/Generated','Assets/Monkey/Editor','Packages','ProjectSettings','Analysis') if b['targetProfile'].startswith('unity-') else ('assets/generated','extensions/monkey-import','Analysis')
     scanned=[]
     for relative in prefixes:
         folder=inside(br,relative)
@@ -98,7 +112,7 @@ def diff_data(before,after):
         if p.is_symlink():fail('SYMLINK_PATH',str(p),'Output contains symbolic link')
         if p.is_file():
             relative=p.relative_to(br).as_posix()
-            if relative not in bf and relative!='manifest.json' and managed(b['targetProfile'],relative):
+            if relative not in bf and relative!='manifest.json' and managed(b['targetProfile'],relative,current):
                 if not any(x['path']==relative for x in conflicts):conflicts.append(dict(path=relative,reason='untracked-generated-file',actual=sha(read(p)),expected=None))
     return dict(schemaVersion=1,beforeRoot=str(br),afterRoot=str(ar),beforeManifestSha256=bh,afterManifestSha256=ah,
                 targetProfile=a['targetProfile'],namespace=a['namespace'],entries=entries,manualConflicts=conflicts,

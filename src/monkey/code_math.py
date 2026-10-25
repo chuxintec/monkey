@@ -35,7 +35,7 @@ def render(expression,language,depth=0):
     fail('CODE_MATH_EXPRESSION',str(kind),'Unsupported expression; no raw source interpolation')
 
 
-def emit(source,model_path,helper,dependencies,output,selected,language='ts',namespace='monkey-project',context=None,typeof_source=None):
+def emit(source,model_path,helper,dependencies,output,selected,language='ts',namespace='monkey-project',context=None,typeof_source=None,root_namespace='Game'):
     from .code_model import inspect
     from .targets.unity import guid
     from .targets.cocos import identity,meta
@@ -77,7 +77,7 @@ def emit(source,model_path,helper,dependencies,output,selected,language='ts',nam
             if parameter['name'].startswith('_monkey_'):fail('CODE_MEMBER_CONFLICT',parameter['name'],'Target helper collision')
         picked.append(m)
     if sha(read(source))!=sha(raw)or sha(read(helper))!=sha(helper_raw):fail('CODE_EMIT_SOURCE_CHANGED',str(source),'Source/helper changed before emission')
-    out=new_output(output,[source,model_path,helper]);cs=['// Generated static Number-call subset. Source helpers never execute.','namespace Monkey.Recovered {',f'public static class {class_name} {{']
+    out=new_output(output,[source,model_path,helper]);cs=['// Generated static Number-call subset. Source helpers never execute.','namespace '+root_namespace+'.Domain.Math {',f'public static class {class_name} {{']
     attr='[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]'
     # One separately rounded binary64 operation per call; prevent fused mul-add
     # contraction across original JavaScript operator boundaries.
@@ -92,15 +92,15 @@ def emit(source,model_path,helper,dependencies,output,selected,language='ts',nam
     cs += ['}','}'];target += ['}']
     if language=='js':target += [f'export {{ {class_name} }};']
     source_id=registrations[0]['identity'];script_guid=guid(namespace,'code/'+source_id+'/'+class_name);script_uuid=identity(namespace,'code/'+source_id+'/'+class_name)
-    files={f'Unity/Assets/Generated/Code/{class_name}.cs':'\n'.join(cs)+'\n',f'Cocos/assets/generated/scripts/{class_name}.{language}':'\n'.join(target)+'\n',
-           f'Unity/Assets/Generated/Code/{class_name}.cs.meta':'fileFormatVersion: 2\nguid: '+script_guid+'\n',
-           f'Cocos/assets/generated/scripts/{class_name}.{language}.meta':__import__('json').dumps(meta(script_uuid,'typescript'if language=='ts'else'javascript','4.0.24'),indent=2)+'\n',
-           'SourceRecovery/Original/'+class_name+'.js':raw,'SourceRecovery/Original/ReviewedBabelHelpers.js':helper_raw,'SourceRecovery/Original/ReviewedTypeofHelper.js':typeof_source}
+    files={f'Unity/Assets/Game/Domain/Math/{class_name}.cs':'\n'.join(cs)+'\n',f'Cocos/assets/scripts/domain/math/{class_name}.{language}':'\n'.join(target)+'\n',
+           f'Unity/Assets/Game/Domain/Math/{class_name}.cs.meta':'fileFormatVersion: 2\nguid: '+script_guid+'\n',
+           f'Cocos/assets/scripts/domain/math/{class_name}.{language}.meta':__import__('json').dumps(meta(script_uuid,'typescript'if language=='ts'else'javascript','4.0.24'),indent=2)+'\n',
+           'SourceRecovery/Code/Source/Emission/'+class_name+'.js':raw,'SourceRecovery/Code/Source/Emission/ReviewedBabelHelpers.js':helper_raw,'SourceRecovery/Code/Source/Emission/ReviewedTypeofHelper.js':typeof_source}
     if language=='js':files['Cocos/assets/package.json']='{"type":"module"}\n'
     for path,body in files.items():
         dest=out/path;dest.parent.mkdir(parents=True,exist_ok=True);dest.write_bytes(body if isinstance(body,bytes)else body.encode())
     pending=[m for m in model['methods']if m not in picked]
-    contract=dict(schemaVersion=1,kind=KIND,status='partial',source=model['source'],codeModelSha256=sha(model_raw),className=class_name,sourceMethods=len(model['methods']),implementedMethods=len(picked),
+    contract=dict(schemaVersion=1,kind=KIND,status='partial',source=model['source'],codeModelSha256=sha(model_raw),className=class_name,codeNamespace=root_namespace+'.Domain.Math',sourceMethods=len(model['methods']),implementedMethods=len(picked),
                   methods=picked,pendingMethods=pending,namespace=namespace,cocosCodeLanguage=language,sourceExecuted=False,
                   helper=dict(sha256=sha(helper_raw),profile=profile['profile'],context=context,executed=False),sourceClass=cls,
                   callDomain=dict(kind='explicit-static-number-calls-v1',accepted='Explicit JavaScript Number/C# double arguments including signed zero, NaN and infinities; unmodified methods and Math.PI',
@@ -111,7 +111,7 @@ def emit(source,model_path,helper,dependencies,output,selected,language='ts',nam
     return contract
 
 
-def prepare(recovered,spec,namespace,output):
+def prepare(recovered,spec,namespace,output,root_namespace='Game'):
     """Called with fresh static module-index records from the explicit input set."""
     from .code_model import inspect
     data=spec['data']
@@ -136,7 +136,7 @@ def prepare(recovered,spec,namespace,output):
     context,typeof_raw=helper_context(Path(output).parent/'InputTree',helper,helper_raw)
     write_json(out/'helper-context.json',context)
     inspect(source,out/'Model',data['moduleName'])
-    contract=emit(source,out/'Model/code-model.json',helper_source,module['dependencies'],out/'Emitted',data['methods'],spec.get('language','ts'),namespace,context,typeof_raw)
+    contract=emit(source,out/'Model/code-model.json',helper_source,module['dependencies'],out/'Emitted',data['methods'],spec.get('language','ts'),namespace,context,typeof_raw,root_namespace)
     report=dict(schemaVersion=1,kind=KIND,sourceModule=module['sourceId'],sourceModuleSha256=sha(raw),helperModule=helper['sourceId'],helperModuleSha256=sha(helper_raw),
                 declarationSha256=spec['sha256'],contractSha256=sha(read(out/'Emitted/Analysis/code-contract.json')),implementedMethods=contract['implementedMethods'],pendingMethods=len(contract['pendingMethods']),
                 binding='static-calls-only-no-component-binding',sourceExecuted=False)

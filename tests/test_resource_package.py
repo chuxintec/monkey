@@ -19,9 +19,10 @@ class GenericImageTests(unittest.TestCase):
             project=root/'out/UnityProject'
             self.assertEqual((project/'SourceRecovery/Original/source/game.js').read_text(),original)
             self.assertFalse(list((project/'Assets').rglob('*.js')))
-            plan=json.loads((project/'Assets/Monkey/Editor/import-plan.json').read_text())
+            plan=json.loads((project/'Assets/Game/Editor/Conversion/import-plan.json').read_text())
             self.assertTrue(plan['galleryOnly']);self.assertEqual(plan['nodes'],[])
-            self.assertEqual(len(plan['textures']),2)
+            # Gallery sprites have no trim=false Sprite, so no untrimmed duplicate is planned.
+            self.assertEqual(len(plan['textures']),1);self.assertFalse(any(t['id'].endswith('@original') for t in plan['textures']))
             from monkey.targets import cocos
             with self.assertRaises(ParseError):cocos.plan(root/'out/Structured/normalize/ir.json','same',root/'forbidden')
             self.assertFalse((root/'forbidden').exists())

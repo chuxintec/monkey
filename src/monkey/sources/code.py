@@ -48,7 +48,7 @@ def modules(raw, source_path=None):
     return [],dict(code='UNSUPPORTED_WRAPPER',message='No supported literal module table; complete source retained')
 
 
-def drafts(module, module_id):
+def drafts(module, module_id, namespace='Game.Gameplay.Unclassified'):
     """Named source members for AI editing; no fabricated unified Invoke API."""
     import re
     token='M'+sha(module_id.encode())[:20]
@@ -66,7 +66,7 @@ def drafts(module, module_id):
             '// TODO: recover source ownership/types/behavior from exact original module. No methods are marked implemented.',
             '// Source module: '+json.dumps(module_id),
             '// Source module SHA256: '+str(module.get('sha256','unknown'))]
-    cs=header+['namespace Recovered.Gameplay {', '  public partial class '+identifier(name)+' {']
+    cs=header+['namespace '+namespace+' {', '  public partial class '+identifier(name)+' {']
     ts=header+['export class '+name+' {']
     known_fields=set()
     for f in fields:

@@ -2,13 +2,12 @@
 import re
 from pathlib import PurePosixPath
 from ..io import diagnostic
-from . import semantic
+from . import semantic,standard
 
-TRACE_DIRS={'original','recovered','recovery','source','sources','generated','monkey','manual','bulkinitial','imported','sourcemedia','unformatted'}
-SOURCE_DIRS={'texture','image','images','prefab','anim','anims','animationclip','spinecook','uispine','sound','sounds','music','font',
-    'configs','material','shader','movieclip','uiraw','sprite','gameasset','remoteasset','spineasset','subpackages','raw-assets','minigameres',
-    'texture2d','monobehaviour','textasset','animatorcontroller','audioclip','mesh'}
+TRACE_DIRS=semantic.TRACE_WORDS
+SOURCE_DIRS=semantic.SOURCE_ONLY_WORDS
 LOCALE_DIRS=set(semantic.LOCALES)-{'zh-hans','zh-hant'}
+TYPE_DIRS={v.rsplit('/',1)[-1].lower() for v in [*standard.UNITY_TYPES.values(),*standard.CREATOR_TYPES.values()]}
 EXEMPT=('Assets/Game/Editor/Conversion/','Assets/Plugins/','Assets/ThirdParty/','Assets/TextMesh Pro/','Assets/Game/Scripts/')
 _HEX=re.compile(r'[0-9a-f]{32}')
 _HASHED_CODE=re.compile(r'-[0-9a-f]{6,}\.(cs|ts|js)$')
@@ -25,7 +24,8 @@ def scan(paths,texts=None):
             low=folder.lower()
             parent=folders[i-1].lower() if i else ''
             if parent=='audio' and low in ('music','sfx','voice'):continue
-            if low in TRACE_DIRS or low in SOURCE_DIRS or (low in LOCALE_DIRS and parent!='localization'):
+            # A locale bundle directly under a type folder is the legacy bundle-as-folder layout.
+            if low in TRACE_DIRS or low in SOURCE_DIRS or (low in LOCALE_DIRS and parent in TYPE_DIRS):
                 gaps.append(diagnostic('LAYOUT_FORBIDDEN_NAME',path,'Source trace folder in production area: '+folder));break
         stem=PurePosixPath(name).stem
         if _HEX.search(stem.lower()):gaps.append(diagnostic('LAYOUT_FORBIDDEN_NAME',path,'GUID-shaped file name'))

@@ -43,17 +43,18 @@ class StructuredTests(unittest.TestCase):
             self.assertEqual(alias['redirectTarget'],'textures:'+TEXTURE)
             for name in ('UnityProject','CocosProject'):
                 project=root/'out'/name;m=load(read(project/'manifest.json'))
-                self.assertEqual(m['layout'],'grea-typed-v1')
+                self.assertEqual(m['projectLayout'],'monkey-project/1.0.0')
+                self.assertFalse([d for d in (m.get('diagnostics') or []) if d['code']=='LAYOUT_FORBIDDEN_NAME'])
                 self.assertEqual(m['validation']['editor'],'not_run')
                 if name=='UnityProject':
                     plan=load(read(project/'Assets/Game/Editor/Conversion/import-plan.json'))
                     self.assertEqual(plan['tmpResources'],dict(packageName='com.unity.ugui',packageVersion='2.6.0',resource='Package Resources/TMP Essential Resources.unitypackage',importMode='package-completion-callback'))
                     self.assertEqual(load(read(project/'Packages/manifest.json'))['dependencies']['com.unity.ugui'],'2.6.0')
                     self.assertEqual(len(plan['sourcePrefabs']),1)
-                    self.assertIn('Assets/Game/Content/Prefabs/Recovery/Sources/',plan['sourcePrefabs'][0]['path'])
+                    self.assertTrue(plan['sourcePrefabs'][0]['path'].startswith('Assets/Game/Content/Prefabs/'),plan['sourcePrefabs'][0]['path'])
                     asset=next(a for a in plan['assets'] if a['kind']=='cc.JsonAsset')
-                    self.assertIn('Assets/Game/Content/Config/Recovered/',asset['path'])
-                    self.assertTrue((project/'Assets/Game/Presentation/Recovery/MonkeyCandidateView.cs').exists())
+                    self.assertTrue(asset['path'].startswith('Assets/Game/Content/Config/'),asset['path'])
+                    self.assertTrue((project/'Assets/Game/Presentation/Preview/ContentPreviewView.cs').exists())
                 else:
                     plan=load(read(project/'extensions/monkey-import/import-plan.json'))
                     asset=next(a for a in plan['assets'] if a['kind']=='json')

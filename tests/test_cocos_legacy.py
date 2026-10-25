@@ -44,7 +44,9 @@ class LegacyResourcesTests(unittest.TestCase):
                 rows=load(read(root/'out'/target/'Analysis/resource-ledger.json'))['files'];old=next(r for r in rows if r['localPath']==stale.name)
                 new=next(r for r in rows if r['localPath']==selected.name)
                 self.assertTrue(old['target'].startswith('SourceRecovery/Excluded/'));self.assertEqual(old['targetState'],'excluded_from_runtime')
-                self.assertNotEqual(old['target'],new['target']);self.assertEqual(new['targetState'],'pending_native_import')
+                self.assertNotEqual(old['target'],new['target'])
+                # The selected image is carried by its normalized sprite; its raw bytes are evidence, never runtime content.
+                self.assertTrue(new['target'].startswith('SourceRecovery/Original/'));self.assertEqual(new['disposition'],'structured_candidate')
 
     def test_unknown_geometry_is_not_silently_projected(self):
         with self.assertRaises(ParseError):document({'__type__':'cc.SpriteFrame','content':{'vertices':[1,2]}})

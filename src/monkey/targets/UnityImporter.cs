@@ -47,12 +47,12 @@ public static partial class MonkeyImporter
     }
     [Serializable] public class NumericMethodsSpec { public string setter,getter; }
     [Serializable] public class ComponentSpec {
-        public string codeClassName,codeScriptGuid,sourceScriptIdentity; public NumericMethodsSpec numericMethods;
+        public string codeClassName,codeNamespace,codeScriptGuid,sourceScriptIdentity; public NumericMethodsSpec numericMethods;
         public string sourceId, type, node, spriteFrame, font, text, nativeLayoutMode;
         public float[] nativeCellSize;
         public int mode, sizeMode, horizontalAlign, verticalAlign, overflow; public float fontSize,lineHeight;
         public bool enabled, convertible, trim, wrap, bold, italic; public float spacing; public BitmapProbe bitmapProbe;
-        public string target,content,nativeId; public int flags,maskType,layoutType,resize,horizontalDirection,verticalDirection,startAxis,constraint,constraintCount,transition;
+        public string target,content,nativeId,controllerPath,materialPath; public int flags,maskType,layoutType,resize,horizontalDirection,verticalDirection,startAxis,constraint,constraintCount,transition;
         public bool inverted,horizontal,vertical,interactable; public float zoomScale,duration,width;
         public float[] margins,spacingXY,padding,effectiveCellSize,cellSize,outlineColor;
         public bool crossAxisScale; public float crossAxisAlignment; public bool[] absolute,centerAbsolute; public float[] center; public int alignMode; public bool affectedByScale,alignCross;
@@ -90,18 +90,20 @@ public static partial class MonkeyImporter
     }
     // Editor-only typed output locations. Original game source and text are never rewritten.
     [Serializable] public class OutputPaths {
-        public string plan="Assets/Monkey/Editor/import-plan.json";
-        public string prefab="Assets/Generated/Views/Candidate.prefab",scene="Assets/Generated/Scenes/Candidate.unity",bootstrap="Assets/Generated/Scenes/ImportBootstrap.unity";
-        public string artRoot="Assets/Generated/Art",controllersRoot="Assets/Generated/Controllers",materialsRoot="Assets/Generated/Art",animationsRoot="Assets/Generated/Animations",sourcePrefabsRoot="Assets/Generated/Views/Sources";
-        public string editableProbe="Assets/Generated/Views/EditableProbe.prefab";
-        public string[] nativeRoots={"Assets/Generated","Assets/TextMesh Pro"},metaRoots={"Assets/Monkey"};
+        // monkey-project/1 defaults (docs/PROJECT-SPEC.md); candidates declare their own copy in output-paths.json.
+        public string plan="Assets/Game/Editor/Conversion/import-plan.json";
+        public string prefab="Assets/Game/Scenes/Preview/ContentPreview.prefab",scene="Assets/Game/Scenes/Preview/ContentPreview.unity",bootstrap="Assets/Game/Scenes/Boot.unity";
+        public string artRoot="Assets/Game/Content",controllersRoot="Assets/Game/Content/Animations",materialsRoot="Assets/Game/Content/Materials",animationsRoot="Assets/Game/Content",sourcePrefabsRoot="Assets/Game/Content";
+        public string editableProbe="Assets/Game/Scenes/Preview/EditableProbe.prefab";
+        public string[] nativeRoots={"Assets/Game/Content","Assets/Game/Scenes","Assets/Game/Presentation","Assets/Game/Domain","Assets/TextMesh Pro"},metaRoots={"Assets/Game/Editor/Conversion"};
     }
     static OutputPaths outputPaths;
     static OutputPaths Paths {
         get {
             if(outputPaths!=null)return outputPaths;
-            const string config="Analysis/output-paths.json";
-            var data=File.Exists(config)?JsonUtility.FromJson<OutputPaths>(File.ReadAllText(config)):new OutputPaths();
+            // Current layout keeps the host locations beside the importer; older formatted candidates kept them in Analysis.
+            var config=new[]{"Assets/Game/Editor/Conversion/output-paths.json","Analysis/output-paths.json"}.FirstOrDefault(File.Exists);
+            var data=config!=null?JsonUtility.FromJson<OutputPaths>(File.ReadAllText(config)):new OutputPaths();
             if(data==null||data.nativeRoots==null||data.metaRoots==null||data.nativeRoots.Length<1||data.nativeRoots.Length>8||data.metaRoots.Length<1||data.metaRoots.Length>8)throw new InvalidOperationException("Invalid typed output roots");
             foreach(var path in new[]{data.plan,data.prefab,data.scene,data.bootstrap,data.artRoot,data.controllersRoot,data.materialsRoot,data.animationsRoot,data.sourcePrefabsRoot,data.editableProbe}.Concat(data.nativeRoots).Concat(data.metaRoots))
                 if(string.IsNullOrEmpty(path)||!path.StartsWith("Assets/",StringComparison.Ordinal)||path.Contains("..")||path.Contains("\\")||path.Contains(":")||path.Contains("\0"))throw new InvalidOperationException("Unsafe typed output location");
@@ -395,6 +397,10 @@ public static partial class MonkeyImporter
             Directory.CreateDirectory(directory);
         foreach(var font in plan.bitmapFonts)Directory.CreateDirectory(Path.GetDirectoryName(font.fontPath));
         foreach(var animation in plan.animations.Where(a=>a.convertible))Directory.CreateDirectory(Path.GetDirectoryName(animation.path));
+        foreach(var planned in plan.components.SelectMany(c=>new[]{c.controllerPath,c.materialPath}).Where(v=>!string.IsNullOrEmpty(v))) {
+            if(!planned.StartsWith("Assets/",StringComparison.Ordinal)||planned.Contains("..")||planned.Contains("\\"))throw new InvalidOperationException("Unsafe planned native asset path");
+            Directory.CreateDirectory(Path.GetDirectoryName(planned));
+        }
         AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
         if (plan.sourceDiagnosticCount > 0) diagnostics.Add("SOURCE_GAPS: " + plan.sourceDiagnosticCount);
         if(NeedsTmp(plan))EnsureTmpResources(plan.tmpResources);
@@ -633,7 +639,7 @@ public static partial class MonkeyImporter
                 var width=spec.width*label.font.faceInfo.pointSize/Mathf.Max(label.fontSize,1)/Mathf.Max(gradient,1);
                 material.SetFloat("_OutlineWidth",Mathf.Clamp01(width));
                 material.SetColor("_OutlineColor",new Color(spec.outlineColor[0]/255f,spec.outlineColor[1]/255f,spec.outlineColor[2]/255f,spec.outlineColor[3]/255f));
-                var path=Paths.materialsRoot+"/"+spec.nativeId+".mat";AssetDatabase.CreateAsset(material,path);
+                var path=string.IsNullOrEmpty(spec.materialPath)?Paths.materialsRoot+"/"+spec.nativeId+".mat":spec.materialPath;AssetDatabase.CreateAsset(material,path);
                 label.fontSharedMaterial=material;
                 label.margin=new Vector4(spec.width,spec.width,spec.width,spec.width);
                 label.UpdateMeshPadding();
@@ -726,7 +732,7 @@ public static partial class MonkeyImporter
         }
         foreach(var owner in (plan.prefabInstances??new PrefabInstanceSpec[0]).Select(p=>p.owner).Distinct().Where(s=>!prefabTemplateHashes.ContainsKey(s)))
             PrepareNativeInstances(plan,owner,nodeMap,nodeSpecs);
-        var view = canvas.AddComponent<MonkeyCandidateView>();
+        var view = canvas.AddComponent<ContentPreviewView>();
         view.Images = canvas.GetComponentsInChildren<UnityEngine.UI.Image>(true);
         view.Labels = canvas.GetComponentsInChildren<TMPro.TextMeshProUGUI>(true);
         view.Buttons = canvas.GetComponentsInChildren<UnityEngine.UI.Button>(true);
@@ -754,7 +760,7 @@ public static partial class MonkeyImporter
         }
         ownedScene=scene;
         if(!scene.IsValid() || !scene.isLoaded)throw new InvalidOperationException("Saved scene reopen failed");
-        instance=scene.GetRootGameObjects().FirstOrDefault(go=>go.GetComponent<MonkeyCandidateView>()!=null);
+        instance=scene.GetRootGameObjects().FirstOrDefault(go=>go.GetComponent<ContentPreviewView>()!=null);
         if(instance==null)throw new InvalidOperationException("Reopened scene has no serialized candidate view");
         SettleNativeLayout(instance);
         if(!EditorSceneManager.SaveScene(scene,ScenePath))throw new InvalidOperationException("Settled native scene save failed");
@@ -796,7 +802,7 @@ public static partial class MonkeyImporter
                     border=new[]{s.border.x,s.border.y,s.border.z,s.border.w}};
             }).ToArray()
         };
-        var savedView=instance.GetComponent<MonkeyCandidateView>();
+        var savedView=instance.GetComponent<ContentPreviewView>();
         readback.viewReferences=plan.components.Where(c=>c.convertible && new[]{"cc.Sprite","cc.Label","cc.Button"}.Contains(c.type)).Select(c=> {
             var node=savedNodeMap[c.node];
             Component component=null;string field;int index;
@@ -843,7 +849,7 @@ public static partial class MonkeyImporter
             bool persisted=contents.transform.GetChild(0).name==original+"__EditProbe";
             contents.transform.GetChild(0).name=original;
             PrefabUtility.SaveAsPrefabAsset(contents,path,out bool saved);
-            return persisted && saved && contents.GetComponent<MonkeyCandidateView>()!=null;
+            return persisted && saved && contents.GetComponent<ContentPreviewView>()!=null;
         }
         finally {PrefabUtility.UnloadPrefabContents(contents);}
     }
@@ -872,7 +878,8 @@ public static partial class MonkeyImporter
         }
     }
     static void ConfigureScaleButton(GameObject go,UnityEngine.UI.Button button,ComponentSpec spec) {
-        var path=Paths.controllersRoot+"/"+spec.nativeId;
+        var planned=!string.IsNullOrEmpty(spec.controllerPath);
+        var path=planned?spec.controllerPath.Substring(0,spec.controllerPath.Length-".controller".Length):Paths.controllersRoot+"/"+spec.nativeId;
         var controller=UnityEditor.Animations.AnimatorController.CreateAnimatorControllerAtPath(path+".controller");
         var normal=new AnimationClip {name="Normal"};var pressed=new AnimationClip {name="Pressed"};
         var scale=go.transform.localScale;
@@ -881,7 +888,8 @@ public static partial class MonkeyImporter
             normal.SetCurve("",typeof(Transform),"m_LocalScale."+axis,AnimationCurve.Constant(0,Mathf.Max(spec.duration,.001f),value));
             pressed.SetCurve("",typeof(Transform),"m_LocalScale."+axis,AnimationCurve.Constant(0,Mathf.Max(spec.duration,.001f),value*spec.zoomScale));
         }
-        AssetDatabase.CreateAsset(normal,path+"-normal.anim");AssetDatabase.CreateAsset(pressed,path+"-pressed.anim");
+        var separator=planned?"_":"-";
+        AssetDatabase.CreateAsset(normal,path+separator+"normal.anim");AssetDatabase.CreateAsset(pressed,path+separator+"pressed.anim");
         var machine=controller.layers[0].stateMachine;
         foreach(var trigger in new[]{"Normal","Highlighted","Pressed","Selected","Disabled"}) {
             controller.AddParameter(trigger,AnimatorControllerParameterType.Trigger);

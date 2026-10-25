@@ -58,8 +58,8 @@ def import_plan_model(document,profile):
 def inspect(candidate,output):
     candidate=safe(candidate);m=stage_manifest(candidate);profile=m.get('targetProfile')
     if profile not in (unity.PROFILE,cocos.PROFILE):fail('PROJECT_PROFILE',str(candidate),'Expected known target candidate')
-    from .targets.layout import lookup
-    path=(lookup('Assets/Monkey/Editor/import-plan.json',m) if profile==unity.PROFILE
+    from .layout import locate
+    path=(locate(m,'importPlan') if profile==unity.PROFILE
           else 'extensions/monkey-import/import-plan.json')
     plan=inside(candidate,path);raw=read(plan,max_bytes=128*1024*1024)
     entry=next((f for f in m['files'] if f['path']==path),None)

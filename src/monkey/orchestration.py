@@ -58,9 +58,9 @@ def run(conversion, settings):
             fail('NATIVE_SOURCE_IDENTITY', str(root), 'Generated candidate manifest differs from conversion receipt')
         # Check every target entrypoint before launching the first Editor. A file
         # accounting fallback may be complete even when native emission failed.
-        from .targets.layout import lookup
+        from .layout import locate
         manifest=stage_manifest(root)
-        entry=lookup('Assets/Monkey/Editor/MonkeyImporter.cs',manifest) if profile==unity.PROFILE else 'extensions/monkey-import/execution.js'
+        entry=locate(manifest,'importer') if profile==unity.PROFILE else 'extensions/monkey-import/execution.js'
         marker=b'public static void ImportBatchAsync()' if profile==unity.PROFILE else b'MONKEY_NATIVE_EXECUTE'
         records=[f for f in manifest['files']if f['path']==entry]
         helper=inside(root,entry)

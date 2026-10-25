@@ -1,6 +1,6 @@
 """Finite conversion-time AnimationClip subset. No source callbacks or runtime evaluation."""
 import math
-from ..io import diagnostic, sha
+from ..io import diagnostic
 from ..sources.compiled import fail, ParseError
 
 SCHEMA=1
@@ -96,7 +96,7 @@ def sample(keys,time):
     return keys[-1]['value']
 
 
-def plan_clips(ir,namespace,profile,selection=None):
+def plan_clips(ir,namespace,profile,selection=None,naming=None):
     clips=ir.get('animationClips',[])
     if ('animationSchemaVersion' in ir or clips) and ir.get('animationSchemaVersion')!=SCHEMA:fail('UNSUPPORTED_ANIMATION_IR','$','Expected animation schema 1')
     known={c['sourceId'] for c in clips};selection=set(selection or known)
@@ -134,18 +134,20 @@ def plan_clips(ir,namespace,profile,selection=None):
             if any(n>1 for n in counts.values()):
                 gaps.append(diagnostic('ANIMATION_CHANNEL_COLLISION',clip['sourceLocation'],'Overlapping source properties target the same native channel',clip['sourceId']))
                 tracks=[t for t in tracks if counts[(t['node'],t['property'])]==1]
-            identity=sha((namespace+'/'+clip['sourceId']+'/'+owner['sourceId']).encode())[:24]
             out.append(dict(id=clip['sourceId']+'@'+owner['sourceId'],name=clip['name'],root=owner['node'],duration=clip['duration'],sample=clip['sample'],
                 wrap=clip['wrap'],tracks=tracks,convertible=bool(tracks) and clip['timingSupported'],partial=clip['partial'] or len(tracks)!=len(clip['tracks']),
-                events=clip['events'],path=('Assets/Generated/Animations/' if profile.startswith('unity-') else 'assets/generated/animations/')+identity+'.anim',autoPlay=False))
-    from ..names import Names
-    naming=Names(ir.get('sourceNames'))
-    for item in out:
+                events=clip['events'],path=None,autoPlay=False,owner=root['name']))
+    if naming is None:
+        from ..layout import LayoutPlanner
+        naming=LayoutPlanner('unity' if profile.startswith('unity-') else 'creator',ir.get('sourceNames'))
+    def meta(item):
         source=item['id'].split('@',1)[0]
-        meta=dict(ir.get('sourceNames',{}).get(source,{}));meta['sourceId']=source
-        if not meta.get('sourceName'):meta['sourceName']=item['name']
-        item['path']=naming.path(item['id'],'.anim','Assets/Generated/Animations' if profile.startswith('unity-') else 'assets/generated/animations',metadata=meta)
-        item['nameEvidence']=naming.records[-1]
+        value=dict(ir.get('sourceNames',{}).get(source,{}));value['sourceId']=source
+        if not value.get('sourceName'):value['sourceName']=item['name']
+        return value
+    # One clip per (clip, owner); a shared clip name is qualified by its owner node before any hash.
+    naming.reserve([(item['id'],'animation','.anim','',meta(item),item.pop('owner')) for item in out])
+    for item in out:item['path']=naming.path(item['id'],'animation','.anim',metadata=meta(item))
     return out,gaps
 
 

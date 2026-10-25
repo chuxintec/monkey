@@ -21,13 +21,13 @@ def declaration(path, language='ts'):
     return dict(path=str(path),sha256=sha(raw),data=data,language=language)
 
 
-def prepare(recovered, spec, namespace, output):
+def prepare(recovered, spec, namespace, output, root_namespace='Game'):
     from .code_model import inspect
     from .code_emit import emit
     data=spec['data']
     if data['kind']=='static-number-methods-v1':
         from .code_math import prepare as prepare_math
-        return prepare_math(recovered,spec,namespace,output)
+        return prepare_math(recovered,spec,namespace,output,root_namespace)
     matches=[m for m in recovered if m.get('name')==data['moduleName'] and any(r.get('identity')==data['registrationId'] for r in m.get('rf',[]))]
     if len(matches)!=1:fail('PACKAGE_CODE_MODULE',data['moduleName'],'Expected one exact original RF module; duplicates are ambiguous')
     module=matches[0];raw=module['source'].encode()
@@ -37,7 +37,7 @@ def prepare(recovered, spec, namespace, output):
     if sha(declaration_raw)!=spec['sha256']:fail('PACKAGE_CODE_CONTRACT_CHANGED',spec['path'],'Declaration changed before emission')
     out=new_output(output);source=out/'OriginalModule.js';source.write_bytes(raw);(out/'OriginalContract.json').write_bytes(declaration_raw)
     inspect(source,out/'Model',data['moduleName'])
-    emit(source,out/'Model/code-model.json',out/'Emitted',[data['numericField']],spec.get('language','ts'),namespace)
+    emit(source,out/'Model/code-model.json',out/'Emitted',[data['numericField']],spec.get('language','ts'),namespace,root_namespace)
     contract=load(read(out/'Emitted/Analysis/code-contract.json'))
     if contract['presentation']['kind']!='label-adapter' or contract['presentation']['sourceRegistration']['identity']!=data['registrationId']:
         fail('PACKAGE_CODE_BASE',module['sourceId'],'Only source-proven native Label adapters currently bind automatically')
@@ -64,7 +64,7 @@ def project_ir(ir_path, inspected, emission, output):
         if sid not in asset_ids:continue
         for c in label_components(asset['document'],sid,contract):
             if c['sourceId']in replacements:fail('PACKAGE_CODE_BINDINGS',c['sourceId'],'Repeated source component')
-            c.update(codeClassName=contract['className'],codeScriptGuid=contract['nativeIdentity']['unityScriptGuid'],codeScriptUuid=contract['nativeIdentity']['creatorScriptUuid'],numericMethods=report['numericMethods'])
+            c.update(codeClassName=contract['className'],codeNamespace=contract['codeNamespace'],codeScriptGuid=contract['nativeIdentity']['unityScriptGuid'],codeScriptUuid=contract['nativeIdentity']['creatorScriptUuid'],numericMethods=report['numericMethods'])
             replacements[c['sourceId']]=c
     if set(replacements)!=expected:fail('PACKAGE_CODE_BINDINGS',identity,'Projection must cover every original matching component exactly once')
     out=new_output(output,[ir_path,emission])
@@ -86,7 +86,7 @@ def install(emission, project, profile, manifest, plan):
     contract_path=emission/'Emitted/Analysis/code-contract.json';contract=load(read(contract_path));prefix='Unity/'if profile==unity.PROFILE else'Cocos/'
     script=None
     for row in contract['files']:
-        original=row['path'].startswith('SourceRecovery/Original/')
+        original=row['path'].startswith('SourceRecovery/Code/Source/Emission/')
         if not row['path'].startswith(prefix)and not original:continue
         source=emission/'Emitted'/row['path'];raw=read(source)
         if sha(raw)!=row['sha256']:fail('PACKAGE_CODE_EMIT_CHANGED',str(source),'Generated source/meta differs')
@@ -116,12 +116,12 @@ def enrich_handoff(project):
               codeState='implemented-evidenced-number-subdomain',binding=report['binding'],sourceBindings=[],
               implementedMethods=methods,pendingMethods=[m['name']for m in contract['pendingMethods']],callDomain=contract['callDomain'],
               targetScript='manifest.json#/codeEmission/scriptPath',contract='Analysis/code-contract.json',
-              allowedPaths=['Assets/Game/Domain/','Assets/Generated/Code/','assets/scripts/domain/','assets/generated/scripts/'],
+              allowedPaths=['Assets/Game/Domain/','assets/scripts/domain/'],
               nextAction='Review static Number-call contract before using these methods; recover vector/object methods separately from exact preserved source',
               verification=['compile generated target script','Number boundary and rounding vectors','target Player/runtime before gameplay integration'],
               validation=dict(compile='not_run',numericCalls='not_run',player='not_run',business='not_run'))
     work=load(read(project/'Analysis/agent-work.json'));work['tasks'].append(task);write_json(project/'Analysis/agent-work.json',work)
-    invocation='Monkey.Recovered.'+contract['className'] if (project/'ProjectSettings').exists()else contract['className']
+    invocation=contract['codeNamespace']+'.'+contract['className'] if (project/'ProjectSettings').exists()else contract['className']
     lines=['# Static numeric utility', '',f'Class: `{invocation}`. Resolve the current script from `manifest.json` → `codeEmission.scriptPath`; this pointer stays valid after formatting.',
            '',f"{len(methods)} source methods emitted, {len(contract['pendingMethods'])} pending. Binding: `{report['binding']}`. No source constructor or helper executes, and no source component is wired by this utility.", '',
            'Implemented calls:',*['- `'+invocation+'.'+m['name']+'('+', '.join(m['parameters'])+')` → number / C# double'for m in methods], '',
