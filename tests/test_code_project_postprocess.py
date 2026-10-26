@@ -133,3 +133,12 @@ class ProjectPostprocessTests(unittest.TestCase):
   run.assert_not_called();self.assertEqual(result['actuallyProcessed'],2)
   after=json.loads((self.output/'state.json').read_bytes())
   self.assertEqual([v['attempts']for v in before['batches'].values()],[v['attempts']for v in after['batches'].values()])
+ def test_status_reports_resumed_child_without_mutating_checkpoint_or_counting_reviewed(self):
+  path=self.output/'state.json';state=json.loads(path.read_bytes());batch=next(iter(state['batches']));entry=state['batches'][batch]
+  entry.update(status='checkpoint',attemptRoots=['own-checkpoint']);state.update(status='running',currentBatch=batch)
+  for p in entry['files']:state['files'][p]['status']='blocked'
+  path.write_bytes(encoded(state));before=path.read_bytes();attempt=self.output/'own-checkpoint';attempt.mkdir()
+  (attempt/'process.json').write_bytes(encoded(dict(state='running',pid=12345)))
+  result=project.status(self.output)
+  self.assertEqual(result['actuallyProcessed'],0);self.assertEqual(result['fileStates']['running'],1)
+  self.assertEqual(result['batchStates']['running'],1);self.assertEqual(path.read_bytes(),before)

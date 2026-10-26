@@ -97,6 +97,16 @@ def _open(root):
 
 def status(root):
     root=safe(root); request=_json(root/'request.json'); state=_json(root/'state.json')
+    current=state.get('currentBatch');live=False
+    if state['status']=='running' and current and state['batches'][current].get('attemptRoots'):
+        process=root/state['batches'][current]['attemptRoots'][-1]/'process.json'
+        if process.is_file():
+            info=_json(process);pid=info.get('pid')
+            live=info.get('state')=='running' and type(pid)is int
+    if live:
+        state['batches'][current]['status']='running'
+        for path in state['batches'][current]['files']:
+            if not state['files'][path].get('processed'):state['files'][path]['status']='running'
     counts = collections.Counter(row['status'] for row in state['files'].values())
     batch_counts = collections.Counter(row['status'] for row in state['batches'].values())
     return dict(status=state['status'], report=str(root/'state.json'), project=str(root/'UnityProject'),
@@ -472,6 +482,9 @@ def run(root):
                         except ProcessLookupError:pass
                         else:fail('PROJECT_POSTPROCESS_CHILD_ALIVE',str(old),'Recorded Codex child is still alive; do not start a second CLI')
                 if (old/'manifest.json').is_file():
+                    entry['status']='running'
+                    for path in remaining:state['files'][path]['status']='running'
+                    state['updatedAt']=time.time();_save(root/'state.json',state)
                     result=_json(old/'manifest.json')
                     checkpoint=_json(old/'request.json')
                     if checkpoint.get('state')=='prepared' and result.get('blockingCondition')=='operator_pause':
