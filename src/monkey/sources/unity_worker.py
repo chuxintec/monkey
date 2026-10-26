@@ -122,6 +122,15 @@ def full_schema(node):
     return [{k:v for k,v in n.items() if k != 'm_Children'} for n in node.to_dict_list()]
 
 
+def component_prefix(obj):
+    """Keep independently decoded native PPtrs when a component body is unknown."""
+    head=obj.parse_monobehaviour_head();refs=[];values={}
+    for name in ('m_GameObject','m_Script'):
+        ptr=getattr(head,name)
+        values[name]=portable(dict(m_FileID=ptr.m_FileID,m_PathID=ptr.m_PathID),refs,'$/'+name)
+    return dict(status='prefix-only',body='unparsed',fields=values),refs
+
+
 def schema_pool(assets, job, all_schemas=False):
     import UnityPy
     wanted = {type_identity(a, o.serialized_type) for a in assets for o in a.objects.values()
@@ -224,6 +233,17 @@ def inspect_bytes(raw, schema_job=None, schema_cache=None, parse_limits=None, pa
                 row.pop('semanticValidation', None)
                 row['references'] = []
                 row['error'] = dict(type=type(error).__name__, message=str(error).splitlines()[0][:240])
+                if obj.type.name=='MonoBehaviour':
+                    try:
+                        prefix,refs=component_prefix(obj)
+                        row['nativePrefix']=prefix;row['references']=refs
+                        row['referenceCoverage']='native-prefix-only;unknown-body-references-not-enumerated'
+                        row['error']['code']='MONOBEHAVIOUR_BODY_UNPARSED'
+                        if not exact and not (obj.serialized_type and obj.serialized_type.node):
+                            row['error']['code']='MISSING_EXACT_MONOBEHAVIOUR_SCHEMA'
+                            row['requiredSchemaIdentity']=type_identity(asset,obj.serialized_type)
+                    except Exception as prefix_error:
+                        row['nativePrefix']=dict(status='unreadable',error=str(prefix_error)[:240])
             row['parseMetrics'].update(inlineValues=counter[0],streamedValues=sum(b['length']for b in blocks)if row['status']=='parsed'else 0)
             objects.append(row)
     return dict(schemaVersion=1, sourceFamily='unity', provider=dict(name='UnityPy',version=PROVIDER_VERSION),

@@ -1,17 +1,29 @@
 # monkey 项目计划与执行进度
 
-## 当前执行：v0.5.0 / 05-A 收口、05-B 冻结交接（2026-10-26）
+## 当前执行：v0.5.0 / 05-C 资源与引用第一组修复（2026-10-26）
 
 用户直接批准先做大工程预算/阶段复用，再做 adopt 并验证肥鹅/向僵尸。开发版本 **0.5.0.dev1**。后续人类批准 GREA/monkey/beaver 职责整改：monkey 负责独立恢复候选，开发工程采用事务交 beaver；已原生核验总监 human `01a1764c-0246-7541-88e4-9a84d3556574`。依据 [三产品计划](/Users/wangmeng/Documents/Manager/decisions/20261026-grea-monkey-beaver/PLAN.md) 与 [交接合同](/Users/wangmeng/Documents/Manager/decisions/20261026-grea-monkey-beaver/CONTRACT.md)，保留在途实现和失败记录，冻结后供 beaver 接手，不重新实现或继续扩展 monkey 工程事务。
 
 | 工作包 | 本轮结果 | 状态与下一步 |
 |---|---|---|
 | 05-A 大工程预算/阶段复用 | 全输入 8 GiB/50 万文件，选择集 256 MiB/2 万，单文件 512 MiB；流式哈希/复制、有界 no-follow 读取；精确 reader/schema/依赖合同替代仅靠版本号。肥鹅双端和僵尸共 315,003 个文件逐项核验通过；肥鹅 inspect/normalize 无重解析/图片解码，僵尸全部 601 容器无 worker 复用 | 本轮子集通过；仍复用原有检查点，未声称任意历史版本/所有阶段均可续跑 |
-| 05-B adopt 在途实现 | 三方预览、身份/命名空间/依赖保护、Unity 原生移动与回滚。339 测试通过；肥鹅副本前一 WIP 原生移动/保存重开通过，并有真实失败后回滚证据；最新新增目录/资产仅离线编译与测试，未原生验证。僵尸全量预览通过，未启动其 Editor | **移交 beaver**；冻结文件/哈希、依赖、调用方、实际验证层和剩余项见 [交接清单](BEAVER-HANDOFF.md)。旧入口明确 deprecated compatibility，替代未就绪前不假转发/不删实现 |
-| 05-C 资源/引用阻断 | 36 未解析对象、借用字段写回、紧密图集、Tiled、超长动画名、Spine/Shader 代表子集 | 待实施，仍属 monkey 候选正确性；不能用边界迁移抹除缺口 |
+| 05-B adopt 在途实现 | 三方预览、身份/命名空间/依赖保护、Unity 原生移动与回滚。339 测试通过；肥鹅副本前一 WIP 原生移动/保存重开通过，并有真实失败后回滚证据；最新新增目录/资产仅离线编译与测试，未原生验证。僵尸全量预览通过，未启动其 Editor | **已由 beaver 接收并完成其本地 0.1.0 验收**；只读复用固定回执，不重测采用。旧 monkey 入口仍为 deprecated compatibility，消费者切换/退休另行闭合；冻结身份见 [交接清单](BEAVER-HANDOFF.md) |
+| 05-C 资源/引用阻断 | 36 对象补回 72 原生头引用，正文仍 unparsed；Unity 两个超长派生路径修复并独立重开；Creator 21 个超预算 Tiled 原生零诊断；僵尸 3 紧密 Sprite / 271 顶点 / 336 三角形及 UV、1 Prefab / 16 字段保存重载通过；72 定向测试通过 | **部分完成**；精确正文 schema/借用字段写回闭合、Spine 播放与 Shader 目标转换继续实施。详见 [资源引用验收](validation/2026-10-26-resource-reference-correctness.md) |
 | 05-D 诊断与使用基础 | 本组补充能力/预算声明与验收摘要 | 其他统一诊断、显式补取续跑、环境/CI/空间预览待实施 |
 
 证据 `.private/v050-adoption-20261026/`；公开摘要 [本轮核验](validation/2026-10-26-v050-budget-reuse-handoff.md)。v0.5 尚未完成；日常安装仍为 v0.4.0，无推送/Release/全局安装。正式肥鹅/GREA 只读，向僵尸继续暂停；当前冻结点没有存活的采用 Editor/CLI 进程。
+
+## 本轮完成：资源与引用第一组（2026-10-26）
+
+续推已原生核验：总监 turn `01a176aa-5d5a-7d10-9a1b-d67ebc7052ea` / human `01a176aa-5d78-7421-a5db-d4c06b216750`，事件 `monkey-resource-reference-continuation-20261026-01`。本组复用冻结来源和 beaver 已验结果，没有重跑 601 容器/全量导出/采用矩阵。原生段仅 monkey 自有副本，所有自有 Unity/Creator child 已退出；正式肥鹅/GREA/beaver/僵尸只读。
+
+- 36 失败对象的基础头恢复 72 处 PPtr（69 非空、3 空引用），与原字节独立核对；1567 成功对象字段及全部原对象 hash 不变。失败正文与字段写回继续严格拒绝，不把引用保留称正文恢复。
+- 肥鹅 776 控制器 / 1552 派生片段只改两个超长文件名；真实路径 Unity 6 创建/独立重开、GUID/曲线/状态引用通过。统一分配器和命名预览重放均包含派生片段。
+- 肥鹅 1053 Tiled 中 21 个超过默认 4096 顶点，最大 59892。局部 2106 KiB / 59904 容量保留原几何/UV/边框；21 Sprite / 13 Frame 的 Creator 3.8.8 原生保存重开、分配/拓扑/UUID 复核零诊断。候选元数据/设置/说明记录该宏，**资源采用不会自动带入项目设置**。
+- 僵尸原叶 Prefab 的 3 紧密 Sprite / 271 顶点 / 336 三角形和 UV 原生读回通过；1 Prefab / 16 字段 / 3 Sprite 引用保存重载及原 GUID 通过。仅精确版本/平面浮点/无旋转等子集，未知布局仍阻断。
+- 定向 72 测试与 JS 语法通过。Spine/Shader 只核已有清单与 48 份代表文件 hash：1768 标准 3.8.99、8 非标准版本，38 Effect / 214 源文件；播放/目标编译仍未闭合。beaver 0.1.0 本地验收回执/wheel 身份已复核，未重复测试，不退休旧兼容入口。
+
+公开证据 [资源引用验收](validation/2026-10-26-resource-reference-correctness.md)，完整私有回执 `.private/v050-resources-20261026/`。下一组继续精确 schema/字段、Spine 代表播放和 Shader profile；v0.5 仍未完成，安装 v0.4.0 不动。
 
 ## 本轮完成：同事交接的通用证据能力实际并入（2026-10-26）
 

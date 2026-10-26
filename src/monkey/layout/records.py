@@ -140,6 +140,11 @@ def preview(conversion,output,overrides=None):
             elif event['operation']=='claim':planner.claim(event['path'],event['owner'])
             elif event['operation']=='path':planner.path(*event['args'])
             elif event['operation']=='folder':planner.folder(*event['args'])
+            elif event['operation']=='derived':
+                sid,owner,kind,suffix,tail,extension=event['args']
+                matches=[r['target'] for r in planner.records if r['identity']==owner and r['kind']==kind and Path(r['target']).suffix==suffix]
+                if len(matches)!=1:fail('LAYOUT_PREVIEW_DERIVED_OWNER',owner,'Exact allocated derivative owner required')
+                planner.derived_path(sid,matches[0],tail,extension)
             else:fail('LAYOUT_PREVIEW_OPERATION',str(plan_path),'Unknown allocation operation')
         before=plan['naming']['records']
         # Records can reorder when overrides change collision groups; join by stable allocation identity.

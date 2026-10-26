@@ -95,6 +95,11 @@ class AnimationTests(unittest.TestCase):
             for target in [unity,cocos]:
                 prefix='unity' if target is unity else 'creator'
                 target.plan(r/'ir/ir.json','fixture',r/(prefix+'-plan'));target.export(r/(prefix+'-plan/plan.json'),r/prefix)
+                if target is unity:
+                    from monkey.layout import standard
+                    helper=(r/prefix/standard.unity('importer')).with_name('NativeButtonAnimations.cs')
+                    self.assertEqual(helper.read_bytes(),Path(unity.__file__).with_name('UnityButtonAnimations.cs').read_bytes())
+                    self.assertTrue(Path(str(helper)+'.meta').is_file())
                 module=load(read(r/prefix/'Analysis/Tasks/animation-module.json'));self.assertFalse(module['callbacksGenerated']);self.assertEqual(len(module['clips']),1)
                 self.assertFalse(any((r/prefix).rglob('*.anim')))
                 task=next(t for t in load(read(r/prefix/'Analysis/Tasks/handoff.json'))['tasks'] if t['taskId']=='finite-ui-animation');self.assertTrue(task['gaps'])

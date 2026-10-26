@@ -327,6 +327,9 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
     naming.reserve([(c['sourceId'],kind,suffix,'',*owned(c,tail)) for c,kind,suffix,tail in native_assets])
     for c,kind,suffix,tail in native_assets:
         c['controllerPath' if kind=='controller' else 'materialPath']=naming.path(c['sourceId'],kind,suffix,metadata=owned(c,tail)[0])
+        if kind=='controller':
+            for state in ('normal','pressed'):
+                c[state+'ClipPath']=naming.derived_path(c['sourceId']+'@'+state,c['controllerPath'],'_'+state,'.anim')
     from .common import reject_layout_conflicts
     diagnostics.extend(reject_layout_conflicts(components))
     from ..assets.animation import plan_clips
@@ -401,6 +404,7 @@ def export(plan_path, output):
             ('UnityPrefabInstances.cs',standard.unity('prefabInstances'),'prefab-instances-editor'),
             *[(name,standard.UNITY_LAYOUT_DIR+'/'+name,'native-ui/'+name) for name in ('NativeLinearLayoutGroup.cs','NativeRectConstraints.cs','NativeTextLineBox.cs')],
             ('UnityDynamicUi.cs',standard.unity('dynamicUi'),'native-ui/UnityDynamicUi.cs'),
+            ('UnityButtonAnimations.cs',Path(standard.unity('importer')).with_name('NativeButtonAnimations.cs').as_posix(),'button-animations-editor'),
             ('UnityImporter.cs',standard.unity('importer'),'editor-adapter')]:
         dest=out/relative;dest.parent.mkdir(parents=True,exist_ok=True);dest.write_bytes(files('monkey.targets').joinpath(template).read_bytes())
         Path(str(dest)+'.meta').write_text('fileFormatVersion: 2\nguid: '+guid(p['namespace'],key)+'\n')

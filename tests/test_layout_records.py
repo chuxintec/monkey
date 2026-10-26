@@ -83,18 +83,22 @@ class LayoutRecordTests(unittest.TestCase):
             owner=dict(bundle='main',logicalPath='Anim/Badge/appear')
             planner.reserve([('clip@a','animation','.anim','',owner,'One'),('clip@b','animation','.anim','',owner,'Two'),
                              ('font','font-asset','.asset','',None,None)])
+            controller=planner.path('button','controller','.controller',metadata=dict(bundle='main',logicalPath='Anim/Badge/StartButton'))
+            for state in ['normal','pressed']:planner.derived_path('button@'+state,controller,'_'+state,'.anim')
             ir=conversion/'Structured/normalize';ir.mkdir(parents=True)
             write_json(ir/'ir.json',dict(sourceNames=names));finish(ir,{})
             plan=conversion/'Structured/UnityProject-plan';plan.mkdir()
             write_json(plan/'plan.json',dict(naming=planner.report()));finish(plan,{})
             result=preview(conversion,root/'preview')
-            self.assertEqual(result['unity']['objects'],3)
+            self.assertEqual(result['unity']['objects'],6)
             self.assertEqual(result['unity']['changed'],0)
             rows=load(read(root/'preview/layout-preview.json'))['rows']
-            self.assertEqual({r['kind'] for r in rows},{'animation','font-asset'})
+            self.assertEqual({r['kind'] for r in rows},{'animation','font-asset','controller'})
             self.assertTrue(any(r['preview'].endswith('appear_two.anim') for r in rows))
             result=preview(conversion,root/'renamed',dict(modules=[dict(match='Anim/Badge',module='Medals')]))
-            self.assertEqual(result['unity']['changed'],2)
+            self.assertEqual(result['unity']['changed'],5)
+            changed=load(read(root/'renamed/layout-preview.json'))['rows']
+            self.assertTrue(all('/Medals/' in row['preview'] for row in changed if row['sourceId'].startswith('button')))
 
     def test_preview_rejects_empty_conversion_without_success_receipt(self):
         from monkey.layout.records import preview

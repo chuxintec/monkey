@@ -111,6 +111,19 @@ class LayoutPlanner:
             stem=stem.encode()[:limit-7].decode('utf-8',errors='ignore').rstrip('_-')+'_'+sha(stem.encode())[:6]
         return stem+extension
 
+    def derived_path(self,sid,base_path,tail,extension):
+        """Allocate Editor-created derivatives with the same full-filename budget."""
+        key=(sid,'animation',extension,tail)
+        if key in self._allocated:return self._allocated[key]
+        parent,_,filename=base_path.rpartition('/');stem=filename.rsplit('.',1)[0]
+        owner=next((r for r in self.records if r['target']==base_path),None)
+        if owner is None:raise ValueError('Derived asset requires an allocated owner path')
+        self.replay.append(dict(operation='derived',args=[sid,owner['identity'],owner['kind'],'.'+filename.rsplit('.',1)[-1],tail,extension]))
+        record=dict(owner,identity=sid,kind='animation',type='animation',stem=stem+tail,
+                    reasons=sorted(set(owner['reasons'])|{'derived-asset'}))
+        target=parent+'/'+self._filename(stem+tail,extension)
+        return self._allocate(key,target,record,None)
+
     def module_of(self,sid,kind='prefab',metadata=None):
         """Cased module folders an object would live under, e.g. the prefab module that binds a script."""
         return self.describe(sid,kind,'.prefab' if kind=='prefab' else '',metadata=metadata)[1]['module']

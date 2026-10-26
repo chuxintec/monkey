@@ -52,7 +52,7 @@ public static partial class MonkeyImporter
         public float[] nativeCellSize;
         public int mode, sizeMode, horizontalAlign, verticalAlign, overflow; public float fontSize,lineHeight;
         public bool enabled, convertible, trim, wrap, bold, italic; public float spacing; public BitmapProbe bitmapProbe;
-        public string target,content,nativeId,controllerPath,materialPath; public int flags,maskType,layoutType,resize,horizontalDirection,verticalDirection,startAxis,constraint,constraintCount,transition;
+        public string target,content,nativeId,controllerPath,materialPath,normalClipPath,pressedClipPath; public int flags,maskType,layoutType,resize,horizontalDirection,verticalDirection,startAxis,constraint,constraintCount,transition;
         public bool inverted,horizontal,vertical,interactable; public float zoomScale,duration,width;
         public float[] margins,spacingXY,padding,effectiveCellSize,cellSize,outlineColor;
         public bool crossAxisScale; public float crossAxisAlignment; public bool[] absolute,centerAbsolute; public float[] center; public int alignMode; public bool affectedByScale,alignCross;
@@ -402,7 +402,7 @@ public static partial class MonkeyImporter
             Directory.CreateDirectory(directory);
         foreach(var font in plan.bitmapFonts)Directory.CreateDirectory(Path.GetDirectoryName(font.fontPath));
         foreach(var animation in plan.animations.Where(a=>a.convertible))Directory.CreateDirectory(Path.GetDirectoryName(animation.path));
-        foreach(var planned in plan.components.SelectMany(c=>new[]{c.controllerPath,c.materialPath}).Where(v=>!string.IsNullOrEmpty(v))) {
+        foreach(var planned in plan.components.SelectMany(c=>new[]{c.controllerPath,c.materialPath,c.normalClipPath,c.pressedClipPath}).Where(v=>!string.IsNullOrEmpty(v))) {
             if(!planned.StartsWith("Assets/",StringComparison.Ordinal)||planned.Contains("..")||planned.Contains("\\"))throw new InvalidOperationException("Unsafe planned native asset path");
             Directory.CreateDirectory(Path.GetDirectoryName(planned));
         }
@@ -885,24 +885,10 @@ public static partial class MonkeyImporter
     static void ConfigureScaleButton(GameObject go,UnityEngine.UI.Button button,ComponentSpec spec) {
         var planned=!string.IsNullOrEmpty(spec.controllerPath);
         var path=planned?spec.controllerPath.Substring(0,spec.controllerPath.Length-".controller".Length):Paths.controllersRoot+"/"+spec.nativeId;
-        var controller=UnityEditor.Animations.AnimatorController.CreateAnimatorControllerAtPath(path+".controller");
-        var normal=new AnimationClip {name="Normal"};var pressed=new AnimationClip {name="Pressed"};
-        var scale=go.transform.localScale;
-        foreach(var axis in new[]{"x","y","z"}) {
-            var value=axis=="x"?scale.x:axis=="y"?scale.y:scale.z;
-            normal.SetCurve("",typeof(Transform),"m_LocalScale."+axis,AnimationCurve.Constant(0,Mathf.Max(spec.duration,.001f),value));
-            pressed.SetCurve("",typeof(Transform),"m_LocalScale."+axis,AnimationCurve.Constant(0,Mathf.Max(spec.duration,.001f),value*spec.zoomScale));
-        }
         var separator=planned?"_":"-";
-        AssetDatabase.CreateAsset(normal,path+separator+"normal.anim");AssetDatabase.CreateAsset(pressed,path+separator+"pressed.anim");
-        var machine=controller.layers[0].stateMachine;
-        foreach(var trigger in new[]{"Normal","Highlighted","Pressed","Selected","Disabled"}) {
-            controller.AddParameter(trigger,AnimatorControllerParameterType.Trigger);
-            var state=machine.AddState(trigger);state.motion=trigger=="Pressed"?pressed:normal;
-            var transition=machine.AddAnyStateTransition(state);transition.AddCondition(UnityEditor.Animations.AnimatorConditionMode.If,0,trigger);
-            transition.hasExitTime=false;transition.hasFixedDuration=true;transition.duration=spec.duration;transition.canTransitionToSelf=false;
-            if(trigger=="Normal")machine.defaultState=state;
-        }
+        var normalPath=string.IsNullOrEmpty(spec.normalClipPath)?path+separator+"normal.anim":spec.normalClipPath;
+        var pressedPath=string.IsNullOrEmpty(spec.pressedClipPath)?path+separator+"pressed.anim":spec.pressedClipPath;
+        var controller=CreateScaleButtonController(path+".controller",normalPath,pressedPath,go.transform.localScale,spec.zoomScale,spec.duration);
         var animator=go.AddComponent<Animator>();animator.runtimeAnimatorController=controller;
         button.transition=UnityEngine.UI.Selectable.Transition.Animation;
         EditorUtility.SetDirty(controller);AssetDatabase.SaveAssetIfDirty(controller);

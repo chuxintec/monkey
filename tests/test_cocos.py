@@ -14,6 +14,21 @@ class CreatorTests(unittest.TestCase):
         config=fixture(root/'source');inspect(config,[2],root/'inspect');normalize(root/'inspect/source-manifest.json',root/'ir')
         return cocos.plan(root/'ir/ir.json','synthetic',root/'plan')
 
+    def test_tiled_candidate_carries_project_local_budget_to_native_import(self):
+        from monkey.io import finish
+        with tempfile.TemporaryDirectory() as temp:
+            r=Path(temp).resolve();self.build(r)
+            ir=load(read(r/'ir/ir.json'));sprite=next(c for c in ir['components'] if c['type']=='cc.Sprite')
+            sprite.update(mode=2,sizeMode=0);next(n for n in ir['nodes'] if n['sourceId']==sprite['node'])['size']=[100,100]
+            write_json(r/'ir/ir.json',ir);finish(r/'ir',ir)
+            plan=cocos.plan(r/'ir/ir.json','tiled',r/'tiled-plan');cocos.export(r/'tiled-plan/plan.json',r/'candidate')
+            instruction=load(read(r/'candidate/extensions/monkey-import/import-plan.json'))
+            budget=instruction['rendererBudget'];self.assertGreater(budget['macroConfig']['BATCHER2D_MEM_INCREMENT'],144)
+            self.assertEqual(load(read(r/'candidate/settings/v2/packages/engine.json'))['macroConfig'],budget['macroConfig'])
+            self.assertEqual(budget,plan['rendererBudget'])
+            self.assertIn('Copying assets alone', (r/'candidate/Docs/RENDERER-REQUIREMENTS.md').read_text())
+            self.assertEqual(load(read(r/'candidate/manifest.json'))['rendererBudget'],budget)
+
     def test_deterministic_asset_identity_closed_logical_refs_and_native_pending(self):
         with tempfile.TemporaryDirectory() as temp:
             r=Path(temp).resolve();p=self.build(r)

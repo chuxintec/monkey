@@ -160,7 +160,7 @@ def resume_state(previous_execution,source,report,targets):
         fail('LAYOUT_RESUME_CODE_CHANGED',str(previous),'Previous helper and import plan must retain their exact owned hashes')
     # This continuation changes only the Editor probe, not the runtime mapping.
     # Reusing geometry evidence after a runtime adapter change requires a new review.
-    for template,relative in [('UnityImporter.cs',(Path(locations['plan']).parent/'MonkeyImporter.cs').as_posix()),('UnityDynamicUi.cs','Assets/Monkey/Editor/UnityDynamicUi.cs'),('IntrinsicGridLayoutGroup.cs','Assets/Game/Presentation/Recovery/IntrinsicGridLayoutGroup.cs')]:
+    for template,relative in [('UnityImporter.cs',(Path(locations['plan']).parent/'MonkeyImporter.cs').as_posix()),('UnityButtonAnimations.cs',(Path(locations['plan']).parent/'NativeButtonAnimations.cs').as_posix()),('UnityDynamicUi.cs','Assets/Monkey/Editor/UnityDynamicUi.cs'),('IntrinsicGridLayoutGroup.cs','Assets/Game/Presentation/Recovery/IntrinsicGridLayoutGroup.cs')]:
         if read(inside(previous,relative))!=read(Path(__file__).parent/'targets'/template):fail('LAYOUT_RESUME_RUNTIME_CHANGED',relative,'Runtime/common conversion code differs; do not reuse prior native geometry without scoped review')
     native_raw=read(find_analysis(previous,'layout-patch-readback.json'),max_bytes=LIMIT);native=load(native_raw,max_nodes=16_000_000,max_depth=128)
     if sha(plan_raw)!=result['executedPlanSha256']or native.get('planSha256')!=sha(plan_raw)or native_raw!=read(run/'layout-patch-readback.json',max_bytes=LIMIT)or not native.get('sourceRuntimeTypeAbsent'):
@@ -252,7 +252,7 @@ def prepare(audit_directory,output,previous_execution=None):
             choice=changed[c['sourceId']];c.update(nativeLayoutMode=choice['mode'],nativeCellSize=choice['cellSize']or[],presentationPolicy='unity-layout-components-v2')
             if choice['sourceCellSize']is not None:c['cellSize']=choice['sourceCellSize']
     write_json(inside(project,paths['plan']),plan)
-    for name,relative in [('UnityImporter.cs',Path(paths['plan']).parent/'MonkeyImporter.cs'),('UnityDynamicUi.cs','Assets/Monkey/Editor/UnityDynamicUi.cs')]:
+    for name,relative in [('UnityImporter.cs',Path(paths['plan']).parent/'MonkeyImporter.cs'),('UnityButtonAnimations.cs',Path(paths['plan']).parent/'NativeButtonAnimations.cs'),('UnityDynamicUi.cs','Assets/Monkey/Editor/UnityDynamicUi.cs')]:
         inside(project,str(relative)).write_bytes(read(Path(__file__).parent/'targets'/name))
     intrinsic=next(r['path']for r in load(read(root/'manifest.json',max_bytes=LIMIT),max_nodes=16_000_000,max_depth=128)['files']if r['path'].endswith('/IntrinsicGridLayoutGroup.cs'))
     inside(project,intrinsic).write_bytes(read(Path(__file__).parent/'targets/IntrinsicGridLayoutGroup.cs'))

@@ -155,11 +155,14 @@ def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None,la
         raw=c.pop('text',None)
         raw=raw.encode() if raw is not None else resource(c['source'])
         dest=f'resources/{i:04d}'+Path(c['target']).suffix;(out/dest).write_bytes(raw);c['source']=dest
+    from ..creator_geometry import renderer_budget
+    render_budget,tile_gaps=renderer_budget(ir['nodes'],components,assets)
+    diagnostics.extend(diagnostic('TILED_GEOMETRY_UNSUPPORTED',sid,message,sid) for sid,message in tile_gaps)
     result=dict(schemaVersion=1,toolVersion=__version__,targetProfile=PROFILE,namespace=namespace,projectLayout=VERSION,layoutOverridesSha256=overrides_sha,
         scopeMode=ir.get('scopeMode','asset-selection'),
         sourceIrSha256=sha(stage_bytes(path)),sourceManifestSha256=ir['sourceManifestSha256'],sourceManifestPath=ir.get('sourceManifestPath'),
         sourceRoots=ir.get('sourceRoots',{}),sourceLocations=ir.get('sourceLocations',{}),bindings=receipt,
-        designSize=[750,1334],assets=assets,copies=copies,animations=animations,sourcePrefabs=prefabs,prefabInstances=instances,naming=naming.report(),nodes=native_color_nodes(ir['nodes'],components),components=components,
+        designSize=[750,1334],rendererBudget=render_budget,assets=assets,copies=copies,animations=animations,sourcePrefabs=prefabs,prefabInstances=instances,naming=naming.report(),nodes=native_color_nodes(ir['nodes'],components),components=components,
         diagnostics=diagnostics,editorValidation='not_run',subresourceValidation='pending-native-import')
     write_json(out/'plan.json',result);return finish(out,result)
 
@@ -186,6 +189,19 @@ def export(plan_path,output):
         write_json(Path(str(target)+'.meta'),m)
     project_id=identity(p['namespace'],'project')
     write_json(out/'package.json',dict(name='monkey-native-candidate',version='3.8.8',uuid=project_id,creator=dict(version='3.8.8')))
+    if p.get('rendererBudget',{}).get('macroConfig',{}).get('BATCHER2D_MEM_INCREMENT',144)>144:
+        write_json(out/'settings/v2/packages/engine.json',dict(__version__='1.0.12',macroConfig=p['rendererBudget']['macroConfig']))
+        (out/'Docs').mkdir(exist_ok=True)
+        kib=p['rendererBudget']['macroConfig']['BATCHER2D_MEM_INCREMENT']
+        (out/'Docs/RENDERER-REQUIREMENTS.md').write_text(
+            '# Creator renderer requirements\n\nThis isolated 3.8.8 candidate requires '
+            f'BATCHER2D_MEM_INCREMENT={kib} KiB for its original Tiled Sprite geometry. '
+            'The candidate-local settings/v2/packages/engine.json records the requirement; '
+            'the Editor importer also applies it in this owned Editor process.\n\n'
+            'Copying assets alone does not transfer project settings. A development-project consumer must '
+            'review and explicitly merge this requirement, preserving its other engine settings. '
+            'Do not overwrite a development project settings file or assume asset adoption applies the macro. '
+            'Preview/build/Player validation is separate from the Editor allocation proof.\n',encoding='utf-8')
     ext=out/'extensions/monkey-import'
     for name in ['main.js','scene.js']:(ext/name).write_bytes(files('monkey.targets').joinpath('Creator'+('Main.js' if name=='main.js' else 'Scene.js')).read_bytes())
     (ext/'execution.js').write_bytes(files('monkey.targets').joinpath('CreatorExecution.js').read_bytes())
@@ -200,7 +216,7 @@ def export(plan_path,output):
     write_json(ext/'package.json',dict(package_version=2,version='0.2.0',name='monkey-import',main='./main.js',
         contributions=dict(scene=dict(script='./scene.js'),menu=[dict(path='Monkey',label='Import isolated candidate',message='import-candidate')],
                            messages={'import-candidate':dict(methods=['importCandidate'])})))
-    write_json(ext/'import-plan.json',{k:p[k] for k in ['schemaVersion','targetProfile','designSize','assets','nodes','components'] }|dict(projectUuid=project_id,animations=p.get('animations',[]),sourcePrefabs=p.get('sourcePrefabs',[]),prefabInstances=p.get('prefabInstances',[]),prefabRelationshipReadback='creator-native-fileid-v1',uiGeometryReadback='native-ui-layout-roundtrip-v1',sceneGeometryReadback='full-local-v1',bitmapPageReadback='sprite-frame-v1',spriteMeshReadback='native-rect-mesh-v1',outputPaths=standard.creator_output_paths()))
+    write_json(ext/'import-plan.json',{k:p[k] for k in ['schemaVersion','targetProfile','designSize','assets','nodes','components'] }|dict(rendererBudget=p.get('rendererBudget'),projectUuid=project_id,animations=p.get('animations',[]),sourcePrefabs=p.get('sourcePrefabs',[]),prefabInstances=p.get('prefabInstances',[]),prefabRelationshipReadback='creator-native-fileid-v1',uiGeometryReadback='native-ui-layout-roundtrip-v1',sceneGeometryReadback='full-local-v1',bitmapPageReadback='sprite-frame-v1',spriteMeshReadback='native-rect-mesh-v1',outputPaths=standard.creator_output_paths()))
     from .dynamic_ui import driven_fields
     instruction_path=ext/'import-plan.json';instruction=load(instruction_path.read_bytes())
     instruction['uiStateProbeVersion']=2
@@ -230,7 +246,7 @@ def export(plan_path,output):
     (out/'README.md').write_text('Creator 3.8.8 isolated candidate. Layout '+VERSION+' (monkey docs/PROJECT-SPEC.md).\nOpen only in an authorized resource window.\nRun Monkey/Import isolated candidate once after assets import. Existing outputs are refused.\nNative scene and child UUIDs require Editor; no source engine interpreter ships.\n')
     write_json(find_analysis(out,'name-map.json'),p.get('naming',{}))
     report=dict(schemaVersion=1,toolVersion=__version__,targetProfile=PROFILE,namespace=p['namespace'],projectUuid=project_id,projectLayout=VERSION,
-        scopeMode=p.get('scopeMode','asset-selection'),
+        scopeMode=p.get('scopeMode','asset-selection'),rendererBudget=p.get('rendererBudget'),
         sourceManifestSha256=p['sourceManifestSha256'],sourceRoots=p['sourceRoots'],planSha256=sha(stage_bytes(path)),diagnostics=p['diagnostics'],
         editorValidation='not_run',visualValidation='not_run',businessValidation='not_run',subresourceValidation='pending-native-import')
     write_json(find_analysis(out,'candidate.json'),report);return finish(out,report)
@@ -253,6 +269,9 @@ def verify(candidate,output,level='static'):
             audio_assets={a['sourceId']:a for a in rb.get('audioAssets',[])}
             good=rb.get('creatorVersion')=='3.8.8' and rb.get('projectUuid')==m['projectUuid'] and rb.get('manifestSha256')==fingerprint(root/'manifest.json')
             good=good and set(expected_assets)==set(actual_assets) and rb.get('nodeCount')==len(plan['nodes'])
+            from ..creator_geometry import verify_tiled_readback
+            if not verify_tiled_readback(plan,rb):
+                good=False;diagnostics.append(diagnostic('TILED_NATIVE_READBACK_MISMATCH','CreatorScene','Tiled mesh allocation/budget/topology/identity readback differs'))
             for sid,a in expected_assets.items():
                 actual=actual_assets.get(sid,{})
                 good=good and actual.get('uuid')==a['uuid'] and (a['kind']!='sprite' or bool(actual.get('spriteFrameUuid')))

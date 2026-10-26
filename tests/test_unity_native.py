@@ -52,6 +52,17 @@ def seal(root):
 
 
 class UnityNativeTests(unittest.TestCase):
+    def test_relocated_native_asset_uses_exact_source_mapping_and_guid(self):
+        with tempfile.TemporaryDirectory() as t:
+            root=fixture(Path(t).resolve()/'candidate')
+            old='Assets/Sprites/hero.asset';new='Assets/Sprites/renamed_sprite.asset'
+            (root/old).rename(root/new);(root/(old+'.meta')).rename(root/(new+'.meta'))
+            write_json(root/'Analysis/Mappings/unity-relocation.json',dict(moves=[dict(source=old,target=new,guid='4'*32)]));seal(root)
+            self.assertEqual(plan(root)['spec']['expectedSprites'][0]['guid'],'4'*32)
+            mapping=root/'Analysis/Mappings/unity-relocation.json'
+            write_json(mapping,dict(moves=[dict(source=old,target=new,guid='6'*32)]));seal(root)
+            with self.assertRaisesRegex(ParseError,'identity differs'):plan(root)
+
     def test_exact_source_reference_preserves_names_and_guid_and_grea_alias_moves_nothing(self):
         with tempfile.TemporaryDirectory() as t:
             root=fixture(Path(t).resolve()/'candidate');p=plan(root,'grea');s=p['spec']

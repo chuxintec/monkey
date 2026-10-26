@@ -9,7 +9,7 @@ using UnityEditor;
 namespace Monkey.UnityRecovery {
 public static class SourceVerifier {
     [Serializable] public class Spec { public string prefabPath; public string className; public string scriptPath; public string[] fields; public int[] expectedArrayLengths; public string deadlineUtc; public int budgetSeconds; public bool saveRoundtrip; public int expectedSpriteReferences; public bool verifySourceDescriptors; public string expectedScriptGuid; public string expectedPrefabGuid; public string expectedRootName; public Vector3 expectedPosition, expectedScale; public Quaternion expectedRotation; public bool expectedActive; public SpriteSpec[] expectedSprites; public Move[] formatMoves; }
-    [Serializable] public class SpriteSpec { public string name,guid,fileId,textureGuid; public float x,y,width,height; }
+    [Serializable] public class SpriteSpec { public string name,guid,fileId,textureGuid; public float x,y,width,height; public bool verifyMesh; public Vector2[] meshVertices,meshUv; public int[] triangleIndices; }
     [Serializable] public class Move { public string from,to,guid,kind; }
     [Serializable] public class Field { public string name; public string type; public int arrayLength; public int nullElements; }
     [Serializable] public class Result { public string status; public string unityVersion; public string prefabPath; public string guid; public string rootFileId; public string componentFileId; public string scriptGuid; public string scriptFileId; public string scriptClass; public string[] componentTypes; public Vector3 localPosition; public Vector3 localScale; public Quaternion localRotation; public bool active; public int nodeCount; public int missingScripts; public bool classFound; public Field[] fields; public bool saved; public bool prefabReloaded; public bool referencesPreserved; public int spriteReferences; public Move[] movedAssets; public bool sourceDescriptorsVerified; public bool geometryPreserved; public string error; }
@@ -31,6 +31,12 @@ public static class SourceVerifier {
                         if(target.name!=match.name||guid!=match.guid||id.ToString(System.Globalization.CultureInfo.InvariantCulture)!=match.fileId||!rect.x.Equals(match.x)||!rect.y.Equals(match.y)||!rect.width.Equals(match.width)||!rect.height.Equals(match.height))throw new Exception("Source Sprite identity/atlas rect differs: "+match.name);
                         string textureGuid;long textureId;
                         if(target.texture==null||!AssetDatabase.TryGetGUIDAndLocalFileIdentifier(target.texture,out textureGuid,out textureId)||textureGuid!=match.textureGuid)throw new Exception("Source Sprite atlas texture differs: "+match.name);
+                        if(match.verifyMesh) {
+                            var vertices=target.vertices;var triangles=target.triangles;var uv=target.uv;
+                            if(match.meshVertices==null||match.meshUv==null||match.triangleIndices==null||vertices.Length!=match.meshVertices.Length||uv.Length!=match.meshUv.Length||triangles.Length!=match.triangleIndices.Length)throw new Exception("Source tight Sprite mesh count differs: "+match.name);
+                            for(var i=0;i<vertices.Length;i++)if(!vertices[i].Equals(match.meshVertices[i])||!(Math.Abs(uv[i].x-match.meshUv[i].x)<=0.000001f)||!(Math.Abs(uv[i].y-match.meshUv[i].y)<=0.000001f))throw new Exception("Source tight Sprite vertex/UV differs: "+match.name);
+                            for(var i=0;i<triangles.Length;i++)if(triangles[i]!=match.triangleIndices[i])throw new Exception("Source tight Sprite triangle differs: "+match.name);
+                        }
                     }
                     found++;
                 }

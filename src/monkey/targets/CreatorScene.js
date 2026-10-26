@@ -9,6 +9,22 @@ const batch=require('./batch.js');
 const jobs=require('./jobs.js');
 const numeric=require('./numeric-code.js');
 const color = a => new cc.Color(...a);
+function tiledReadback(plan,nodes) {
+    if(!plan.rendererBudget)return null;
+    const rows=[];
+    for(const c of plan.components) {
+        if(!c.convertible||c.type!=='cc.Sprite'||c.mode!==2||!c.spriteFrame)continue;
+        const sprite=nodes.get(c.node).getComponent(cc.Sprite);
+        if(!sprite||!sprite.spriteFrame)throw Error('Tiled native SpriteFrame missing: '+c.sourceId);
+        if(!sprite.renderData)sprite._flushAssembler();
+        sprite.renderData.vertDirty=true;sprite._assembler.updateRenderData(sprite);
+        const data=sprite.renderData;
+        if((data.vertexCount>0&&!data.chunk)||data.vertexCount>plan.rendererBudget.vertexCapacity)throw Error('Tiled native mesh allocation failed: '+c.sourceId);
+        rows.push({sourceId:c.sourceId,vertexCount:data.vertexCount,indexCount:data.indexCount,allocated:true,
+            spriteFrameUuid:sprite.spriteFrame._uuid});
+    }
+    return {profile:plan.rendererBudget.profile,macroKiB:cc.macro.BATCHER2D_MEM_INCREMENT,sprites:rows};
+}
 const checkTime=plan=>{if(plan.nativeDeadlineMs&&Date.now()>=plan.nativeDeadlineMs)throw Error('NATIVE_BUDGET_EXHAUSTED');};
 const loadAsset = (uuid, type) => new Promise((resolve,reject) => cc.assetManager.loadAny({uuid}, {reloadAsset:type===cc.SpriteFrame}, (e,a) => {
     if (e) reject(e); else if (!(a instanceof type)) reject(Error('Unexpected native asset type: '+uuid)); else resolve(a);
@@ -29,6 +45,11 @@ module.exports = {
         async finishAssembly(id,saved,plan){return relations.finish(id,saved,plan,loadAsset);},
         async assemble(plan) {
             if (!globalThis.EditorExtends || typeof EditorExtends.serialize !== 'function') throw Error('Native serializer unavailable');
+            if(plan.rendererBudget) {
+                const kib=plan.rendererBudget.macroConfig.BATCHER2D_MEM_INCREMENT;
+                if(!Number.isInteger(kib)||kib<144||kib>2303)throw Error('Invalid native tiled renderer budget');
+                cc.macro.BATCHER2D_MEM_INCREMENT=kib;
+            }
             const scene = new cc.Scene('Candidate');
             let retained=false;
             try {
@@ -212,7 +233,7 @@ module.exports = {
                 sourcePrefabs.push(prefabs.read(templates.get(spec.sourceId),spec,plan,info,templates));
             }
             const dynamicUiProbes=await dynamic.probe(plan,design,(done,total)=>jobs.progress('native-readback',sourcePrefabs.length+done,sourcePrefabs.length+total));
-            return {dynamicUiProbes,nativeInitialNodes:plan.nativeInitialNodes,sourcePrefabs,prefabInstances,jsonAssets,audioAssets,fontPages,animations,numericCodeBindings,nodeCount:saved.length,nodes:[...mapped].map(([sourceId,n])=>({sourceId,nodeUuid:n.uuid,name:n.name,
+            return {tiledRenderer:tiledReadback(plan,mapped),dynamicUiProbes,nativeInitialNodes:plan.nativeInitialNodes,sourcePrefabs,prefabInstances,jsonAssets,audioAssets,fontPages,animations,numericCodeBindings,nodeCount:saved.length,nodes:[...mapped].map(([sourceId,n])=>({sourceId,nodeUuid:n.uuid,name:n.name,
                 position:[n.position.x,n.position.y,n.position.z],size:[n.getComponent(cc.UITransform).width,n.getComponent(cc.UITransform).height],
                 pivot:[n.getComponent(cc.UITransform).anchorX,n.getComponent(cc.UITransform).anchorY],scale:[n.scale.x,n.scale.y,n.scale.z],
                 rotation:[n.rotation.x,n.rotation.y,n.rotation.z,n.rotation.w],active:n.active,...prefabs.uiState(n,sourceNodes.get(sourceId))})),components:refs,labels,frames};

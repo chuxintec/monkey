@@ -148,10 +148,17 @@ def plan(project, format_profile='none'):
     sprite_specs = []
     asset_paths = {}
     lengths = []
+    relocation_path=find_analysis(project,'unity-relocation.json')
+    relocations=document(relocation_path).get('moves',[]) if relocation_path.exists() else []
 
     def native_asset(key, suffix):
         name = objects.unique_name(key)
         matches = [p for p in assets.rglob('*'+suffix) if p.name == name+suffix]
+        for move in relocations:
+            if Path(move['source']).name!=name+suffix:continue
+            target=inside(project,move['target'])
+            require(target.is_file() and target.suffix==suffix and guid(project,move['target'])==move.get('guid'),'Relocated source asset identity differs')
+            if target not in matches:matches.append(target)
         require(len(matches) == 1, 'Exact unique native filename unavailable: '+name+suffix)
         rel = matches[0].relative_to(project).as_posix()
         return rel, guid(project, rel)
@@ -169,7 +176,7 @@ def plan(project, format_profile='none'):
             matches = [value for original_key,value in atlas['data']['m_RenderDataMap'] if original_key == data['m_RenderDataKey']]
             require(len(matches) == 1, 'Exact Sprite atlas render key is missing or ambiguous')
             rd = matches[0]
-            require(rd['settingsRaw'] == 67 and rd['downscaleMultiplier'] == 1 and rd['alphaTexture']['pathId'] == '0' and not rd['secondaryTextures'],
+            require(rd['settingsRaw'] in (65,67) and rd['downscaleMultiplier'] == 1 and rd['alphaTexture']['pathId'] == '0' and not rd['secondaryTextures'],
                     'Atlas rotation/alpha/downscale variant is not proven')
             texture_key, texture = objects.resolve(atlas_key, rd['texture'], 'Texture2D')
             asset, asset_guid = native_asset(key, '.asset')
@@ -187,7 +194,14 @@ def plan(project, format_profile='none'):
                 textures[texture_key] = dict(path=texture_path, guid=texture_guid, sourceFile=source_file, sourcePathId=texture_key[2], rgbaRawSha256=pixel_hash)
             rect = rd['textureRect']
             require(set(rect) == {'x','y','width','height'}, 'Unsupported atlas rect')
-            sprite_specs.append(dict(name=objects.unique_name(key),guid=asset_guid,fileId=ids[0].decode(),textureGuid=texture_guid,**rect))
+            mesh={}
+            if rd['settingsRaw']==65:
+                source_file=objects.files[key[:2]]
+                require(source_file.get('unityVersion')=='2021.3.30f1' and source_file.get('targetPlatform')=='20','Tight Sprite source version/platform requires a verified profile')
+                from .unity_sprite import tight_geometry
+                try:mesh=tight_geometry(data,rd,texture['data']['m_Width'],texture['data']['m_Height'])
+                except (ValueError,KeyError,TypeError) as error:require(False,'Unsupported exact tight geometry: '+str(error))
+            sprite_specs.append(dict(name=objects.unique_name(key),guid=asset_guid,fileId=ids[0].decode(),textureGuid=texture_guid,**rect,**mesh))
             asset_paths[asset] = (asset_guid,'sprite')
             asset_paths[texture_path] = (texture_guid,'texture')
     require(sprite_specs, 'At least one resolved Sprite reference required')
