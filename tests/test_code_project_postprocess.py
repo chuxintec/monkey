@@ -29,7 +29,8 @@ class ProjectPostprocessTests(unittest.TestCase):
   for path in self.latest:
    p=prepared.output/'workspace'/path;p.write_text(p.read_text().replace('return 1','return 2'))
    results.append(dict(path=path,status='partial',summary='Reviewed the literal-return method and original source scope; dynamic domain remains explicit.',unresolved=['Own fixture result only'],membersReviewed=[x['methodId']for x in records[path]['functions']],originalLogicPreserved=True))
-  return dict(status='partial',fileResults=results,blockingCondition=None,unexpectedPaths=[],workspaceIntegrityErrors=[],gitBoundary={'valid':True},sessionId='own-fixture',usage={},model='unknown',reasoningEffort='unknown',diffSha256='0'*64)
+  changes=[dict(path=p,afterSha256=sha((prepared.output/'workspace'/p).read_bytes()))for p in self.latest]
+  return dict(status='partial',fileResults=results,actualChanges=changes,blockingCondition=None,unexpectedPaths=[],workspaceIntegrityErrors=[],gitBoundary={'valid':True},sessionId='own-fixture',usage={},model='unknown',reasoningEffort='unknown',diffSha256='0'*64)
  def test_all_ready_batches_run_continuously_and_integrate_independent_copy(self):
   with patch.object(project.worker,'prepare',side_effect=self.fake_prepare),patch.object(project.worker,'run',side_effect=self.fake_run) as run:
    result=project.run(self.output)
@@ -96,3 +97,39 @@ class ProjectPostprocessTests(unittest.TestCase):
   state=json.loads((self.output/'state.json').read_bytes())
   self.assertEqual(called,[session]);self.assertEqual(state['batches'][batch]['attempts'],1)
   self.assertEqual(result['actuallyProcessed'],2)
+ def test_reviewed_fields_and_proven_nested_functions_are_valid_without_missing_or_unrelated_ids(self):
+  meta={'sourceSha256':'source-a','functions':[dict(methodId='outer',sourceBytes=dict(start=10,end=100))],
+        'fields':[dict(fieldId='field@20',sourceBytes=dict(start=20,end=30))]}
+  index={'source-a':[('nested',40,60),('outside',101,110)],'source-b':[('other-source',40,60)]}
+  allowed=project._allowed_review_ids(meta,index)
+  self.assertEqual(allowed,{'outer','nested','field@20'})
+  result=dict(path='Own.cs',originalLogicPreserved=True,summary='Reviewed the nested callback and field initialization from the exact original source.',status='partial',membersReviewed=list(allowed))
+  raw=b'public class Own {}'
+  self.assertEqual(project._valid_file('Own.cs',raw,raw,result,meta,allowed),[])
+  for ids in (['nested','field@20'],list(allowed)+['outside'],list(allowed)+['other-source']):
+   self.assertTrue(project._valid_file('Own.cs',raw,raw,{**result,'membersReviewed':ids},meta,allowed))
+ def test_completed_review_recheck_rejects_changed_payload_without_another_model(self):
+  def invalid_review(prepared,**kw):
+   result=self.fake_run(prepared,**kw)
+   result['fileResults'][0]['membersReviewed'].append('unknown-review-id')
+   (prepared.output/'manifest.json').write_bytes(encoded(result));return result
+  with patch.object(project.worker,'prepare',side_effect=self.fake_prepare),patch.object(project.worker,'run',side_effect=invalid_review):
+   result=project.run(self.output)
+  self.assertEqual(result['actuallyProcessed'],0)
+  state=json.loads((self.output/'state.json').read_bytes());b=next(iter(state['batches'].values()));out=self.output/b['attemptRoots'][-1]
+  target=out/'workspace'/b['files'][0];target.write_text(target.read_text()+'// manual change\n')
+  with patch.object(project.worker,'run')as run:
+   with self.assertRaises(ParseError)as error:project.recheck(self.output)
+  self.assertEqual(error.exception.code,'PROJECT_POSTPROCESS_RESULT_CHANGED');run.assert_not_called()
+ def test_completed_review_recheck_reuses_saved_results_and_preserves_attempts(self):
+  def recorded_review(prepared,**kw):
+   result=self.fake_run(prepared,**kw);(prepared.output/'manifest.json').write_bytes(encoded(result));return result
+  with patch.object(project.worker,'prepare',side_effect=self.fake_prepare),patch.object(project.worker,'run',side_effect=recorded_review),patch.object(project,'_valid_file',return_value=['old validator rejected valid review metadata']):
+   result=project.run(self.output)
+  self.assertEqual(result['actuallyProcessed'],0)
+  before=json.loads((self.output/'state.json').read_bytes())
+  with patch.object(project.worker,'run')as run:
+   result=project.recheck(self.output)
+  run.assert_not_called();self.assertEqual(result['actuallyProcessed'],2)
+  after=json.loads((self.output/'state.json').read_bytes())
+  self.assertEqual([v['attempts']for v in before['batches'].values()],[v['attempts']for v in after['batches'].values()])

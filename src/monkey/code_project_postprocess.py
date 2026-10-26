@@ -212,14 +212,38 @@ def _task(batch_id):
     return f'''Process the COMPLETE assigned recovery batch {batch_id}; this is whole-project batch processing, not a sample. Read and substantively analyze EVERY selected C# file and all of its mapped source functions/fields, using __Context/file-mappings.json and exact original-source-fragments.json. Where exact original modules exist for older named drafts, recover supported source bodies rather than treating all existing placeholder bodies as final. Do not restrict this pass to formatting or directory statistics. Read large files in bounded chunks; listing filenames, counting lines or reporting hashes alone does not count as review. Repair reliable C# syntax, inferable local types, collection/API calls, closures and scope, declaration/reference consistency, cross-class calls and Unity adaptation drafts. Preserve original business logic and resource identities. Preserve exported class/member names and every existing source-function marker; do not delete functions, replace business bodies by stubs, invent services or fake success. Avoid unnecessary edits: unchanged is valid only with specific findings about the actual code. Unknown dynamic/engine/type semantics must be recorded per file as partial, with exact unresolved details. Review SDK/engine/auxiliary candidates too; labels do not exclude them. Do not execute original JS/WASM/DLL, engines, network tools, other Codex CLIs or agents. Only edit the selected .cs files, and only read the supplied immutable __Context files as evidence. Do not create/delete files or change __Context, Git metadata, model/configuration or credentials. For EVERY selected path return fileResults with concrete summary, status, all reviewed source function IDs in membersReviewed (including embedded callbacks; empty only if the file map has no functions), unresolved, and originalLogicPreserved. Do not claim a file reviewed if its body/mapped functions were not analyzed. Local unknowns may be partial; they must not stop review of the other selected files. Apply actual improvements where justified. Preserve a full useful continuation draft; full compilation/gameplay are not required. Return the exact structured response with changedPaths matching actual modified files.'''
 
 
-def _valid_file(path, before, after, result, metadata):
+def _review_index(plan):
+    sources=collections.defaultdict(list)
+    for row in plan['files']:
+        source=row.get('sourceSha256')
+        if not source:continue
+        for member in row.get('functions',[]):
+            span=member.get('sourceBytes') or {};a,b=span.get('start'),span.get('end')
+            if type(a)is int and type(b)is int and a<b:
+                sources[source].append((member['methodId'],a,b))
+    return sources
+
+
+def _allowed_review_ids(metadata,index):
+    allowed={r['methodId']for r in metadata.get('functions',[])}
+    allowed.update(r['fieldId']for r in metadata.get('fields',[]))
+    spans=[r.get('sourceBytes')or{}for r in metadata.get('functions',[])+metadata.get('fields',[])]
+    if not spans and isinstance(metadata.get('class'),dict):spans=[metadata['class'].get('sourceBytes')or{}]
+    for member,a,b in index.get(metadata.get('sourceSha256'),[]):
+        if any(type(s.get('start'))is int and type(s.get('end'))is int and s['start']<=a<b<=s['end']for s in spans):
+            allowed.add(member)
+    return allowed
+
+
+def _valid_file(path, before, after, result, metadata, allowed_review_ids=None):
     issues = []
     if result.get('path') != path or result.get('originalLogicPreserved') is not True:
         issues.append('missing positive per-file logic-preservation result')
     expected = {r['methodId'] for r in metadata.get('functions', [])}
     actual = set(result.get('membersReviewed', []))
-    if actual != expected:
-        issues.append(f'source function review coverage differs: missing={len(expected-actual)}, unknown={len(actual-expected)}')
+    allowed=(expected|{r['fieldId']for r in metadata.get('fields',[])}) if allowed_review_ids is None else allowed_review_ids
+    if not expected<=actual or not actual<=allowed:
+        issues.append(f'source function review coverage differs: missing={len(expected-actual)}, unknown={len(actual-allowed)}')
     summary = result.get('summary', '').strip()
     if len(summary) < 16:
         issues.append('review reason is too short to describe actual findings')
@@ -303,7 +327,9 @@ def _attempt(root, request, plan, state, batch, remaining):
 def _consume(root, request, plan, state, batch, remaining, output, result):
     entry = state['batches'][batch['id']]; number = entry['attempts']
     metadata = {r['path']: r for r in plan['files']}
+    review_index=_review_index(plan)
     reported = {r['path']: r for r in result.get('fileResults', [])}
+    reviewed_hashes={r['path']:r.get('afterSha256')for r in result.get('actualChanges',[])}
     integration = []; rejected = []
     if result.get('sourceVerificationErrors'):
         fail('PROJECT_POSTPROCESS_SOURCE_CHANGED',request['sourceRoot'],'Original candidate/source verification failed during Codex processing')
@@ -316,8 +342,11 @@ def _consume(root, request, plan, state, batch, remaining, output, result):
         issues = ['workspace boundary violation'] if unsafe_batch else []
         try:
             after = read(safe(after_path), max_bytes=worker.FILE_BYTES)
-            issues.extend(_valid_file(path, before, after, f, metadata[path]))
-        except (OSError,ValueError):
+            if sha(after)!=reviewed_hashes.get(path,metadata[path]['sha256']):
+                fail('PROJECT_POSTPROCESS_RESULT_CHANGED',path,'Batch workspace changed after its recorded review; it cannot be replayed')
+            issues.extend(_valid_file(path, before, after, f, metadata[path],_allowed_review_ids(metadata[path],review_index)))
+        except (OSError,ValueError)as error:
+            if getattr(error,'code',None)=='PROJECT_POSTPROCESS_RESULT_CHANGED':raise
             after = before; issues.append('derived code file unavailable')
         if issues:
             rejected.append(path)
@@ -347,6 +376,35 @@ def _consume(root, request, plan, state, batch, remaining, output, result):
     state['updatedAt'] = time.time(); _save(root/'state.json', state)
     _event(root, 'batch_finished', batch=batch['id'], attempt=number, accepted=len(integration), remaining=len(rejected), status=entry['status'])
     return rejected
+
+
+def recheck(root):
+    """Revalidate saved completed reviews after a validator fix, without a model call."""
+    root=safe(root)
+    with (root/'run.lock').open('a+b')as lock:
+        try:fcntl.flock(lock.fileno(),fcntl.LOCK_EX|fcntl.LOCK_NB)
+        except BlockingIOError:fail('PROJECT_POSTPROCESS_BUSY',str(root),'Pause the supervisor before replaying saved review records')
+        root,request,plan,state=_open(root);_integrate(root,request,state)
+        if sha(read(root/'UnityProject'/request['originalManifestName'],max_bytes=PLAN_BYTES))!=state['lastManifestSha256']:
+            fail('PROJECT_POSTPROCESS_DIRTY',str(root),'Derived manifest changed outside recorded integration')
+        current=state.get('currentBatch')
+        if current and state['batches'][current].get('attemptRoots'):
+            process=root/state['batches'][current]['attemptRoots'][-1]/'process.json'
+            if process.is_file()and _json(process).get('state')!='exited':
+                fail('PROJECT_POSTPROCESS_CHILD_ALIVE',str(process),'Saved reviews can only be replayed while the child is stopped')
+        before=sum(v.get('processed',False)for v in state['files'].values())
+        for batch in plan['batches']:
+            entry=state['batches'][batch['id']]
+            if entry['status']!='failed' or not entry.get('attemptRoots'):continue
+            output=root/entry['attemptRoots'][-1]
+            if not(output/'manifest.json').is_file():continue
+            result=_json(output/'manifest.json')
+            if result.get('blockingCondition') or not result.get('fileResults'):continue
+            paths=[p for p in batch['paths']if not state['files'][p].get('processed')]
+            if paths:_consume(root,request,plan,state,batch,paths,output,result)
+        _event(root,'saved_reviews_rechecked',newlyAccepted=sum(v.get('processed',False)for v in state['files'].values())-before,
+               validatorSha256=sha(read(Path(__file__),max_bytes=worker.FILE_BYTES)),modelCalled=False)
+    return status(root)
 
 
 def _finish(root, request, plan, state):
