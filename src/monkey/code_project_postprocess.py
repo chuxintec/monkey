@@ -34,7 +34,7 @@ def _event(root, kind, **values):
 
 
 def prepare(candidate, expected_manifest, output, *, max_files=128,
-            max_code_bytes=512*1024, batch_seconds=1200, idle_seconds=180,
+            max_code_bytes=512*1024, batch_seconds=3600, idle_seconds=900,
             max_attempts=2, codex=worker.DEFAULT_CODEX):
     from .code_postprocess_plan import prepare_plan
     source, manifest, rows, identity = snapshot(candidate)
@@ -106,6 +106,48 @@ def status(root):
                 currentBatch=state.get('currentBatch'), blockingCondition=state.get('blockingCondition'),
                 currentManifestSha256=state['lastManifestSha256'], updatedAt=state['updatedAt'],
                 originalSourceExecuted=False, editorPlayerRun=False)
+
+
+def request_pause(root):
+    root=safe(root); _json(root/'request.json')
+    _save(root/'operator-control.json',dict(pauseRequested=True,requestedAt=time.time()))
+    state=_json(root/'state.json'); batch=state.get('currentBatch')
+    if batch and state['batches'][batch].get('attemptRoots'):
+        attempt=root/state['batches'][batch]['attemptRoots'][-1]
+        if (attempt/'request.json').is_file(): worker.request_pause(attempt)
+    return dict(status='pause_requested',report=str(root/'operator-control.json'),
+                childStopped=False,description='The supervisor will preserve the current exact-session checkpoint before exiting')
+
+
+def _pause_requested(root):
+    path=root/'operator-control.json'
+    return path.is_file() and _json(path).get('pauseRequested') is True
+
+
+def configure(root, *, batch_seconds, idle_seconds):
+    root=safe(root)
+    if type(batch_seconds) is not int or not 1<=batch_seconds<=3600 or type(idle_seconds) is not int or not 1<=idle_seconds<=batch_seconds:
+        fail('PROJECT_POSTPROCESS_BUDGET',str(root),'Require finite batch seconds 1..3600 and idle seconds within that budget')
+    with (root/'run.lock').open('a+b') as lock:
+        try:fcntl.flock(lock.fileno(),fcntl.LOCK_EX|fcntl.LOCK_NB)
+        except BlockingIOError:fail('PROJECT_POSTPROCESS_BUSY',str(root),'Pause the active supervisor before changing its budgets')
+        root,request,plan,state=_open(root)
+        batch=state.get('currentBatch')
+        if batch and state['batches'][batch].get('attemptRoots'):
+            attempt=root/state['batches'][batch]['attemptRoots'][-1]
+            if (attempt/'process.json').is_file():
+                info=_json(attempt/'process.json')
+                if info.get('state') in ('running','starting','unknown'):
+                    fail('PROJECT_POSTPROCESS_CHILD_ALIVE',str(attempt),'A recorded child must finish or save a pause checkpoint before budget changes')
+            checkpoint=_json(attempt/'request.json')
+            if checkpoint.get('state') in ('prepared','checkpoint'):
+                worker.configure_checkpoint(attempt,timeout_seconds=batch_seconds,no_progress_seconds=idle_seconds)
+        old=dict(batchSeconds=request['batchSeconds'],idleSeconds=request['idleSeconds'])
+        request.update(batchSeconds=batch_seconds,idleSeconds=idle_seconds)
+        _save(root/'request.json',request)
+        _event(root,'budgets_changed',before=old,after=dict(batchSeconds=batch_seconds,idleSeconds=idle_seconds),
+               attemptsReset=False,elapsedReset=False,modelChanged=False)
+    return dict(status='configured',report=str(root/'request.json'),batchSeconds=batch_seconds,idleSeconds=idle_seconds)
 
 
 def _contexts(root, request, plan, batch, paths, attempt):
@@ -246,6 +288,7 @@ def _attempt(root, request, plan, state, batch, remaining):
                               context_root=evidence, context_files=context_files, project_batch=True,
                               codex=request['codex'], timeout_seconds=request['batchSeconds'],
                               no_progress_seconds=request['idleSeconds'], max_resumes=request['maxResumesPerAttempt'])
+    if _pause_requested(root): worker.request_pause(output)
     result = worker.run(prepared)
     # Exact-session resumes are local to this attempt; the project can execute many sessions/batches.
     while not result.get('blockingCondition'):
@@ -297,7 +340,8 @@ def _consume(root, request, plan, state, batch, remaining, output, result):
     if result.get('blockingCondition'):
         state['blockingCondition'] = dict(kind=result['blockingCondition'], batch=batch['id'], attempt=number,
                                          report=str((output/'manifest.json').relative_to(root)))
-        entry['status'] = 'blocked'; state['status'] = 'blocked'
+        entry['status'] = 'checkpoint' if result['blockingCondition']=='operator_pause' else 'blocked'
+        state['status'] = 'paused' if result['blockingCondition']=='operator_pause' else 'blocked'
     else:
         entry['status'] = 'pending' if rejected else 'partial' if any(state['files'][p]['status']=='partial' for p in batch['paths']) else 'processed'
     state['updatedAt'] = time.time(); _save(root/'state.json', state)
@@ -350,14 +394,18 @@ def run(root):
         if sha(read(manifest_path,max_bytes=PLAN_BYTES))!=state['lastManifestSha256']:
             fail('PROJECT_POSTPROCESS_DIRTY',str(manifest_path),'Derived owning manifest changed outside recorded integration')
         if state['status'] in ('complete','complete_with_partial'):return status(root)
+        if _pause_requested(root):
+            state.update(status='paused',updatedAt=time.time());_save(root/'state.json',state);return status(root)
         if state['status']=='preparing':fail('PROJECT_POSTPROCESS_PREPARING',str(root),'Candidate copy preparation is incomplete; preserve it for recovery')
         state['blockingCondition']=None;state['status']='running';_save(root/'state.json',state)
         for batch in plan['batches']:
+            if _pause_requested(root):
+                state.update(status='paused',updatedAt=time.time());_save(root/'state.json',state);return status(root)
             entry=state['batches'][batch['id']]
             remaining=[p for p in batch['paths']if not state['files'][p].get('processed')]
             if not remaining:continue
             # A killed supervisor never trusts an uncommitted mutable workspace as reviewed output.
-            if entry['status']=='running':
+            if entry['status'] in ('running','checkpoint'):
                 old=root/entry['attemptRoots'][-1];live=old/'process.json'
                 if live.is_file():
                     info=_json(live)
@@ -368,6 +416,8 @@ def run(root):
                 if (old/'manifest.json').is_file():
                     result=_json(old/'manifest.json')
                     checkpoint=_json(old/'request.json')
+                    if checkpoint.get('state')=='prepared' and result.get('blockingCondition')=='operator_pause':
+                        result=worker.run(old);checkpoint=_json(old/'request.json')
                     while checkpoint.get('state')=='checkpoint' and checkpoint.get('lastSessionId') and checkpoint.get('resumeCount',0)<request['maxResumesPerAttempt'] and checkpoint.get('childElapsedSeconds',0)<request['batchSeconds']:
                         result=worker.run(old,session_id=checkpoint['lastSessionId']);checkpoint=_json(old/'request.json')
                         if result.get('blockingCondition'):break
@@ -396,11 +446,16 @@ def run(root):
 
 
 def resume(root, *, retry_failed=False):
-    root,request,plan,state=_open(root)
-    if retry_failed:
-        for entry in state['batches'].values():
-            if entry['status']=='failed':
-                entry['attemptLimit']=entry['attempts']+request['maxAttempts']
-                entry['status']='pending'
-        state['status']='pending';state['updatedAt']=time.time();_save(root/'state.json',state)
+    root=safe(root)
+    with (root/'run.lock').open('a+b') as lock:
+        try:fcntl.flock(lock.fileno(),fcntl.LOCK_EX|fcntl.LOCK_NB)
+        except BlockingIOError:fail('PROJECT_POSTPROCESS_BUSY',str(root),'A running supervisor owns this queue; resume cannot rewrite its state')
+        root,request,plan,state=_open(root)
+        if _pause_requested(root):_save(root/'operator-control.json',dict(pauseRequested=False,resumedAt=time.time()))
+        if retry_failed:
+            for entry in state['batches'].values():
+                if entry['status']=='failed':
+                    entry['attemptLimit']=entry['attempts']+request['maxAttempts']
+                    entry['status']='pending'
+            state['status']='pending';state['updatedAt']=time.time();_save(root/'state.json',state)
     return run(root)

@@ -17,6 +17,7 @@ import selectors
 import signal
 import subprocess
 import time
+import uuid
 from typing import Iterable
 
 from . import __version__
@@ -34,6 +35,8 @@ WORKSPACE_FILE_BYTES = 16 * 1024 * 1024
 DIFF_BYTES = 256 * 1024 * 1024
 MAX_FILES = 256
 MAX_RESUMES = 1
+GLOBAL_LOCK_PATH = Path('/private/tmp/monkey-codex-postprocess.lock')
+ACTIVE_PROCESS_PATH = Path('/private/tmp/monkey-codex-postprocess.active.json')
 _SESSION = re.compile(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89aAbB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$')
 _SCHEMA = {
     'type': 'object', 'additionalProperties': False,
@@ -374,6 +377,7 @@ def prepare(candidate_root: str | Path, selected_files: Iterable[str],
         _atomic(destination / 'baseline.json', encoded(baseline))
         info = {
             'schemaVersion': 1,
+            'runId': str(uuid.uuid4()),
             'producer': {'version': __version__, 'moduleSha256': sha(read(Path(__file__), max_bytes=FILE_BYTES))},
             'base': {'candidateRoot': str(source), 'manifestPath': 'manifest.json',
                      'manifestSha256': actual_manifest_hash,
@@ -395,6 +399,179 @@ def prepare(candidate_root: str | Path, selected_files: Iterable[str],
     except BaseException:
         # Preserve the prepared checkpoint for diagnosis; never remove user-visible work.
         raise
+
+
+def request_pause(prepared_root: str | Path) -> dict:
+    """Request a cooperative pause through a pinned, non-executable control file."""
+    root = safe(prepared_root)
+    request_path = safe(root / 'request.json')
+    request = load(read(request_path, max_bytes=1024 * 1024))
+    _ensure_run_identity(root, request, request_path)
+    if request.get('state') not in ('prepared', 'checkpoint'):
+        return {'outcome': 'pause_not_needed', 'runId': request['runId'],
+                'reason': 'batch-not-resumable', 'idempotent': True}
+    process_path = safe(root / 'process.json')
+    process = load(read(process_path, max_bytes=1024 * 1024)) if process_path.is_file() else None
+    if process and process.get('state') == 'exited':
+        return {'outcome': 'pause_not_needed', 'runId': request['runId'],
+                'reason': 'child-already-exited', 'idempotent': True}
+    pid = process.get('pid') if process else None
+    if process and (process.get('state') != 'running' or type(pid) is not int or pid < 2):
+        fail('POSTPROCESS_PAUSE_NOT_RUNNING', str(root), 'The recorded Codex child state is uncertain')
+    if pid is not None:
+        try: os.kill(pid, 0)
+        except ProcessLookupError:
+            return {'outcome': 'pause_not_needed', 'runId': request['runId'],
+                    'reason': 'child-already-exited', 'idempotent': True}
+        except PermissionError:
+            pass
+    control_path = safe(root / 'control.json')
+    if control_path.exists():
+        previous = load(read(control_path, max_bytes=1024 * 1024))
+        if previous.get('runId') != request.get('runId'):
+            fail('POSTPROCESS_CONTROL_IDENTITY', str(control_path), 'Control file belongs to another batch')
+        if previous.get('state') in ('requested', 'stopping'):
+            return {'outcome': 'pause_requested', 'runId': request['runId'],
+                    'requestId': previous.get('requestId'), 'idempotent': True}
+    pause = {'schemaVersion': 1, 'runId': request['runId'], 'requestId': str(uuid.uuid4()),
+             'action': 'pause', 'state': 'requested', 'requestedAtUnix': time.time(),
+             'beforeChildStart': process is None}
+    _atomic(control_path, encoded(pause))
+    return {'outcome': 'pause_requested', 'runId': request['runId'],
+            'requestId': pause['requestId'], 'idempotent': False}
+
+
+def configure_checkpoint(prepared_root: str | Path, *, timeout_seconds: int,
+                         no_progress_seconds: int) -> dict:
+    """Change only finite time budgets on a never-started or exited checkpoint."""
+    root = safe(prepared_root)
+    if type(timeout_seconds) is not int or not 1 <= timeout_seconds <= 3600:
+        fail('POSTPROCESS_BUDGET', str(root), 'timeout_seconds must be in 1..3600')
+    if type(no_progress_seconds) is not int or not 1 <= no_progress_seconds <= timeout_seconds:
+        fail('POSTPROCESS_BUDGET', str(root), 'no_progress_seconds must be within the cumulative timeout')
+    lock_path = GLOBAL_LOCK_PATH
+    lock_stream = lock_path.open('a+b')
+    try:
+        try: fcntl.flock(lock_stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError: fail('POSTPROCESS_BUSY', str(lock_path), 'Cannot change budgets while a Codex batch is running')
+        request_path = safe(root / 'request.json')
+        request = load(read(request_path, max_bytes=1024 * 1024))
+        _ensure_run_identity(root, request, request_path)
+        state = request.get('state')
+        if state not in ('prepared', 'checkpoint'):
+            fail('POSTPROCESS_BUDGET_STATE', str(root), 'Budget changes require a prepared batch or checkpoint')
+        process_path = root / 'process.json'
+        process = load(read(safe(process_path), max_bytes=1024 * 1024)) if process_path.exists() else None
+        if state == 'prepared' and process is not None:
+            fail('POSTPROCESS_CHILD_ALREADY_STARTED', str(process_path), 'A prepared batch is adjustable only before any child has started')
+        if process and process.get('state') != 'exited':
+            fail('POSTPROCESS_CHILD_ACTIVE', str(process_path), 'Only an exited child can have its checkpoint budget changed')
+        if state == 'checkpoint' and (not process or not request.get('lastSessionId')
+                                      or not _SESSION.fullmatch(str(request['lastSessionId']))):
+            fail('POSTPROCESS_CHECKPOINT_IDENTITY', str(root), 'A resumable checkpoint requires an exited child and exact session id')
+        control_path = root / 'control.json'
+        if control_path.exists():
+            control = load(read(safe(control_path), max_bytes=1024 * 1024))
+            if control.get('runId') != request.get('runId') or control.get('state') in ('requested', 'stopping'):
+                fail('POSTPROCESS_CONTROL_PENDING', str(control_path), 'A pause request must be acknowledged before budget changes')
+        elapsed = request.get('childElapsedSeconds', 0)
+        if type(elapsed) not in (int, float) or timeout_seconds <= elapsed:
+            fail('POSTPROCESS_TOTAL_BUDGET', str(root), 'New cumulative timeout must exceed already-used child time')
+        old = {'timeoutSeconds': request['budgets']['timeoutSeconds'],
+               'noProgressSeconds': request['budgets']['noProgressSeconds']}
+        new = {'timeoutSeconds': timeout_seconds, 'noProgressSeconds': no_progress_seconds}
+        change = {'old': old, 'new': new, 'atUnix': time.time(),
+                  'childElapsedSecondsPreserved': elapsed,
+                  'resumeCountPreserved': request.get('resumeCount', 0),
+                  'maxResumesPreserved': request.get('maxResumes', MAX_RESUMES)}
+        history = request.get('budgetAdjustments', [])
+        if not isinstance(history, list) or len(history) >= 32:
+            fail('POSTPROCESS_BUDGET_HISTORY', str(root), 'Budget adjustment history is invalid or full')
+        history.append(change)
+        request['budgets'].update(new)
+        request['budgetAdjustments'] = history
+        _atomic(request_path, encoded(request))
+        revision_path = root / 'manifest.json'
+        if revision_path.is_file():
+            revision = load(read(safe(revision_path), max_bytes=4 * 1024 * 1024))
+            revision['budgetAdjustments'] = history
+            _atomic(revision_path, encoded(revision))
+        return {'outcome': 'budget_configured', 'runId': request['runId'],
+                'old': old, 'new': new, 'childElapsedSeconds': elapsed,
+                'resumeCount': request.get('resumeCount', 0),
+                'maxResumes': request.get('maxResumes', MAX_RESUMES),
+                'adjustmentCount': len(history)}
+    finally:
+        lock_stream.close()
+
+
+def _pending_pause(root: Path, request: dict) -> dict | None:
+    path = root / 'control.json'
+    if not path.exists(): return None
+    try:
+        control = load(read(safe(path), max_bytes=1024 * 1024))
+        expected = {'schemaVersion', 'runId', 'requestId', 'action', 'state', 'requestedAtUnix'}
+        allowed = (set(control) == expected or set(control) == expected | {'beforeChildStart'})
+        if (allowed and control.get('schemaVersion') == 1
+                and control.get('runId') == request.get('runId')
+                and control.get('action') == 'pause' and control.get('state') == 'requested'
+                and isinstance(control.get('requestId'), str)
+                and re.fullmatch(r'[0-9a-f-]{36}', control['requestId'])):
+            return control
+    except Exception:
+        return None
+    return None
+
+
+def _consume_pause_control(root: Path, request: dict) -> None:
+    """A precise-session resume acknowledges and consumes a completed pause."""
+    path = root / 'control.json'
+    if not path.exists():
+        return
+    control = load(read(safe(path), max_bytes=1024 * 1024))
+    if control.get('runId') != request.get('runId') or control.get('action') != 'pause':
+        fail('POSTPROCESS_CONTROL_IDENTITY', str(path), 'Pause control belongs to another run')
+    state = control.get('state')
+    if state in ('requested', 'stopping'):
+        fail('POSTPROCESS_CONTROL_PENDING', str(path), 'Pause request has not been acknowledged by the child')
+    if state == 'consumed':
+        return
+    if state not in ('acknowledged', 'not_needed'):
+        fail('POSTPROCESS_CONTROL_STATE', str(path), 'Pause control state is not resumable')
+    _atomic(path, encoded({**control, 'state': 'consumed',
+                           'consumedAtUnix': time.time()}))
+
+
+def _ensure_run_identity(root: Path, request: dict, request_path: Path) -> None:
+    """Add a stable ID to older prepared batches without changing their source pins."""
+    run_id = request.get('runId')
+    if run_id is not None:
+        if not isinstance(run_id, str) or not _SESSION.fullmatch(run_id):
+            fail('POSTPROCESS_RUN_IDENTITY', str(request_path), 'Prepared run identity is malformed')
+        return
+    identity = {'root': str(root.resolve()), 'base': request.get('base'),
+                'selected': request.get('selected'), 'taskSha256': request.get('taskSha256'),
+                'codexIdentity': request.get('codexIdentity')}
+    run_id = str(uuid.uuid5(uuid.NAMESPACE_URL, 'monkey-postprocess:' + sha(encoded(identity))))
+    request['runId'] = run_id
+    request['identityMigration'] = {'from': 'legacy-no-runId', 'atUnix': time.time(),
+                                    'method': 'stable-derived-from-existing-pins'}
+    _atomic(request_path, encoded(request))
+
+
+def _write_pause_state(root: Path, request: dict, pause: dict, state: str,
+                       **fields) -> None:
+    path = root / 'control.json'
+    try:
+        current = load(read(safe(path), max_bytes=1024 * 1024))
+    except Exception:
+        return
+    if (current.get('runId') == request.get('runId')
+            and current.get('action') == 'pause'
+            and current.get('requestId') == pause.get('requestId')
+            and current.get('state') in ('requested', 'stopping')):
+        updated = {**current, 'state': state, **fields, 'updatedAtUnix': time.time()}
+        _atomic(path, encoded(updated))
 
 
 def _build_prompt(task: str, selected: list[tuple[str, Path, bytes]],
@@ -440,6 +617,7 @@ def run(prepared: Prepared | str | Path, *, session_id: str | None = None,
     workspace = safe(root / 'workspace')
     request_path = safe(root / 'request.json')
     request = load(read(request_path, max_bytes=1024 * 1024))
+    _ensure_run_identity(root, request, request_path)
     if request.get('state') not in ('prepared', 'checkpoint'):
         fail('POSTPROCESS_ALREADY_RUN', str(root), 'This run is already finalized; create a new preparation')
     if session_id is not None and request.get('state') != 'checkpoint':
@@ -466,7 +644,7 @@ def run(prepared: Prepared | str | Path, *, session_id: str | None = None,
     codex_path, codex_identity = _resolve_codex(codex if codex is not None else request['codexPath'])
     if codex_identity['sha256'] != request['codexIdentity']['sha256']:
         fail('CODEX_EXECUTABLE_CHANGED', str(codex_path), 'Resolved CLI bytes differ from the prepared identity')
-    lock_path = Path('/private/tmp/monkey-codex-postprocess.lock')
+    lock_path = GLOBAL_LOCK_PATH
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     lock_stream = lock_path.open('a+b')
     try:
@@ -474,7 +652,26 @@ def run(prepared: Prepared | str | Path, *, session_id: str | None = None,
         except BlockingIOError: fail('POSTPROCESS_BUSY', str(lock_path), 'A Codex post-process task is already running')
         _guard_global_process()
         _guard_child_process(root)
+        if session_id is None:
+            before_start = _pending_pause(root, request)
+            if before_start and before_start.get('beforeChildStart'):
+                _write_pause_state(root, request, before_start, 'acknowledged',
+                                   stoppedAtUnix=time.time(), reason='child-not-started')
+                revision = {'schemaVersion': 1, 'status': 'failed', 'outcome': 'operator_paused',
+                            'classification': 'operator_pause', 'blockingCondition': 'operator_pause',
+                            'operatorPauseRequestId': before_start['requestId'], 'resumeAvailable': False,
+                            'sessionId': None, 'actualChanges': [], 'unresolved': [],
+                            'base': request['base'], 'selected': request['selected'],
+                            'stopReason': 'operator-pause-before-start'}
+                _atomic(root / 'manifest.json', encoded(revision))
+                return revision
+            control_path = root / 'control.json'
+            if control_path.exists():
+                control = load(read(safe(control_path), max_bytes=1024 * 1024))
+                if control.get('beforeChildStart') and control.get('state') in ('acknowledged', 'not_needed'):
+                    _consume_pause_control(root, request)
         if session_id:
+            _consume_pause_control(root, request)
             request['resumeCount'] = request.get('resumeCount', 0) + 1
             _atomic(request_path, encoded(request))
         return _invoke(root, workspace, request, codex_path, codex_identity, session_id)
@@ -507,6 +704,7 @@ def _invoke(root: Path, workspace: Path, request: dict, codex: Path,
     log_path = root / 'events.jsonl'
     start = time.monotonic(); last_progress = start; status = 'failed'; reason = None; code = None
     process = None
+    pause_request = None; pause_stage = 0; pause_deadline = None
     record = {'state': 'starting', 'pid': None, 'sessionId': session_id,
               'attempt': request.get('resumeCount', 0), 'startedAtUnix': time.time()}
     _record_process(root, record)
@@ -534,7 +732,7 @@ def _invoke(root: Path, workspace: Path, request: dict, codex: Path,
                     if log.tell() + stderr_log.tell() + len(chunk) > max_log:
                         reason = 'output-budget'; _stop(process); break
                     sink.write(chunk); sink.flush(); last_progress = now
-                if reason: break
+                if reason and reason != 'operator-pause': break
                 code = process.poll()
                 if code is not None:
                     while selector.get_map():
@@ -548,6 +746,27 @@ def _invoke(root: Path, workspace: Path, request: dict, codex: Path,
                             sink.write(tail); sink.flush()
                         if reason: break
                     break
+                if pause_request is None:
+                    pause_request = _pending_pause(root, request)
+                    if pause_request:
+                        reason = 'operator-pause'; pause_stage = 1; pause_deadline = now + 10
+                        _write_pause_state(root, request, pause_request, 'stopping', observedAtUnix=time.time())
+                        try: os.killpg(process.pid, signal.SIGINT)
+                        except ProcessLookupError: pass
+                        continue
+                if pause_request is not None:
+                    if now >= pause_deadline:
+                        if pause_stage == 1:
+                            pause_stage = 2; pause_deadline = now + 3
+                            try: os.killpg(process.pid, signal.SIGTERM)
+                            except ProcessLookupError: pass
+                        else:
+                            try: os.killpg(process.pid, signal.SIGKILL)
+                            except ProcessLookupError: pass
+                            try: code = process.wait(timeout=3)
+                            except subprocess.TimeoutExpired: pass
+                            break
+                    continue
                 if now - start >= timeout:
                     reason = 'timeout'; _stop(process); break
                 if now - last_progress >= idle:
@@ -565,6 +784,17 @@ def _invoke(root: Path, workspace: Path, request: dict, codex: Path,
                   pid=process.pid if process is not None else None,
                   returnCode=process_code, endedAtUnix=time.time())
     _record_process(root, record)
+    pause_acknowledged = pause_request is not None and process_code is not None
+    if pause_acknowledged:
+        _write_pause_state(root, request, pause_request, 'acknowledged',
+                           stoppedAtUnix=time.time(), sessionId=_extract_session_id(log_path))
+    elif pause_request is not None:
+        reason = 'termination-timeout'
+    else:
+        pending_pause = _pending_pause(root, request)
+        if pending_pause:
+            _write_pause_state(root, request, pending_pause, 'not_needed',
+                               reason='child-exited-before-pause', stoppedAtUnix=time.time())
     actual = _workspace_changes(workspace, request, request['workspaceBudgetBytes'])
     if any(row.get('budgetExceeded') for row in actual): reason = reason or 'workspace-output-budget'
     integrity_errors = _workspace_integrity(workspace, request)
@@ -633,10 +863,14 @@ def _invoke(root: Path, workspace: Path, request: dict, codex: Path,
     child_seconds = round(time.monotonic() - start, 3)
     cumulative_seconds = round(request.get('childElapsedSeconds', 0) + child_seconds, 3)
     observations = _parse_events(log_path)
+    session_id_result = _extract_session_id(log_path) or request.get('sessionId')
     revision = {
         'schemaVersion': 1, 'status': status,
-        'classification': 'blocked' if blocker else status,
-        'blockingCondition': blocker['kind'] if blocker else None,
+        'outcome': 'operator_paused' if pause_acknowledged else 'blocked' if blocker else status,
+        'classification': 'operator_pause' if pause_acknowledged else 'blocked' if blocker else status,
+        'blockingCondition': 'operator_pause' if pause_acknowledged else blocker['kind'] if blocker else None,
+        'operatorPauseRequestId': pause_request.get('requestId') if pause_acknowledged else None,
+        'resumeAvailable': bool(session_id_result),
         'blocker': blocker,
         'projectBatch': request.get('projectBatch', False),
         'fileResults': file_results if request.get('projectBatch') else None,
@@ -651,7 +885,7 @@ def _invoke(root: Path, workspace: Path, request: dict, codex: Path,
         'declaredChangedPaths': [str(item)[:512] for item in declared_paths[:MAX_FILES]],
         'responseSummary': declared.get('summary') if response_valid else None,
         'exitCode': code, 'stopReason': reason,
-        'sessionId': _extract_session_id(log_path) or request.get('sessionId'),
+        'sessionId': session_id_result,
         'cliVersion': cli_version, 'executable': codex_identity,
         'model': observations['model'], 'reasoningEffort': observations['reasoningEffort'],
         'usage': observations['usage'], 'usageAccounting': 'last-reported-turn-only; not cost or cumulative billing',
@@ -662,7 +896,9 @@ def _invoke(root: Path, workspace: Path, request: dict, codex: Path,
         'taskSha256': request['taskSha256'],
     }
     _atomic(root / 'manifest.json', encoded(revision))
-    checkpointable = reason in ('timeout', 'no-progress', 'output-budget', 'workspace-output-budget', 'termination-timeout') and revision['sessionId'] and not source_errors
+    checkpointable = (pause_acknowledged or
+                       (reason in ('timeout', 'no-progress', 'output-budget', 'workspace-output-budget', 'termination-timeout')
+                        and revision['sessionId'] and not source_errors))
     if checkpointable:
         _atomic(root / 'checkpoint-files.json', encoded(_snapshot(workspace)))
     request.update(state='checkpoint' if checkpointable else 'finalized', childElapsedSeconds=cumulative_seconds,
@@ -704,13 +940,13 @@ def _guard_child_process(root: Path) -> None:
 
 def _record_process(root: Path, record: dict) -> None:
     _atomic(root / 'process.json', encoded(record))
-    active = Path('/private/tmp/monkey-codex-postprocess.active.json')
+    active = ACTIVE_PROCESS_PATH
     _atomic(active, encoded({'state': record.get('state'), 'pid': record.get('pid'),
                              'attempt': record.get('attempt'), 'updatedAtUnix': time.time()}))
 
 
 def _guard_global_process() -> None:
-    path = Path('/private/tmp/monkey-codex-postprocess.active.json')
+    path = ACTIVE_PROCESS_PATH
     if not path.exists(): return
     record = load(read(path, max_bytes=1024 * 1024)); state = record.get('state')
     if state == 'exited': return

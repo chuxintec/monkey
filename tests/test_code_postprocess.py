@@ -1,10 +1,13 @@
 import json
 import os
 from pathlib import Path
+import threading
 import tempfile
+import time
 import unittest
 
-from monkey.code_postprocess import prepare, run
+import monkey.code_postprocess as postprocess
+from monkey.code_postprocess import configure_checkpoint, prepare, request_pause, run
 from monkey.io import sha, encoded
 from monkey.sources.compiled import ParseError
 
@@ -16,6 +19,8 @@ class CodePostprocessTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(dir='/private/tmp')
         self.root = Path(self.temp.name)
+        postprocess.GLOBAL_LOCK_PATH = self.root / 'postprocess.lock'
+        postprocess.ACTIVE_PROCESS_PATH = self.root / 'postprocess.active.json'
         self.candidate = self.root / 'candidate'
         self.candidate.mkdir()
         code = b'public class Example { public int Value = 1; }\n'
@@ -241,6 +246,17 @@ else:
         self.assertEqual(json.loads((self.output / 'request.json').read_text())['state'], 'checkpoint')
         with self.assertRaises(ParseError):
             run(prepared, session_id='223e4567-e89b-42d3-a456-426614174000')
+        request_path = self.output / 'request.json'
+        legacy = json.loads(request_path.read_text())
+        legacy.pop('runId')
+        elapsed = legacy['childElapsedSeconds']
+        resumes = legacy.get('resumeCount', 0)
+        request_path.write_text(json.dumps(legacy))
+        configure_checkpoint(prepared.output, timeout_seconds=30, no_progress_seconds=10)
+        migrated = json.loads(request_path.read_text())
+        self.assertEqual(migrated['identityMigration']['from'], 'legacy-no-runId')
+        self.assertEqual(migrated['childElapsedSeconds'], elapsed)
+        self.assertEqual(migrated.get('resumeCount', 0), resumes)
         resumed = run(prepared, session_id=SESSION)
         self.assertEqual(resumed['status'], 'partial')
         self.assertEqual(json.loads((self.output / 'invocation.json').read_text())['command'][2], 'resume')
@@ -257,6 +273,88 @@ time.sleep(3)
             run(prepared,session_id=SESSION)
         self.assertEqual(error.exception.code,'POSTPROCESS_TOTAL_BUDGET')
         self.assertEqual(json.loads((self.output/'request.json').read_text())['state'],'checkpoint')
+
+    def test_cooperative_pause_waits_for_child_exit_then_exact_resume_consumes_control(self):
+        self.fake_cli(f'''import json, pathlib, signal, sys, time
+if 'resume' in sys.argv:
+    response=pathlib.Path(sys.argv[sys.argv.index('-o')+1])
+    response.write_text(json.dumps({{"status":"partial","changedPaths":[],"unresolved":["review pending"],"summary":"resumed safely"}}))
+else:
+    def finish(signum, frame):
+        time.sleep(0.7)
+        raise SystemExit(130)
+    signal.signal(signal.SIGINT, finish)
+    print(json.dumps({{"type":"thread.started","thread_id":"{SESSION}"}}),flush=True)
+    while True: time.sleep(0.1)
+''')
+        prepared = self.make_prepared(timeout_seconds=60, no_progress_seconds=30)
+        result = {}
+        worker = threading.Thread(target=lambda: result.setdefault('revision', run(prepared)))
+        worker.start()
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            try:
+                process = json.loads((self.output / 'process.json').read_text())
+                if process.get('state') == 'running': break
+            except (FileNotFoundError, json.JSONDecodeError): pass
+            time.sleep(0.02)
+        else: self.fail('synthetic Codex child did not start')
+        receipt = request_pause(prepared.output)
+        self.assertEqual(receipt['outcome'], 'pause_requested')
+        worker.join(timeout=8)
+        self.assertFalse(worker.is_alive(), 'pause must stop and reap the owned child')
+        paused = result['revision']
+        self.assertEqual(paused['outcome'], 'operator_paused')
+        self.assertEqual(paused['blockingCondition'], 'operator_pause')
+        self.assertEqual(paused['sessionId'], SESSION)
+        control = json.loads((self.output / 'control.json').read_text())
+        self.assertEqual(control['state'], 'acknowledged')
+        self.assertEqual(json.loads((self.output / 'process.json').read_text())['state'], 'exited')
+
+        before = json.loads((self.output / 'request.json').read_text())
+        adjusted = configure_checkpoint(prepared.output, timeout_seconds=60, no_progress_seconds=20)
+        after = json.loads((self.output / 'request.json').read_text())
+        self.assertEqual(adjusted['outcome'], 'budget_configured')
+        self.assertEqual(after['childElapsedSeconds'], before['childElapsedSeconds'])
+        self.assertEqual(after.get('resumeCount', 0), before.get('resumeCount', 0))
+        self.assertEqual(after.get('maxResumes', 1), before.get('maxResumes', 1))
+        resumed = run(prepared, session_id=SESSION)
+        self.assertEqual(resumed['status'], 'partial')
+        self.assertEqual(json.loads((self.output / 'control.json').read_text())['state'], 'consumed')
+
+    def test_prestart_pause_returns_typed_pause_without_spawning_child(self):
+        prepared = self.make_prepared()
+        receipt = request_pause(prepared.output)
+        self.assertEqual(receipt['outcome'], 'pause_requested')
+        self.assertTrue(receipt['idempotent'] is False)
+        revision = run(prepared)
+        self.assertEqual(revision['outcome'], 'operator_paused')
+        self.assertEqual(revision['blockingCondition'], 'operator_pause')
+        self.assertFalse((self.output / 'process.json').exists())
+        self.assertEqual(json.loads((self.output / 'control.json').read_text())['state'], 'acknowledged')
+
+    def test_legacy_prepared_revision_gets_stable_identity_without_counter_reset(self):
+        prepared = self.make_prepared(max_resumes=2)
+        request_path = self.output / 'request.json'
+        request = json.loads(request_path.read_text())
+        request.pop('runId')
+        request['childElapsedSeconds'] = 17.25
+        request['resumeCount'] = 1
+        request_path.write_text(json.dumps(request))
+        first = configure_checkpoint(prepared.output, timeout_seconds=90, no_progress_seconds=20)
+        migrated = json.loads(request_path.read_text())
+        second = configure_checkpoint(prepared.output, timeout_seconds=100, no_progress_seconds=20)
+        self.assertEqual(first['runId'], second['runId'])
+        self.assertEqual(migrated['identityMigration']['from'], 'legacy-no-runId')
+        self.assertEqual(migrated['childElapsedSeconds'], 17.25)
+        self.assertEqual(migrated['resumeCount'], 1)
+
+    def test_pause_request_after_child_exit_is_safe_noop(self):
+        self.fake_cli('import json,pathlib,sys\nr=pathlib.Path(sys.argv[sys.argv.index("-o")+1]); r.write_text(json.dumps({"status":"partial","changedPaths":[],"unresolved":["x"],"summary":"done"}))\n')
+        prepared = self.make_prepared()
+        run(prepared)
+        receipt = request_pause(prepared.output)
+        self.assertEqual(receipt['outcome'], 'pause_not_needed')
 
 
 if __name__ == '__main__':

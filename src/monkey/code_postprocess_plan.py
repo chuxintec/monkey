@@ -585,4 +585,3 @@ def prepare_plan(candidate, expected_manifest_sha256, max_files=128, max_code_by
         "diagnosticPolicy": {"compactCounts": "per-source countsByCode from the compact report",
             "perMapping": "detailsRef path and record index; detail shard bodies were not loaded",
             "queueBehavior": "dependency edges are advisory hints; cycles do not block source-order execution"}}
-

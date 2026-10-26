@@ -1,4 +1,4 @@
-import json,tempfile,unittest
+import fcntl,json,tempfile,unittest
 from pathlib import Path
 from unittest.mock import patch
 from test_code_postprocess_plan import CodePostprocessPlanTests
@@ -49,3 +49,50 @@ class ProjectPostprocessTests(unittest.TestCase):
   with patch.object(project.worker,'prepare',side_effect=self.fake_prepare),patch.object(project.worker,'run',side_effect=self.fake_run):
    with self.assertRaises(ParseError) as error:project.run(self.output)
   self.assertEqual(error.exception.code,'PROJECT_POSTPROCESS_DIRTY');self.assertEqual(target.read_text(),'manual work')
+ def test_pause_before_start_preserves_all_work_and_explicit_resume_runs(self):
+  receipt=project.request_pause(self.output)
+  self.assertFalse(receipt['childStopped'])
+  with patch.object(project.worker,'run') as worker:
+   paused=project.run(self.output)
+  self.assertEqual(paused['status'],'paused');self.assertEqual(paused['actuallyProcessed'],0);worker.assert_not_called()
+  with patch.object(project.worker,'prepare',side_effect=self.fake_prepare),patch.object(project.worker,'run',side_effect=self.fake_run):
+   result=project.resume(self.output)
+  self.assertEqual(result['actuallyProcessed'],2)
+ def test_configure_budgets_does_not_reset_attempt_history_and_busy_refuses(self):
+  path=self.output/'state.json';state=json.loads(path.read_bytes());batch=next(iter(state['batches']));state['batches'][batch]['attempts']=1;path.write_bytes(encoded(state))
+  project.configure(self.output,batch_seconds=3600,idle_seconds=900)
+  self.assertEqual(json.loads(path.read_bytes())['batches'][batch]['attempts'],1)
+  self.assertEqual(json.loads((self.output/'request.json').read_bytes())['batchSeconds'],3600)
+  with (self.output/'run.lock').open('a+b')as lock:
+   fcntl.flock(lock.fileno(),fcntl.LOCK_EX|fcntl.LOCK_NB)
+   with self.assertRaises(ParseError)as error:project.configure(self.output,batch_seconds=100,idle_seconds=50)
+   self.assertEqual(error.exception.code,'PROJECT_POSTPROCESS_BUSY')
+   with self.assertRaises(ParseError)as error:project.resume(self.output)
+   self.assertEqual(error.exception.code,'PROJECT_POSTPROCESS_BUSY')
+  self.assertEqual(json.loads((self.output/'request.json').read_bytes())['batchSeconds'],3600)
+ def test_operator_pause_is_checkpoint_not_consumed_fresh_attempt(self):
+  paused=dict(status='partial',fileResults=[],blockingCondition='operator_pause',unexpectedPaths=[],workspaceIntegrityErrors=[],gitBoundary={'valid':True})
+  with patch.object(project.worker,'prepare',side_effect=self.fake_prepare),patch.object(project.worker,'run',return_value=paused):
+   result=project.run(self.output)
+  self.assertEqual(result['status'],'paused');self.assertEqual(result['actuallyProcessed'],0)
+  state=json.loads((self.output/'state.json').read_bytes());entry=state['batches'][result['currentBatch']]
+  self.assertEqual(entry['status'],'checkpoint');self.assertEqual(entry['attempts'],1)
+ def test_checkpoint_resume_reuses_same_attempt_and_exact_session(self):
+  session='12345678-1234-4234-8234-123456789abc'
+  def paused_worker(prepared,**kw):
+   result=dict(status='partial',fileResults=[],blockingCondition='operator_pause',unexpectedPaths=[],workspaceIntegrityErrors=[],gitBoundary={'valid':True})
+   (prepared.output/'request.json').write_bytes(encoded(dict(state='checkpoint',lastSessionId=session,resumeCount=0,childElapsedSeconds=10)))
+   (prepared.output/'manifest.json').write_bytes(encoded(result));return result
+  with patch.object(project.worker,'prepare',side_effect=self.fake_prepare),patch.object(project.worker,'run',side_effect=paused_worker):
+   paused=project.run(self.output)
+  batch=paused['currentBatch'];called=[]
+  def continued_worker(prepared,**kw):
+   if isinstance(prepared,Path):
+    called.append(kw['session_id']);prepared=type('Prepared',(),{'output':prepared})()
+    (prepared.output/'request.json').write_bytes(encoded(dict(state='finalized',resumeCount=1,childElapsedSeconds=20)))
+   return self.fake_run(prepared,**kw)
+  with patch.object(project.worker,'prepare',side_effect=self.fake_prepare),patch.object(project.worker,'run',side_effect=continued_worker):
+   result=project.resume(self.output)
+  state=json.loads((self.output/'state.json').read_bytes())
+  self.assertEqual(called,[session]);self.assertEqual(state['batches'][batch]['attempts'],1)
+  self.assertEqual(result['actuallyProcessed'],2)

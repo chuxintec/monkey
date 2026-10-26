@@ -1,5 +1,7 @@
 # v0.6 模块执行登记
 
+首批实际运行暴露预算过短：父维护项目pause/configure/CLI/运行资料；复用codex_postprocess在既有三文件内补低层合作式检查点和停机预算调整。真实CLI仍父唯一串行，既有工作进程自然退出后才交接，不重置耗时或尝试次数。
+
 全量后处理当前实施：父/root单写code_project_postprocess.py、CLI/PLAN/统一工程与所有真实CLI调用；复用code_regeneration单写code_postprocess_plan.py/专测/CODEX-PROJECT-PLAN.md，交完整范围/依赖/源映射分批；复用codex_postprocess单写code_postprocess.py/专测/CODEX-POSTPROCESS.md，扩展多批低层进程/每文件结果/只读上下文/受限恢复。shader_profile空闲，不造工作。2模块+父；不递归，不真实引擎，不跨写其他产品。旧“两方法本地交付”保留能力验证，不再作为v0.6全量出口。
 
 

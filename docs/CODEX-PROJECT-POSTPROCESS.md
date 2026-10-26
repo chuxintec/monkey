@@ -8,11 +8,17 @@ monkey code-project-prepare --candidate /path/to/export --expected-manifest <sha
 monkey code-project-run --run /path/to/new-project-run
 monkey code-project-status --run /path/to/new-project-run
 monkey code-project-resume --run /path/to/new-project-run
+monkey code-project-pause --run /path/to/new-project-run
+# Wait until status is paused and the recorded child has exited, then:
+monkey code-project-configure --run /path/to/new-project-run --batch-seconds 3600 --idle-seconds 900
+monkey code-project-resume --run /path/to/new-project-run
 ```
 
 Preparation discovers every manifest-owned C# file, without SDK/engine filtering. The known full-JS function index remains its own denominator; older named drafts and generated native helpers are additional actual code files. Exact original modules are supplied when their content hash matches the owning inventory. Absent source context is explicit and never fabricated. Source/group ordering and dependency hints organize batches; dependency cycles do not turn into queue deadlocks. Oversized files remain whole and are marked as such.
 
 `run` continuously executes all ready batches through one CLI at a time. Batch limits protect against stalls and do not limit the project to one session or one module. Each attempt can resume its exact saved session within its remaining child-time budget. Failed files get a finite retry window while independent work continues. Authentication, quota and real permission errors stop the queue with unprocessed work visible; they do not trigger alternate providers or model downgrades. `resume --retry-failed` explicitly grants exhausted failed batches another finite retry window without overwriting their old attempts.
+
+The project default is 3,600 seconds per attempt, with a 900-second no-output limit. The first real 104-file / 501,624-byte batch exhausted the earlier 1,200/180 settings before its full structured review was returned. A pause request is asynchronous: its receipt does not claim the child stopped. The worker saves its exact session and workspace before the supervisor exits. Budget changes require the supervisor lock to be free and the child to have exited; they retain cumulative execution time, resume counts, attempt numbers and model configuration. They do not retroactively declare interrupted files reviewed.
 
 Each batch has independent copied code, immutable source context, the prompt/schema, session/events/stderr, per-file review results, usage and actual patch. Every source-function ID must appear in the per-file review coverage. A file is accepted only with a concrete result, preserved declarations/markers and valid output boundaries. Unchanged files need code-specific findings. Partial files can be fully reviewed while retaining unknown semantics. Missing review coverage stays unprocessed; it is never counted by clearing a queue entry.
 

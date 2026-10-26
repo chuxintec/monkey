@@ -199,12 +199,16 @@ def main(argv=None):
     p = sub.add_parser('code-project-prepare',help='Prepare an exact whole-candidate C# batch queue and independent complete project')
     p.add_argument('--candidate',required=True);p.add_argument('--expected-manifest',required=True);p.add_argument('--out',required=True)
     p.add_argument('--batch-max-files',type=int,default=128);p.add_argument('--batch-code-bytes',type=int,default=512*1024)
-    p.add_argument('--batch-seconds',type=int,default=1200);p.add_argument('--idle-seconds',type=int,default=180);p.add_argument('--attempts',type=int,default=2)
+    p.add_argument('--batch-seconds',type=int,default=3600);p.add_argument('--idle-seconds',type=int,default=900);p.add_argument('--attempts',type=int,default=2)
     p.add_argument('--codex',default='/opt/homebrew/bin/codex')
     for command in ('code-project-run','code-project-status','code-project-resume'):
         p=sub.add_parser(command,help='Run all ready batches, inspect durable progress, or resume exact project checkpoints')
         p.add_argument('--run',required=True)
         if command=='code-project-resume':p.add_argument('--retry-failed',action='store_true',help='Explicitly grant a new finite retry window to exhausted failed batches')
+    p=sub.add_parser('code-project-pause',help='Request cooperative pause and preserve the active exact-session checkpoint')
+    p.add_argument('--run',required=True)
+    p=sub.add_parser('code-project-configure',help='Change finite batch budgets only while the supervisor and child are stopped')
+    p.add_argument('--run',required=True);p.add_argument('--batch-seconds',type=int,required=True);p.add_argument('--idle-seconds',type=int,required=True)
     p = sub.add_parser('code-types',help='Extract only statically proven source types/dependencies and write named fillable evidence gaps')
     p.add_argument('--source',required=True);p.add_argument('--selectors',required=True);p.add_argument('--type-evidence');p.add_argument('--namespace');p.add_argument('--out',required=True)
     p = sub.add_parser('code-select',help='Select reviewed source methods, close typed dependencies and check actual lowering; no source execution')
@@ -364,7 +368,7 @@ def main(argv=None):
             from .output_limits import policy
             print(json.dumps(dict(version=__version__, profiles=[PROFILE,PROJECT_PROFILE,'cocos-2.4.11-bundle','cocos-3.8.7-bundle','cocos-3.4.1-bundle','cocos-2.1.2-resource','generic-image-resources-v1','egret-custom-resource-plist-v1'], targetProfiles=[UNITY_PROFILE,cocos.PROFILE],
                 ownership=dict(recoveryCandidates='monkey',developmentProjectOperations='beaver',workflow='GREA'),
-                codeRecovery=dict(status='partial',sourceExecution=False,lexicalGraph='complete-source-static-binding-and-utf8-spans',typedModules='explicit-source-class-method-hashes-and-call-domain',moduleProfiles=['foodstreet-demand-health-v1','foodstreet-motion-math-v1'],selection='optional-strict-typed-dependency-closure-and-lowering',methods='default-full-source-best-effort-CSharp-bodies;unknown-fragments-retained',fullDrafts=dict(commands=['code-draft','convert'],typeContractRequired=False,sourceMethods='all-indexed-plus-auxiliary-functions',fields='known-class-or-unresolved-owner-binding',diagnostics='source-linked-bounded-shards',compilation='excluded;syntax-and-API-errors-allowed'),projectPostprocess=dict(commands=['code-project-prepare','code-project-run','code-project-status','code-project-resume'],scope='all-manifest-owned-CSharp-files',execution='single-CLI-continuous-batches;per-batch-limits;exact-session',status='implementation-and-real-whole-project-run-in-progress'),optionalPostprocess=dict(commands=['code-postprocess','code-postprocess-resume'],defaultEnabled=False,provider='existing-local-Codex-CLI',workspace='independent-selected-code-copy',sourceCandidate='immutable',budgets='total-idle-output',resume='exact-recorded-session-only'),packageComposition='exact-frozen-resource-reuse;one-manifest-with-Scene-Prefab-JSON-and-CSharp',incremental='owned-candidate-fingerprints-and-hash-verified-reuse',mono='static-decompiler-drafts;legal-fixture-target-compiled',il2cpp='v29-exact-WASM-body-evidence;8-pure-i64-operator-fragments;caller-map-assumption;stateful-bodies-not-lifted',native='separate-probe-required;not-implied-by-emission'),
+                codeRecovery=dict(status='partial',sourceExecution=False,lexicalGraph='complete-source-static-binding-and-utf8-spans',typedModules='explicit-source-class-method-hashes-and-call-domain',moduleProfiles=['foodstreet-demand-health-v1','foodstreet-motion-math-v1'],selection='optional-strict-typed-dependency-closure-and-lowering',methods='default-full-source-best-effort-CSharp-bodies;unknown-fragments-retained',fullDrafts=dict(commands=['code-draft','convert'],typeContractRequired=False,sourceMethods='all-indexed-plus-auxiliary-functions',fields='known-class-or-unresolved-owner-binding',diagnostics='source-linked-bounded-shards',compilation='excluded;syntax-and-API-errors-allowed'),projectPostprocess=dict(commands=['code-project-prepare','code-project-run','code-project-status','code-project-resume','code-project-pause','code-project-configure'],scope='all-manifest-owned-CSharp-files',execution='single-CLI-continuous-batches;per-batch-limits;exact-session',status='implementation-and-real-whole-project-run-in-progress'),optionalPostprocess=dict(commands=['code-postprocess','code-postprocess-resume'],defaultEnabled=False,provider='existing-local-Codex-CLI',workspace='independent-selected-code-copy',sourceCandidate='immutable',budgets='total-idle-output',resume='exact-recorded-session-only'),packageComposition='exact-frozen-resource-reuse;one-manifest-with-Scene-Prefab-JSON-and-CSharp',incremental='owned-candidate-fingerprints-and-hash-verified-reuse',mono='static-decompiler-drafts;legal-fixture-target-compiled',il2cpp='v29-exact-WASM-body-evidence;8-pure-i64-operator-fragments;caller-map-assumption;stateful-bodies-not-lifted',native='separate-probe-required;not-implied-by-emission'),
                 recoveryOperations=dict(commands=['acquire-resources','diagnose','doctor','space-preview','resource-probe'],
                     resume='same-manifest-and-input-set; completed-partial-receipt-to-fresh-layer; rehash-selected-payloads',
                     retries='1..3; transient-network-or-408-429-5xx-only; fixed-byte-time-budgets',
@@ -442,6 +446,10 @@ def main(argv=None):
             from . import code_project_postprocess as project
             result=project.status(args.run) if args.command=='code-project-status' else project.resume(args.run,retry_failed=args.retry_failed) if args.command=='code-project-resume' else project.run(args.run)
             print(json.dumps(result,ensure_ascii=False));return 0 if result['status'] in ('complete','complete_with_partial') or args.command=='code-project-status' else 1
+        if args.command in ('code-project-pause','code-project-configure'):
+            from . import code_project_postprocess as project
+            result=project.request_pause(args.run) if args.command=='code-project-pause' else project.configure(args.run,batch_seconds=args.batch_seconds,idle_seconds=args.idle_seconds)
+            print(json.dumps(result,ensure_ascii=False));return 0
         if args.command == 'code-types':
             from .code_type_evidence import extract_type_evidence
             from .io import load,read,safe,new_output,write_json
