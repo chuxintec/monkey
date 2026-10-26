@@ -5,11 +5,11 @@
 | 内容 | 实测结果 | 限制 |
 |---|---|---|
 | 显式资源补取 | 1～3 次瞬态重试，404/哈希不符不重试；旧完整请求集合/清单/input-set 精确绑定，成功载荷重哈希后进入新层；篡改拒绝 | 只支持已结束的 partial 收据续接，不支持崩溃 journal 或 Range 下载；本轮用自有 HTTP 夹具，未补取原版 CDN |
-| 统一诊断 | 源容器 SHA / serialized file / pathId → 已有确切目标记录、影响/动作；36 正文逐项隔离、70 借用树字段门独立；URL 查询信息脱敏 | 不解析原包、不启动 Editor、不重新核验全部目标字节；预算截断/延后可见；历史来源限制和新代表观测不自动相互覆盖 |
+| 统一诊断 | 源容器 SHA / serialized file / pathId → 已有确切目标记录、影响/动作；36 正文逐项隔离、70 个借用树对象的字段写回门独立；URL 查询信息脱敏 | 不解析原包、不启动 Editor、不重新核验全部目标字节；预算截断/延后可见；历史来源限制和新代表观测不自动相互覆盖 |
 | 环境/空间 | 本机 Python/固定依赖/显式 Unity6000.6.2f1/Creator3.8.8/provider 元数据通过；空间预览不删除、保留原件/人工/当前资源，符号链接不跟随 | 元数据就绪不是 Editor 连接或项目成功；逻辑空间不等于可释放物理空间；未装新依赖到全局 |
 | Creator Spine | 标准 3.8.99 二进制 Goose16、JSON Catclawaperture 各 1 份：原骨骼/atlas/页图字节与 meta，保存重开 UUID/页名/原生纹理，AnimationState 0→0.125 秒、真实骨骼 world transform 变化，0 诊断 | 分别 55/24 骨骼、60/12 slots；最小资源工程无原游戏层级/业务，未做像素对比，其他 1774 份不外推 |
 | Unity Shader | 仅精确 builtin-2d-sprite / 固定 USE_TEXTURE 子集；ShaderUtil 无 error，导出 .mat 的 GUID 引用保存重导保持；Metal RenderTexture 单像素误差 0.0017156899 ≤ 0.018 | CPU oracle 依据精确源 Sprite 默认 blend；不是直接 Cocos 帧比较、全 UI 或其他宏/37 Effect 验证，不自动绑定游戏材质 |
-| CLI/分发 | acquire-resources / diagnose / doctor / space-preview / resource-probe 接入；ShaderLab、JS/C# helper 进入 package-data；macOS 隔离分发最终核验另记机器回执 | 稳定安装 0.4.0 不动；Linux/Windows、Python 3.11 CI 仅定义，未实际跑远端矩阵 |
+| CLI/分发 | acquire-resources / diagnose / doctor / space-preview / resource-probe 接入；ShaderLab、JS/C# helper 进入 package-data；macOS wheel/sdist 159 产品文件与源码逐字节一致；隔离安装 13 CLI 检查/159 文件哈希通过 | 稳定安装 0.4.0 不动；Linux/Windows、Python 3.11 CI 仅定义，未实际跑远端矩阵 |
 
 ## 身份和过程
 
@@ -26,3 +26,12 @@
 19 Image、10 Text、3 TMP、4 自定义组件仍缺精确 `2021.3.30f1` / platform20 / scriptId / typeHash 正文 schema。`source-schema-blockers.json` 逐项保存源 SHA、原对象身份、类型与 requiredSchemaIdentity。头部 PPtr 已保留，但正文和字段写回仍拒绝；需要可信精确 schema/对应原程序集以及独立字段对照，不接受 Unity6/同名类/近似树替代。
 
 8 份非标准 Spine 版本原样隔离，Unity Spine runtime 未安装/未验，其他 Shader 继续保存源。完整业务、Player、微信分包/构建、全视觉一致性和消费者切换不属于本组已验证结果。v0.5 仍未完整验收，不发布或替换日常安装。
+
+## 本地分发身份
+
+从不可变产品提交 `71c177df4f177c3a2151d1420b93e59b37b0b634` 构建，后续验收文档提交不替换该源码身份：
+
+- wheel：575981 字节，SHA256 `6b7621a440461fe51900cc8f20438588179bb6f87a18345fb5571a4450e2360b`。
+- sdist：847047 字节，SHA256 `233767422dc73f811c71868925f793d9742f30b3d6f1304a412fdeaa2c4c4bb3`。
+- 159 个 product 文件在 Git 源快照 / wheel / sdist / 隔离安装之间相同；MIT 元数据及新增 Shader/JS/C# 模板齐全。macOS arm64 / Python3.14.7 的 13 CLI 检查通过，临时工作目录在 checkout 外。首次构建启动脚本误 resolve venv Python 符号链接，导致找不到 setuptools、0 制品；保留失败日志，改为使用原 venv 入口后成功，未安装全局 backend。
+- `delivery.json`、`distribution.json`、`package-audit.json`、`installed-smoke.json` 在上述私有证据根，159 安装文件再核哈希通过。验证结束只读主进程清单为空；日常 `monkey --version` 仍为 0.4.0。没有发布、推送或全局安装。

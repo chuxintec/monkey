@@ -9,7 +9,7 @@
 | 05-A 大工程预算与阶段复用 | 肥鹅 Unity 75,710 文件 / 2,834,639,181 字节，Creator 74,694 / 2,789,086,480；僵尸 164,599 / 3,267,184,074；暖阶段禁止原包读/解码/worker 时实际复用，漂移/篡改拒绝 | 完成既定本地子集，复用 [预算验收](validation/2026-10-26-v050-budget-reuse-handoff.md)，未重导全量 |
 | 05-B adopt 移交 | 冻结采用实现已由 beaver 接收并完成其本地 0.1.0 验收；只读复核固定回执/wheel | 采用归 beaver；旧 monkey CLI 明确 deprecated compatibility，消费者切换/退休另列，不重复采用测试 |
 | 05-C 原生资源与引用 | 第一组 72 头引用、2 动画长名、21 Tiled、3 紧密 Sprite 几何/UV；新增 Spine 二进制/JSON 各 1 份原生引用/页图/时间/姿态保存重开；精确 Shader 的材质保存重导、编译/Metal 像素通过 | **仍阻断**：36 正文无可信精确 schema，字段写回不放行。8 非标准 Spine、其他 37 Effect、Unity Spine runtime 等继续隔离；[新验收](validation/2026-10-26-v050-operations-resources.md) |
-| 05-D 诊断与使用基础 | acquire-resources 的有限重试/已结束部分层续接；diagnose 的源身份/目标映射/动作；doctor、space-preview 无安装/删除；公开 CLI 与相关回归通过 | macOS 隔离 wheel/sdist 最终收尾；Linux/Windows CI 矩阵已写但未远端运行，不能声称跨平台已通过 |
+| 05-D 诊断与使用基础 | acquire-resources 的有限重试/已结束部分层续接；diagnose 的源身份/目标映射/动作；doctor、space-preview 无安装/删除；公开 CLI 与相关回归通过 | macOS 隔离 wheel/sdist 159 产品文件逐字节一致、13 CLI 烟测通过；Linux/Windows CI 矩阵已写但未远端运行，不能声称跨平台已通过 |
 
 **实际阻断**：19 Image、10 Text、3 TMP、4 自定义组件的精确 Unity `2021.3.30f1` / platform `20` / scriptId / typeHash 正文 schema 或相应可信原程序集未取得。逐对象原 hash、类型和动作已写 `.private/v050-continuation-20261026/source-schema-blockers.json`。独立参考与目标 GUID/localId/hash 写回门继续有效；不按通用类名套近似布局，不补默认值。已批准的独立工作已继续做到分发收口，v0.5 当前不能宣称完整验收。
 
