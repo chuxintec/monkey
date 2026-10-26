@@ -10,6 +10,8 @@
 
 2026-10-27 生成器控制流补修：新鲜discard局部声明自带block，避免无花括号if/else、while、for中CS1023；保留真实`_`赋值及Sequence求值顺序。renderer模块23项通过，独立.NET8反例先用022fc8c复现3处CS1023，再以修复版编译零警告/错误并得到`embedded=7,7`；回执`.private/v060-full-postprocess-20261026/RendererEmbeddedBehavior02/receipt.json`。仅合成代码执行，不是游戏全量编译。修复影响未来生成，冻结07与实际串行队列不改；检查点1294/6445，第20批实际审阅中，全量未完成。
 
+2026-10-27 增量内容复核03：前20批1400/6445实际审阅集成，第21批90文件继续执行。新增321文件（前两轮已核1079之外）源/当前哈希全部匹配、无55%以下体积收缩；4个新增空/null-only方法信号逐一回读精确原文均为空函数。另1处新增NotSupportedException经差异/原文复核是原空壳XHR类新增部分方法后的未知事件分支，未用异常替换既有正文；任意事件名/this绑定/send及WeakMap等仍明确未恢复、originalLogicPreserved=false。回执`ContentAudit03/accepted-code-audit.json`与`manual-signal-review.json`保留原信号及人工判断；不是全语义/编译/运行证明，不外推后续未审文件。
+
 ## 全量执行入口（本轮进行中）
 
 首轮全manifest实际为 **6,445份C# / 40,574,177字节 / 86批**：5,522份新初稿、914份旧具名草稿（原JS模块SHA全部精确匹配）、9份原生工程辅助代码；47,384函数/19,571索引方法和3,706字段映射另作分母。各弱标签均未过滤，唯一725,535字节文件保持完整。`ProjectRun01` 以0模型调用/0处理状态升级旧未运行5522清单，ScopeHistory保留原plan/request/state；完整资源工程复用原已拷贝清单，未重导资源。
