@@ -424,13 +424,18 @@ def recheck(root):
         before=sum(v.get('processed',False)for v in state['files'].values())
         for batch in plan['batches']:
             entry=state['batches'][batch['id']]
-            if entry['status']!='failed' or not entry.get('attemptRoots'):continue
-            output=root/entry['attemptRoots'][-1]
-            if not(output/'manifest.json').is_file():continue
-            result=_json(output/'manifest.json')
-            if result.get('blockingCondition') or not result.get('fileResults'):continue
-            paths=[p for p in batch['paths']if not state['files'][p].get('processed')]
-            if paths:_consume(root,request,plan,state,batch,paths,output,result)
+            original_status=entry['status']
+            if not entry.get('attemptRoots'):continue
+            for attempt in reversed(entry['attemptRoots']):
+                output=root/attempt
+                if not(output/'manifest.json').is_file():continue
+                result=_json(output/'manifest.json')
+                if result.get('blockingCondition') or not result.get('fileResults'):continue
+                reported={r['path']for r in result['fileResults']}
+                paths=[p for p in batch['paths']if not state['files'][p].get('processed')and p in reported]
+                if paths:_consume(root,request,plan,state,batch,paths,output,result)
+            if any(not state['files'][p].get('processed')for p in batch['paths'])and original_status in ('checkpoint','running','blocked'):
+                entry['status']=original_status;_save(root/'state.json',state)
         _event(root,'saved_reviews_rechecked',newlyAccepted=sum(v.get('processed',False)for v in state['files'].values())-before,
                validatorSha256=sha(read(Path(__file__),max_bytes=worker.FILE_BYTES)),modelCalled=False)
     return status(root)

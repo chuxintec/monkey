@@ -182,3 +182,17 @@ class ProjectPostprocessTests(unittest.TestCase):
    result=project.run(self.output)
   self.assertEqual(result['actuallyProcessed'],0)
   for path in self.paths:self.assertIn('return 1',(self.output/'UnityProject'/path).read_text())
+ def test_recheck_uses_completed_review_before_newer_prelaunch_pause(self):
+  def recorded_review(prepared,**kw):
+   result=self.fake_run(prepared,**kw);(prepared.output/'manifest.json').write_bytes(encoded(result));return result
+  with patch.object(project.worker,'prepare',side_effect=self.fake_prepare),patch.object(project.worker,'run',side_effect=recorded_review),patch.object(project,'_valid_file',return_value=['old validator rejected review metadata']):
+   project.run(self.output)
+  path=self.output/'state.json';state=json.loads(path.read_bytes());batch=next(iter(state['batches']));entry=state['batches'][batch]
+  latest=self.output/entry['attemptRoots'][-1]
+  (latest/'manifest.json').write_bytes(encoded(dict(status='partial',blockingCondition='operator_pause',fileResults=[])))
+  state.update(status='paused',currentBatch=batch);entry['status']='checkpoint';path.write_bytes(encoded(state))
+  with patch.object(project.worker,'run')as model:
+   result=project.recheck(self.output)
+  model.assert_not_called();self.assertEqual(result['actuallyProcessed'],2)
+  state=json.loads(path.read_bytes());record=state['files'][entry['files'][0]]
+  self.assertEqual(record['lastAttempt'],entry['attemptRoots'][0]);self.assertEqual(state['batches'][batch]['attempts'],2)
