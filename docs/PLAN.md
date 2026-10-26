@@ -18,6 +18,10 @@
 
 2026-10-27 全量检查点1924（非整版完成）：前27批1924/6445实际审阅集成，1884 partial /32 processed /8 unchanged，1476文件实际改动，14847项必需源函数映射逐文件覆盖。第28批19文件（含大型配置模块集合）继续。增量内容复核04仅新增524文件：源/当前hash全匹配、无55%以下收缩、占位异常增加或新增映射空方法信号；`ContentAudit04/accepted-code-audit.json`及`checkpoint-metrics.json`留存。另前1779之外新增145文件发现1个未映射新增空方法信号：原prototype.OnUpdate空回调被转为具名StateDraft.OnUpdate，精确原文确认仍为空，非新业务占位；`UnmappedEmptyAudit02/signals.json`和`manual-source-review.json`。上一条本地记录将信号数提前写为0，现按实际结果更正。前轮已知XHR未知事件分支等partial限制保留，不因本轮无新信号消除。仅静态内容/身份/覆盖检查，不是全语义、整版编译、Player或运行证明。
 
+2026-10-27 全量检查点2531（非整版完成）：前35批2531/6445实际审阅集成，2471 partial /49 processed /11 unchanged，1975文件改动，16779必需源函数映射覆盖；3文件额外review-ID限制保留，不计未知ID为已验证覆盖。第36批90文件继续。内容复核05新增607文件hash匹配，无55%以下收缩/新增映射空方法；新增未映射空方法信号亦0。3处异常计数增加经精确原文复核：配置10个delete占位变为字典删除+未知接收者NotSupported分支、movieClip属性删除同类限制、原版明确抛Error的待覆写钩子改为NotImplementedException（异常类型近似仍非等价证明）。均非把原业务正文新改成占位，全部originalLogicPreserved=false/partial保留；回执`ContentAudit05/{accepted-code-audit,manual-signal-review,checkpoint-metrics}.json`和`UnmappedEmptyAudit03/signals.json`。不外推全语义/整版编译/运行/资源实际加载。
+
+2026-10-27 生成器布尔常量窄补修：仅普通数字Literal 0/1的Unary !分别转true/false；其他数字/类型/标记/运算符维持原输出及诊断，不猜动态truthiness。33项renderer检查通过；独立.NET8用例06先复现旧版方法/字段CS0023三处，再以修复版零警告/错误编译并运行得`not=True,False;field=True`。`RendererBooleanLiteralBehavior06/receipt.json`保存源码与日志hash，仅合成代码。未来生成生效，冻结07和实际串行候选不改、不重导；全量继续。
+
 ## 全量执行入口（本轮进行中）
 
 首轮全manifest实际为 **6,445份C# / 40,574,177字节 / 86批**：5,522份新初稿、914份旧具名草稿（原JS模块SHA全部精确匹配）、9份原生工程辅助代码；47,384函数/19,571索引方法和3,706字段映射另作分母。各弱标签均未过滤，唯一725,535字节文件保持完整。`ProjectRun01` 以0模型调用/0处理状态升级旧未运行5522清单，ScopeHistory保留原plan/request/state；完整资源工程复用原已拷贝清单，未重导资源。

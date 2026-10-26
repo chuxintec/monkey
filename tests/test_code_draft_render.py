@@ -388,6 +388,39 @@ class CodeDraftRenderTests(unittest.TestCase):
         self.assertIn("(1 / 2)", render_division(literal(1, regex={"pattern": "1", "flags": ""}), literal(2)))
         self.assertIn("(1 + 2)", render_division(literal(1), literal(2), operator="+"))
 
+    def test_not_of_plain_int32_zero_and_one_is_constant_but_other_inputs_stay_approximate(self):
+        raw = b"!0; !1;"
+        for value, expected in ((0, "true"), (1, "false")):
+            unary = n("UnaryExpression", operator="!", argument=n("Literal", value=value))
+            method_ast = n("FunctionExpression", params=[], body=n("BlockStatement", body=[n("ReturnStatement", argument=unary)]))
+            method_result = render_method({"name": "notLiteral", "sourceBytes": {"start": 0, "end": len(raw)}}, method_ast, raw)
+            self.assertIn(f"return {expected};", method_result["source"])
+            self.assertNotIn("truthiness_approximation", {d["code"] for d in method_result["diagnostics"]})
+            field_result = render_field({"name": "flag", "static": True, "sourceBytes": {"start": 0, "end": len(raw)}}, unary, raw)
+            self.assertIn(f"= {expected};", field_result["source"])
+            self.assertNotIn("truthiness_approximation", {d["code"] for d in field_result["diagnostics"]})
+
+        unsupported = [
+            (n("Literal", value=2), "(!2)"),
+            (n("Literal", value=1.0), "(!1.0)"),
+            (ident("value"), "(!value)"),
+            (n("Literal", value="0"), '(!"0")'),
+            (n("Literal", value=False), "(!false)"),
+            (n("Literal", value=0, bigint="0"), "(!0)"),
+            (n("Literal", value=1, regex={"pattern": "1", "flags": ""}), "(!1)"),
+            (n("Literal", value=2147483648), "(!2147483648)"),
+        ]
+        for argument, expected in unsupported:
+            unary = n("UnaryExpression", operator="!", argument=argument)
+            result = render_method({"name": "notApprox", "sourceBytes": {"start": 0, "end": len(raw)}},
+                n("FunctionExpression", params=[], body=n("BlockStatement", body=[n("ReturnStatement", argument=unary)])), raw)
+            self.assertIn(expected, result["source"])
+            self.assertIn("truthiness_approximation", {d["code"] for d in result["diagnostics"]})
+        field = render_field({"name": "unhandledFlag", "static": True, "sourceBytes": {"start": 0, "end": len(raw)}},
+            n("UnaryExpression", operator="!", argument=n("Literal", value=2)), raw)
+        self.assertIn("= (!2);", field["source"])
+        self.assertIn("truthiness_approximation", {d["code"] for d in field["diagnostics"]})
+
     def test_incomplete_binding_scan_reports_budget_and_skips_new_renames(self):
         raw = b"function f($,_){return $+_;}"
         dollar_param = n("Identifier", name="$", bindingId="budget-dollar", _draftIdentifierTarget="keptDollar")

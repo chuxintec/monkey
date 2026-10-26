@@ -661,7 +661,10 @@ class _Renderer:
                 return f"({node.get('operator', '++')}{arg})" if node.get("prefix") else f"({arg}{node.get('operator', '++')})"
             if kind == "UnaryExpression":
                 op = node.get("operator")
-                arg = self.expr(node.get("argument"), depth + 1)
+                argument = node.get("argument")
+                if op == "!" and self._is_plain_int32_literal(argument) and argument.get("value") in (0, 1):
+                    return "true" if argument["value"] == 0 else "false"
+                arg = self.expr(argument, depth + 1)
                 if op in ("!", "+", "-", "~"):
                     if op == "!":
                         self.diagnose(node, "truthiness_approximation", "JavaScript unary ! maps to C# boolean negation", "dynamic truthiness conversion is not inserted")
