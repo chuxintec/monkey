@@ -13,6 +13,12 @@
 
 证据 `.private/v050-adoption-20261026/`；公开摘要 [本轮核验](validation/2026-10-26-v050-budget-reuse-handoff.md)。v0.5 尚未完成；日常安装仍为 v0.4.0，无推送/Release/全局安装。正式肥鹅/GREA 只读，向僵尸继续暂停；当前冻结点没有存活的采用 Editor/CLI 进程。
 
+## 本轮补充：GREA 七项恢复工具归属已评审（2026-10-26）
+
+按总监事件 `monkey-grea-recovery-handoff-scope-20261026-01` 核对固定清单/来源SHA，只审7项恢复侧条目。Cocos结构/模块/转换3项复用monkey现有核心或明确子集、兼容替代仍需消费者核验；APK复用现有reader但XAPK嵌套/OBB只保留参考；ELF、Laya合同、Shader探针3项当前无等价能力，冻结参考而不扩profile。共保留23份必要源/依赖/许可身份，没有复制903文件或并入新实现。compiled代表/两个拒绝、三类AST源范围、APK/XAPK与可编辑版本差异得到实际回执，6项定向测试通过；原生/Player/消费方切换未验。七项均不归beaver，旧实现仍由GREA在替代/消费核验后退休。
+
+详情 [归属评审](GREA-RECOVERY-HANDOFF.md) 与 [机器清单](validation/2026-10-26-grea-recovery-handoff.json)。仅修改monkey文档和自有私有证据；db253cb的beaver采用冻结归档不变，05-C/05-D保持实施主线，不将归属评审算作资源问题修复或版本完成。
+
 ## 当前：v0.5 – v0.7 统一版本规划（2026-10-26，职责整改后）
 
 完整范围和出口见 [ENGINE-ROADMAP](ENGINE-ROADMAP.md)。制作目录沿用 `monkey-project/2.0.0`，不因产品拆分重排目录或改资产身份。
