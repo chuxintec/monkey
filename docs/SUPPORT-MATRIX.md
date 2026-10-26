@@ -1,3 +1,5 @@
+> v0.5 受限本地出口已接受：`acceptedDelivery=local_declared_subset`；原范围 `versionComplete=false` / `originalScopeComplete=false`。依据 [总监裁定](/Users/wangmeng/Documents/Manager/decisions/20261026-grea-monkey-beaver/MONKEY-V05-LOCAL-EXIT.md)，沿用 71c177d 和既有 0.5.0.dev1 制品，所有 partial/unsupported、36正文及字段写回阻断保持。后续只由精确可信输入/获准新方法/下一版指令触发，当前等待，不重测或重打包。
+
 > 本地 v0.5 新增的标准 3.8.99 Spine 二进制/JSON 两份时间/姿态代表、精确单 Shader 材质/编译/Metal 像素结果及 36 正文 schema 阻断见 [本轮验收](validation/2026-10-26-v050-operations-resources.md)。仅声明代表子集，不外推全资源/全宏/全版本。
 
 > 当前开发分支的原生 Flow 替换及限制见 [原生布局增量修复](NATIVE-LAYOUT-PATCH.md)。旧版本动态布局读回为历史证据；新实现按候选另验，不继承旧算法的全子集宣称。

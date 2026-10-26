@@ -2,6 +2,14 @@
 
 2026-10-26，本地 0.5.0.dev1。延续 05-A/C/D，只改 monkey；采用实现已冻结交 beaver，不重测已接收的采用矩阵，不修改正式游戏或恢复暂停项目。第一组资源证据沿用 [既有验收](2026-10-26-resource-reference-correctness.md)。本组完成不等于 v0.5 全部出口通过。
 
+## 本地交付索引状态（裁定补记）
+
+事件 `monkey-v05-local-restricted-delivery-20261026-01` / [MONKEY-V05-LOCAL-EXIT](/Users/wangmeng/Documents/Manager/decisions/20261026-grea-monkey-beaver/MONKEY-V05-LOCAL-EXIT.md) 接受 `acceptedDelivery=local_declared_subset`。原全范围 `versionComplete=false`、`originalScopeComplete=false` 与以下全部未完成项保持。该补记只整理状态，不新增验证结论。
+
+沿用产品源码 `71c177df4f177c3a2151d1420b93e59b37b0b634`、原验收收据 `1582dc702deefde5c63816b96bff0b975c0e8fae` 以及下列同 SHA 的 wheel/sdist；没有重测、重导、重构建、启动引擎或更换日常安装。机器交付索引 `.private/v050-continuation-20261026/delivery.json` 增补裁定字段，原制品身份不变。
+
+继续恢复的输入以逐对象 blocker 为准：匹配 `2021.3.30f1` / platform20 / scriptId / typeHash 的可信 schema/原程序集及匹配依据；字段写回另需独立原字段值与精确目标 GUID/localId/hash。没有这些输入时等待，不循环尝试，不自动启动 v0.6。
+
 | 内容 | 实测结果 | 限制 |
 |---|---|---|
 | 显式资源补取 | 1～3 次瞬态重试，404/哈希不符不重试；旧完整请求集合/清单/input-set 精确绑定，成功载荷重哈希后进入新层；篡改拒绝 | 只支持已结束的 partial 收据续接，不支持崩溃 journal 或 Range 下载；本轮用自有 HTTP 夹具，未补取原版 CDN |

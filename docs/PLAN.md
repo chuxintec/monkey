@@ -1,8 +1,12 @@
 # monkey 项目计划与执行进度
 
-## 当前执行：v0.5.0 / 资源代表与操作基础完成，精确 schema 阻断（2026-10-26）
+## 当前交付：v0.5 受限本地候选；原范围精确来源阻塞（2026-10-26）
 
-本地开发版本 **0.5.0.dev1**；已安装仍为 **0.4.0**，无推送/Release/全局安装。按续推事件 `monkey-v05-existing-plan-resume-20261026-01` 完成可独立推进的资源及使用基础，未把子集通过报成整版完成。正式肥鹅/GREA/beaver 只读，向僵尸保持暂停；本轮仅使用 monkey 自有资源探针和已冻结来源。
+本地开发版本 **0.5.0.dev1**；已安装仍为 **0.4.0**，无推送/Release/全局安装。
+
+总监事件 `monkey-v05-local-restricted-delivery-20261026-01` 已按 [本地出口裁定](/Users/wangmeng/Documents/Manager/decisions/20261026-grea-monkey-beaver/MONKEY-V05-LOCAL-EXIT.md) 接受已声明子集：`acceptedDelivery=local_declared_subset`；原全范围 `versionComplete=false`、`originalScopeComplete=false` 保留。沿用源码 `71c177d` 和原 0.5.0.dev1 制品，不因状态文字重打包。
+
+按续推事件 `monkey-v05-existing-plan-resume-20261026-01` 完成可独立推进的资源及使用基础，未把子集通过报成整版完成。正式肥鹅/GREA/beaver 只读，向僵尸保持暂停；本轮仅使用 monkey 自有资源探针和已冻结来源。
 
 | 工作包 | 已验证 | 当前出口 |
 |---|---|---|
@@ -13,7 +17,13 @@
 
 **实际阻断**：19 Image、10 Text、3 TMP、4 自定义组件的精确 Unity `2021.3.30f1` / platform `20` / scriptId / typeHash 正文 schema 或相应可信原程序集未取得。逐对象原 hash、类型和动作已写 `.private/v050-continuation-20261026/source-schema-blockers.json`。独立参考与目标 GUID/localId/hash 写回门继续有效；不按通用类名套近似布局，不补默认值。已批准的独立工作已继续做到分发收口，v0.5 当前不能宣称完整验收。
 
-执行方式按 [模块登记](TEAM-STATE.md)；仅一个 Shader 完整模块开发者，公共接口/窗口/集成由主开发负责。Shader 已交付，不新增任务或循环回报；本次以精确 schema 阻断向总监成组报告。范围和后续版本见 [ENGINE-ROADMAP](ENGINE-ROADMAP.md)，操作见 [V0.5-OPERATIONS](V0.5-OPERATIONS.md)。
+执行方式按 [模块登记](TEAM-STATE.md)；仅一个 Shader 完整模块开发者，公共接口/窗口/集成由主开发负责。Shader 已交付，受限本地候选已按裁定收口；当前等待具体可信输入、获准的新恢复方法或后续版本指令，不循环尝试或自动启动 v0.6。裁定无需确认/重复报告。范围和后续版本见 [ENGINE-ROADMAP](ENGINE-ROADMAP.md)，操作见 [V0.5-OPERATIONS](V0.5-OPERATIONS.md)。
+
+### 继续恢复所需输入
+
+- 逐对象取 `.private/v050-continuation-20261026/source-schema-blockers.json` 的 Unity版本 / platform / scriptId / typeHash / 原对象SHA；提供与其精确匹配的可信 schema 或原程序集及匹配依据。
+- 字段写回还需独立可信的原字段值对照，以及目标 GUID/localId/hash；程序集/解析成功本身不放行写回。
+- 不同版本同事包、Unity6/同名类或近似树不能替代；36 正文、8 非标准 Spine、Unity Spine runtime、其他37 Effect和未运行CI继续按真实状态保留。无新输入不重试、不重导、不构建/启动引擎。
 
 ## 本轮完成：资源与引用第一组（2026-10-26）
 
