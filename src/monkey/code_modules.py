@@ -39,18 +39,33 @@ def prepare(source, contract_path, configuration_table=None):
     selected = [method['id'] for m in modules for method in m['methods']]
     if len(selected)>256: fail('CODE_MODULE_SELECTION_BUDGET','$','At most256 exact methods per bounded generation')
     if len(set(selected)) != len(selected): fail('CODE_MODULE_METHOD_CONFLICT', '$', 'Source method assigned twice')
-    graph = facts(source, spec['sourceSha256'], selected)
+    witnesses = spec.get('recordShapeEvidence', [])
+    if not isinstance(witnesses, list) or len(witnesses)>64 or any(not isinstance(w,dict) or not isinstance(w.get('methodId'),str) or not isinstance(w.get('methodSha256'),str) for w in witnesses):
+        fail('CODE_MODULE_RECORD_EVIDENCE','$','Expected at most64 exact same-source method witnesses')
+    if len({w['methodId']for w in witnesses})!=len(witnesses): fail('CODE_MODULE_RECORD_EVIDENCE','$','Duplicate method witnesses')
+    requested=list(dict.fromkeys([*selected,*[w['methodId']for w in witnesses]]))
+    if len(requested)>256: fail('CODE_MODULE_SELECTION_BUDGET','$','Generated methods and evidence witnesses together exceed256')
+    graph = facts(source, spec['sourceSha256'], requested)
     indexed = {m['id']: m for m in graph['methods']}; asts = {s['method']['id']: s['ast'] for s in graph['selected']}
     classes = {c['id']: c for c in graph['classes']}
+    for witness in witnesses:
+        original=indexed.get(witness['methodId'])
+        if not original or original.get('factsCoverage') or original['sourceSha256']!=witness['methodSha256']:
+            fail('CODE_MODULE_RECORD_EVIDENCE',witness['methodId'],'Exact same-source non-deferred AST/hash witness required')
     context = dict(record_types=target_names, records={}, aliases={}, by_target={}, dependencies={m['id']: set() for m in modules})
-    observed_fields = {n['property']['name'] for n in walk(graph['selected']) if n.get('type') == 'MemberExpression' and not n.get('computed')}
-    observed_fields.update(p['key'].get('name') for n in walk(graph['selected']) if n.get('type') == 'ObjectExpression' for p in n['properties'] if p.get('type') == 'Property')
+    selected_asts=[item['ast']for item in graph['selected']if item['method']['id']in selected]
+    def observed(nodes):
+        fields={n['property']['name']for n in walk(nodes)if n.get('type')=='MemberExpression'and not n.get('computed')}
+        fields.update(p['key'].get('name')for n in walk(nodes)if n.get('type')=='ObjectExpression'for p in n['properties']if p.get('type')=='Property')
+        return fields
+    observed_fields=observed(selected_asts)
+    record_fields=observed(graph['selected'])
     for record in records:
         fields = record.get('fields')
         if not isinstance(fields, dict) or not fields or len(fields) > 64: fail('CODE_MODULE_RECORD', record['name'], 'Expected a bounded source record shape')
         for field in fields:
             name(field)
-            if field not in observed_fields: fail('CODE_MODULE_RECORD', field, 'Field absent from selected source AST evidence')
+            if field not in record_fields: fail('CODE_MODULE_RECORD', field, 'Field absent from selected source AST/evidence witnesses')
         context['records'][record['name']] = {name(k): parse_type(v, target_names) for k, v in sorted(fields.items())}
     for module in modules:
         cls = classes.get(module.get('classId'))
@@ -95,7 +110,7 @@ def prepare(source, contract_path, configuration_table=None):
               directory+'Game.Recovered.asmdef': encoded(dict(name='Game.Recovered',rootNamespace=namespace,autoReferenced=True))}
     for path in list(shared): shared[path+'.meta'] = ('fileFormatVersion: 2\nguid: '+guid(namespace, 'code-modules/'+path)+'\n').encode()
     files.update(shared); owners.update({p: 'RecoveryTypes' for p in shared})
-    shared_fp = sha(encoded(dict(records=records,namespace=namespace,helper=sha(helper.encode()))))
+    shared_fp = sha(encoded(dict(records=records,recordShapeEvidence=witnesses,namespace=namespace,helper=sha(helper.encode()))))
     requests.append(dict(id='RecoveryTypes',sourceFingerprint=shared_fp,dependencies=[],targetPaths=sorted(shared)))
     mappings = []
     for module in modules:
@@ -146,7 +161,7 @@ def prepare(source, contract_path, configuration_table=None):
     report = dict(schemaVersion=1,status='implemented_declared_subset; compile_and_native_not_run',source=graph['source'],contractSha256=sha(contract_raw),namespace=namespace,
                   coverage=dict(sourceMethods=graph['summary']['methods'],methodIndexKind='literal static/prototype assignment functions',sourceFunctions=graph['summary']['functions'],sourceClasses=graph['summary']['classes'],selectedMethods=len(selected),implementedMethods=len(mappings),unselectedMethods=graph['summary']['methods']-len(selected),compiledMethods=0,behaviorVerifiedMethods=0,nativeBoundMethods=0),
                   methods=mappings,sourceExecuted=False,originalConstructorRecovered=False,sourceInheritanceRecovered=False,
-                  fields=dict(initialization='explicit caller-supplied state; no original-constructor claim',staticMaps='caller must supply non-null maps before any entry call',recordShapes=records),
+                  fields=dict(initialization='explicit caller-supplied state; no original-constructor claim',staticMaps='caller must supply non-null maps before any entry call',recordShapes=records,recordShapeEvidence=witnesses),
                   callDomain=spec.get('callDomain'),configuration=configuration,validation=dict(compiled='not_run',behavior='not_run',unityBinding='not_run'),
                   limitations=['Only selected source-proven typed methods are compiled candidates; unselected source is excluded.', 'Call-domain types narrow legal inputs; omitted arguments, coercing objects, unknown nulls and dynamic calls are rejected.', 'Recipe recursion requires finite acyclic input; collection mutation/deletion during traversal and callback mutation of captured collections are outside the domain.', 'Record and map/list values must be non-null; numeric IDs/counts are finite JS Numbers; callbacks retain source-proven timing only.', 'Generated state constructors are explicit adapters, not recovered source/base initialization.'])
     report_path='Analysis/Code/code-modules.json'; files[report_path]=encoded(report)

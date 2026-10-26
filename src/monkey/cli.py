@@ -177,6 +177,10 @@ def main(argv=None):
     p.add_argument('--numeric-field',action='append',default=[],help='Explicit numeric call-subdomain contract; not a global JS type inference')
     p.add_argument('--cocos-code-language',choices=['ts','js'],default='ts')
     p.add_argument('--out',required=True)
+    p = sub.add_parser('code-select',help='Select reviewed source methods, close typed dependencies and check actual lowering; no source execution')
+    p.add_argument('--source',required=True);p.add_argument('--selectors',required=True);p.add_argument('--out',required=True)
+    group=p.add_mutually_exclusive_group(required=True)
+    group.add_argument('--type-evidence');group.add_argument('--module-profile')
     p = sub.add_parser('code-handoff',help='Generate source-bound named drafts from a frozen Cocos candidate; optional additive owned-copy handoff')
     p.add_argument('--candidate',required=True);p.add_argument('--out',required=True)
     p.add_argument('--expected-manifest');p.add_argument('--apply-owned',action='store_true');p.add_argument('--reuse-facts');p.add_argument('--expected-facts')
@@ -194,9 +198,17 @@ def main(argv=None):
     p = sub.add_parser('unity-code-candidate',help='Prepare exact static Mono C# drafts; closure is not IL-equivalence or Unity verification')
     p.add_argument('--source-report',required=True);p.add_argument('--expected-report',required=True);p.add_argument('--out',required=True)
     p.add_argument('--method-id',action='append')
+    p = sub.add_parser('wasm-code-source',help='Verify exact decoded WASM code bodies and v29 metadata/map identities; never execute a module')
+    p.add_argument('--source',required=True);p.add_argument('--expected-source',required=True);p.add_argument('--metadata',required=True);p.add_argument('--expected-metadata',required=True)
+    p.add_argument('--method-map',required=True);p.add_argument('--expected-method-map',required=True);p.add_argument('--decoded-segments',required=True);p.add_argument('--brotli-provider')
+    p.add_argument('--method-id',action='append');p.add_argument('--out',required=True)
+    p = sub.add_parser('wasm-code-candidate',help='Lift supported exact WASM operators to isolated C# fragments; heap and unknown calls remain evidence')
+    p.add_argument('--source-report',action='append',required=True);p.add_argument('--expected-report',action='append',required=True)
+    p.add_argument('--method',action='append',required=True);p.add_argument('--out',required=True)
     p = sub.add_parser('code-native-probe',help='Prepare the exact supported HealthState Unity6 probe; no Editor launch')
     p.add_argument('--candidate',required=True);p.add_argument('--expected-manifest',required=True);p.add_argument('--out',required=True)
     p.add_argument('--recipe-module',action='store_true',help='Also bind the exact source recipe JSON and recovered catalog in the independent probe')
+    p.add_argument('--interactive',action='store_true',help='Prepare a fresh Editor pointer flow over the source-bound modules and original recipe JSON')
     p = sub.add_parser('research-matrix', help='Discover every Research game without converting or following external sources')
     p.add_argument('--root', required=True)
     p.add_argument('--out', required=True)
@@ -322,7 +334,7 @@ def main(argv=None):
             from .output_limits import policy
             print(json.dumps(dict(version=__version__, profiles=[PROFILE,PROJECT_PROFILE,'cocos-2.4.11-bundle','cocos-3.8.7-bundle','cocos-3.4.1-bundle','cocos-2.1.2-resource','generic-image-resources-v1','egret-custom-resource-plist-v1'], targetProfiles=[UNITY_PROFILE,cocos.PROFILE],
                 ownership=dict(recoveryCandidates='monkey',developmentProjectOperations='beaver',workflow='GREA'),
-                codeRecovery=dict(status='partial',sourceExecution=False,lexicalGraph='complete-source-static-binding-and-utf8-spans',typedModules='explicit-source-class-method-hashes-and-call-domain',moduleProfiles=['foodstreet-demand-health-v1'],methods='real-bodies-and-closed-cross-class-calls;unknowns-excluded',incremental='owned-candidate-fingerprints-and-hash-verified-reuse',mono='static-decompiler-drafts;legal-fixture-target-compiled',il2cpp='same-source-metadata-and-method-map-evidence;not-method-implementation',native='separate-probe-required;not-implied-by-emission'),
+                codeRecovery=dict(status='partial',sourceExecution=False,lexicalGraph='complete-source-static-binding-and-utf8-spans',typedModules='explicit-source-class-method-hashes-and-call-domain',moduleProfiles=['foodstreet-demand-health-v1','foodstreet-motion-math-v1'],selection='bounded-source-method-roots;typed-dependency-closure;actual-lowering-preflight',methods='real-bodies-and-closed-cross-class-calls;unknowns-excluded',incremental='owned-candidate-fingerprints-and-hash-verified-reuse',mono='static-decompiler-drafts;legal-fixture-target-compiled',il2cpp='v29-exact-WASM-body-evidence;8-pure-i64-operator-fragments;caller-map-assumption;stateful-bodies-not-lifted',native='separate-probe-required;not-implied-by-emission'),
                 recoveryOperations=dict(commands=['acquire-resources','diagnose','doctor','space-preview','resource-probe'],
                     resume='same-manifest-and-input-set; completed-partial-receipt-to-fresh-layer; rehash-selected-payloads',
                     retries='1..3; transient-network-or-408-429-5xx-only; fixed-byte-time-budgets',
@@ -332,7 +344,7 @@ def main(argv=None):
                 projectOperations=dict(status='deprecated-compatibility',owner='beaver',commands=['adopt','adopt-recover','register','apply'],replacement='beaver-0.1.0-local-verified;consumer-switch-pending',scope='frozen-transition-implementation; not a new monkey mainline capability',unityNative='representative-move-and-reopen-verified-on-predecessor-WIP; latest-add-folder-runtime-not_run',creatorNative='unsupported'),
                 outputPolicy=dict(wholeInput=policy({'scopeMode':'whole-input'}),selection=policy({}),hashChunkBytes=1048576,sourceDecoderBudgets='independent'),
                 additionalPackageProfiles={'cocos-3.4.1-bundle':dict(scope='version-proven-node-ui-prefab-and-resource-subset',graphs='856-of-857-source-graphs;22503-nodes;52-instances;one-null-quaternion-rejected',native='5-source-frames-plus-6-prefabs-331-nodes-8-instances-7-mounted-nodes-1-mounted-widget-both-targets-verified',operations=['package-convert']), 'egret-custom-resource-plist-v1':dict(scope='reviewed-custom-resource-manifest-plist-binjson-v2',targets=['unity6'],sourceSkins='typed-data-only-native-layout-pending',remoteAcquisition='explicit-manifest-cache-and-bounded-fetch',native='132-source-frames-verified; expanded-atlas-set-pending',operations=['package-convert']), 'cocos-2.1.2-resource':dict(scope='version-proven-resource-subset',native='211-source-frames-both-targets-verified',graphs='pending',operations=['package-convert']), 'generic-image-resources-v1':dict(scope='derived-original-image-gallery-only',families=['laya','layaair','egret','eraget','custom','other'],targets=['unity6'],native='Egret-16-derived-images-verified',sourceGraphs='not-restored',operations=['package-convert']), 'cocos-2.4.11-bundle':dict(scope='version-proven-published-bundle-subset',native='91-source-graphs-both-targets-verified',operations=['package-convert']), 'cocos-3.8.7-bundle':dict(scope='version-proven-node-ui-template-and-resource-subset',native='83-static-graphs-plus-4-prefab-5-native-relations-and-16-node-dynamic-ui-representatives-both-targets-verified',graphs='114-root-closures-static;5-graphs-missing-6-exact-templates;not-all-native-validated',operations=['package-convert'])},
-                schemaVersion=1, dynamicUi=dict(probeVersion=2,verifiedLayoutGroups=6,verifiedLayoutStates=54,native='historical-v02-grid-scale-constraints-child-resize-and-linear-scale-representatives',timing='Editor-native-forced-update;Player-not_run',unityFlowReplacement=dict(status='verified-subset',sourcePrefabs=48,sourceComponents=63,aggregateAssets=50,representatives=6,scope='horizontal-flexible-unscaled-uniform-grid-or-proven-single-row',otherLayouts='review-required;no-source-flow-runtime-fallback',sourceText='questionnaire-Label-not-recovered;Rect-resize-only')), formatting=dict(implemented=['unity-creator-unimported-owned-grea-v1','fresh-package-convert-none-grea'],pending=['unity-general-scene-native-format','unity-source-positive-native-move-sample'],rejected=['materialized-native-assets-require-a-future-native-move-adapter']), unitySourceProfile=dict(inspectionPolicy=dict(defaultObjectValues=250000,defaultContainerValues=8000000,maxObjectValues=1000000,maxContainerValues=16000000,maxDepth=96,streamedFields=['Font.m_FontData','AssetBundle.m_PreloadTable'],chunkElements=8192,maxPayloadBytes=268435456),name='unityfs-unitypy-1.25.3-assetripper-2.0.0',status='partial',inputs='explicit-unity-bundle-or-webdata-files-and-exact-local-texture-cache',additionalContainers=['UnityWebData1.0'],invalidTexturePolicy='block-default-explicit-quarantine-retains-original',dependencyClosure='explicit-frozen-pool-exact-serialized-file-closure',editor='one-prefab-schema-reference-save-reload-verified',publicNative=True,nativeProfile='unity-leaf-prefab-sprite-array-v1',nativeFormatting='typed-resource-moves-with-dynamic-path-pins; real sample pinned all 134 assets',methodsRecovered=0), implemented=['acquire-resources','diagnose','doctor','space-preview','resource-probe','query-methods','query-tables','inspect-aliases','adopt','adopt-recover','unity-field-plan','convert','catalog','inspect','normalize','plan','export','verify','handoff','diff','register','apply','preflight','native-import','research-matrix','code-model','code-emit','unity-code-source','unity-code-candidate','code-native-probe','format-project','project-model','inspect-unity','export-unity','unity-code-model','index-unity','hydrate-unity','code-handoff','native-finish-plan','native-finish','acquire-unity-textures','prepare-unity-bulk','export-unity-bulk','freeze-handoff','freeze-unity-handoff','native-layout-audit','native-layout-prepare','native-layout-patch','native-layout-finish','native-layout-bundle'], planned=[],
+                schemaVersion=1, dynamicUi=dict(probeVersion=2,verifiedLayoutGroups=6,verifiedLayoutStates=54,native='historical-v02-grid-scale-constraints-child-resize-and-linear-scale-representatives',timing='Editor-native-forced-update;Player-not_run',unityFlowReplacement=dict(status='verified-subset',sourcePrefabs=48,sourceComponents=63,aggregateAssets=50,representatives=6,scope='horizontal-flexible-unscaled-uniform-grid-or-proven-single-row',otherLayouts='review-required;no-source-flow-runtime-fallback',sourceText='questionnaire-Label-not-recovered;Rect-resize-only')), formatting=dict(implemented=['unity-creator-unimported-owned-grea-v1','fresh-package-convert-none-grea'],pending=['unity-general-scene-native-format','unity-source-positive-native-move-sample'],rejected=['materialized-native-assets-require-a-future-native-move-adapter']), unitySourceProfile=dict(inspectionPolicy=dict(defaultObjectValues=250000,defaultContainerValues=8000000,maxObjectValues=1000000,maxContainerValues=16000000,maxDepth=96,streamedFields=['Font.m_FontData','AssetBundle.m_PreloadTable'],chunkElements=8192,maxPayloadBytes=268435456),name='unityfs-unitypy-1.25.3-assetripper-2.0.0',status='partial',inputs='explicit-unity-bundle-or-webdata-files-and-exact-local-texture-cache',additionalContainers=['UnityWebData1.0'],invalidTexturePolicy='block-default-explicit-quarantine-retains-original',dependencyClosure='explicit-frozen-pool-exact-serialized-file-closure',editor='one-prefab-schema-reference-save-reload-verified',publicNative=True,nativeProfile='unity-leaf-prefab-sprite-array-v1',nativeFormatting='typed-resource-moves-with-dynamic-path-pins; real sample pinned all 134 assets',methodsRecovered=0), implemented=['acquire-resources','diagnose','doctor','space-preview','resource-probe','query-methods','query-tables','inspect-aliases','adopt','adopt-recover','unity-field-plan','convert','catalog','inspect','normalize','plan','export','verify','handoff','diff','register','apply','preflight','native-import','research-matrix','code-model','code-emit','code-select','wasm-code-source','wasm-code-candidate','unity-code-source','unity-code-candidate','code-native-probe','format-project','project-model','inspect-unity','export-unity','unity-code-model','index-unity','hydrate-unity','code-handoff','native-finish-plan','native-finish','acquire-unity-textures','prepare-unity-bulk','export-unity-bulk','freeze-handoff','freeze-unity-handoff','native-layout-audit','native-layout-prepare','native-layout-patch','native-layout-finish','native-layout-bundle'], planned=[],
                 targetValidation={UNITY_PROFILE:dict(static='implemented',editor='representative-subset-verified',visual='not_run'),cocos.PROFILE:dict(static='implemented',editor='representative-subset-verified',visual='not_run')},
                 compiledFormats=['compiled-v1','pack-v1','texture-pack-v1'],
                 containerFormats=['plain-wxapkg','APK-ZIP','Cocos-resource-directory'],
@@ -369,6 +381,10 @@ def main(argv=None):
                 from .code_emit import emit
                 result=emit(args.source,args.code_model,args.out,args.numeric_field,args.cocos_code_language,args.namespace)
             print(json.dumps(result,ensure_ascii=False));return 1
+        if args.command == 'code-select':
+            from .code_selection import write_selection
+            result=write_selection(args.source,args.selectors,args.out,type_evidence=args.type_evidence,module_profile=args.module_profile)
+            print(json.dumps(result,ensure_ascii=False));return 0 if result['status']=='selected_ready' else 1
         if args.command == 'unity-code-source':
             from .unity_code_sources import inspect
             result=inspect(args.source,args.out,expected_sha256=args.expected_source,family=args.family,provider=args.provider,metadata=args.metadata,method_map=args.method_map,expected_metadata_sha256=args.expected_metadata,expected_method_map_sha256=args.expected_method_map)
@@ -376,9 +392,24 @@ def main(argv=None):
         if args.command == 'unity-code-candidate':
             from .unity_code_candidate import prepare_candidate
             print(json.dumps(prepare_candidate(args.source_report,args.out,expected_report_sha256=args.expected_report,method_ids=args.method_id),ensure_ascii=False));return 1
+        if args.command == 'wasm-code-source':
+            from .wasm_code_sources import inspect_wasm
+            from .io import load,read,safe
+            result=inspect_wasm(args.source,args.out,expected_source_sha256=args.expected_source,metadata=args.metadata,expected_metadata_sha256=args.expected_metadata,method_map=args.method_map,expected_method_map_sha256=args.expected_method_map,decoded_segments=load(read(safe(args.decoded_segments),max_bytes=1024*1024)),method_ids=args.method_id,brotli_provider=args.brotli_provider)
+            print(json.dumps(result,ensure_ascii=False));return 1
+        if args.command == 'wasm-code-candidate':
+            if len(args.source_report)!=len(args.expected_report):parser.error('Supply one --expected-report SHA256 per source report, in the same order')
+            from .wasm_code_semantics import recover_wasm_subset
+            refs=[dict(report=p,expectedSha256=h)for p,h in zip(args.source_report,args.expected_report)]
+            print(json.dumps(recover_wasm_subset(refs,args.out,selections=args.method),ensure_ascii=False));return 1
         if args.command == 'code-native-probe':
-            from .code_native_probe import prepare
-            print(json.dumps(prepare(args.candidate,args.expected_manifest,args.out,recipe_module=args.recipe_module),ensure_ascii=False));return 0
+            if args.interactive:
+                from .code_interactive_probe import prepare
+                result=prepare(args.candidate,args.expected_manifest,args.out)
+            else:
+                from .code_native_probe import prepare
+                result=prepare(args.candidate,args.expected_manifest,args.out,recipe_module=args.recipe_module)
+            print(json.dumps(result,ensure_ascii=False));return 0
         if args.command == 'acquire-unity-textures':
             from .unity_texture_acquisition import acquire
             result=acquire(args.inspection,args.cache_manifest,args.cdn_source,args.cdn_root,args.out,args.cache_root,args.budget_seconds,args.workers,args.resume)

@@ -10,6 +10,7 @@ from .sources.compiled import fail
 
 _PROFILES = {
     'foodstreet-demand-health-v1': ('code_profiles', 'foodstreet-demand-health-v1.json'),
+    'foodstreet-motion-math-v1': ('code_profiles', 'foodstreet-motion-math-v1.json'),
 }
 _MAX_PROFILE_BYTES = 128 * 1024
 _MAX_SOURCE_BYTES = 16 * 1024 * 1024

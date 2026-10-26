@@ -286,7 +286,7 @@ class Lowerer:
         if callee['type'] != 'MemberExpression' or callee.get('computed'): self.error(node, 'Dynamic callee unsupported')
         prop, receiver = property_name(callee), callee['object']
         if receiver.get('type') == 'Identifier' and not receiver.get('bindingId'):
-            if receiver['name'] == 'Math' and prop in ('min', 'max', 'floor', 'abs'):
+            if receiver['name'] == 'Math' and prop in ('min', 'max', 'floor', 'abs', 'sqrt'):
                 if len(args) != (2 if prop in ('min', 'max') else 1): self.error(node, 'Math arity mismatch')
                 return ('NumberMath.' if prop in ('min', 'max') else 'Math.') + prop.capitalize() + '(' + ', '.join(self.expr(a, NUMBER)[0] for a in args) + ')', NUMBER
             if receiver['name'] == 'Array' and prop == 'from' and len(args) == 1:

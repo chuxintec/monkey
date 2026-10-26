@@ -533,6 +533,20 @@ __RECIPE_CONSTANTS__
         catch (Exception error) { Fail(error); }
     }
 
+    // Independent interactive proof reuses these exact scene/binding checks;
+    // it does not run the automated sequence or exit the Editor.
+    public static string PrepareInteractiveScene()
+    {
+        PrepareAndSaveScene();
+        return ToJson(VerifySavedSceneAndBindings());
+    }
+
+    public static string ReopenInteractiveScene()
+    {
+        EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+        return ToJson(VerifySavedSceneAndBindings());
+    }
+
     private static void PrepareAndSaveScene()
     {
         if (Application.unityVersion != "6000.6.2f1")

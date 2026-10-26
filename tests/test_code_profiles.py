@@ -30,6 +30,13 @@ class BuiltInCodeProfileTests(unittest.TestCase):
         self.assertEqual(len(profile['records']), 3)
         self.assertEqual(sum(len(module['methods']) for module in profile['modules']), 12)
 
+    def test_motion_profile_is_packaged_canonical_and_source_bound(self):
+        name='foodstreet-motion-math-v1';raw=files('monkey').joinpath('code_profiles',name+'.json').read_bytes();profile=json.loads(raw)
+        self.assertEqual(raw,encoded(profile));self.assertEqual(profile['profileName'],name)
+        self.assertEqual(profile['sourceSha256'],'21af08e48846f6ad1a2e0673b0c945358136723b1664f0cd1f6ec9b3df6c5cb5')
+        self.assertEqual(len(profile['modules']),1);self.assertEqual(len(profile['modules'][0]['methods']),4)
+        for forbidden in ('.private','/Users/','game.js','SourceRecovery'): self.assertNotIn(forbidden,raw.decode())
+
     def test_unknown_profile_is_rejected_before_reading_source(self):
         with self.assertRaises(ParseError) as caught:
             load_profile('foodstreet-demand-health-v2', '/does/not/exist.js')

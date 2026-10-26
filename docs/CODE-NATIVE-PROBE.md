@@ -17,3 +17,13 @@ Current local validation: the parent-owned Unity 6000.6.2f1 window04 on the exac
 ```sh
 monkey code-native-probe --candidate code-candidate --expected-manifest SHA256 --recipe-module --out new-unity-probe
 ```
+
+## Operable Editor flow
+
+```sh
+monkey code-native-probe --candidate code-candidate --expected-manifest SHA256 --interactive --out new-interactive-probe
+```
+
+This prepares the same source-bound assets plus `MonkeyInteractiveProbeWindow.Open`, an Editor-only window with six sequential pointer controls: Start, Damage, Heal, Combo, Query Recipe, Stop/Reopen. It creates only a normal project-local default Search index; it does not change global settings. Run the generated executeMethod in an independently owned Editor window. After each MouseUp it writes `interactive-code-probe.json`; PlayMode transitions resume through a disk receipt, and reopening waits for `EnteredEditMode`. The closing control exits the owned Editor after pass/fail.
+
+Final continuation window04 passed all six actual CUA OS pointer actions, HP 79→89, combo 1, callback counts 2/1, original JSON's nine leaves, destruction unsubscribe and identical saved bindings. Editor exit 0 was reaped. This is an operable finite validation flow. It is new test UI/lifecycle wiring, not recovered original UI or a human physical-input/Player/visual-parity claim. Source `HealthState` is an ECS model, not a source MonoBehaviour; the existing original `onHpChange` consumer at `method@3177644` has an unresolved decorated/inherited owner and is explicitly unsupported, not missing source. Its source bytes remain indexed and preserved.

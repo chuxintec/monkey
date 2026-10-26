@@ -1,4 +1,4 @@
-> 当前开发0.6.0.dev1为合并的C#恢复/模块构建版，C1–C9见[PLAN](PLAN.md)。肥鹅大JS整源词法索引16,384方法，3源模块12方法自动转写/离线编译/独立行为通过，2模块9方法/原JSON在Unity原生有限流程通过；其余方法未生成。Mono仅合法夹具，向僵尸IL2CPP/WASM仍metadata_only，不提前记家族supported。macOS隔离分发通过，见[本地验收](validation/2026-10-26-v060-csharp-modules.md)。v0.5受限交付及36精确正文缺口原样保留。
+> 当前开发0.6.0.dev1为合并C#恢复/模块构建版。肥鹅7MB整源静态索引928类/16,384方法；合并候选4模块16方法编译/独立行为已验证（16,368未选择，非不支持）；2模块9方法/原JSON的Unity有限流程已有6次实际系统指针输入与保存重开。`code-select`支持有界入口/类型依赖闭包及真实lowering预检。向僵尸WASM已有精确segment/map/body证据，8纯i64运算生成C#片段；13波次/触发方法仍body_evidence_only，caller-map关联未独立证明。Mono仅合法夹具；完整游戏/Player/视觉未验。详见[续推验收](validation/2026-10-26-v060-continuation.md)。v0.5及36精确正文缺口保留。
 
 > v0.5 受限本地出口已接受：`acceptedDelivery=local_declared_subset`；原范围 `versionComplete=false` / `originalScopeComplete=false`。依据 [总监裁定](/Users/wangmeng/Documents/Manager/decisions/20261026-grea-monkey-beaver/MONKEY-V05-LOCAL-EXIT.md)，沿用 71c177d 和既有 0.5.0.dev1 制品，所有 partial/unsupported、36正文及字段写回阻断保持。后续只由精确可信输入/获准新方法/下一版指令触发，当前等待，不重测或重打包。
 

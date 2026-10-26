@@ -8,7 +8,7 @@
 | Unity来源与C5探针 / `/root/shader_profile` | 复用gpt-6-luna/high / 实际运行时未知 | 36e9d6d；unity_code_sources.py、unity_code_il.py、unity_code_candidate.py、code_native_probe.py及专用测试/文档/证据 | Mono合法夹具闭环已交付；探针修复与原JSON可选接线已交付；父补齐JSONSerialize/持久阶段并在窗口04完成9方法/Scene/事件/原JSON/解绑，exit0/reaped。子Agent不启动Editor |
 | C8/C6候选增量与JSON / `/root/code_regeneration` | gpt-6-luna/high / 实际运行时未知 | 36e9d6d；code_regeneration.py、code_configuration.py、RecipeJsonConfiguration.cs及专用测试/文档/证据 | 已交付：深链/依赖指纹/dirty保护，原732行JSON及meta原样、运行时reader真实9叶验证；父UnityTextAsset原生读回通过；不做beaver人工工程采用 |
 
-源码/证据在 `.private/v060-csharp-20261026/`；只在接口变更、阻塞、交付或窗口交接时通信，主开发集成后成版报告。以下保留v0.5原登记。
+续推：两个既有实例分别交付 `code_selection` 和 WASM 静态字节/纯运算模块，均已停止写入。父完成共享CLI、record见证守卫、MotionMath及合并16方法候选、实际6指针Unity流程、文档与分发集成。续推证据 `.private/v060-csharp-continuation-20261026/`；首候选证据在 `.private/v060-csharp-20261026/`；只在接口变更、阻塞、交付或窗口交接时通信，主开发集成后成版报告。以下保留v0.5原登记。
 
 # v0.5 模块执行登记
 

@@ -26,9 +26,9 @@ def main():
         identity=json.loads(run(['-c','import json,monkey,sys;print(json.dumps(dict(version=monkey.__version__,module=monkey.__file__,python=sys.version.split()[0])))']))
         if 'site-packages'not in identity['module']:raise RuntimeError('Smoke requires an installed wheel outside the source checkout')
         run(['-m','monkey.cli','--version']);cap=json.loads(run(['-m','monkey.cli','capabilities','--json']))
-        for command in ('acquire-resources','diagnose','doctor','space-preview','resource-probe','adopt','code-model','code-emit','unity-code-source','unity-code-candidate','code-native-probe'):
+        for command in ('acquire-resources','diagnose','doctor','space-preview','resource-probe','adopt','code-model','code-emit','code-select','wasm-code-source','wasm-code-candidate','unity-code-source','unity-code-candidate','code-native-probe'):
             run(['-m','monkey.cli',command,'--help'])
-        run(['-c','from importlib.resources import files; p=files("monkey.targets"); assert all(p.joinpath(x).is_file() for x in ("CreatorResources.js","RecoveredSprite.shader","UnityShaderProbe.cs","CodeCollections.cs","RecipeJsonConfiguration.cs")); assert files("monkey").joinpath("code-graph.cjs").is_file(); assert files("monkey").joinpath("code_profiles","foodstreet-demand-health-v1.json").is_file()'])
+        run(['-c','from importlib.resources import files; p=files("monkey.targets"); assert all(p.joinpath(x).is_file() for x in ("CreatorResources.js","RecoveredSprite.shader","UnityShaderProbe.cs","CodeCollections.cs","RecipeJsonConfiguration.cs")); assert files("monkey").joinpath("code-graph.cjs").is_file(); assert all(files("monkey").joinpath("code_profiles",x+".json").is_file() for x in ("foodstreet-demand-health-v1","foodstreet-motion-math-v1"))'])
         code_status='not_run_node_unavailable'
         if shutil.which('node'):
             source=work/'original.js';source.write_text('var Rules=(function(){function e(){} e.Clamp=function(x){if(x<0)return 0;return x;};return e;})();',encoding='utf-8')
@@ -36,7 +36,10 @@ def main():
             run(['-m','monkey.cli','code-model','--source',str(source),'--lexical-graph','--expected-source',source_sha,'--out',str(work/'code-index')],expected=1)
             graph=json.loads((work/'code-index/code-graph.json').read_bytes());cls=graph['classes'][0];method=graph['methods'][0]
             contract=work/'contract.json';contract.write_text(json.dumps(dict(schemaVersion=1,sourceSha256=source_sha,namespace='Game.Domain.Recovered',records=[],modules=[dict(id='Rules',targetClass='Rules',classId=cls['id'],classSha256=cls['sourceSha256'],fields={},methods=[dict(id=method['id'],sha256=method['sourceSha256'],name='Clamp',parameters=['Number'],returns='Number')])])),encoding='utf-8')
-            run(['-m','monkey.cli','code-emit','--source',str(source),'--module-contract',str(contract),'--out',str(work/'code-candidate')],expected=1)
+            selectors=work/'selectors.json';selectors.write_text(json.dumps([dict(classId=cls['id'],methodId=method['id'])]),encoding='utf-8')
+            run(['-m','monkey.cli','code-select','--source',str(source),'--selectors',str(selectors),'--type-evidence',str(contract),'--out',str(work/'selection')])
+            assert json.loads((work/'selection/selection.json').read_bytes())['lowering']=='passed'
+            run(['-m','monkey.cli','code-emit','--source',str(source),'--module-contract',str(work/'selection/module-contract.json'),'--out',str(work/'code-candidate')],expected=1)
             generated=(work/'code-candidate/Assets/Game/Domain/Recovered/Rules.cs').read_text()
             assert 'if (' in generated and 'return x;' in generated
             assert (work/'code-candidate/SourceRecovery/Code/Source/RecoveredSource.js').read_bytes()==source.read_bytes()

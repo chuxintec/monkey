@@ -2,7 +2,7 @@
 
 执行 [统一C1–C9计划](PLAN.md) 和 [完整范围](/Users/wangmeng/Documents/Manager/decisions/20261026-grea-monkey-beaver/MONKEY-V06-CSHARP-PLAN.md)。本版新增投入为完整模块符号/类型/方法体/跨模块依赖、Unity生命周期事件与原字段配置/资源绑定、确定性C#候选/增量/编译行为/AI交接，原后续C#内容不再另排v0.7。CLI只有实装后才登记能力。下方历史数值子集仍兼容，不代表本大版验收。
 
-固定肥鹅main/game.js为7,147,892字节/SHA `21af08e48846f6ad1a2e0673b0c945358136723b1664f0cd1f6ec9b3df6c5cb5`。完整词法图现有928类/16,384方法，原RF914区域不再作为完整上下文；旧138数值候选保留历史。新类型模块恢复见 [CODE-MODULES](CODE-MODULES.md)：OrderRules、RecipeCatalog、HealthState三组共12个方法体已生成、离线编译并通过独立预期行为；Unity原生接线另验。未知保持具名源位置/原因/编译排除，不填默认值。不执行原JS/WASM/DLL；源码转写仅在明确类型和调用子域内成立。Mono托管IL与IL2CPP元数据/方法体分别说明，36未有精确schema的正文仅阻断依赖操作。
+固定肥鹅main/game.js为7,147,892字节/SHA `21af08e48846f6ad1a2e0673b0c945358136723b1664f0cd1f6ec9b3df6c5cb5`。完整词法图928类/16,384方法，原RF914区域不是完整上下文；旧138数值候选保留历史。当前[模块生成](CODE-MODULES.md)/[入口选择](CODE-SELECTION.md)可按显式类型合同批量闭合并实际lowering。4个真实模块16方法候选已编译，16,368未选择不等于不支持；原12方法与新4方法各有独立行为证据。原生9方法有限流程完成6次系统指针操作，非原UI恢复。Unity WASM精确字节链与8纯运算片段另见[WASM来源](WASM-CODE-SOURCES.md)；13波次/触发方法仍缺精确布局/调用目标，caller-map关联假设保留。未知保留具名源位置/原因/编译排除；不执行原JS/WASM/DLL，36正文仅阻断依赖操作。
 
 # 可接续代码子集（v0.2开发中）
 

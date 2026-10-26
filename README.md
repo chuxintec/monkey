@@ -4,7 +4,7 @@
 
 当前版本为 **0.4.0**，采用 [monkey-project/1 工程规范](docs/PROJECT-SPEC.md)。新增 Unity 字体/引用表分块读取和可配置解析预算，详见 [解析预算](docs/providers/UNITY-PARSE-BUDGETS.md) 和 [v0.4.0 发布说明](docs/RELEASE-v0.4.0.md)。资源候选、原生导入、画面及业务验收分别记录。
 
-当前本地开发 `0.6.0.dev1`：完整源码词法索引、显式类型/真实 C# 方法体、闭合模块、原 JSON 运行时读取及受限 Unity 原生探针。肥鹅 3 模块/12 方法通过离线编译和独立行为，2 模块/9 方法通过 Unity 原生有限流程；非完整游戏。用法见 [C# 模块](docs/CODE-MODULES.md)、[内置 profile](docs/CODE-PROFILES.md)、[本地验收](docs/validation/2026-10-26-v060-csharp-modules.md)。v0.5 预算/资源复用的受限交付和 36 正文缺口保持，见 [操作说明](docs/V0.5-OPERATIONS.md)。稳定安装仍为 0.4.0，开发工程采用已移交 beaver；旧 adopt 入口仅保留弃用兼容。
+当前本地开发 `0.6.0.dev1`：完整源码词法索引、按入口选择/类型依赖与实际 lowering 预检、真实 C# 方法体及自有候选。肥鹅合并候选 4 模块/16 方法已编译，独立行为与原 JSON 已验证；2 模块/9 方法的 Unity 有限流程已完成 6 次系统指针操作和保存重开。向僵尸新增 WASM 精确方法体证据及 8 个纯整数运算 C# 片段，映射关联仍有明确假设、波次方法未转写；非完整游戏。见 [模块选择](docs/CODE-SELECTION.md)、[WASM 来源](docs/WASM-CODE-SOURCES.md)、[续推验收](docs/validation/2026-10-26-v060-continuation.md)。v0.5 预算/复用及 36 正文缺口保留，稳定安装仍为 0.4.0；开发工程采用归 beaver。
 
 新输出直接生成规范目录；`--format none|grea` 保留为弃用兼容参数。`convert --layout layout.json` 可使用游戏级命名覆盖；`layout-preview` 预览已完成转换的路径变化，`layout-migration` 按 GUID/UUID 生成旧候选到新候选的迁移清单。进度和未验证项见 [PLAN](docs/PLAN.md)，用法见 [USAGE](docs/USAGE.md)。
 
