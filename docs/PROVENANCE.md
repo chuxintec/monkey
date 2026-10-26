@@ -40,3 +40,8 @@ Spine原生闭包适配尚未实现。原始PSD等文件留存上限128MiB，不
 用户明确要求中文文件名转拼音，覆盖上述旧“中文保留”路径规则。采用固定外部依赖 pypinyin 0.55.0（MIT，PyPI 官方分发），无声调、ü 为 v，使用词组读音；共享路径分配器继续按源身份消歧并保留原名映射，不改 JSON 字段、显示文本或资源内部标识。
 
 BON tagged little-endian v1 的标签、字符串表及容器结构只读核对肥鹅原包静态 decoder 和既有 `Tools/static-bon-reader.py`；monkey 独立实现，无运行时 import 项目工具或硬编码私有路径。仅处理 `cc.BufferAsset` 的明确 Config 路径且本次输入含已识别 decoder 语义证据的来源。原 JS 不执行。解码拒绝截断、尾随字节、重复键、无效字符串引用、非字符串对象键、非有限数值和超预算；Binary/Date 明确 needs_adapter，避免丢失类型。每个顶层表单独输出 UTF-8 JSON，索引保留原始顶层键、源 SHA、完整字节消费、目标 SHA；空地区覆盖也明确记为零表。主配置、地区覆盖、语言表不擅自混合，保留原始二进制。
+
+
+## 2026-10-26 同事研发交接中的通用证据机制
+
+按用户明确授权只读核对Tools/Query-Methods.py、Tools/Query-Tables.py、SourceEvidence/AdapterSources/iter_original_methods.py及对应方法/表/路由清单，提取分块方法定位、精确表hash提取和URL到内容身份的思路。monkey使用自己的safe/RootReader/load/new_output/错误合同独立实现evidence_stream/evidence_queries，补严格JSON语法、EOF哈希、预算和ZIP边界；没有复制对方脚本、私有游戏代码或赋予它们本项目MIT再分发许可。测试全为自造结构；真实来源/原模块/适配模块、选中表和工具原件仅留.private，公开摘要只记录能力与验证范围。Unity证据role明确分开原二进制和适配二进制，保留派生声明，不根据文件名声称来源原版或方法体恢复。

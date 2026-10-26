@@ -11,7 +11,8 @@ from .io import safe,read,load,sha,write_json,inside
 from .sources.compiled import fail
 from .layout.standard import find_analysis
 
-ROLES={'metadata','source-binary','source-package','source-script','il2cpp-declarations','dummy-assembly','semantic-snapshot','asset-evidence','native-media','recovery-source'}
+ROLES={'metadata','source-binary','source-package','source-script','il2cpp-declarations','dummy-assembly','semantic-snapshot','asset-evidence','native-media','recovery-source',
+       'method-map','decoded-table-manifest','resource-alias-index','adapted-binary'}
 
 
 def declared(manifest):
@@ -24,6 +25,10 @@ def declared(manifest):
         seen.add(path);raw=read(path,max_bytes=128*1024**2);total+=len(raw)
         if len(raw)!=row.get('bytes')or sha(raw)!=row.get('sha256')or total>1024**3:fail('UNITY_CODE_EVIDENCE_CHANGED',str(path),'Frozen bytes or aggregate budget differ')
         result.append(dict(row,path=str(path)))
+    originals={r['sha256'] for r in result if r['role']=='source-binary'}
+    for row in result:
+        if row['role']=='adapted-binary' and (row.get('derivedFromSha256') not in originals or row['derivedFromSha256']==row['sha256']):
+            fail('UNITY_ADAPTED_PROVENANCE',row['path'],'Adapted binary requires a distinct original source-binary identity in this manifest')
     return p,data,result
 
 
@@ -80,10 +85,13 @@ def attach(manifest,project,overrides=None):
             if not native.exists():shutil.copy2(path,native)
             if sha(read(native,max_bytes=128*1024**2))!=row['sha256']:fail('UNITY_MEDIA_COPY_CHANGED',str(native),'Media copy differs')
         copied.append(dict(role=row['role'],sha256=row['sha256'],bytes=row['bytes'],path=dest.relative_to(project).as_posix(),nativePath=native.relative_to(project).as_posix()if native else None,nativeIdentity='pending-editor-import'if native else'not-applicable'))
+        if row['role']=='adapted-binary':copied[-1]['derivedFromSha256']=row['derivedFromSha256']
         if row['role']=='il2cpp-declarations':
             recovered=declarations(read(path,max_bytes=128*1024**2),project/'SourceRecovery/Code/Drafts/Il2Cpp',selected)
             drafts.extend(recovered['types']);total_methods+=recovered['methods'];total_fields+=recovered['fields']
     report=dict(schemaVersion=1,manifestSha256=sha(read(manifest)),files=copied,types=drafts,declaredMethods=total_methods,declaredFields=total_fields,
-                methodsImplemented=0,sourceCodeExecuted=False,compiled='not_run',scope='explicit original evidence and metadata declarations; no invented method bodies')
+                methodsImplemented=0,sourceCodeExecuted=False,compiled='not_run',scope='explicit original evidence and metadata declarations; no invented method bodies',
+                adaptedBinaries=sum(r['role']=='adapted-binary' for r in copied),
+                derivationProof='manifest-declared hash relationship only; adapted bytes are not original module bytes')
     write_json(find_analysis(project,'code-evidence-handoff.json'),report)
     return dict(files=len(copied),bytes=sum(r['bytes']for r in copied),typesIndexed=len(drafts),typeDraftFiles=sum(t['status']=='declaration-draft'for t in drafts),declaredMethods=total_methods,declaredFields=total_fields,methodsImplemented=0,report='Analysis/Code/code-evidence-handoff.json')

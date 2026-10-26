@@ -13,6 +13,14 @@
 
 证据 `.private/v050-adoption-20261026/`；公开摘要 [本轮核验](validation/2026-10-26-v050-budget-reuse-handoff.md)。v0.5 尚未完成；日常安装仍为 v0.4.0，无推送/Release/全局安装。正式肥鹅/GREA 只读，向僵尸继续暂停；当前冻结点没有存活的采用 Editor/CLI 进程。
 
+## 本轮完成：同事交接的通用证据能力实际并入（2026-10-26）
+
+人类授权已原生核验：总监turn `01a17684-3487-7890-a76a-33bc95bf9f91` / human `01a17684-35f6-7ed2-a252-2f7f73d2898a`；事件 `monkey-colleague-recovery-intake-20261026-01`。完整读取指定3脚本与对应manifest/方法映射格式，独立实现并接入现有CLI/inspection，未复制游戏实现：`query-methods`流式方法定位及完整SHA，`query-tables`带hash的嵌套归档/单表提取，`inspect-aliases`精确URL→内容身份与选中载荷核验；既有Unity代码证据清单增加method-map/table-manifest/alias-index及独立adapted-binary角色。
+
+真实交接ZIP中174,526映射行/49MB流式查询通过；27,454表变体清单/59MB内层ZIP及选中表核验通过；69,463 URL映射为34,003内容身份，选中别名载荷SHA通过。3个公开开发CLI入口均实调成功；原主WASM与适配主WASM分别完整核hash，按不同内容身份保留。全套349测试通过，最终身份回执字段补充后的定向验证也通过；旧inspect/normalize签名未改变，可继续原缓存复用。
+
+机制与边界见 [EVIDENCE-QUERIES](EVIDENCE-QUERIES.md)、[验收记录](validation/2026-10-26-colleague-evidence-intake.md)。私有证据`.private/colleague-intake-20261026/`；大包完整验收由僵尸接收者集中做，本工具只核选定成员，不重解7GB。方法体恢复仍0；不采用WebView宿主、改造WASM运行层、经济/存档政策，游戏资料不进入公开包。当前0.5.0.dev1本地开发，安装0.4.0不动，无发布/推送；本项属于05-D证据定位增量，不替代05-C剩余36对象/资源阻断或整版完成。
+
 ## 本轮补充：GREA 七项恢复工具归属已评审（2026-10-26）
 
 按总监事件 `monkey-grea-recovery-handoff-scope-20261026-01` 核对固定清单/来源SHA，只审7项恢复侧条目。Cocos结构/模块/转换3项复用monkey现有核心或明确子集、兼容替代仍需消费者核验；APK复用现有reader但XAPK嵌套/OBB只保留参考；ELF、Laya合同、Shader探针3项当前无等价能力，冻结参考而不扩profile。共保留23份必要源/依赖/许可身份，没有复制903文件或并入新实现。compiled代表/两个拒绝、三类AST源范围、APK/XAPK与可编辑版本差异得到实际回执，6项定向测试通过；原生/Player/消费方切换未验。七项均不归beaver，旧实现仍由GREA在替代/消费核验后退休。

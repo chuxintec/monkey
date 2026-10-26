@@ -401,3 +401,8 @@ Scene/Prefab/Animation 原生文件由 `native-import` 或 `convert --native` �
 `resource-catalog.json` 记录完整纹理与 Shader 源代码，`spine-closures.json` 记录骨骼/atlas/页图。Unity Addressables/AssetBundle 与远端构建未配置，业务运行/播放/渲染仍单独验收。
 
 图片统一使用 `Textures/<Module>/`，不再生成 Sprites 目录。保留 Sprite 导入设置与引用；仅合并字节一致且无独立绑定要求的附加完整纹理，尺寸/裁切不同的图片不强行删除。`resource-catalog.json` 记录纹理别名；Spine/字体页图仍留在对应闭包旁。
+
+
+## 0.5.0.dev1 冻结证据查询
+
+新增流式 `query-methods`、带hash嵌套ZIP的 `query-tables` 和精确URL/内容身份的 `inspect-aliases`。只读来源、隔离输出；签名/映射不计方法体，listing不计全载荷验证。完整参数、预算和代码证据role见 [EVIDENCE-QUERIES](EVIDENCE-QUERIES.md)。这是显式开发入口能力，稳定安装0.4.0不自动升级。

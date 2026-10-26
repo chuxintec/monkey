@@ -1,6 +1,7 @@
 import argparse
 import json
 import sys
+import zipfile
 from . import __version__
 from .sources.bundle import inspect, PROFILE
 from .sources.compiled import ParseError, fail
@@ -18,6 +19,21 @@ def main(argv=None):
     sub = parser.add_subparsers(dest='command', required=True)
     cap = sub.add_parser('capabilities')
     cap.add_argument('--json', action='store_true')
+    for name in ('query-methods','query-tables','inspect-aliases'):
+        p=sub.add_parser(name,help='Inspect exact frozen evidence; no source program execution')
+        p.add_argument('--source',required=name!='query-tables')
+        p.add_argument('--member',help='Exact ZIP member; expected SHA identifies member bytes, not the outer ZIP')
+        p.add_argument('--expected-sha',required=name!='query-tables')
+        p.add_argument('--limit',type=int,default=20)
+        p.add_argument('--out',required=True)
+        if name=='query-methods':
+            p.add_argument('--type',default='');p.add_argument('--method',default='')
+            p.add_argument('--module');p.add_argument('--function',type=int)
+        elif name=='query-tables':
+            p.add_argument('--manifest',required=True);p.add_argument('--expected-manifest-sha',required=True)
+            p.add_argument('--contains',default='');p.add_argument('--extract')
+        else:
+            p.add_argument('--alias');p.add_argument('--content-source');p.add_argument('--content-prefix',default='')
     p = sub.add_parser('adopt', help='Deprecated compatibility: three-way asset adoption; ownership transferred to beaver')
     p.add_argument('--candidate', help='Frozen incoming package or Unity-source project')
     p.add_argument('--target', help='Existing owned development project; never the source export')
@@ -229,14 +245,30 @@ def main(argv=None):
     args = parser.parse_args(argv)
     unity_parse_limits={k:v for k,v in [('objectValues',getattr(args,'unity_object_value_limit',None)),('containerValues',getattr(args,'unity_container_value_limit',None))] if v is not None} or None
     try:
+        if args.command in ('query-methods','query-tables','inspect-aliases'):
+            from .evidence_queries import query_methods,query_tables,inspect_aliases
+            try:
+                if args.command=='query-methods':
+                    result=query_methods(args.source,args.expected_sha,args.out,member=args.member,type_name=args.type,
+                                         method=args.method,module=args.module,function=args.function,limit=args.limit)
+                elif args.command=='query-tables':
+                    result=query_tables(args.manifest,args.expected_manifest_sha,args.out,source=args.source,
+                                        expected=args.expected_sha,member=args.member,contains=args.contains,extract=args.extract,limit=args.limit)
+                else:
+                    result=inspect_aliases(args.source,args.expected_sha,args.out,member=args.member,alias=args.alias,limit=args.limit,
+                                           content_source=args.content_source,content_prefix=args.content_prefix)
+            except (zipfile.BadZipFile,EOFError) as error:fail('EVIDENCE_ARCHIVE',args.source or args.manifest,str(error))
+            print(json.dumps(dict(status=result['status'],operation=result['operation'],report=str(args.out)+'/inspection.json'),ensure_ascii=False))
+            return 0
         if args.command == 'capabilities':
             from .output_limits import policy
             print(json.dumps(dict(version=__version__, profiles=[PROFILE,PROJECT_PROFILE,'cocos-2.4.11-bundle','cocos-3.8.7-bundle','cocos-3.4.1-bundle','cocos-2.1.2-resource','generic-image-resources-v1','egret-custom-resource-plist-v1'], targetProfiles=[UNITY_PROFILE,cocos.PROFILE],
                 ownership=dict(recoveryCandidates='monkey',developmentProjectOperations='beaver',workflow='GREA'),
+                evidenceInspection=dict(commands=['query-methods','query-tables','inspect-aliases'],inputs=['strict-streamed-json-array','manifest-hashed-table-zip','exact-url-content-alias-index'],sourceExecution=False,metadataIsMethodBody=False,hashVerification='complete-selected-source; outer-ZIP-not-implied',maxSourceBytes=536870912,maxRowBytes=8388608,maxResults=1000),
                 projectOperations=dict(status='deprecated-compatibility',owner='beaver',commands=['adopt','adopt-recover','register','apply'],replacement='pending-verified-beaver-handoff',scope='frozen-transition-implementation; not a new monkey mainline capability',unityNative='representative-move-and-reopen-verified-on-predecessor-WIP; latest-add-folder-runtime-not_run',creatorNative='unsupported'),
                 outputPolicy=dict(wholeInput=policy({'scopeMode':'whole-input'}),selection=policy({}),hashChunkBytes=1048576,sourceDecoderBudgets='independent'),
                 additionalPackageProfiles={'cocos-3.4.1-bundle':dict(scope='version-proven-node-ui-prefab-and-resource-subset',graphs='856-of-857-source-graphs;22503-nodes;52-instances;one-null-quaternion-rejected',native='5-source-frames-plus-6-prefabs-331-nodes-8-instances-7-mounted-nodes-1-mounted-widget-both-targets-verified',operations=['package-convert']), 'egret-custom-resource-plist-v1':dict(scope='reviewed-custom-resource-manifest-plist-binjson-v2',targets=['unity6'],sourceSkins='typed-data-only-native-layout-pending',remoteAcquisition='explicit-manifest-cache-and-bounded-fetch',native='132-source-frames-verified; expanded-atlas-set-pending',operations=['package-convert']), 'cocos-2.1.2-resource':dict(scope='version-proven-resource-subset',native='211-source-frames-both-targets-verified',graphs='pending',operations=['package-convert']), 'generic-image-resources-v1':dict(scope='derived-original-image-gallery-only',families=['laya','layaair','egret','eraget','custom','other'],targets=['unity6'],native='Egret-16-derived-images-verified',sourceGraphs='not-restored',operations=['package-convert']), 'cocos-2.4.11-bundle':dict(scope='version-proven-published-bundle-subset',native='91-source-graphs-both-targets-verified',operations=['package-convert']), 'cocos-3.8.7-bundle':dict(scope='version-proven-node-ui-template-and-resource-subset',native='83-static-graphs-plus-4-prefab-5-native-relations-and-16-node-dynamic-ui-representatives-both-targets-verified',graphs='114-root-closures-static;5-graphs-missing-6-exact-templates;not-all-native-validated',operations=['package-convert'])},
-                schemaVersion=1, dynamicUi=dict(probeVersion=2,verifiedLayoutGroups=6,verifiedLayoutStates=54,native='historical-v02-grid-scale-constraints-child-resize-and-linear-scale-representatives',timing='Editor-native-forced-update;Player-not_run',unityFlowReplacement=dict(status='verified-subset',sourcePrefabs=48,sourceComponents=63,aggregateAssets=50,representatives=6,scope='horizontal-flexible-unscaled-uniform-grid-or-proven-single-row',otherLayouts='review-required;no-source-flow-runtime-fallback',sourceText='questionnaire-Label-not-recovered;Rect-resize-only')), formatting=dict(implemented=['unity-creator-unimported-owned-grea-v1','fresh-package-convert-none-grea'],pending=['unity-general-scene-native-format','unity-source-positive-native-move-sample'],rejected=['materialized-native-assets-require-a-future-native-move-adapter']), unitySourceProfile=dict(inspectionPolicy=dict(defaultObjectValues=250000,defaultContainerValues=8000000,maxObjectValues=1000000,maxContainerValues=16000000,maxDepth=96,streamedFields=['Font.m_FontData','AssetBundle.m_PreloadTable'],chunkElements=8192,maxPayloadBytes=268435456),name='unityfs-unitypy-1.25.3-assetripper-2.0.0',status='partial',inputs='explicit-unity-bundle-or-webdata-files-and-exact-local-texture-cache',additionalContainers=['UnityWebData1.0'],invalidTexturePolicy='block-default-explicit-quarantine-retains-original',dependencyClosure='explicit-frozen-pool-exact-serialized-file-closure',editor='one-prefab-schema-reference-save-reload-verified',publicNative=True,nativeProfile='unity-leaf-prefab-sprite-array-v1',nativeFormatting='typed-resource-moves-with-dynamic-path-pins; real sample pinned all 134 assets',methodsRecovered=0), implemented=['adopt','adopt-recover','unity-field-plan','convert','catalog','inspect','normalize','plan','export','verify','handoff','diff','register','apply','preflight','native-import','research-matrix','code-model','code-emit','format-project','project-model','inspect-unity','export-unity','unity-code-model','index-unity','hydrate-unity','code-handoff','native-finish-plan','native-finish','acquire-unity-textures','prepare-unity-bulk','export-unity-bulk','freeze-handoff','freeze-unity-handoff','native-layout-audit','native-layout-prepare','native-layout-patch','native-layout-finish','native-layout-bundle'], planned=[],
+                schemaVersion=1, dynamicUi=dict(probeVersion=2,verifiedLayoutGroups=6,verifiedLayoutStates=54,native='historical-v02-grid-scale-constraints-child-resize-and-linear-scale-representatives',timing='Editor-native-forced-update;Player-not_run',unityFlowReplacement=dict(status='verified-subset',sourcePrefabs=48,sourceComponents=63,aggregateAssets=50,representatives=6,scope='horizontal-flexible-unscaled-uniform-grid-or-proven-single-row',otherLayouts='review-required;no-source-flow-runtime-fallback',sourceText='questionnaire-Label-not-recovered;Rect-resize-only')), formatting=dict(implemented=['unity-creator-unimported-owned-grea-v1','fresh-package-convert-none-grea'],pending=['unity-general-scene-native-format','unity-source-positive-native-move-sample'],rejected=['materialized-native-assets-require-a-future-native-move-adapter']), unitySourceProfile=dict(inspectionPolicy=dict(defaultObjectValues=250000,defaultContainerValues=8000000,maxObjectValues=1000000,maxContainerValues=16000000,maxDepth=96,streamedFields=['Font.m_FontData','AssetBundle.m_PreloadTable'],chunkElements=8192,maxPayloadBytes=268435456),name='unityfs-unitypy-1.25.3-assetripper-2.0.0',status='partial',inputs='explicit-unity-bundle-or-webdata-files-and-exact-local-texture-cache',additionalContainers=['UnityWebData1.0'],invalidTexturePolicy='block-default-explicit-quarantine-retains-original',dependencyClosure='explicit-frozen-pool-exact-serialized-file-closure',editor='one-prefab-schema-reference-save-reload-verified',publicNative=True,nativeProfile='unity-leaf-prefab-sprite-array-v1',nativeFormatting='typed-resource-moves-with-dynamic-path-pins; real sample pinned all 134 assets',methodsRecovered=0), implemented=['query-methods','query-tables','inspect-aliases','adopt','adopt-recover','unity-field-plan','convert','catalog','inspect','normalize','plan','export','verify','handoff','diff','register','apply','preflight','native-import','research-matrix','code-model','code-emit','format-project','project-model','inspect-unity','export-unity','unity-code-model','index-unity','hydrate-unity','code-handoff','native-finish-plan','native-finish','acquire-unity-textures','prepare-unity-bulk','export-unity-bulk','freeze-handoff','freeze-unity-handoff','native-layout-audit','native-layout-prepare','native-layout-patch','native-layout-finish','native-layout-bundle'], planned=[],
                 targetValidation={UNITY_PROFILE:dict(static='implemented',editor='representative-subset-verified',visual='not_run'),cocos.PROFILE:dict(static='implemented',editor='representative-subset-verified',visual='not_run')},
                 compiledFormats=['compiled-v1','pack-v1','texture-pack-v1'],
                 containerFormats=['plain-wxapkg','APK-ZIP','Cocos-resource-directory'],
