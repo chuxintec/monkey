@@ -1,5 +1,11 @@
 # monkey 执行约定
 
+## 当前 v0.6 C# 大版本（2026-10-26）
+
+续推事件 `monkey-v06-continue-development-20261026-01` 已原生回读真实人类 turn `01a17778-4eb2-7d43-b89e-53a8b46d986d` / human `01a17778-4ed4-7223-8255-df15ac647275`“推进开发”。继续现有 v0.6 WIP/模块实例，禁止以旧 v0.5 复核或单组结束代替整版接续。
+
+真实人类合并并启动已在本聊天原生核验：总监 turn `01a17751-6597-7d01-ae5b-13c670fb3d3c` / human `01a17751-65b2-76c2-bf0d-df22da2b6204`，事件 `monkey-v06-csharp-major-start-20261026-01`。执行 [完整计划](/Users/wangmeng/Documents/Manager/decisions/20261026-grea-monkey-beaver/MONKEY-V06-CSHARP-PLAN.md)，唯一进度仍 `docs/PLAN.md`。开发 `0.6.0.dev1`、分支 `codex/v0.6-csharp-recovery`；覆盖旧等待下一版指令，保留 v0.5 受限基线及36精确来源缺口。C1–C9 的C#恢复/跨模块/Unity接线/增量/交接一次纳入，不逐小包发布；未知方法排除编译，不运行原JS/WASM/DLL，不复制源引擎运行时。只写 monkey 自有候选；beaver/GREA/正式游戏只读。以整个版本完成或严重阻塞为总监报告节点，不等ACK，不自动扩大来源/发布/安装。
+
 ## 当前协作规则（2026-10-26 覆盖旧 no-subagent 条款）
 
 执行 [通用模块开发规范](/Users/wangmeng/Documents/Manager/standards/MODULE-DEVELOPERS.md) 与 [任务模板](/Users/wangmeng/Documents/Manager/templates/module-developer-task.md)。人类来源已本聊天原生核验：总监 turn `01a1770e-aefa-7e00-81fa-8e64fada4a55` / human `01a1770e-af1d-7510-b494-867958dddf0e`。主开发保持现有配置并负责整个 v0.5、共享接口与集成；独立就绪模块可交项目内模块开发者，新增默认 `gpt-6-luna/high`，优先复用，动态 0～8 但不超过平台实际容量。不递归、不创建顶层聊天；精简登记见 `docs/TEAM-STATE.md`。

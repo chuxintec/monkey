@@ -9,5 +9,6 @@ prune .private
 prune outputs
 prune dist
 recursive-include src/monkey *.cjs
+recursive-include src/monkey/code_profiles *.json
 
 include scripts/install_release.py

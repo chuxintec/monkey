@@ -2,7 +2,13 @@
 
 本路线沿唯一PLAN执行，不另建任务表。用户原生授权见SUPPORT-MATRIX.md；工作版本U/C不是预先声明发布号或已支持状态。
 
-## 版本规划：v0.5 – v0.7（2026-10-26，职责整改后）
+## 当前路线覆盖：v0.6 C# 合并大版本
+
+以 [MONKEY-V06-CSHARP-PLAN](/Users/wangmeng/Documents/Manager/decisions/20261026-grea-monkey-beaver/MONKEY-V06-CSHARP-PLAN.md) 和唯一 [PLAN](PLAN.md) 的C1–C9为当前范围：原06-A/B/C/D、原建议C# v0.7以及后续原C#脚本恢复/依赖/字段事件/Unity接线/增量/编译交接一次纳入v0.6。先肥鹅完整脚本→真实方法模块→跨类依赖与原生绑定，再按不同合同推进Mono与IL2CPP/WASM。至少3个有分支/集合/调用的真实代表模块及1组Unity有限可操作子集；签名/数值getter/草稿不算方法实现。
+
+本地0.6.0.dev1已实现3真实模块12方法/跨类调用/原JSON，离线编译及独立行为通过；2模块9方法原生接线、保存重开、PlayMode和销毁解绑通过。分支codex/v0.6-csharp-recovery；v0.5受限基线不改。广泛新引擎profile、全网发现/CDN扩展作为未排号的后续来源路线，仅所选代码的直接依赖做最小支撑。beaver拥有人工工程编辑/重构/三方采用/新业务模板/发布构建，monkey只恢复来源并生成独立候选。下方旧v0.5–v0.7表为历史规划，不能覆盖本合并决定。
+
+## 历史版本规划：v0.5 – v0.7（2026-10-26，职责整改后）
 
 本节仍是 PLAN 的范围与验收定义，不另设任务源。用户已批准开始 v0.5；在途 0.5.0.dev1 与已发布/安装的 MIT v0.4.0 分开。随后批准三产品职责：**monkey 恢复候选，beaver 操作开发工程，GREA 管流程和路由**。依据 [三产品计划](/Users/wangmeng/Documents/Manager/decisions/20261026-grea-monkey-beaver/PLAN.md)；下面覆盖此前“monkey adopt/构建/更新”的版本草案，不抹掉实际 WIP 与验证。
 

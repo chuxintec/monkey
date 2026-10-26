@@ -1,3 +1,5 @@
+> 当前开发0.6.0.dev1为合并的C#恢复/模块构建版，C1–C9见[PLAN](PLAN.md)。肥鹅大JS整源词法索引16,384方法，3源模块12方法自动转写/离线编译/独立行为通过，2模块9方法/原JSON在Unity原生有限流程通过；其余方法未生成。Mono仅合法夹具，向僵尸IL2CPP/WASM仍metadata_only，不提前记家族supported。v0.5受限交付及36精确正文缺口原样保留。
+
 > v0.5 受限本地出口已接受：`acceptedDelivery=local_declared_subset`；原范围 `versionComplete=false` / `originalScopeComplete=false`。依据 [总监裁定](/Users/wangmeng/Documents/Manager/decisions/20261026-grea-monkey-beaver/MONKEY-V05-LOCAL-EXIT.md)，沿用 71c177d 和既有 0.5.0.dev1 制品，所有 partial/unsupported、36正文及字段写回阻断保持。后续只由精确可信输入/获准新方法/下一版指令触发，当前等待，不重测或重打包。
 
 > 本地 v0.5 新增的标准 3.8.99 Spine 二进制/JSON 两份时间/姿态代表、精确单 Shader 材质/编译/Metal 像素结果及 36 正文 schema 阻断见 [本轮验收](validation/2026-10-26-v050-operations-resources.md)。仅声明代表子集，不外推全资源/全宏/全版本。
