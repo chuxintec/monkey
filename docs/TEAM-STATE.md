@@ -1,5 +1,8 @@
 # v0.6 模块执行登记
 
+全量后处理当前实施：父/root单写code_project_postprocess.py、CLI/PLAN/统一工程与所有真实CLI调用；复用code_regeneration单写code_postprocess_plan.py/专测/CODEX-PROJECT-PLAN.md，交完整范围/依赖/源映射分批；复用codex_postprocess单写code_postprocess.py/专测/CODEX-POSTPROCESS.md，扩展多批低层进程/每文件结果/只读上下文/受限恢复。shader_profile空闲，不造工作。2模块+父；不递归，不真实引擎，不跨写其他产品。旧“两方法本地交付”保留能力验证，不再作为v0.6全量出口。
+
+
 5A/5B成组已验：renderer集合/owner映射、writer内嵌/canonical/计数、postprocess隔离执行均交付；父完成3源刷新07、独立全清单/样例/暖复用与一次真实Codex调用。3子实例均空闲，不再派生；修订partial与实际验证边界见PLAN及本组验收。
 
 沿通用 MODULE-DEVELOPERS；主开发保持模型、公共IR/Schema/CLI/manifest/注册/依赖/版本/Editor单写。真实容量6，不满编；当前复用2个实例并新增1个独立可选后处理模块；3个模块已交付并空闲，父完成统一集成，默认Luna High；不为等待或报告新开工作。

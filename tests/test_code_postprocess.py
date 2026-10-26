@@ -150,6 +150,82 @@ os.link({str(source)!r}, path)
             prepare(self.candidate, ['Assets/Example.cs'], self.manifest_hash,
                     self.root / 'linked-revision', 'task', codex=link)
 
+    def test_project_batch_readonly_context_and_file_results(self):
+        context = self.candidate / 'module-map.json'
+        context.write_text('{"members":["Assembly.Example::OnStart"]}', encoding='utf-8')
+        self.fake_cli(f'''import json, pathlib, sys
+path = pathlib.Path('Assets/Example.cs')
+path.write_text(path.read_text().replace('Value = 1', 'Value = 2'))
+print(json.dumps({{"type":"turn.completed","usage":{{"input_tokens":4,"output_tokens":2}}}}),flush=True)
+response=pathlib.Path(sys.argv[sys.argv.index('-o')+1])
+response.write_text(json.dumps({{"status":"complete","changedPaths":["Assets/Example.cs"],"unresolved":[],"summary":"Reviewed module mapping and made a bounded source correction.","fileResults":[{{"path":"Assets/Example.cs","status":"processed","summary":"Reviewed source member OnStart and retained the original control flow while correcting the generated type reference.","unresolved":[],"membersReviewed":["Assembly.Example::OnStart"],"originalLogicPreserved":True}}]}}))
+''')
+        prepared = prepare(self.candidate, ['Assets/Example.cs'], self.manifest_hash,
+                           self.output, 'Process the selected module.', codex=self.codex,
+                           project_batch=True, context_files=['module-map.json'],
+                           context_root=self.candidate, max_resumes=2)
+        context_copy = prepared.workspace / '__Context/module-map.json'
+        self.assertEqual(context_copy.read_text(), context.read_text())
+        self.assertFalse(os.access(context_copy, os.W_OK))
+        prompt = (self.output / 'prompt.txt').read_text()
+        self.assertIn('__Context/module-map.json', prompt)
+        self.assertNotIn('Assembly.Example::OnStart', prompt)
+        self.assertNotIn('public class Example', prompt)
+        response_schema = json.loads((self.output / 'output-schema.json').read_text())
+        self.assertIn('fileResults', response_schema['required'])
+        self.assertEqual(json.loads((self.output / 'request.json').read_text())['maxResumes'], 2)
+        revision = run(prepared)
+        self.assertEqual(revision['status'], 'complete')
+        self.assertEqual(revision['fileResults'][0]['membersReviewed'], ['Assembly.Example::OnStart'])
+        self.assertEqual(revision['contextFiles']['__Context/module-map.json']['sha256'], sha(context.read_bytes()))
+        self.assertEqual(json.loads((self.output / 'process.json').read_text())['state'], 'exited')
+
+    def test_changed_context_is_detected_and_cannot_complete(self):
+        context = self.candidate / 'map.json'; context.write_text('{"members":[]}', encoding='utf-8')
+        self.fake_cli('import json,pathlib,sys\np=pathlib.Path("__Context/map.json"); p.chmod(0o600); p.write_text("tampered")\nr=pathlib.Path(sys.argv[sys.argv.index("-o")+1]); r.write_text(json.dumps({"status":"complete","changedPaths":["__Context/map.json"],"unresolved":[],"summary":"The selected source remained unchanged after review.","fileResults":[{"path":"Assets/Example.cs","status":"unchanged","summary":"Reviewed the only generated member and found its current source mapping already consistent.","unresolved":[],"membersReviewed":[],"originalLogicPreserved":True}]}))\n')
+        prepared = prepare(self.candidate, ['Assets/Example.cs'], self.manifest_hash,
+                           self.output, 'Inspect one generated file.', codex=self.codex,
+                           project_batch=True, context_files=['map.json'], context_root=self.candidate)
+        revision = run(prepared)
+        self.assertEqual(revision['status'], 'partial')
+        self.assertTrue(any('context bytes changed' in item for item in revision['workspaceIntegrityErrors']))
+
+    def test_project_batch_missing_result_is_blocked_not_processed(self):
+        self.fake_cli('import json, pathlib, sys\nresponse=pathlib.Path(sys.argv[sys.argv.index("-o")+1])\nresponse.write_text(json.dumps({"status":"complete","changedPaths":[],"unresolved":[],"summary":"No file results returned." ,"fileResults":[]}))\n')
+        prepared = prepare(self.candidate, ['Assets/Example.cs'], self.manifest_hash,
+                           self.output, 'Process the selected module.', codex=self.codex,
+                           project_batch=True)
+        revision = run(prepared)
+        self.assertEqual(revision['status'], 'partial')
+        self.assertEqual(revision['fileResults'][0]['status'], 'blocked')
+        self.assertIn('not counted as processed', revision['fileResults'][0]['summary'])
+
+    def test_safe_blocker_summary_only_uses_cli_error_events(self):
+        self.fake_cli('import sys\nsys.stdin.read()\nprint("{\\\"type\\\":\\\"turn.failed\\\",\\\"error\\\":{\\\"message\\\":\\\"Unauthorized: do not expose this raw message\\\"}}", flush=True)\nraise SystemExit(1)\n')
+        revision = run(self.make_prepared())
+        self.assertEqual(revision['blockingCondition'], 'auth')
+        self.assertNotIn('Unauthorized', revision['blocker']['safeSummary'])
+
+    def test_blocker_classifier_ignores_tool_output(self):
+        self.fake_cli('import sys\nsys.stdin.read()\nprint("{\\\"type\\\":\\\"item.completed\\\",\\\"item\\\":{\\\"type\\\":\\\"command_execution\",\\\"output\\\":\\\"quota exceeded\"}}", flush=True)\nraise SystemExit(1)\n')
+        revision = run(self.make_prepared())
+        self.assertIsNone(revision['blockingCondition'])
+
+    def test_safe_blocker_summary_reads_only_prefixed_stderr_errors(self):
+        self.fake_cli('import sys\nsys.stdin.read()\nprint("Error: rate limit reached; never expose this line", file=sys.stderr, flush=True)\nraise SystemExit(1)\n')
+        revision = run(self.make_prepared())
+        self.assertEqual(revision['blockingCondition'], 'quota')
+        self.assertNotIn('rate limit reached', revision['blocker']['safeSummary'])
+        self.assertTrue((self.output / 'stderr.log').is_file())
+
+    def test_run_refuses_an_already_running_recorded_child_without_killing_it(self):
+        prepared = self.make_prepared()
+        (self.output / 'process.json').write_text(json.dumps({'state': 'running', 'pid': os.getpid()}))
+        with self.assertRaises(ParseError) as error:
+            run(prepared)
+        self.assertEqual(error.exception.code, 'POSTPROCESS_CHILD_ACTIVE')
+        self.assertEqual(json.loads((self.output / 'process.json').read_text())['pid'], os.getpid())
+
     def test_resume_requires_exact_recorded_session(self):
         self.fake_cli(f'''import json, pathlib, sys, time
 if 'resume' in sys.argv:
