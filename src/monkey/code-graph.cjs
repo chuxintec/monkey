@@ -133,49 +133,72 @@ const functionById=new Map(functions.filter(fn=>methodByFunction.has(fn)).map(fn
 const mode=process.argv[2]||'index';let selected=[];
 if(mode==='draft-stream'){
  let total=0;const send=row=>{const line=JSON.stringify(row,(_,v)=>typeof v==='bigint'?{unsupportedBigInt:v.toString()}:v)+'\n';total+=Buffer.byteLength(line);if(total>1024*1024*1024)throw Error('CODE_DRAFT_STREAM_BUDGET');fs.writeSync(1,line);};
- const convert=n=>{if(Array.isArray(n))return n.map(convert);if(!n||typeof n!=='object')return n;const out={};for(const[k,v]of Object.entries(n))if(k==='start'||k==='end')out[k]=offsets[v];else out[k]=convert(v);return out;};
- send({record:'header',schemaVersion:1,source:{sha256:hash(raw),bytes:raw.length},sourceExecuted:false,
-   summary:{astNodes:nodes,classes:classes.length,methods:methods.length,functions:functions.length},classes,registrations});
- let emitted=0,flattened=0,containers=0,fieldCount=0;
  const boundedNodes=(start,limit)=>{const todo=[start];let count=0;while(todo.length){const n=todo.pop();if(++count>limit)return count;for(const[k,v]of Object.entries(n)){if(k==='start'||k==='end')continue;if(Array.isArray(v)){for(const x of v)if(x&&typeof x.type==='string')todo.push(x);}else if(v&&typeof v.type==='string')todo.push(v);}}return count;};
+ const functionIds=new WeakMap(),flattenedFunctions=new WeakSet();let flattened=0,containers=0;
+ for(const fn of functions){
+  functionIds.set(fn,methodByFunction.get(fn)?.id||'function@'+offsets[fn.start]);
+  if(factoryClass.has(fn)){flattenedFunctions.add(fn);flattened++;}
+  else if(!methodByFunction.has(fn)&&boundedNodes(fn,300000)>300000){flattenedFunctions.add(fn);containers++;}
+ }
+ const enclosingFunction=n=>{let fn=parent.get(n);while(fn&&!isFunction(fn))fn=parent.get(fn);return fn;};
+ const emittedParent=n=>{let fn=enclosingFunction(n);while(fn&&flattenedFunctions.has(fn))fn=enclosingFunction(fn);return fn?functionIds.get(fn):null;};
+ const thisOwner=n=>{
+  let fn=enclosingFunction(n);while(fn?.type==='ArrowFunctionExpression')fn=enclosingFunction(fn);
+  const m=fn&&methodByFunction.get(fn);
+  if(m?.ownerBindingId)return {ownerBindingId:m.ownerBindingId,static:m.static,methodId:m.id};
+  if(fn){const c=enclosingClass(fn),b=fn.id&&resolve(fn.id.name,ownerScope.get(fn));if(c&&b?.id===c.constructorBindingId)return{ownerBindingId:b.id,static:false,constructor:true};}
+  return null;
+ };
+ const convert=n=>{
+  if(Array.isArray(n))return n.map(convert);if(!n||typeof n!=='object')return n;
+  const out={};for(const[k,v]of Object.entries(n))if(k==='start'||k==='end')out[k]=offsets[v];else out[k]=convert(v);
+  if(n.type==='Identifier'){const b=resolve(n.name,ownerScope.get(n));out.bindingId=b&&!b.ambiguous?b.id:null;if(b?.ambiguous)out.bindingAmbiguous=true;}
+  if(n.type==='ThisExpression'){const owner=thisOwner(n);if(owner){out.thisOwnerBindingId=owner.ownerBindingId;out.thisStatic=owner.static;}}
+  if(isFunction(n))out.draftFunctionId=functionIds.get(n)||'function@'+offsets[n.start];
+  return out;
+ };
  const byClassBinding=new Map();for(const c of classes){byClassBinding.set(c.bindingId,c);byClassBinding.set(c.constructorBindingId,c);}
  const knownOwners=new Set(methods.map(m=>m.ownerBindingId).filter(Boolean));for(const k of byClassBinding.keys())knownOwners.add(k);
  const fieldContexts=new WeakMap();
- const fieldContext=n=>{
-  let enclosing=parent.get(n);while(enclosing&&!isFunction(enclosing))enclosing=parent.get(enclosing);
-  if(!enclosing)return 'program';
-  if(fieldContexts.has(enclosing))return fieldContexts.get(enclosing);
-  const context=factoryClass.has(enclosing)?'class_factory':!methodByFunction.has(enclosing)&&boundedNodes(enclosing,300000)>300000?'module':'runtime_write';
-  fieldContexts.set(enclosing,context);return context;
- };
- const fieldsTodo=[ast];
+ const fieldContext=n=>{const fn=enclosingFunction(n);if(!fn)return 'program';if(fieldContexts.has(fn))return fieldContexts.get(fn);const context=factoryClass.has(fn)?'class_factory':!methodByFunction.has(fn)&&flattenedFunctions.has(fn)?'module':'runtime_write';fieldContexts.set(fn,context);return context;};
+ const fieldRows=[],fieldsTodo=[ast];
  while(fieldsTodo.length){
   const n=fieldsTodo.pop();
   if(n.type==='AssignmentExpression'&&n.operator==='='&&n.left.type==='MemberExpression'&&n.left.object.type==='Identifier'&&!isFunction(n.right)){
    const receiver=n.left.object,b=resolve(receiver.name,ownerScope.get(n)),name=property(n.left);
    if(b&&!b.ambiguous&&knownOwners.has(b.id)&&name&&name!=='prototype'){
     const c=byClassBinding.get(b.id);const field={id:'field@'+offsets[n.start],name,ownerAlias:receiver.name,ownerBindingId:b.id,classId:c?.id??null,static:true,initializationContext:fieldContext(n),sourceBytes:range(n),sourceSha256:digest(n)};
-    const value=boundedNodes(n.right,100000)>100000?{type:'UnsupportedDraftFragment',start:offsets[n.right.start],end:offsets[n.right.end],reason:'Large field initializer retained for repair'}:convert(n.right);
-    send({record:'field',field,ast:value});fieldCount++;
+    fieldRows.push({field,node:n.right});
    }
   }
   for(const[k,v]of Object.entries(n)){if(k==='start'||k==='end')continue;if(Array.isArray(v)){for(const x of v)if(x&&typeof x.type==='string')fieldsTodo.push(x);}else if(v&&typeof v.type==='string')fieldsTodo.push(v);}
  }
+ const functionRows=[];
  for(const fn of functions){
-  if(factoryClass.has(fn)){flattened++;continue;}
+  if(flattenedFunctions.has(fn))continue;
   const existing=methodByFunction.get(fn),c=enclosingClass(fn);
-  if(!existing&&boundedNodes(fn,300000)>300000){containers++;continue;}
-  const method=existing||{id:'function@'+offsets[fn.start],name:fn.id?.name||'Function'+offsets[fn.start],classId:c?.id??null,
-    ownerAlias:c?.constructorAlias??null,ownerBindingId:null,static:false,sourceBytes:range(fn),functionBytes:range(fn),sourceSha256:digest(fn),bodySha256:digest(fn.body),parameters:fn.params.map(n=>({name:n.type==='Identifier'?n.name:null,binding:n.type})),async:!!fn.async,generator:!!fn.generator,calls:[],captures:[]};
-  let astRow;
-  if(existing&&boundedNodes(fn,300000)>300000){
-   astRow={type:fn.type,start:offsets[fn.start],end:offsets[fn.end],params:convert(fn.params),body:{type:'BlockStatement',start:offsets[fn.body.start],end:offsets[fn.body.end],body:fn.body.body.map(n=>boundedNodes(n,100000)>100000?{type:'UnsupportedDraftFragment',start:offsets[n.start],end:offsets[n.end],reason:'Large source fragment retained locally; other statements continue'}:convert(n))}};
-  }else astRow=convert(fn);
-  let record={record:'function',kind:existing?'indexed_method':'auxiliary_function',method,ast:astRow};
-  if(Buffer.byteLength(JSON.stringify(record))>64*1024*1024)record={record:'function',kind:existing?'indexed_method':'auxiliary_function',method,ast:null,diagnostic:'AST fragment exceeds64MiB; exact source is retained for local transcription'};
-  send(record);emitted++;
+  const method=existing?{...existing}:{id:functionIds.get(fn),name:fn.id?.name||'Function'+offsets[fn.start],classId:c?.id??null,
+    ownerAlias:c?.constructorAlias??null,ownerBindingId:null,static:false,sourceBytes:range(fn),functionBytes:range(fn),sourceSha256:digest(fn),bodySha256:digest(fn.body),parameters:fn.params.map(n=>({name:n.type==='Identifier'?n.name:null,binding:n.type})),async:!!fn.async,generator:!!fn.generator,calls:[],captures:[],writes:[]};
+  method.parentFunctionId=emittedParent(fn);method.lexicalParentFunctionId=enclosingFunction(fn)?functionIds.get(enclosingFunction(fn)):null;
+  if(!existing)bodyFacts(fn,method);
+  functionRows.push({fn,method,kind:existing?'indexed_method':'auxiliary_function'});
  }
- send({record:'footer',functionsEmitted:emitted,classFactoriesFlattened:flattened,moduleContainersFlattened:containers,staticFields:fieldCount,indexedMethods:methods.length,sourceExecuted:false});process.exit(0);
+ const metadataKeys=['id','name','classId','ownerAlias','ownerBindingId','static','sourceBytes','sourceSha256','functionBytes','parentFunctionId','lexicalParentFunctionId'];
+ send({record:'header',schemaVersion:1,source:{sha256:hash(raw),bytes:raw.length},sourceExecuted:false,
+  summary:{astNodes:nodes,classes:classes.length,methods:methods.length,functions:functions.length},classes,registrations,
+  draftDeclarations:functionRows.map(({method,kind})=>({...Object.fromEntries(metadataKeys.map(k=>[k,method[k]])),kind})),
+  draftFields:fieldRows.map(r=>r.field),draftMutatedBindings:[...new Set(mutations.map(m=>m.bindingId).filter(Boolean))]});
+ for(const{field,node}of fieldRows){const value=boundedNodes(node,100000)>100000?{type:'UnsupportedDraftFragment',start:offsets[node.start],end:offsets[node.end],reason:'Large field initializer retained for repair'}:convert(node);send({record:'field',field,ast:value});}
+ for(const{fn,method,kind}of functionRows){
+  let astRow;
+  if(kind==='indexed_method'&&boundedNodes(fn,300000)>300000){
+   astRow={type:fn.type,start:offsets[fn.start],end:offsets[fn.end],draftFunctionId:method.id,params:convert(fn.params),body:{type:'BlockStatement',start:offsets[fn.body.start],end:offsets[fn.body.end],body:fn.body.body.map(n=>boundedNodes(n,100000)>100000?{type:'UnsupportedDraftFragment',start:offsets[n.start],end:offsets[n.end],reason:'Large source fragment retained locally; other statements continue'}:convert(n))}};
+  }else astRow=convert(fn);
+  let record={record:'function',kind,method,ast:astRow};
+  if(Buffer.byteLength(JSON.stringify(record))>64*1024*1024)record={record:'function',kind,method,ast:null,diagnostic:'AST fragment exceeds64MiB; exact source is retained for local transcription'};
+  send(record);
+ }
+ send({record:'footer',functionsEmitted:functionRows.length,classFactoriesFlattened:flattened,moduleContainersFlattened:containers,staticFields:fieldRows.length,indexedMethods:methods.length,sourceExecuted:false});process.exit(0);
 }
 
 if(mode==='methods'){

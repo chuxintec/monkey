@@ -16,6 +16,147 @@ def ident(name):
 
 
 class CodeDraftRenderTests(unittest.TestCase):
+    def test_collection_constructors_retain_values_length_and_set_receiver(self):
+        raw = b"new Array(3); new Array('x'); new Set([this.id]); new Map([[\"k\", this.id]]);"
+        def new(name, args):
+            return n("NewExpression", callee=ident(name), arguments=args)
+        array_length = render_method({"name": "length", "sourceBytes": {"start": 0, "end": len(raw)}},
+            n("FunctionExpression", params=[], body=n("BlockStatement", body=[n("ReturnStatement", argument=new("Array", [n("Literal", value=3)]))])), raw)
+        self.assertIn("__draftArrayArg = 3", array_length["source"])
+        self.assertIn("Enumerable.Repeat<dynamic>(null, (int)__draftArrayLength)", array_length["source"])
+        self.assertIn("System.Linq", array_length["usings"])
+        array_value = render_method({"name": "value", "sourceBytes": {"start": 0, "end": len(raw)}},
+            n("FunctionExpression", params=[], body=n("BlockStatement", body=[n("ReturnStatement", argument=new("Array", [n("Literal", value="x")]))])), raw)
+        self.assertIn('new System.Collections.Generic.List<dynamic> { __draftArrayArg }', array_value["source"])
+        set_value = render_method({"name": "set", "sourceBytes": {"start": 0, "end": len(raw)}},
+            n("FunctionExpression", params=[], body=n("BlockStatement", body=[n("ReturnStatement", argument=new("Set", [n("ArrayExpression", elements=[n("MemberExpression", computed=False, object=n("ThisExpression"), property=ident("id"))])]))])), raw)
+        self.assertIn("(this).id", set_value["source"])
+        self.assertIn("__draftSet.Add(__draftSetItem)", set_value["source"])
+        map_value = render_method({"name": "map", "sourceBytes": {"start": 0, "end": len(raw)}},
+            n("FunctionExpression", params=[], body=n("BlockStatement", body=[n("ReturnStatement", argument=new("Map", [n("ArrayExpression", elements=[n("ArrayExpression", elements=[n("Literal", value="k"), n("MemberExpression", computed=False, object=n("ThisExpression"), property=ident("id"))])])]))])), raw)
+        self.assertIn('__draftMap[__draftPair[0]] = __draftPair[1]', map_value["source"])
+        self.assertIn("(this).id", map_value["source"])
+
+    def test_unknown_collection_shape_evaluates_every_argument_before_throw(self):
+        raw = b"new Map(first(), second());"
+        call = lambda name: n("CallExpression", callee=ident(name), arguments=[])
+        expr = n("NewExpression", callee=ident("Map"), arguments=[call("first"), call("second")])
+        result = render_method({"name": "unknownMap", "sourceBytes": {"start": 0, "end": len(raw)}},
+            n("FunctionExpression", params=[], body=n("BlockStatement", body=[n("ReturnStatement", argument=expr)])), raw)
+        code = result["source"]
+        self.assertLess(code.index("__draftArg0 = first()"), code.index("__draftArg1 = second()"))
+        self.assertLess(code.index("__draftArg1 = second()"), code.index("Unsupported Map constructor shape"))
+        self.assertIn("unknown_collection_constructor_shape", {d["code"] for d in result["diagnostics"]})
+
+    def test_injected_identifier_and_member_targets_preserve_receiver_and_report_unknown(self):
+        raw = b"return source.old + Old.staticField + source['old'] + source.unknown;"
+        source_member = n("MemberExpression", computed=False, object=ident("source"), property=ident("old"),
+                          _draftMember={"name": "newName", "ownerClass": "Thing", "receiver": "source"})
+        static_member = n("MemberExpression", computed=False, object=ident("Old"), property=ident("staticField"),
+                          _draftMember={"name": "Mapped", "ownerClass": "Domain.Thing", "receiver": "static_owner"})
+        computed_member = n("MemberExpression", computed=True, object=ident("source"), property=n("Literal", value="old"),
+                            _draftMember={"name": "newName", "ownerClass": "Thing", "receiver": "source"})
+        unresolved = n("MemberExpression", computed=False, object=ident("source"), property=ident("unknown"),
+                       _draftUnresolvedMember={"reason": "no owner binding"})
+        ast = n("FunctionExpression", params=[n("Identifier", name="oldParam", bindingId="local-1", _draftIdentifierTarget="renamed")], body=n("BlockStatement", body=[
+            n("ReturnStatement", argument=n("BinaryExpression", operator="+", left=source_member,
+                right=n("BinaryExpression", operator="+", left=static_member, right=n("BinaryExpression", operator="+", left=computed_member, right=unresolved))))]))
+        result = render_method({"name": "mapMembers", "static": True, "sourceBytes": {"start": 0, "end": len(raw)}}, ast, raw)
+        code = result["source"]
+        self.assertIn("(source).newName", code)
+        self.assertIn("Domain.Thing.Mapped", code)
+        self.assertIn("(source).unknown", code)
+        self.assertIn("unresolved_member_mapping", {d["code"] for d in result["diagnostics"]})
+        self.assertNotIn("static_this_approximation", {d["code"] for d in result["diagnostics"]})
+        self.assertIn("dynamic renamed", code)
+
+    def test_nested_function_marker_and_capture_parameters_are_reported(self):
+        raw = b"function outer(value){ return x => value + x; }"
+        lambda_ast = n("ArrowFunctionExpression", draftFunctionId="function@42", params=[ident("x")],
+                       body=n("BinaryExpression", operator="+", left=n("Identifier", name="value", bindingId="capture-1", _draftIdentifierTarget="capturedValue"), right=ident("x")))
+        ast = n("FunctionExpression", params=[ident("value")], body=n("BlockStatement", body=[n("ReturnStatement", argument=lambda_ast)]))
+        result = render_method({"name": "outer", "sourceBytes": {"start": 0, "end": len(raw)},
+                               "captureParameters": [{"bindingId": "b1", "targetName": "capturedValue"}, {"bindingId": "b2", "targetName": "capturedValue"}]}, ast, raw)
+        self.assertIn("/* source-function:function@42 */", result["source"])
+        self.assertIn("dynamic capturedValue", result["source"])
+        self.assertEqual(["function@42"], [row["id"] for row in result["embeddedFunctions"]])
+        self.assertNotIn("method@", str(result["embeddedFunctions"]))
+
+    def test_function_declaration_marker_and_shadowed_collection_name(self):
+        raw = b"function outer(){ function inner(){ return 1; } return Array(); }"
+        inner = n("FunctionDeclaration", draftFunctionId="method@91", id=ident("inner"), params=[],
+                  body=n("BlockStatement", body=[n("ReturnStatement", argument=n("Literal", value=1))]))
+        shadowed = n("NewExpression", callee=n("Identifier", name="Array", bindingId="local-array"), arguments=[])
+        ast = n("FunctionExpression", params=[], body=n("BlockStatement", body=[
+            inner, n("ReturnStatement", argument=shadowed)
+        ]))
+        result = render_method({"name": "outer", "sourceBytes": {"start": 0, "end": len(raw)}}, ast, raw)
+        self.assertIn("/* source-function:method@91 */", result["source"])
+        self.assertIn("new Array()", result["source"])
+        self.assertEqual(["method@91"], [row["id"] for row in result["embeddedFunctions"]])
+
+    def test_map_and_set_null_sources_evaluate_once_and_return_empty_collections(self):
+        raw = b"new Map(getSource()); new Set(getSource());"
+        source_call = lambda: n("CallExpression", callee=ident("getSource"), arguments=[])
+        map_expr = n("NewExpression", callee=ident("Map"), arguments=[source_call()])
+        set_expr = n("NewExpression", callee=ident("Set"), arguments=[source_call()])
+        ast = n("FunctionExpression", params=[], body=n("BlockStatement", body=[
+            n("ExpressionStatement", expression=map_expr), n("ReturnStatement", argument=set_expr)
+        ]))
+        result = render_method({"name": "nullCollections", "sourceBytes": {"start": 0, "end": len(raw)}}, ast, raw)
+        code = result["source"]
+        self.assertIn("__draftMapSource = getSource()", code)
+        self.assertIn("if (__draftMapSource == null) return __draftMap", code)
+        self.assertIn("__draftSetSource = getSource()", code)
+        self.assertIn("if (__draftSetSource == null) return __draftSet", code)
+        self.assertEqual(2, code.count("getSource()"))
+
+    def test_ambiguous_global_names_are_not_lowered_as_builtins(self):
+        raw = b"undefined; NaN; Infinity; new Array(2); Math.max(1,2); cc.log('x');"
+        def ambiguous(name):
+            return n("Identifier", name=name, bindingAmbiguous=True)
+        math_max = n("CallExpression", callee=n("MemberExpression", computed=False, object=ambiguous("Math"), property=ident("max")),
+                     arguments=[n("Literal", value=1), n("Literal", value=2)])
+        cc_log = n("CallExpression", callee=n("MemberExpression", computed=False, object=ambiguous("cc"), property=ident("log")),
+                   arguments=[n("Literal", value="x")])
+        ast = n("FunctionExpression", params=[], body=n("BlockStatement", body=[
+            n("ExpressionStatement", expression=ambiguous("undefined")),
+            n("ExpressionStatement", expression=ambiguous("NaN")),
+            n("ExpressionStatement", expression=ambiguous("Infinity")),
+            n("ExpressionStatement", expression=n("NewExpression", callee=ambiguous("Array"), arguments=[n("Literal", value=2)])),
+            n("ExpressionStatement", expression=math_max), n("ExpressionStatement", expression=cc_log),
+        ]))
+        result = render_method({"name": "ambiguous", "sourceBytes": {"start": 0, "end": len(raw)}}, ast, raw)
+        code = result["source"]
+        self.assertIn("_ = undefined;", code)
+        self.assertIn("_ = NaN;", code)
+        self.assertIn("_ = Infinity;", code)
+        self.assertIn("new Array(2)", code)
+        self.assertIn("(Math).max(1, 2)", code)
+        self.assertIn("(cc).log(\"x\")", code)
+        self.assertNotIn("double.NaN", code)
+        self.assertNotIn("UnityEngine.Debug.Log", code)
+
+    def test_static_unknown_member_uses_known_owner_and_keeps_unknown_diagnostic(self):
+        raw = b"return this.allRecipes;"
+        receiver = n("ThisExpression", _draftStaticThisOwner="Game.Domain.RecipeCatalog")
+        member = n("MemberExpression", computed=False, object=receiver, property=ident("allRecipes"),
+                   _draftUnresolvedMember={"reason": "member is not represented in the target map"})
+        ast = n("FunctionExpression", params=[], body=n("BlockStatement", body=[n("ReturnStatement", argument=member)]))
+        result = render_method({"name": "recipes", "static": True, "sourceBytes": {"start": 0, "end": len(raw)}}, ast, raw)
+        self.assertIn("return Game.Domain.RecipeCatalog.allRecipes;", result["source"])
+        codes = {diagnostic["code"] for diagnostic in result["diagnostics"]}
+        self.assertIn("unresolved_member_mapping", codes)
+        self.assertNotIn("static_this_approximation", codes)
+
+    def test_dynamic_this_without_static_owner_annotation_is_unchanged(self):
+        raw = b"return this;"
+        ast = n("FunctionExpression", params=[], body=n("BlockStatement", body=[
+            n("ReturnStatement", argument=n("ThisExpression"))
+        ]))
+        result = render_method({"name": "dynamicThis", "sourceBytes": {"start": 0, "end": len(raw)}}, ast, raw)
+        self.assertIn("return this;", result["source"])
+
     def test_control_flow_calls_collections_math_string_and_callback_render_as_code(self):
         source = b'function update(x){ /* body */ }'
         ast = n("FunctionExpression", **{"async": False}, params=[ident("x")], body=n("BlockStatement", body=[

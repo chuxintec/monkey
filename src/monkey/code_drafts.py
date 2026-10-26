@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections import Counter
 from pathlib import Path
 
 from .code_graph import draft_records
@@ -34,6 +35,15 @@ def _module_id(path):
     return "Draft_" + hashlib.sha256(path.encode("utf-8")).hexdigest()[:28]
 
 
+def _embedded_owner_precedence(owner):
+    """Prefer the most local source span, with stable ties for incomplete spans."""
+    span = owner.get("sourceBytes") or {}
+    start, end = span.get("start"), span.get("end")
+    if isinstance(start, int) and isinstance(end, int) and 0 <= start <= end:
+        return (end - start, start, owner.get("targetPath", ""), owner.get("targetMethod", ""))
+    return (2**63 - 1, 2**63 - 1, owner.get("targetPath", ""), owner.get("targetMethod", ""))
+
+
 def _span_bytes(row, raw):
     span = row.get("functionBytes") or row.get("sourceBytes") or {}
     start, end = span.get("start"), span.get("end")
@@ -52,17 +62,22 @@ def _rename_field_declaration(source, old_name, new_name):
     return updated + separator + suffix if count else source
 
 
-def _fallback(method, source_raw, class_name, target_name, diagnostic):
+def _fallback(method, source_raw, class_name, target_name, diagnostic, capture_parameters=None):
     span = method.get("functionBytes") or method.get("sourceBytes") or {}
     start, end = span.get("start"), span.get("end")
     if type(start) is int and type(end) is int and 0 <= start < end <= len(source_raw):
         original = source_raw[start:end].decode("utf-8", errors="replace")
     else:
         original = "<source function span unavailable>"
-    name = _identifier(target_name or method.get("name"), "DraftMethod")
+    candidate_name = str(target_name or method.get("name") or "DraftMethod")
+    name = (candidate_name if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", candidate_name)
+            and candidate_name not in _KEYWORDS else _identifier(candidate_name, "DraftMethod"))
     if name.casefold() == class_name.casefold(): name += "_DraftMethod"
     parameters = method.get("parameters", [])
-    args = ", ".join(f"dynamic arg{i}" for i, _ in enumerate(parameters if isinstance(parameters, list) else []))
+    arguments = [f"dynamic arg{i}" for i, _ in enumerate(parameters if isinstance(parameters, list) else [])]
+    arguments.extend("dynamic " + row["targetName"] for row in (capture_parameters or [])
+                     if isinstance(row, dict) and isinstance(row.get("targetName"), str))
+    args = ", ".join(arguments)
     comments = "".join("        // " + line for line in original.splitlines(keepends=True))
     if original and not original.endswith(("\n", "\r")): comments += "\n"
     body = (f"    public dynamic {name}({args})\n    {{\n"
@@ -137,10 +152,54 @@ def _dependencies(function_rows, class_records, class_by_binding, bucket_module_
     return {mid: sorted(values) for mid, values in dependencies.items()}
 
 
+def _capture_parameters(row, ast, symbol_planner=None):
+    if symbol_planner:
+        method = dict(row.get("method", {}))
+        if row.get("captures") and not method.get("captures"):
+            method["captures"] = row["captures"]
+        return symbol_planner.capture_parameters(method)
+    raw_captures = row.get("captures") or row.get("method", {}).get("captures") or []
+    if not isinstance(raw_captures, list):
+        return []
+    names = {}
+    stack = [ast]
+    while stack:
+        node = stack.pop()
+        if isinstance(node, dict):
+            binding = node.get("bindingId")
+            name = node.get("name")
+            if isinstance(binding, str) and isinstance(name, str):
+                names.setdefault(binding, name)
+            stack.extend(value for value in node.values() if isinstance(value, (dict, list)))
+        elif isinstance(node, list):
+            stack.extend(value for value in node if isinstance(value, (dict, list)))
+    result, used = [], set()
+    for capture in raw_captures:
+        if isinstance(capture, dict):
+            binding = capture.get("bindingId") or capture.get("id")
+            source_name = capture.get("name") or capture.get("sourceName")
+        else:
+            binding, source_name = capture, None
+        if not isinstance(binding, str):
+            continue
+        source_name = source_name if isinstance(source_name, str) else names.get(binding)
+        target = _identifier(source_name or ("Capture_" + sha(binding.encode())[:8]), "DraftCapture")
+        base = target
+        index = 2
+        while target.casefold() in used:
+            target = base + "_" + str(index)
+            index += 1
+        used.add(target.casefold())
+        result.append({"bindingId": binding, "targetName": target})
+    return result
+
+
 def _signature():
     root = Path(__file__).parent
     parts = ("code_drafts.py", "code_graph.py", "code-graph.cjs", "code_draft_render.py", "code_regeneration.py",
              "io.py", "layout/casing.py", "sources/source-offsets.cjs", "sources/acorn.cjs")
+    if (root / "code_draft_symbols.py").is_file():
+        parts += ("code_draft_symbols.py",)
     return sha(encoded({name: sha(read(root / name)) for name in parts}))
 
 
@@ -167,6 +226,9 @@ def prepare(source, expected_source_sha256=None):
     grouped, used_names, field_name_sources = {}, {}, {}
     namespace = "Monkey.Generated.Drafts.Source" + digest
     indexed_emitted = auxiliary_emitted = 0
+    auxiliary_extracted = auxiliary_embedded = auxiliary_with_captures = 0
+    symbol_planner = None
+    inline_registry = {}
 
     def add_bucket(bucket):
         if bucket in buckets:
@@ -196,6 +258,13 @@ def prepare(source, expected_source_sha256=None):
             if row.get("sourceExecuted") is not False:
                 fail("CODE_DRAFT_SOURCE_EXECUTION", source.name, "Static graph reported source execution")
             classes, class_by_binding, class_names = _class_records(row)
+            if "draftDeclarations" in row:
+                try:
+                    from .code_draft_symbols import DraftSymbols
+                except ImportError as exc:
+                    fail("CODE_DRAFT_SYMBOL_PLANNER_MISSING", source.name,
+                         "Header contains draftDeclarations but code_draft_symbols is unavailable")
+                symbol_planner = DraftSymbols(row, class_names, _identifier)
             for class_id in classes:
                 add_bucket(class_id)
             continue
@@ -213,12 +282,17 @@ def prepare(source, expected_source_sha256=None):
                 add_bucket(bucket)
                 context = field.get("initializationContext", "program")
                 is_initializer = context in ("program", "class_factory", "module")
+                planned_field_name = (symbol_planner.target_name(field, kind="field") if symbol_planner
+                                      else _identifier(field.get("name"), "DraftField"))
                 rendered_field = None
                 if is_initializer:
                     try:
                         from .code_draft_render import render_field
-                        rendered_field = render_field(dict(field, targetName=_identifier(field.get("name"), "DraftField")),
-                                                      row.get("ast"), raw, class_name=bucket_names[bucket])
+                        field_ast = row.get("ast")
+                        if symbol_planner and isinstance(field_ast, dict):
+                            field_ast = symbol_planner.annotate(field_ast, field, captures=None)
+                        rendered_field = render_field(dict(field, targetName=planned_field_name),
+                                                      field_ast, raw, class_name=bucket_names[bucket])
                         if not isinstance(rendered_field, dict) or not isinstance(rendered_field.get("source"), str):
                             raise ValueError("Renderer returned an incomplete field draft")
                         field_status = "drafted"
@@ -237,9 +311,9 @@ def prepare(source, expected_source_sha256=None):
                     if row.get("ast") is None or any(item.get("code") == "field_initializer_missing" for item in field_diags):
                         field_status = "fallback_initializer_in_source"
                     grouped[bucket]["usings"].update(item for item in rendered_field.get("usings", []) if isinstance(item, str))
-                    emitted_name = rendered_field.get("emittedName", _identifier(field.get("name"), "DraftField"))
+                    emitted_name = rendered_field.get("emittedName", planned_field_name)
                 else:
-                    emitted_name = _identifier(field.get("name"), "DraftField")
+                    emitted_name = planned_field_name
                     field_status = ("runtime_write_preserved_in_method" if context == "runtime_write"
                                     else "unknown_initialization_context")
                     diagnostic_code = ("runtime_field_write_not_promoted" if context == "runtime_write"
@@ -292,7 +366,9 @@ def prepare(source, expected_source_sha256=None):
                     "sourceName": source_name_key, "source": field_source if is_initializer else None,
                     "status": field_status})
                 field_reports.append({"fieldId": field.get("id"), "sourceName": field.get("name"),
-                    "classId": field.get("classId"), "ownerBindingId": field.get("ownerBindingId"),
+                    "classId": field.get("classId"), "ownerAlias": field.get("ownerAlias"),
+                    "ownerBindingId": field.get("ownerBindingId"), "static": field.get("static"),
+                    "access": field.get("access"),
                     "sourceBytes": field.get("sourceBytes"), "sourceSha256": field.get("sourceSha256"),
                     "targetPath": bucket_paths[bucket], "targetClass": bucket_names[bucket],
                     "targetMember": emitted_name, "initializationContext": context,
@@ -304,7 +380,9 @@ def prepare(source, expected_source_sha256=None):
                 unresolved_diag = {"code": "unresolved_field_owner", "fieldId": field.get("id"),
                     "message": "Field owner is not a class or known owner binding; retained in original source only."}
                 field_reports.append({"fieldId": field.get("id"), "sourceName": field.get("name"),
-                    "classId": field.get("classId"), "ownerBindingId": field.get("ownerBindingId"),
+                    "classId": field.get("classId"), "ownerAlias": field.get("ownerAlias"),
+                    "ownerBindingId": field.get("ownerBindingId"), "static": field.get("static"),
+                    "access": field.get("access"), "initializationContext": field.get("initializationContext"),
                     "sourceBytes": field.get("sourceBytes"), "sourceSha256": field.get("sourceSha256"),
                     "status": "unresolved_owner", "targetPath": None, "diagnostics": [unresolved_diag],
                     "sourceExecuted": False, "draftOnly": True})
@@ -315,6 +393,29 @@ def prepare(source, expected_source_sha256=None):
         if header is None:
             fail("CODE_DRAFT_INCOMPLETE", source.name, "Function row appeared before source header")
         method = row.get("method", {})
+        method_id = method.get("id")
+        parent_function_id = method.get("parentFunctionId", row.get("parentFunctionId"))
+        raw_captures = row.get("captures", method.get("captures", []))
+        compact = {key: value for key, value in row.items() if key != "ast"}
+        function_meta.append(compact)
+        if row.get("kind") == "indexed_method":
+            indexed_emitted += 1
+        else:
+            auxiliary_emitted += 1
+        if row.get("kind") != "indexed_method" and method_id in inline_registry:
+            owner = inline_registry[method_id]
+            function_reports.append({"kind": row.get("kind"), "methodId": method_id, "sourceName": method.get("name"),
+                "classId": method.get("classId"), "ownerBindingId": method.get("ownerBindingId"),
+                "ownerAlias": method.get("ownerAlias"), "parentFunctionId": parent_function_id,
+                "sourceBytes": method.get("sourceBytes"), "functionBytes": method.get("functionBytes"),
+                "sourceSha256": method.get("sourceSha256"), "parameters": method.get("parameters", []),
+                "calls": method.get("calls", []), "capturedBindings": raw_captures,
+                "targetPath": owner["targetPath"], "targetClass": owner["targetClass"],
+                "targetMethod": owner["targetMethod"], "targetLocationMarker": owner["marker"],
+                "status": "embedded_in_owner", "approximateTypes": [], "members": [],
+                "diagnostics": [], "sourceExecuted": False, "draftOnly": True})
+            auxiliary_embedded += 1
+            continue
         bucket = _row_class_id(method, classes, class_by_binding)
         if not bucket:
             owner = method.get("ownerBindingId")
@@ -322,55 +423,96 @@ def prepare(source, expected_source_sha256=None):
         add_bucket(bucket)
         class_name = bucket_names[bucket]
         source_name = method.get("name") if isinstance(method.get("name"), str) else "Function"
-        target_name = _identifier(source_name, "DraftMethod")
-        if target_name.casefold() in used_names[bucket]:
+        target_name = (symbol_planner.target_name(method, kind="method") if symbol_planner
+                       else _identifier(source_name, "DraftMethod"))
+        if not symbol_planner and target_name.casefold() in used_names[bucket]:
             target_name += "_" + sha(str(method.get("id", "")).encode())[:8]
             suffix, base = 2, target_name
             while target_name.casefold() in used_names[bucket]:
                 target_name = base + "_" + str(suffix)
                 suffix += 1
         used_names[bucket].add(target_name.casefold())
+        ast = row.get("ast")
+        capture_parameters = (_capture_parameters(row, ast, symbol_planner)
+                              if parent_function_id and row.get("kind") != "indexed_method" else [])
+        method_input = dict(method, targetName=target_name, captureParameters=capture_parameters)
+        if symbol_planner and isinstance(ast, dict):
+            ast = symbol_planner.annotate(ast, method_input, captures=capture_parameters)
         render_diagnostics = []
-        if row.get("ast") is None:
+        if ast is None:
             diagnostic = {"code": "ast_fragment_unavailable", "message": row.get("diagnostic", "AST fragment unavailable; retained exact function source")}
-            rendered = _fallback(method, raw, class_name, target_name, diagnostic)
+            rendered = _fallback(method, raw, class_name, target_name, diagnostic, capture_parameters)
             status = "fallback_original_source_excerpt"
         else:
             try:
                 from .code_draft_render import render_method
-                rendered = render_method(dict(method, targetName=target_name), row["ast"], raw, class_name=class_name)
+                rendered = render_method(method_input, ast, raw, class_name=class_name)
                 if (not isinstance(rendered, dict) or not isinstance(rendered.get("source"), str)
                         or rendered.get("sourceExecuted") is not False or rendered.get("draftOnly") is not True):
                     raise ValueError("Renderer returned an incomplete/non-draft result")
-                status = "drafted"
+                seen_embedded_ids = set()
+                for embedded in rendered.get("embeddedFunctions", []):
+                    if not isinstance(embedded, dict):
+                        raise ValueError("Renderer returned an invalid embedded-function record")
+                    embedded_id = embedded.get("id") or embedded.get("functionId")
+                    marker = embedded.get("marker")
+                    if (not isinstance(embedded_id, str) or not embedded_id
+                            or not isinstance(marker, str) or not marker
+                            or marker not in rendered["source"]):
+                        raise ValueError("Embedded-function marker is missing from the owning method source")
+                    if embedded_id in seen_embedded_ids:
+                        raise ValueError("Renderer reported one embedded function more than once in a method")
+                    seen_embedded_ids.add(embedded_id)
+                status = "extracted_with_capture_parameters" if capture_parameters else "drafted"
             except Exception as exc:
                 diagnostic = {"code": "renderer_exception", "message": "Renderer failed with " + type(exc).__name__ + "; preserved complete original function fragment"}
-                rendered = _fallback(method, raw, class_name, target_name, diagnostic)
+                rendered = _fallback(method, raw, class_name, target_name, diagnostic, capture_parameters)
                 status = "fallback_original_source_excerpt"
-        if row.get("kind") == "indexed_method":
-            indexed_emitted += 1
-        else:
-            auxiliary_emitted += 1
+        if row.get("kind") != "indexed_method":
+            auxiliary_extracted += 1
+            if capture_parameters:
+                auxiliary_with_captures += 1
+        target_method = rendered.get("emittedName", target_name)
+        for embedded in rendered.get("embeddedFunctions", []):
+            if not isinstance(embedded, dict):
+                continue
+            embedded_id = embedded.get("id") or embedded.get("functionId")
+            if isinstance(embedded_id, str):
+                candidate = {"targetPath": bucket_paths[bucket], "targetClass": class_name,
+                    "targetMethod": target_method, "marker": embedded["marker"],
+                    "sourceBytes": method.get("sourceBytes")}
+                current = inline_registry.get(embedded_id)
+                if current is None or _embedded_owner_precedence(candidate) < _embedded_owner_precedence(current):
+                    inline_registry[embedded_id] = candidate
+                    # The auxiliary row can be streamed before a narrower owner
+                    # is encountered. Keep its published mapping canonical too.
+                    for report_row in function_reports:
+                        if report_row.get("status") == "embedded_in_owner" and report_row.get("methodId") == embedded_id:
+                            report_row.update({"targetPath": candidate["targetPath"],
+                                "targetClass": candidate["targetClass"], "targetMethod": candidate["targetMethod"],
+                                "targetLocationMarker": candidate["marker"]})
         text = "\n".join("    " + line if line else "" for line in rendered["source"].splitlines())
         span = method.get("sourceBytes") or {}
         grouped[bucket]["methods"].append((span.get("start", 0), method.get("id", ""), text))
         grouped[bucket]["usings"].update(item for item in rendered.get("usings", []) if isinstance(item, str))
         rendered_diagnostics = [dict(item, methodId=method.get("id"), kind=row.get("kind"))
                                 for item in rendered.get("diagnostics", []) if isinstance(item, dict)]
+        if capture_parameters:
+            rendered_diagnostics.append({"code": "capture_parameter_callsite_unwired", "methodId": method_id,
+                "message": "Captured locals are explicit dynamic parameters; source call sites were not rewritten."})
         function_reports.append({"kind": row.get("kind"), "methodId": method.get("id"), "sourceName": source_name,
             "classId": method.get("classId"), "ownerBindingId": method.get("ownerBindingId"),
             "ownerAlias": method.get("ownerAlias"), "sourceBytes": method.get("sourceBytes"),
             "functionBytes": method.get("functionBytes"), "sourceSha256": method.get("sourceSha256"),
             "parameters": method.get("parameters", []), "static": method.get("static"),
             "access": method.get("access"), "async": method.get("async", False),
-            "calls": method.get("calls", []),
+            "calls": method.get("calls", []), "parentFunctionId": parent_function_id,
+            "capturedBindings": raw_captures, "captureParameters": capture_parameters,
+            "captureCallSitesRewritten": False if capture_parameters else None,
             "targetPath": bucket_paths[bucket], "targetClass": class_name,
-            "targetMethod": rendered.get("emittedName", target_name), "status": status,
+            "targetMethod": target_method, "targetLocationMarker": None, "status": status,
             "approximateTypes": rendered.get("approximateTypes", []), "members": rendered.get("members", []),
             "diagnostics": rendered_diagnostics, "sourceExecuted": False, "draftOnly": True})
-        # Strip the AST immediately; only compact graph facts are needed later.
-        compact = {key: value for key, value in row.items() if key != "ast"}
-        function_meta.append(compact)
         grouped[bucket]["records"].append(compact)
 
     if header is None or footer is None:
@@ -378,6 +520,59 @@ def prepare(source, expected_source_sha256=None):
     if footer.get("sourceExecuted") is not False:
         fail("CODE_DRAFT_SOURCE_EXECUTION", source.name, "Static graph reported source execution")
 
+    if "draftDeclarations" in header:
+        declarations = header.get("draftDeclarations")
+        if not isinstance(declarations, list):
+            fail("CODE_DRAFT_DECLARATIONS", source.name, "draftDeclarations must be an array")
+        declared_by_id = {}
+        for declaration in declarations:
+            if not isinstance(declaration, dict) or not isinstance(declaration.get("id"), str):
+                fail("CODE_DRAFT_DECLARATIONS", source.name, "Each declaration needs a source function id")
+            if declaration["id"] in declared_by_id:
+                fail("CODE_DRAFT_DECLARATIONS", declaration["id"], "Duplicate source function declaration id")
+            declared_by_id[declaration["id"]] = declaration
+        streamed_by_id = {row["method"].get("id"): row for row in function_meta}
+        if len(streamed_by_id) != len(function_meta) or set(streamed_by_id) != set(declared_by_id):
+            fail("CODE_DRAFT_DECLARATIONS", source.name, "Header declaration inventory differs from streamed function rows")
+        for function_id, declaration in declared_by_id.items():
+            streamed = streamed_by_id[function_id]
+            method = streamed["method"]
+            for key in ("name", "classId", "ownerAlias", "ownerBindingId", "static", "sourceBytes",
+                        "sourceSha256", "functionBytes", "parentFunctionId"):
+                if declaration.get(key) != method.get(key):
+                    fail("CODE_DRAFT_DECLARATIONS", function_id, "Header declaration differs from streamed method field: " + key)
+            if declaration.get("kind") != streamed.get("kind"):
+                fail("CODE_DRAFT_DECLARATIONS", function_id, "Header declaration kind differs from streamed row")
+    if "draftFields" in header:
+        declarations = header.get("draftFields")
+        if not isinstance(declarations, list):
+            fail("CODE_DRAFT_FIELDS", source.name, "draftFields must be an array")
+        declared_by_id = {}
+        for declaration in declarations:
+            if not isinstance(declaration, dict) or not isinstance(declaration.get("id"), str):
+                fail("CODE_DRAFT_FIELDS", source.name, "Each field declaration needs a source field id")
+            if declaration["id"] in declared_by_id:
+                fail("CODE_DRAFT_FIELDS", declaration["id"], "Duplicate source field declaration id")
+            declared_by_id[declaration["id"]] = declaration
+        # Field metadata is retained in the detailed field reports independently
+        # of whether its owner was resolvable or its initializer was renderable.
+        streamed_by_id = {row.get("fieldId"): row for row in field_reports}
+        if len(streamed_by_id) != len(field_reports) or set(streamed_by_id) != set(declared_by_id):
+            fail("CODE_DRAFT_FIELDS", source.name, "Header field inventory differs from streamed field rows")
+        for field_id, declaration in declared_by_id.items():
+            streamed = streamed_by_id[field_id]
+            for key in ("name", "classId", "ownerAlias", "ownerBindingId", "static", "initializationContext",
+                        "sourceBytes", "sourceSha256"):
+                report_key = "sourceName" if key == "name" else key
+                declaration_value = declaration.get(key, "program" if key == "initializationContext" else None)
+                if declaration_value != streamed.get(report_key):
+                    fail("CODE_DRAFT_FIELDS", field_id, "Header field declaration differs from streamed field field: " + key)
+
+    # Count embedded mappings once by owner path; doing this inside each class
+    # report would scan all function rows for every class (O(classes * functions)).
+    embedded_counts_by_path = Counter(
+        row["targetPath"] for row in function_reports
+        if row.get("status") == "embedded_in_owner" and isinstance(row.get("targetPath"), str))
     class_reports = []
     field_declaration_count = 0
     for bucket in sorted(buckets):
@@ -465,20 +660,22 @@ def prepare(source, expected_source_sha256=None):
             "sourceBytes": class_row.get("sourceBytes") if class_row else None,
             "sourceSha256": class_row.get("sourceSha256") if class_row else None,
             "indexedMethodCount": indexed_count, "auxiliaryFunctionCount": aux_count,
+            "embeddedFunctionCount": embedded_counts_by_path.get(path, 0),
             "hasNoIndexedMethods": indexed_count == 0,
             "registrationNeighborIsInferenceOnly": bool(class_row and class_row.get("precedingRegistration"))})
 
     dependencies = _dependencies(function_meta, classes, class_by_binding, bucket_module_ids)
     requests, owners, code_module_ids = [], {}, []
-    report_by_id = {item.get("methodId"): item for item in function_reports}
     for bucket in sorted(buckets):
         path, module_id = bucket_paths[bucket], bucket_module_ids[bucket]
         records = grouped[bucket]["records"]
-        mappings = [{"sourceMethodId": row["method"].get("id"), "sourceName": row["method"].get("name"),
-                    "sourceSha256": row["method"].get("sourceSha256"), "sourceBytes": row["method"].get("sourceBytes"),
-                    "kind": row.get("kind"), "targetClass": bucket_names[bucket], "targetPath": path,
-                    "targetMethod": report_by_id.get(row["method"].get("id"), {}).get("targetMethod")}
-                   for row in records]
+        mappings = [{"sourceMethodId": item.get("methodId"), "sourceName": item.get("sourceName"),
+                    "sourceSha256": item.get("sourceSha256"), "sourceBytes": item.get("sourceBytes"),
+                    "kind": item.get("kind"), "targetClass": item.get("targetClass"),
+                    "targetPath": item.get("targetPath"), "targetMethod": item.get("targetMethod"),
+                    "targetLocationMarker": item.get("targetLocationMarker"), "status": item.get("status"),
+                    "capturedBindings": item.get("capturedBindings", [])}
+                   for item in function_reports if item.get("targetPath") == path]
         class_row = classes.get(bucket)
         fingerprint = sha(encoded({"sourceSha256": source_sha, "classId": class_row.get("id") if class_row else None,
             "classSha256": class_row.get("sourceSha256") if class_row else None,
@@ -490,25 +687,58 @@ def prepare(source, expected_source_sha256=None):
         owners[path] = module_id
         code_module_ids.append(module_id)
 
+    # An embedded mapping is valid only if its exact marker survived into its
+    # owner's final generated file. This catches renderer/writer drift before
+    # the report can claim the nested source has an output location.
+    for row in function_reports:
+        if row.get("status") != "embedded_in_owner":
+            continue
+        target_path, marker = row.get("targetPath"), row.get("targetLocationMarker")
+        target_bytes = files.get(target_path) if isinstance(target_path, str) else None
+        if not isinstance(target_bytes, bytes) or not isinstance(marker, str) or not marker:
+            fail("CODE_DRAFT_EMBEDDED_MARKER", row.get("methodId", "unknown"),
+                 "Embedded function mapping has no owner output or exact marker")
+        if marker.encode("utf-8") not in target_bytes:
+            fail("CODE_DRAFT_EMBEDDED_MARKER", row.get("methodId", "unknown"),
+                 "Embedded function marker is absent from the final owner output")
+
+    indexed_mapping_count = sum(row.get("kind") == "indexed_method" for row in function_reports)
+    embedded_mapping_count = sum(row.get("status") == "embedded_in_owner" for row in function_reports)
+    if indexed_mapping_count != indexed_emitted:
+        fail("CODE_DRAFT_INDEXED_METHOD_COVERAGE", source.name,
+             "Indexed source function rows do not match indexed mapping records")
+    if embedded_mapping_count != auxiliary_embedded:
+        fail("CODE_DRAFT_EMBEDDED_COVERAGE", source.name,
+             "Embedded auxiliary count differs from embedded mapping records")
+
     coverage = {"sourceClasses": len(classes), "functionsEmitted": footer.get("functionsEmitted", len(function_meta)),
         "classFactoriesFlattened": footer.get("classFactoriesFlattened", 0),
         "moduleContainersFlattened": footer.get("moduleContainersFlattened", 0),
         "graphFooterCounts": {key: value for key, value in footer.items() if key not in ("record", "sourceExecuted")},
         "indexedMethodsInSource": footer.get("indexedMethods", header.get("summary", {}).get("methods", 0)),
+        "functionRecordsInGraph": footer.get("functionsEmitted", len(function_meta)),
+        "functionsEmittedMeaning": "graph function rows; each row has one source mapping, while embedded auxiliary rows point to their owner instead of adding a standalone method",
         "indexedMethodFunctionsEmitted": indexed_emitted, "auxiliaryFunctionsEmitted": auxiliary_emitted,
+        "functionsMapped": len(function_reports), "auxiliaryFunctionsExtracted": auxiliary_extracted,
+        "auxiliaryFunctionsEmbedded": auxiliary_embedded,
+        "auxiliaryFunctionsExtractedWithCaptures": auxiliary_with_captures,
         "classFiles": len(class_reports), "fieldRecords": len(field_reports),
         "fieldDeclarations": field_declaration_count,
         "fieldInitializers": sum(row.get("status") in ("drafted", "initialized_in_static_constructor", "initialized_in_constructor") for row in field_reports),
         "runtimeFieldWrites": sum(row.get("status") == "runtime_write_preserved_in_method" for row in field_reports),
         "fieldsWithInitializers": sum(row.get("status") in ("drafted", "initialized_in_static_constructor", "initialized_in_constructor") for row in field_reports),
-        "methodsWithBodies": sum(row["status"] == "drafted" for row in function_reports),
-        "fallbackFunctionsWithOriginalExcerpt": sum(row["status"] != "drafted" for row in function_reports), "methodsNotEmitted": 0}
+        "methodsWithBodies": sum(row["status"] in ("drafted", "extracted_with_capture_parameters", "fallback_original_source_excerpt") for row in function_reports),
+        "fallbackFunctionsWithOriginalExcerpt": sum(row["status"] == "fallback_original_source_excerpt" for row in function_reports),
+        "embeddedFunctionsMapped": sum(row["status"] == "embedded_in_owner" for row in function_reports),
+        "methodsNotEmitted": 0}
     if indexed_emitted != coverage["indexedMethodsInSource"]:
         fail("CODE_DRAFT_INDEXED_METHOD_COVERAGE", source.name, "Streamed indexed function count differs from source method summary")
     if indexed_emitted != header.get("summary", {}).get("methods", indexed_emitted):
         fail("CODE_DRAFT_INDEXED_METHOD_COVERAGE", source.name, "Streamed indexed function count differs from header method summary")
     if indexed_emitted + auxiliary_emitted != coverage["functionsEmitted"]:
-        fail("CODE_DRAFT_FUNCTION_COVERAGE", source.name, "Streamed function count differs from graph footer")
+        fail("CODE_DRAFT_FUNCTION_COVERAGE", source.name, "Function mapping row count differs from graph footer")
+    if len(function_reports) != coverage["functionRecordsInGraph"]:
+        fail("CODE_DRAFT_FUNCTION_COVERAGE", source.name, "Not every streamed source function received a mapping record")
     if "staticFields" in footer and len(field_reports) != footer["staticFields"]:
         fail("CODE_DRAFT_FIELD_COVERAGE", source.name, "Streamed field count differs from graph footer")
 
@@ -550,11 +780,12 @@ def prepare(source, expected_source_sha256=None):
     for row in function_reports:
         function_index.append({key: row.get(key) for key in ("kind", "methodId", "sourceName", "classId",
             "ownerBindingId", "sourceBytes", "functionBytes", "sourceSha256", "targetPath", "targetClass",
-            "targetMethod", "status")} | detail_refs.get(("function", row.get("methodId")), {}))
+            "targetMethod", "targetLocationMarker", "parentFunctionId", "capturedBindings",
+            "captureParameters", "captureCallSitesRewritten", "status")} | detail_refs.get(("function", row.get("methodId")), {}))
     field_index = []
     for row in field_reports:
         field_index.append({key: row.get(key) for key in ("fieldId", "sourceName", "classId", "ownerBindingId",
-            "sourceBytes", "sourceSha256", "targetPath", "targetClass", "targetMember", "initializationContext",
+            "ownerAlias", "static", "access", "sourceBytes", "sourceSha256", "targetPath", "targetClass", "targetMember", "initializationContext",
             "initializationPlacement", "status")} |
             detail_refs.get(("field", row.get("fieldId")), {}))
     report = {"schemaVersion": 1, "status": "full_source_csharp_drafts; compile_excluded",
@@ -567,6 +798,7 @@ def prepare(source, expected_source_sha256=None):
             "businessVsSdk": "not_proven_by_candidate_tags", "sdkEngineCodeFiltered": False,
             "registrationNameUse": "nearest lexical neighbor hint only"},
         "coverage": coverage, "classes": class_reports, "fields": field_index,
+        "draftSymbols": symbol_planner.summary() if symbol_planner else None,
         "details": detail_paths,
         "modules": [{"id": row["id"], "targetPaths": row["targetPaths"],
             "dependencies": row["dependencies"], "methodIds": [item.get("sourceMethodId") for item in row["sourceMethodMappings"]]}

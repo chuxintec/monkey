@@ -29,6 +29,30 @@ def _identifier(value: Any) -> str:
     return "@" + value if value in _CSHARP_KEYWORDS else value
 
 
+def _qualified_identifier(value: Any) -> str | None:
+    """Accept a dotted symbol path, but never pass arbitrary C# source through."""
+    if not isinstance(value, str) or not value or any(not part for part in value.split(".")):
+        return None
+    if not all(re.fullmatch(r"[A-Za-z_$][A-Za-z0-9_$]*", part) for part in value.split(".")):
+        return None
+    return ".".join(_identifier(part) for part in value.split("."))
+
+
+def _target_identifier(node: Any, fallback: Any = None) -> str:
+    if isinstance(node, dict):
+        raw = node.get("_draftIdentifierTarget")
+        mapped = _identifier(raw) if isinstance(raw, str) and re.fullmatch(r"[A-Za-z_$][A-Za-z0-9_$]*", raw) else None
+        if mapped:
+            return mapped
+    return _identifier(fallback)
+
+
+def _is_unambiguous_global_identifier(node: Any) -> bool:
+    return (isinstance(node, dict) and node.get("type") == "Identifier"
+            and node.get("bindingId") is None and not node.get("bindingAmbiguous")
+            and not node.get("_draftIdentifierTarget"))
+
+
 class _Renderer:
     def __init__(self, method: dict[str, Any], ast: dict[str, Any], raw: bytes, class_name: str | None):
         self.method = method
@@ -45,6 +69,21 @@ class _Renderer:
         self.uses_unity = False
         self.uses_generic = False
         self.uses_tasks = False
+        self.uses_linq = False
+        self.embedded_functions: list[dict[str, Any]] = []
+        self._embedded_ids: set[str] = set()
+
+    def _embed_marker(self, node: Any) -> str:
+        if not isinstance(node, dict):
+            return ""
+        function_id = node.get("draftFunctionId")
+        if not isinstance(function_id, str) or not re.fullmatch(r"(?:method|function)@[A-Za-z0-9_.:/-]{1,160}", function_id):
+            return ""
+        marker = f"/* source-function:{function_id} */"
+        if function_id not in self._embedded_ids:
+            self._embedded_ids.add(function_id)
+            self.embedded_functions.append({"id": function_id, "marker": marker, "kind": node.get("type")})
+        return marker + " "
 
     def diagnose(self, node: Any, code: str, message: str, approximation: str | None = None) -> None:
         start = node.get("start") if isinstance(node, dict) else None
@@ -91,17 +130,29 @@ class _Renderer:
         try:
             if kind == "Identifier":
                 name = node.get("name")
-                if name == "undefined":
+                raw_target = node.get("_draftIdentifierTarget")
+                target = _identifier(raw_target) if isinstance(raw_target, str) and re.fullmatch(r"[A-Za-z_$][A-Za-z0-9_$]*", raw_target) else None
+                if target:
+                    return target
+                if raw_target is not None:
+                    self.diagnose(node, "invalid_identifier_target", "Injected identifier target is not a safe C# symbol path; source name is retained", "identifier target mapping ignored")
+                has_binding = node.get("bindingId") is not None or bool(node.get("bindingAmbiguous"))
+                if name == "undefined" and not has_binding:
                     self.diagnose(node, "undefined_approximation", "JavaScript undefined is approximated as C# null", "undefined-to-null")
                     return "null"
-                if name == "NaN":
+                if name == "NaN" and not has_binding:
                     return "double.NaN"
-                if name == "Infinity":
+                if name == "Infinity" and not has_binding:
                     return "double.PositiveInfinity"
                 if not isinstance(name, str):
                     return self._unknown_expression(node, "identifier has no name")
                 return _identifier(name)
             if kind == "ThisExpression":
+                static_owner = _qualified_identifier(node.get("_draftStaticThisOwner"))
+                if static_owner:
+                    return static_owner
+                if node.get("_draftStaticThisOwner") is not None:
+                    self.diagnose(node, "invalid_static_this_owner", "Injected static-this owner is not a safe qualified C# name; source this is retained", "static receiver may still be invalid in this context")
                 return "this"
             if kind == "Literal":
                 value = node.get("value")
@@ -144,32 +195,65 @@ class _Renderer:
                     pairs.append("[" + json.dumps(key, ensure_ascii=True) + "] = " + self.expr(prop.get("value"), depth + 1))
                 return "new System.Collections.Generic.Dictionary<string, dynamic> { " + ", ".join(pairs) + " }"
             if kind == "MemberExpression":
-                obj = self.expr(node.get("object"), depth + 1)
+                mapping = node.get("_draftMember")
+                unresolved = node.get("_draftUnresolvedMember")
                 prop = node.get("property", {})
+                if isinstance(mapping, dict):
+                    target_name = _target_identifier({}, mapping.get("name")) if isinstance(mapping.get("name"), str) and re.fullmatch(r"[A-Za-z_$][A-Za-z0-9_$]*", mapping.get("name")) else None
+                    receiver = mapping.get("receiver")
+                    if target_name and receiver == "static_owner":
+                        owner = _qualified_identifier(mapping.get("ownerClass"))
+                        if owner:
+                            return owner + "." + target_name
+                    elif target_name and receiver == "source":
+                        return f"({self.expr(node.get('object'), depth + 1)}).{target_name}"
+                    self.diagnose(node, "invalid_member_mapping", "Injected member mapping is incomplete or unsafe; source receiver/member is retained", "member target mapping ignored")
+                if unresolved is not None:
+                    reason = unresolved.get("reason") if isinstance(unresolved, dict) else str(unresolved)
+                    self.diagnose(node, "unresolved_member_mapping", f"Member mapping unresolved: {reason or 'unspecified'}; original receiver and member are retained", "source-shaped member may not exist in target")
+                obj = self.expr(node.get("object"), depth + 1)
                 if node.get("computed"):
+                    if isinstance(mapping, dict):
+                        target_name = _target_identifier({}, mapping.get("name")) if isinstance(mapping.get("name"), str) and re.fullmatch(r"[A-Za-z_$][A-Za-z0-9_$]*", mapping.get("name")) else None
+                        receiver = mapping.get("receiver")
+                        if target_name and receiver == "source":
+                            return f"({obj}).{target_name}"
+                        if target_name and receiver == "static_owner":
+                            owner = _qualified_identifier(mapping.get("ownerClass"))
+                            if owner:
+                                return owner + "." + target_name
                     return f"({obj})[{self.expr(prop, depth + 1)}]"
                 name = prop.get("name") if isinstance(prop, dict) else None
                 if not isinstance(name, str):
                     return self._unknown_expression(node, "member name is not static")
-                if obj == "Math":
+                original_object = node.get("object")
+                static_this_owner = (_qualified_identifier(original_object.get("_draftStaticThisOwner"))
+                                     if isinstance(original_object, dict) and original_object.get("type") == "ThisExpression"
+                                     else None)
+                if unresolved is not None and static_this_owner and not node.get("computed"):
+                    return static_this_owner + "." + _identifier(name)
+                obj_node = node.get("object", {})
+                is_global_obj = _is_unambiguous_global_identifier(obj_node)
+                if obj == "Math" and is_global_obj:
                     return "System.Math." + _MATH.get(name, _identifier(name))
-                if obj == "cc":
+                if obj == "cc" and is_global_obj:
                     return "cc." + _identifier(name)
                 return f"({obj}).{_identifier(name)}"
             if kind == "CallExpression":
                 callee = node.get("callee", {})
                 args = [self.expr(arg, depth + 1) if arg.get("type") != "SpreadElement" else self._unknown_expression(arg, "spread call argument") for arg in node.get("arguments", [])]
-                if callee.get("type") == "MemberExpression" and not callee.get("computed"):
+                if callee.get("type") == "MemberExpression" and not callee.get("computed") and not callee.get("_draftMember") and not callee.get("_draftUnresolvedMember"):
                     obj = callee.get("object", {})
                     prop = callee.get("property", {}).get("name")
-                    if obj.get("type") == "Identifier" and obj.get("name") == "Math" and isinstance(prop, str):
+                    obj_unbound = _is_unambiguous_global_identifier(obj)
+                    if obj_unbound and obj.get("name") == "Math" and isinstance(prop, str):
                         if prop == "random":
                             self.uses_unity = True
                             self.diagnose(node, "math_random_approximation", "Math.random maps to UnityEngine.Random.value", "Unity random source differs from JavaScript Math.random")
                             return "UnityEngine.Random.value"
                         if prop in _MATH:
                             return "System.Math." + _MATH[prop] + "(" + ", ".join(args) + ")"
-                    if obj.get("type") == "Identifier" and obj.get("name") == "cc" and isinstance(prop, str):
+                    if obj_unbound and obj.get("name") == "cc" and isinstance(prop, str):
                         mapped = {"log": "Debug.Log", "warn": "Debug.LogWarning", "error": "Debug.LogError"}.get(prop)
                         if mapped:
                             self.uses_unity = True
@@ -185,12 +269,58 @@ class _Renderer:
                 return self.expr(callee, depth + 1) + "(" + ", ".join(args) + ")"
             if kind == "NewExpression":
                 callee = node.get("callee", {})
-                args = [self.expr(arg, depth + 1) for arg in node.get("arguments", [])]
-                if callee.get("type") == "Identifier" and callee.get("name") in ("Array", "Map", "Set"):
+                arguments = node.get("arguments", [])
+                collection = callee.get("name") if _is_unambiguous_global_identifier(callee) else None
+                if collection in ("Array", "Map", "Set"):
                     self.uses_generic = True
-                    mapping = {"Array": "System.Collections.Generic.List<dynamic>", "Map": "System.Collections.Generic.Dictionary<dynamic, dynamic>", "Set": "System.Collections.Generic.HashSet<dynamic>"}[callee["name"]]
-                    self.diagnose(node, "collection_constructor_approximation", f"JavaScript {callee['name']} is represented as a .NET generic collection", "iteration/order and coercion semantics may differ")
-                    return "new " + mapping + "()"
+                    spread = any(isinstance(arg, dict) and arg.get("type") == "SpreadElement" for arg in arguments)
+                    if spread or (collection in ("Map", "Set") and len(arguments) > 1):
+                        evaluated = []
+                        for arg in arguments:
+                            if isinstance(arg, dict) and arg.get("type") == "SpreadElement":
+                                self.diagnose(arg, "collection_spread_approximation", f"Spread argument to {collection} is evaluated but not expanded", "collection constructor throws after all arguments are evaluated")
+                                evaluated.append(self.expr(arg.get("argument"), depth + 1))
+                            else:
+                                evaluated.append(self.expr(arg, depth + 1))
+                        self.diagnose(node, "unknown_collection_constructor_shape", f"JavaScript {collection} constructor shape is not modeled; every argument is evaluated before an explicit throw", "collection construction omitted after preserving argument evaluation")
+                        prelude = " ".join(f"dynamic __draftArg{i} = {value};" for i, value in enumerate(evaluated))
+                        return f"((System.Func<dynamic>)(() => {{ {prelude} throw new System.NotImplementedException(\"Unsupported {collection} constructor shape\"); }}))()"
+                    args = [self.expr(arg, depth + 1) for arg in arguments]
+                    self.diagnose(node, "collection_constructor_approximation", f"JavaScript {collection} is lowered to a .NET generic collection with argument evaluation retained", "iteration, ordering, equality, coercion, or size limits may differ")
+                    if collection == "Array":
+                        if not args:
+                            return "new System.Collections.Generic.List<dynamic>()"
+                        if len(args) > 1:
+                            return "new System.Collections.Generic.List<dynamic> { " + ", ".join(args) + " }"
+                        self.uses_linq = True
+                        return (
+                            "((System.Func<dynamic>)(() => { dynamic __draftArrayArg = " + args[0] + "; "
+                            "if (__draftArrayArg is byte || __draftArrayArg is sbyte || __draftArrayArg is short || __draftArrayArg is ushort || __draftArrayArg is int || __draftArrayArg is uint || __draftArrayArg is long || __draftArrayArg is ulong || __draftArrayArg is float || __draftArrayArg is double || __draftArrayArg is decimal) { "
+                            "double __draftArrayLength = System.Convert.ToDouble(__draftArrayArg); "
+                            "if (__draftArrayLength < 0 || __draftArrayLength > 1000000 || System.Math.Truncate(__draftArrayLength) != __draftArrayLength) throw new System.ArgumentOutOfRangeException(\"Array length\"); "
+                            "return System.Linq.Enumerable.Repeat<dynamic>(null, (int)__draftArrayLength).ToList(); } "
+                            "return new System.Collections.Generic.List<dynamic> { __draftArrayArg }; }))()"
+                        )
+                    if collection == "Map":
+                        if not args:
+                            return "new System.Collections.Generic.Dictionary<dynamic, dynamic>()"
+                        return (
+                            "((System.Func<dynamic>)(() => { dynamic __draftMapSource = " + args[0] + "; "
+                            "var __draftMap = new System.Collections.Generic.Dictionary<dynamic, dynamic>(); "
+                            "if (__draftMapSource == null) return __draftMap; "
+                            "foreach (dynamic __draftPair in (System.Collections.IEnumerable)__draftMapSource) __draftMap[__draftPair[0]] = __draftPair[1]; "
+                            "return __draftMap; }))()"
+                        )
+                    if not args:
+                        return "new System.Collections.Generic.HashSet<dynamic>()"
+                    return (
+                        "((System.Func<dynamic>)(() => { dynamic __draftSetSource = " + args[0] + "; "
+                        "var __draftSet = new System.Collections.Generic.HashSet<dynamic>(); "
+                            "if (__draftSetSource == null) return __draftSet; "
+                        "foreach (dynamic __draftSetItem in (System.Collections.IEnumerable)__draftSetSource) __draftSet.Add(__draftSetItem); "
+                        "return __draftSet; }))()"
+                    )
+                args = [self.expr(arg, depth + 1) for arg in arguments]
                 return "new " + self.expr(callee, depth + 1) + "(" + ", ".join(args) + ")"
             if kind == "BinaryExpression":
                 op = node.get("operator")
@@ -271,7 +401,7 @@ class _Renderer:
                     body_text = "=> " + self.expr(body, depth + 1)
                 if init:
                     self.diagnose(node, "destructured_callback_parameter", "Destructured callback argument uses generated dynamic placeholder", "binding shape is not reconstructed")
-                return "(" + ", ".join(params) + ") => " + body_text
+                return self._embed_marker(node) + "(" + ", ".join(params) + ") => " + body_text
             if kind == "AwaitExpression":
                 self.uses_tasks = True
                 self.diagnose(node, "await_approximation", "await is emitted in a Task<dynamic> draft method", "Unity synchronization context and promise semantics are unverified")
@@ -303,14 +433,14 @@ class _Renderer:
         setup: list[str] = []
         for index, param in enumerate(params):
             if isinstance(param, dict) and param.get("type") == "Identifier":
-                rendered.append("dynamic " + _identifier(param.get("name")))
+                rendered.append("dynamic " + _target_identifier(param, param.get("name")))
             elif isinstance(param, dict) and param.get("type") == "AssignmentPattern" and param.get("left", {}).get("type") == "Identifier":
-                name = _identifier(param["left"].get("name"))
+                name = _target_identifier(param["left"], param["left"].get("name"))
                 rendered.append("dynamic " + name)
                 setup.append("// Draft note: JS default parameter retained at declaration source; invocation semantics are not reproduced.")
                 self.diagnose(param, "default_parameter_approximation", "JavaScript default parameter is represented as a required dynamic argument", "optional call default not applied")
             elif isinstance(param, dict) and param.get("type") == "RestElement" and param.get("argument", {}).get("type") == "Identifier":
-                name = _identifier(param["argument"].get("name"))
+                name = _target_identifier(param["argument"], param["argument"].get("name"))
                 rendered.append("params dynamic[] " + name)
                 self.diagnose(param, "rest_parameter_approximation", "JavaScript rest parameter maps to params dynamic[]", "array identity and argument coercion may differ")
             else:
@@ -327,7 +457,7 @@ class _Renderer:
         for decl in node.get("declarations", []):
             ident = decl.get("id", {})
             if ident.get("type") == "Identifier":
-                name = _identifier(ident.get("name"))
+                name = _target_identifier(ident, ident.get("name"))
                 init = self.expr(decl.get("init")) if decl.get("init") else "null"
                 if decl.get("init") is None:
                     self.diagnose(decl, "uninitialized_local_approximation", "Uninitialized JavaScript local is initialized to null in the draft", "undefined-to-null")
@@ -463,7 +593,7 @@ class _Renderer:
                 left = node.get("left", {})
                 if left.get("type") == "VariableDeclaration":
                     names = left.get("declarations", [{}])[0].get("id", {})
-                    variable = _identifier(names.get("name")) if names.get("type") == "Identifier" else "__draftItem"
+                    variable = _target_identifier(names, names.get("name")) if names.get("type") == "Identifier" else "__draftItem"
                 else:
                     variable = self.expr(left, depth + 1)
                 right = self.expr(node.get("right"), depth + 1)
@@ -490,7 +620,7 @@ class _Renderer:
                     lines.append(pad + "catch (System.Exception __draftException)")
                     lines.append(pad + "{")
                     if param and param.get("type") == "Identifier":
-                        lines.append(pad + "    dynamic " + _identifier(param.get("name")) + " = __draftException;")
+                        lines.append(pad + "    dynamic " + _target_identifier(param, param.get("name")) + " = __draftException;")
                     elif param:
                         lines.append(pad + "    // Draft omission: catch binding pattern " + self._comment(self.snippet(param)))
                         self.diagnose(param, "catch_pattern_approximation", "Catch destructuring binding is not reconstructed", "exception remains available as __draftException")
@@ -511,8 +641,10 @@ class _Renderer:
                 return [pad + "// Draft omission: debugger; " + self._comment(self.snippet(node))]
             if kind == "FunctionDeclaration":
                 params, init = self.parameters(node.get("params", []), node)
-                name = _identifier(node.get("id", {}).get("name", "DraftFunction"))
-                lines = [pad + "dynamic " + name + "(" + ", ".join(params) + ")"]
+                name = _target_identifier(node.get("id", {}), node.get("id", {}).get("name", "DraftFunction"))
+                marker = self._embed_marker(node)
+                lines = ([pad + marker.rstrip()] if marker else [])
+                lines.append(pad + "dynamic " + name + "(" + ", ".join(params) + ")")
                 lines.append(pad + "{")
                 body = node.get("body", {})
                 for child in body.get("body", []):
@@ -549,6 +681,27 @@ class _Renderer:
         if isinstance(meta_params, list) and not params_ast:
             params_ast = [{"type": "Identifier", "name": p.get("name")} if isinstance(p, dict) else {"type": "Identifier", "name": str(p)} for p in meta_params]
         params, setup = self.parameters(params_ast, function)
+        original_names = set()
+        for param in params_ast:
+            if isinstance(param, dict):
+                ident_node = param.get("left") if param.get("type") == "AssignmentPattern" else param.get("argument") if param.get("type") == "RestElement" else param
+                if isinstance(ident_node, dict) and ident_node.get("type") == "Identifier":
+                    original_names.add(_qualified_identifier(ident_node.get("_draftIdentifierTarget")) or _identifier(ident_node.get("name")))
+        capture_params: list[str] = []
+        captures = self.method.get("captureParameters", [])
+        if isinstance(captures, list):
+            for capture in captures:
+                if not isinstance(capture, dict):
+                    continue
+                raw_target = capture.get("targetName")
+                target_name = _identifier(raw_target) if isinstance(raw_target, str) and re.fullmatch(r"[A-Za-z_$][A-Za-z0-9_$]*", raw_target) else None
+                if target_name is None:
+                    self.diagnose(function, "invalid_capture_parameter", "Capture parameter has no safe targetName and was omitted", "capture reference may remain unresolved")
+                    continue
+                if target_name in original_names or target_name in capture_params:
+                    continue
+                capture_params.append(target_name)
+                params.append("dynamic " + target_name)
         name = _identifier(self.method.get("targetName") or self.method.get("name") or "DraftMethod")
         if self.class_name and name.lstrip("@").casefold() == self.class_name.lstrip("@").casefold():
             name += "_DraftMethod"
@@ -570,7 +723,7 @@ class _Renderer:
         lines = ["    {"]
         for item in setup:
             lines.append("        " + item)
-        if self._contains_type(body, "ThisExpression") and static:
+        if self._has_unmapped_this(body) and static:
             self.diagnose(body, "static_this_approximation", "Static source method references this; draft retains it as C# this and may not compile", "owner/static classification may be incomplete")
         emitted_body = []
         for stmt in body.get("body", []):
@@ -586,9 +739,13 @@ class _Renderer:
             usings.append("UnityEngine")
         if self.uses_tasks:
             usings.append("System.Threading.Tasks")
+        if self.uses_linq:
+            usings.append("System.Linq")
         return {"source": signature + "\n" + "\n".join(lines), "usings": sorted(set(usings)),
                 "diagnostics": self.diagnostics, "approximateTypes": sorted(self.approx_types),
                 "members": sorted(self.members), "emittedName": name.lstrip("@"),
+                "embeddedFunctions": self.embedded_functions,
+                "captureParameters": capture_params,
                 "sourceSpan": self.method.get("sourceBytes"), "sourceExecuted": False,
                 "draftOnly": True}
 
@@ -599,6 +756,18 @@ class _Renderer:
             return any(self._contains_type(value, kind) for key, value in node.items() if key not in ("start", "end"))
         if isinstance(node, list):
             return any(self._contains_type(value, kind) for value in node)
+        return False
+
+    def _has_unmapped_this(self, node: Any) -> bool:
+        if isinstance(node, dict):
+            if node.get("type") == "ThisExpression":
+                return _qualified_identifier(node.get("_draftStaticThisOwner")) is None
+            mapping = node.get("_draftMember")
+            if node.get("type") == "MemberExpression" and isinstance(mapping, dict) and mapping.get("receiver") == "static_owner":
+                return any(self._has_unmapped_this(value) for key, value in node.items() if key not in ("object", "start", "end"))
+            return any(self._has_unmapped_this(value) for key, value in node.items() if key not in ("start", "end"))
+        if isinstance(node, list):
+            return any(self._has_unmapped_this(value) for value in node)
         return False
 
 
@@ -652,7 +821,7 @@ def render_field(field: dict[str, Any], ast: dict[str, Any] | None, source_bytes
         renderer.diagnose(ast, "field_name_class_collision", "Field name matches its containing class and was suffixed for C# syntax", "parent mapping must use the emittedName")
     if isinstance(ast, dict):
         initializer = renderer.expr(ast)
-        if renderer._contains_type(ast, "ThisExpression"):
+        if renderer._has_unmapped_this(ast):
             renderer.diagnose(ast, "field_initializer_this", "JavaScript this is retained in a C# field initializer; field initializers cannot use this", "receiver semantics remain unmodified and the draft may not compile")
     else:
         renderer.diagnose(field, "field_initializer_missing", "No initializer AST was supplied; original source is retained and access throws", "no default field value is inferred")
@@ -670,7 +839,10 @@ def render_field(field: dict[str, Any], ast: dict[str, Any] | None, source_bytes
     usings = ["System", "System.Collections.Generic"]
     if renderer.uses_unity:
         usings.append("UnityEngine")
+    if renderer.uses_linq:
+        usings.append("System.Linq")
     return {"source": declaration, "usings": sorted(set(usings)), "diagnostics": renderer.diagnostics,
             "approximateTypes": sorted(renderer.approx_types), "members": sorted(renderer.members),
+            "embeddedFunctions": renderer.embedded_functions,
             "emittedName": name.lstrip("@"), "sourceSpan": field.get("sourceBytes"),
             "sourceExecuted": False, "draftOnly": True}

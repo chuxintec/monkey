@@ -188,6 +188,14 @@ def main(argv=None):
     p = sub.add_parser('code-draft',help='Export every available source method/function as best-effort C# drafts; type/syntax/API gaps do not gate export')
     p.add_argument('--source',required=True);p.add_argument('--expected-source');p.add_argument('--out',required=True)
     p.add_argument('--reuse-from');p.add_argument('--expected-manifest')
+    p = sub.add_parser('code-postprocess',help='Explicit optional bounded Codex CLI pass over independent copies of selected generated C#')
+    p.add_argument('--candidate',required=True);p.add_argument('--expected-manifest',required=True)
+    p.add_argument('--selected-path',action='append',required=True);p.add_argument('--task-file',required=True);p.add_argument('--out',required=True)
+    p.add_argument('--evidence-root');p.add_argument('--evidence-file',action='append',default=[])
+    p.add_argument('--codex',default='/opt/homebrew/bin/codex');p.add_argument('--budget-seconds',type=int,default=900)
+    p.add_argument('--idle-seconds',type=int,default=180);p.add_argument('--prepare-only',action='store_true',help='Prepare workspace and probe CLI help; no model session')
+    p = sub.add_parser('code-postprocess-resume',help='Resume only the exact recorded Codex checkpoint session; never resume latest')
+    p.add_argument('--run',required=True);p.add_argument('--session',required=True)
     p = sub.add_parser('code-types',help='Extract only statically proven source types/dependencies and write named fillable evidence gaps')
     p.add_argument('--source',required=True);p.add_argument('--selectors',required=True);p.add_argument('--type-evidence');p.add_argument('--namespace');p.add_argument('--out',required=True)
     p = sub.add_parser('code-select',help='Select reviewed source methods, close typed dependencies and check actual lowering; no source execution')
@@ -347,7 +355,7 @@ def main(argv=None):
             from .output_limits import policy
             print(json.dumps(dict(version=__version__, profiles=[PROFILE,PROJECT_PROFILE,'cocos-2.4.11-bundle','cocos-3.8.7-bundle','cocos-3.4.1-bundle','cocos-2.1.2-resource','generic-image-resources-v1','egret-custom-resource-plist-v1'], targetProfiles=[UNITY_PROFILE,cocos.PROFILE],
                 ownership=dict(recoveryCandidates='monkey',developmentProjectOperations='beaver',workflow='GREA'),
-                codeRecovery=dict(status='partial',sourceExecution=False,lexicalGraph='complete-source-static-binding-and-utf8-spans',typedModules='explicit-source-class-method-hashes-and-call-domain',moduleProfiles=['foodstreet-demand-health-v1','foodstreet-motion-math-v1'],selection='optional-strict-typed-dependency-closure-and-lowering',methods='default-full-source-best-effort-CSharp-bodies;unknown-fragments-retained',fullDrafts=dict(commands=['code-draft','convert'],typeContractRequired=False,sourceMethods='all-indexed-plus-auxiliary-functions',fields='known-class-or-unresolved-owner-binding',diagnostics='source-linked-bounded-shards',compilation='excluded;syntax-and-API-errors-allowed'),packageComposition='exact-frozen-resource-reuse;one-manifest-with-Scene-Prefab-JSON-and-CSharp',incremental='owned-candidate-fingerprints-and-hash-verified-reuse',mono='static-decompiler-drafts;legal-fixture-target-compiled',il2cpp='v29-exact-WASM-body-evidence;8-pure-i64-operator-fragments;caller-map-assumption;stateful-bodies-not-lifted',native='separate-probe-required;not-implied-by-emission'),
+                codeRecovery=dict(status='partial',sourceExecution=False,lexicalGraph='complete-source-static-binding-and-utf8-spans',typedModules='explicit-source-class-method-hashes-and-call-domain',moduleProfiles=['foodstreet-demand-health-v1','foodstreet-motion-math-v1'],selection='optional-strict-typed-dependency-closure-and-lowering',methods='default-full-source-best-effort-CSharp-bodies;unknown-fragments-retained',fullDrafts=dict(commands=['code-draft','convert'],typeContractRequired=False,sourceMethods='all-indexed-plus-auxiliary-functions',fields='known-class-or-unresolved-owner-binding',diagnostics='source-linked-bounded-shards',compilation='excluded;syntax-and-API-errors-allowed'),optionalPostprocess=dict(commands=['code-postprocess','code-postprocess-resume'],defaultEnabled=False,provider='existing-local-Codex-CLI',workspace='independent-selected-code-copy',sourceCandidate='immutable',budgets='total-idle-output',resume='exact-recorded-session-only'),packageComposition='exact-frozen-resource-reuse;one-manifest-with-Scene-Prefab-JSON-and-CSharp',incremental='owned-candidate-fingerprints-and-hash-verified-reuse',mono='static-decompiler-drafts;legal-fixture-target-compiled',il2cpp='v29-exact-WASM-body-evidence;8-pure-i64-operator-fragments;caller-map-assumption;stateful-bodies-not-lifted',native='separate-probe-required;not-implied-by-emission'),
                 recoveryOperations=dict(commands=['acquire-resources','diagnose','doctor','space-preview','resource-probe'],
                     resume='same-manifest-and-input-set; completed-partial-receipt-to-fresh-layer; rehash-selected-payloads',
                     retries='1..3; transient-network-or-408-429-5xx-only; fixed-byte-time-budgets',
@@ -401,6 +409,21 @@ def main(argv=None):
             from .code_drafts import emit
             result=emit(args.source,args.out,expected_source_sha256=args.expected_source,reuse_from=args.reuse_from,expected_manifest_sha256=args.expected_manifest)
             print(json.dumps(result,ensure_ascii=False));return 1
+        if args.command == 'code-postprocess':
+            from .code_postprocess import prepare,run
+            from .io import safe,read
+            task=read(safe(args.task_file),max_bytes=16000).decode('utf-8')
+            prepared=prepare(args.candidate,args.selected_path,args.expected_manifest,args.out,task,
+                evidence_root=args.evidence_root,evidence_files=args.evidence_file,codex=args.codex,
+                timeout_seconds=args.budget_seconds,no_progress_seconds=args.idle_seconds)
+            if args.prepare_only:
+                print(json.dumps(dict(status='prepared',request=str(prepared.manifest_path),workspace=str(prepared.workspace),modelStarted=False),ensure_ascii=False));return 0
+            result=run(prepared)
+            print(json.dumps(dict(status=result['status'],report=str(prepared.output/'manifest.json'),sessionId=result.get('sessionId'),changedFiles=len(result.get('actualChanges',[])),unresolved=len(result.get('unresolved',[]))),ensure_ascii=False));return 0 if result['status']=='complete' else 1
+        if args.command == 'code-postprocess-resume':
+            from .code_postprocess import run
+            result=run(args.run,session_id=args.session)
+            print(json.dumps(dict(status=result['status'],report=str(Path(args.run)/'manifest.json'),sessionId=result.get('sessionId'),changedFiles=len(result.get('actualChanges',[])),unresolved=len(result.get('unresolved',[]))),ensure_ascii=False));return 0 if result['status']=='complete' else 1
         if args.command == 'code-types':
             from .code_type_evidence import extract_type_evidence
             from .io import load,read,safe,new_output,write_json

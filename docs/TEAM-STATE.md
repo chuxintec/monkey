@@ -1,9 +1,14 @@
 # v0.6 模块执行登记
 
-沿通用 MODULE-DEVELOPERS；主开发保持模型、公共IR/Schema/CLI/manifest/注册/依赖/版本/Editor单写。真实容量6，不满编；2个独立模块实例均已完成、停止写入，默认Luna High；不为等待或报告新开工作。
+5A/5B成组已验：renderer集合/owner映射、writer内嵌/canonical/计数、postprocess隔离执行均交付；父完成3源刷新07、独立全清单/样例/暖复用与一次真实Codex调用。3子实例均空闲，不再派生；修订partial与实际验证边界见PLAN及本组验收。
+
+沿通用 MODULE-DEVELOPERS；主开发保持模型、公共IR/Schema/CLI/manifest/注册/依赖/版本/Editor单写。真实容量6，不满编；当前复用2个实例并新增1个独立可选后处理模块；3个模块已交付并空闲，父完成统一集成，默认Luna High；不为等待或报告新开工作。
 
 
 全量初稿收尾已验（最新用户裁定）：父维护 worker/公开包级convert/候选清单与最终真实样本核验；code_regeneration 仅维护 code_drafts.py、test_code_drafts.py、CODE-DRAFTS.md 的全量writer/字段归组/报告分片/复用；shader_profile 仅维护 code_draft_render.py、test_code_draft_render.py、CODE-DRAFT-RENDER.md 的局部尽力转写与机械语法修复。两既有实例复用，无新Agent/Editor；字段运行时写入不能被提成静态初始化。静态this未知语义保留诊断，不猜原绑定。最终3源19,571索引方法/47,384函数、3,706字段记录的实际输出和beaver全112,758文件只读验证通过；24,263文件暖阶段禁用parser/render仍复用。writer12与主链集成21定向检查通过。
+
+
+5A/5B新增明确工作区：shader_profile 单写 renderer/专测/docs（集合、已绑定引用、内嵌位置）；code_regeneration 单写 writer/专测/docs（预规划名调用父symbol模块，闭包去重复及覆盖映射）；父单写 worker/新code_draft_symbols/CLI/PLAN/最终候选与真实Codex任务；codex_postprocess（按用户通用规范新增Luna High）单写 code_postprocess.py/专测/CODEX-POSTPROCESS.md，先合成进程检查，真实肥鹅仅父在5A后单CLI启动。无Editor/资源重导，无全局安装/发布/正式游戏写入。3模块+父低于平台6容量，子不递归。
 
 | 模块 / 实例 | 目标 / 观测模型 | 基线与可写区 | 依赖 / 状态 |
 |---|---|---|---|

@@ -2,6 +2,8 @@
 
 ## 当前 v0.6 C# 大版本（2026-10-26）
 
+5A/5B续推已原生核验：总监turn `01a17878-82ef-7111-b9f4-8c23dba42d9c` / human `01a17878-8321-74c3-bea3-bac188c57398`“按方案执行”，以及turn `01a1787c-c5e5-7ce2-a8e3-3a58b344eb38` / human `01a1787c-c602-77e0-93c1-6c610ebaaeac`“允许 monkey 导出 C#后，启动一个codex cli进行代码处理”。当前v0.6继续：通用集合构造参数/符号声明引用/闭包归属整改，保留03基线、不手改产物；随后可选既有本机Codex CLI处理一次有界肥鹅模块，原初稿不依赖AI，AI只写独立派生代码副本，单CLI串行/精确session/预算与检查点，不递归、不改用户全局配置/凭据，不外发无关资料或接其他AI服务。完整范围见权威计划5A/5B；旧禁止外发条款仅在本次明确Codex用途和材料范围内被覆盖。无发布/推送/全局安装/正式游戏写入/恢复暂停项目权限。
+
 最新用户全量C#裁定已本聊天原生核验：总监turn `01a17807-bfde-7210-ac1a-06412c7f108f` / human `01a17807-bffc-72c3-af7b-6551a18f424f`。按重写的 MONKEY-V06-CSHARP-PLAN.md 全量导出实际C#初稿，允许语法/类型/API错误，类型合同/编译/语义证明不再是导出门槛。已有严格16方法及主流程WIP保留作增强；逐片段失败继续，不用索引/统一空壳代替有源方法。默认批量完整肥鹅，统一资源/Scene/Prefab/JSON候选交接；源未得WASM正文不编造。仍不执行原JS/WASM/DLL、不写正式游戏、不发布/全局安装。下文冲突的严格导出门槛作历史。
 
 事件 `monkey-v06-direction-mainflow-20261026-01` 继续既定v0.6：以 Manager/reviews/20261026-grea-responsibility-review/MONKEY-BEAVER-DIRECTION.md 为本次方向补正。5a2ce31/89332be、16方法/8WASM/6CUA及分发02保留，不重验；补公开包级convert/冻结资源候选组装、通用可证明类型提取、同一manifest和beaver接续。先前local_c1_c9_candidate_ready不等于整版主流程已完成；不为数量加profile、不再重复整套打包/原生/安装。

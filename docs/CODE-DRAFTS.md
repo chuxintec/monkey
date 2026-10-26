@@ -4,6 +4,8 @@
 
 `monkey.code_drafts.emit(source, out, expected_source_sha256=None, *, reuse_from=None, expected_manifest_sha256=None)` prepares the same output and writes it to a fresh owned candidate. Reuse requires both an existing candidate and its exact manifest SHA-256. The code regeneration selector verifies old owned files before returning reusable bytes; modified, unknown, or manually owned files block the operation. The old candidate and input source are never modified.
 
+When the graph header includes `draftDeclarations`, the writer creates `DraftSymbols` before rendering and uses its preplanned method/field names and AST binding annotations. If an outer renderer reports `embeddedFunctions`, the corresponding auxiliary function maps to the owner file/method and source marker instead of producing an empty standalone method. An unembedded nested function with captured binding IDs is extracted with explicit dynamic capture parameters and an explicit call-site-not-rewritten diagnostic. Indexed method counts keep their original denominator; auxiliary records are separately counted as extracted or embedded.
+
 Every source gets a SHA-partitioned output set:
 
 - `SourceRecovery/Code/Source/<sha12>/Source.js` preserves the original source bytes.
