@@ -1,6 +1,6 @@
-# 当前开发分支：monkey-project/1
+# 当前开发分支：monkey-project/2
 
-当前包版本 `0.3.0.dev1`，以 GitHub prerelease 交付。日常使用已安装 Release 的 `monkey`；仓库入口仅转发，源码开发显式使用 `.venv/bin/python -m monkey.cli`。新输出布局以 [PROJECT-SPEC](PROJECT-SPEC.md) 为准，以下历史格式化说明不适用于新输出；`--format none|grea` 都是弃用别名。
+稳定安装为 `0.4.0`，本地开发为 `0.5.0.dev1`，新操作命令见 [v0.5 说明](V0.5-OPERATIONS.md)。日常使用已安装 Release 的 `monkey`；仓库入口仅转发，源码开发显式使用 `.venv/bin/python -m monkey.cli`。新输出布局以 [PROJECT-SPEC](PROJECT-SPEC.md) 为准，以下历史格式化说明不适用于新输出；`--format none|grea` 都是弃用别名。
 
 ```sh
 monkey convert --help

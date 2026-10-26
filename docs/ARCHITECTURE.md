@@ -4,7 +4,7 @@
 
 包级wxapkg/APK/明确Cocos资源集合 → 安全解包与身份 → 全文件台账 → 资源/静态代码模块恢复 → Unity6/Creator3.8标准工程＋代码初稿 → AI接续。每项输入有处置、来源hash与目标路径；未支持原件/代码在SourceRecovery编译排除区，不当原生资产。目标运行时不解释IR或源引擎对象图。完整源码初稿允许未实现业务，不假成功；源证据、draft、compiled、behavior_verified分列。
 
-Unity资源遵循Assets/Game/Content类型、五层模块与Game/Editor；Creator遵循assets/scripts五层、art/audio/fonts/scenes/prefabs。已有切片生成目录暂作为历史适配例外，新包级产物采用规范布局。每个工程有AGENTS、Docs/START-HERE、资源覆盖和模块工作包，可独立搬走；不依赖本机原源路径。
+Unity 资源遵循 `Assets/Game/Content/<Type>/<Module>/`，Creator 资源遵循 `assets/resources/<Type>/<Module>/`；代码层与规范入口见 PROJECT-SPEC。每个工程有 AGENTS、Docs/START-HERE、资源覆盖和模块工作包，可独立搬走；不依赖本机原源路径。
 
 ## 设计原则
 
@@ -31,7 +31,7 @@ flowchart TD
 
 ## 工程布局与实现目录
 
-生成工程的唯一布局规范为 [PROJECT-SPEC](PROJECT-SPEC.md)，当前标识 `monkey-project/1.0.0`。`src/monkey/layout/` 负责规划、身份稳定命名、覆盖表、验证及文档/迁移记录；`layout/standard.py` 统一路径，旧候选通过兼容读取保留。此次只重构目标工程布局，不重排 monkey 自身的源码架构。
+生成工程的唯一布局规范为 [PROJECT-SPEC](PROJECT-SPEC.md)，当前标识 `monkey-project/2.0.0`。`src/monkey/layout/` 负责规划、身份稳定命名、覆盖表、验证及文档/迁移记录；`layout/standard.py` 统一路径，旧候选通过兼容读取保留。此次只重构目标工程布局，不重排 monkey 自身的源码架构。
 
 ## 数据合同
 

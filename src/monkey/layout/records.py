@@ -68,6 +68,15 @@ def resource_paths(project,engine):
         path=standard.find_analysis(project,name)
         if not path.exists():continue
         report=load(read(path,max_bytes=256*1024*1024),max_nodes=8_000_000)
+        if name=='resource-catalog.json':
+            for shader in report.get('shaders',[]):
+                if shader.get('nativeShader')is not True:continue
+                for kind in ('shader','material'):
+                    target=shader.get('nativeProfile',{}).get('outputs',{}).get(kind,'')
+                    if not target.startswith(root+'/') or not (project/target).is_file():continue
+                    key=target[len(root)+1:].rsplit('.',1)[0]
+                    assets[(target,shader['sourceId'],kind)]=dict(sourceId=shader['sourceId'],path=target,type=kind,address=key,
+                        loadKey=key,entryKind='asset',state='exported',nativeValidation=shader.get('nativeValidation','not_run'))
         for row in report.get('naming',report).get('records',[]):
             target=row.get('target','')
             if not target.startswith(root+'/'):continue

@@ -72,6 +72,14 @@ def export_catalog(manifest,project,engine,namespace,cache,overrides=None):
             metadata(target,'shader-source/'+asset['sourceId']+'/'+name,'json' if name.endswith('.json') else 'text')
             row['files'].append(dict(path=target,sha256=sha(raw),bytes=len(raw)))
         row.update(status='source_exported_needs_adapter',reason='Original compiled GLSL stages and effect settings recovered; no automatic GLSL-to-ShaderLab or Creator 2-to-3 compilation is claimed')
+        if engine=='unity':
+            from ..shader_profiles import export_profile
+            native=export_profile(effect,project,namespace,asset['sourceId'],effect_sha256=sha(payloads['EffectDescription.json']),folder=folder)
+            row['nativeProfile']=native['profile'];row['nativeValidation']='not_run'
+            if native['written']:
+                row.update(status='source_exported_with_exact_target_profile',nativeShader=True,
+                    reason='Exact pinned source/macro profile generated; material binding, native validation and source variants remain separate gates',
+                    nativeFiles=[dict(path=p,sha256=sha(read(project/p)),bytes=(project/p).stat().st_size)for p in native['files']])
     report['naming']=naming.report()
     report['deduplicatedTextures']=sum(r['status']=='shared_existing_texture' for r in report['textures'])
     report['writtenTextures']=len(report['textures'])-report['deduplicatedTextures']

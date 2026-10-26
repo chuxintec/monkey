@@ -21,6 +21,6 @@ where = ["src"]
 astc = ["texture2ddecoder==1.0.6"]
 
 [tool.setuptools.package-data]
-"monkey.targets" = ["*.cs", "*.js"]
+"monkey.targets" = ["*.cs", "*.js", "*.shader"]
 "monkey" = ["licenses/*.txt", "*.cjs"]
 "monkey.sources" = ["*.cjs"]

@@ -27,9 +27,10 @@ def origin(url):
     return p.scheme+'://'+p.netloc.lower()
 
 
-def prepare(manifest,output,selection,cache_root=None,budget_seconds=900,protected_roots=(),derive_input_set=True):
+def prepare(manifest,output,selection,cache_root=None,budget_seconds=900,protected_roots=(),derive_input_set=True,resume_from=None,max_attempts=3):
     if type(budget_seconds) is not int or not 30<=budget_seconds<=3600:
         fail('REMOTE_BUDGET','remote manifest','Expected a 30..3600 second acquisition window')
+    if type(max_attempts) is not int or not 1<=max_attempts<=3:fail('REMOTE_ATTEMPTS','remote manifest','Expected 1..3 attempts')
     manifest=safe(manifest);raw=read(manifest);data=load(raw)
     rows=data if isinstance(data,list) else data.get('files') if isinstance(data,dict) and data.get('schemaVersion')==1 else None
     if not isinstance(rows,list) or not 1<=len(rows)<=50000:
@@ -51,16 +52,39 @@ def prepare(manifest,output,selection,cache_root=None,budget_seconds=900,protect
         if any(p.as_posix().casefold() in paths for p in Path(entry['path']).parents if p.as_posix()!='.'):
             fail('REMOTE_PATH_COLLISION',entry['path'],'A destination file is also another file parent')
     if len(origins)>32:fail('REMOTE_ORIGIN_BUDGET','remote manifest','At most 32 explicit origins')
-    destination=safe(output);protected=[manifest,*[r['path'] for r in selection['inputs']],*map(safe,protected_roots)]+([cache] if cache else [])
+    previous=safe(resume_from) if resume_from else None;reused={};previous_sha=None
+    if previous:
+        receipt_path=previous/'acquisition.json';previous_raw=read(receipt_path);prior=load(previous_raw);previous_sha=sha(previous_raw)
+        source_key='sourceInputSetSha256' if derive_input_set else 'sourceSelectionSha256'
+        if prior.get('schemaVersion')!=1 or prior.get('sourceManifestSha256')!=sha(raw) or prior.get(source_key)!=selection['sha256']:
+            fail('REMOTE_RESUME_IDENTITY',str(previous),'Exact remote manifest and input selection required')
+        by_path={r['path']:r for r in entries};seen=set()
+        for row in prior.get('files',[]):
+            path=row.get('path');item=by_path.get(path)
+            if item is None or path in seen or row.get('sourceKey')!=sha(item['url'].encode()):
+                fail('REMOTE_RESUME_IDENTITY',str(path),'Unknown, duplicate or changed source key')
+            seen.add(path)
+            if row.get('status') not in ('local_verified','downloaded','reused_verified') or row.get('includedByOriginalRoot'):continue
+            digest=row.get('sha256');size=row.get('bytes')
+            if (not isinstance(digest,str) or not re.fullmatch('[a-f0-9]{64}',digest) or type(size) is not int or not 0<=size<=MAX_FILE or
+                    (item['sha256'] is not None and item['sha256']!=digest) or (item['bytes'] is not None and item['bytes']!=size)):
+                fail('REMOTE_RESUME_IDENTITY',path,'Prior content receipt differs from declared identity')
+            payload=inside(previous/'files',path)
+            if not payload.is_file() or payload.stat().st_size!=size or fingerprint(payload)!=digest:
+                fail('REMOTE_RESUME_CHANGED',path,'Previously acquired bytes changed; preserve the old layer')
+            reused[path]=dict(path=payload,sha256=digest,bytes=size)
+        if seen!=set(by_path):fail('REMOTE_RESUME_IDENTITY',str(previous),'Previous receipt does not cover this exact request set')
+    destination=safe(output);protected=[manifest,*[r['path'] for r in selection['inputs']],*map(safe,protected_roots)]+([cache] if cache else [])+([previous] if previous else [])
     if destination.exists() or any(destination==r or destination.is_relative_to(r) or r.is_relative_to(destination) for r in protected):
         fail('REMOTE_OUTPUT_CONFLICT',str(destination),'Choose a fresh acquisition directory outside source roots')
     return dict(manifest=manifest,manifestSha256=sha(raw),output=destination,selection=selection,cache=cache,
-                entries=entries,origins=origins,budget=budget_seconds,deriveInputSet=derive_input_set)
+                entries=entries,origins=origins,budget=budget_seconds,deriveInputSet=derive_input_set,resume=reused,
+                resumeFrom=previous,resumeReceiptSha256=previous_sha,maxAttempts=max_attempts)
 
 
 def acquire(settings,offline=False):
     roots=[r['path'] for r in settings['selection']['inputs']]
-    out=new_output(settings['output'],[settings['manifest'],*roots]);fetched=out/'files';fetched.mkdir();temporary_root=out/'Temporary';temporary_root.mkdir()
+    out=new_output(settings['output'],[settings['manifest'],*roots,*([settings['resumeFrom']] if settings.get('resumeFrom') else [])]);fetched=out/'files';fetched.mkdir();temporary_root=out/'Temporary';temporary_root.mkdir()
     lock=Lock();used=0;deadline=time.monotonic()+settings['budget']-20
     def reserve(count):
         nonlocal used
@@ -71,15 +95,16 @@ def acquire(settings,offline=False):
         def redirect_request(self,req,fp,code,msg,headers,newurl):
             if origin(newurl) not in settings['origins']:raise ValueError('REMOTE_REDIRECT_ORIGIN')
             return super().redirect_request(req,fp,code,msg,headers,newurl)
-    def one(item):
+    def attempt(item,number):
         row=dict(path=item['path'],sourceKey=sha(item['url'].encode()),origin=origin(item['url']),
-                 expectedSha256=item['sha256'],expectedBytes=item['bytes'])
+                 expectedSha256=item['sha256'],expectedBytes=item['bytes'],attempts=number,
+                 identityAssurance='declared-sha256' if item['sha256'] else 'captured-bytes-without-declared-hash')
         temporary=None
         try:
             if time.monotonic()>=deadline:raise TimeoutError('REMOTE_DEADLINE')
-            local=None
+            prior=settings.get('resume',{}).get(item['path']);local=prior['path'] if prior else None
             candidates=[inside(settings['cache'],item['path'])] if settings['cache'] else [inside(r,item['path']) for r in roots if r.is_dir()]
-            if item['sha256']:
+            if local is None and item['sha256']:
                 for candidate in candidates:
                     if candidate.is_file() and candidate.stat().st_size<=MAX_FILE and (item['bytes'] is None or candidate.stat().st_size==item['bytes']) and fingerprint(candidate)==item['sha256']:
                         local=candidate;break
@@ -104,11 +129,11 @@ def acquire(settings,offline=False):
                     if count>MAX_FILE:raise ValueError('REMOTE_SINGLE_BYTE_BUDGET')
                     reserve(len(block));digest.update(block);writer.write(block)
             actual=digest.hexdigest()
-            if (item['sha256'] and actual!=item['sha256']) or (item['bytes'] is not None and count!=item['bytes']):
+            if (item['sha256'] and actual!=item['sha256']) or (item['bytes'] is not None and count!=item['bytes']) or (prior and (actual!=prior['sha256'] or count!=prior['bytes'])):
                 quarantine=out/'Quarantine'/sha(item['path'].encode());quarantine.parent.mkdir(exist_ok=True);os.link(temporary,quarantine);temporary.unlink();temporary=None
                 return dict(row,status='identity_mismatch',sha256=actual,bytes=count,quarantine=quarantine.relative_to(out).as_posix())
             os.link(temporary,target);temporary.unlink();temporary=None
-            return dict(row,status='local_verified' if local else 'downloaded',sha256=actual,bytes=count,includedByOriginalRoot=False)
+            return dict(row,status='reused_verified' if prior else 'local_verified' if local else 'downloaded',sha256=actual,bytes=count,includedByOriginalRoot=False)
         except HTTPError as error:
             error.close();return dict(row,status='unavailable',httpStatus=error.code)
         except Exception as error:
@@ -116,13 +141,21 @@ def acquire(settings,offline=False):
             return dict(row,status='failed',errorType=type(error).__name__,errorCode=code)
         finally:
             if temporary is not None and temporary.exists():temporary.unlink()
+    def one(item):
+        for number in range(1,settings.get('maxAttempts',3)+1):
+            row=attempt(item,number)
+            transient=(row.get('httpStatus') in (408,429,500,502,503,504) or row.get('errorType') in ('URLError','TimeoutError','ConnectionResetError','IncompleteRead'))
+            if not transient or number==settings.get('maxAttempts',3) or time.monotonic()+.5>=deadline:return row
+            time.sleep(min(.25*number,max(0,deadline-time.monotonic())))
     with ThreadPoolExecutor(max_workers=4) as executor:rows=list(executor.map(one,settings['entries']))
-    available=[r for r in rows if r['status'] in ('local_verified','downloaded')]
+    available=[r for r in rows if r['status'] in ('local_verified','downloaded','reused_verified')]
     summary=dict(requestedFiles=len(rows),availableFiles=len(available),missingFiles=len(rows)-len(available),
                  downloadedFiles=sum(r['status']=='downloaded' for r in rows),localVerifiedFiles=sum(r['status']=='local_verified' for r in rows),
+                 reusedVerifiedFiles=sum(r['status']=='reused_verified' for r in rows),attemptedBytes=used,
                  accountedBytes=sum(r['bytes'] for r in available),offline=offline,allDeclaredAvailable=len(available)==len(rows))
     receipt=dict(schemaVersion=1,sourceManifestSha256=settings['manifestSha256'],sourceInputSetSha256=settings['selection']['sha256'],
-                 status='complete' if summary['allDeclaredAvailable'] else 'partial',summary=summary,files=rows)
+                 status='complete' if summary['allDeclaredAvailable'] else 'partial',summary=summary,files=rows,
+                 resumeReceiptSha256=settings.get('resumeReceiptSha256'),maxAttempts=settings.get('maxAttempts',3))
     write_json(out/'acquisition.json',receipt)
     selected=settings['selection'];derived=selected['path']
     if not settings.get('deriveInputSet',True):

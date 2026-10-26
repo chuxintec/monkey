@@ -8,6 +8,7 @@ const dynamic=require('./dynamic-ui.js');
 const batch=require('./batch.js');
 const jobs=require('./jobs.js');
 const numeric=require('./numeric-code.js');
+const resources=require('./resources.js');
 const color = a => new cc.Color(...a);
 function tiledReadback(plan,nodes) {
     if(!plan.rendererBudget)return null;
@@ -134,6 +135,7 @@ module.exports = {
                 for(const c of plan.components.filter(c=>c.convertible&&c.type==='cc.Label')) {
                     checkTime(plan);nodes.get(c.node).getComponent(cc.Label).updateRenderData(true);
                 }
+                await resources.attach(plan,canvasNode,loadAsset);
                 const numericCodeExercise=numeric.exercise(codeEntries);
                 const animationAssets=[];
                 for(const spec of plan.animations||[])if(spec.convertible) {
@@ -233,7 +235,7 @@ module.exports = {
                 sourcePrefabs.push(prefabs.read(templates.get(spec.sourceId),spec,plan,info,templates));
             }
             const dynamicUiProbes=await dynamic.probe(plan,design,(done,total)=>jobs.progress('native-readback',sourcePrefabs.length+done,sourcePrefabs.length+total));
-            return {tiledRenderer:tiledReadback(plan,mapped),dynamicUiProbes,nativeInitialNodes:plan.nativeInitialNodes,sourcePrefabs,prefabInstances,jsonAssets,audioAssets,fontPages,animations,numericCodeBindings,nodeCount:saved.length,nodes:[...mapped].map(([sourceId,n])=>({sourceId,nodeUuid:n.uuid,name:n.name,
+            return {resourceProbes:await resources.read(plan,scene),tiledRenderer:tiledReadback(plan,mapped),dynamicUiProbes,nativeInitialNodes:plan.nativeInitialNodes,sourcePrefabs,prefabInstances,jsonAssets,audioAssets,fontPages,animations,numericCodeBindings,nodeCount:saved.length,nodes:[...mapped].map(([sourceId,n])=>({sourceId,nodeUuid:n.uuid,name:n.name,
                 position:[n.position.x,n.position.y,n.position.z],size:[n.getComponent(cc.UITransform).width,n.getComponent(cc.UITransform).height],
                 pivot:[n.getComponent(cc.UITransform).anchorX,n.getComponent(cc.UITransform).anchorY],scale:[n.scale.x,n.scale.y,n.scale.z],
                 rotation:[n.rotation.x,n.rotation.y,n.rotation.z,n.rotation.w],active:n.active,...prefabs.uiState(n,sourceNodes.get(sourceId))})),components:refs,labels,frames};

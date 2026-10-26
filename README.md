@@ -4,6 +4,8 @@
 
 当前版本为 **0.4.0**，采用 [monkey-project/1 工程规范](docs/PROJECT-SPEC.md)。新增 Unity 字体/引用表分块读取和可配置解析预算，详见 [解析预算](docs/providers/UNITY-PARSE-BUDGETS.md) 和 [v0.4.0 发布说明](docs/RELEASE-v0.4.0.md)。资源候选、原生导入、画面及业务验收分别记录。
 
+本地 `0.5.0.dev1` 正在补齐大工程预算、阶段复用、资源诊断和原生资源代表验证；新命令与边界见 [v0.5 操作说明](docs/V0.5-OPERATIONS.md)。稳定安装仍为 0.4.0，开发工程采用已移交 beaver；旧 adopt 入口仅保留弃用兼容。
+
 新输出直接生成规范目录；`--format none|grea` 保留为弃用兼容参数。`convert --layout layout.json` 可使用游戏级命名覆盖；`layout-preview` 预览已完成转换的路径变化，`layout-migration` 按 GUID/UUID 生成旧候选到新候选的迁移清单。进度和未验证项见 [PLAN](docs/PLAN.md)，用法见 [USAGE](docs/USAGE.md)。
 
 开发版现在默认将中文输出路径转为拼音，保留源名映射、同音消歧和资源 GUID；肥鹅 BON 配置自动逐表导出 JSON，入口为目标工程 `Docs/CONFIGURATION.md`。这些功能包含在本版 wheel 中。

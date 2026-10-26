@@ -22,6 +22,46 @@ class Response(io.BytesIO):
 
 
 class AcquisitionTests(unittest.TestCase):
+    def test_transient_retry_is_bounded_and_404_is_not_retried(self):
+        from collections import Counter
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp).resolve();_,selection=self.setup_source(root);manifest=root/'downloads.json';counts=Counter()
+            write_json(manifest,[dict(url='https://cdn.example/'+p,path=p)for p in ['flaky','missing','overloaded']])
+            class Opener:
+                def open(self,request,timeout):
+                    name=request.full_url.rsplit('/',1)[-1];counts[name]+=1
+                    if name=='missing' or name=='overloaded' or counts[name]<2:raise HTTPError(request.full_url,404 if name=='missing' else 503,'transient',{},None)
+                    return Response(b'original')
+            with patch.object(acquisition,'build_opener',return_value=Opener()),patch.object(acquisition.time,'sleep'):
+                result=acquisition.acquire(acquisition.prepare(manifest,root/'out',selection))
+            self.assertEqual(dict(counts),dict(flaky=2,missing=1,overloaded=3))
+            self.assertEqual(result['summary']['availableFiles'],1)
+            rows={r['path']:r for r in json.loads(result['receipt'].read_text())['files']}
+            self.assertEqual(rows['overloaded']['attempts'],3);self.assertEqual(rows['missing']['httpStatus'],404)
+
+    def test_resume_revalidates_exact_old_payload_and_fetches_only_missing_in_fresh_layer(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp).resolve();_,selection=self.setup_source(root);manifest=root/'downloads.json'
+            write_json(manifest,[dict(url='https://cdn.example/'+p,path=p,sha256=sha(p.encode()))for p in ['one','two']])
+            class First:
+                def open(self,request,timeout):
+                    name=request.full_url.rsplit('/',1)[-1]
+                    if name=='two':raise HTTPError(request.full_url,404,'missing',{},None)
+                    return Response(name.encode())
+            with patch.object(acquisition,'build_opener',return_value=First()):
+                initial=acquisition.acquire(acquisition.prepare(manifest,root/'first',selection))
+            before=initial['receipt'].read_bytes();requested=[]
+            class Next:
+                def open(self,request,timeout):requested.append(request.full_url);return Response(b'two')
+            with patch.object(acquisition,'build_opener',return_value=Next()):
+                result=acquisition.acquire(acquisition.prepare(manifest,root/'second',selection,resume_from=root/'first'))
+            self.assertEqual(requested,['https://cdn.example/two']);self.assertEqual(result['summary']['reusedVerifiedFiles'],1)
+            self.assertTrue(result['summary']['allDeclaredAvailable']);self.assertEqual(before,initial['receipt'].read_bytes())
+            (root/'first/files/one').write_bytes(b'changed')
+            with self.assertRaisesRegex(ParseError,'REMOTE_RESUME_CHANGED'):
+                acquisition.prepare(manifest,root/'third',selection,resume_from=root/'first')
+            self.assertFalse((root/'third').exists())
+
     def setup_source(self,root):
         source=fixture(root/'source').parent
         path=root/'inputs.json'

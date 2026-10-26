@@ -1,5 +1,11 @@
 # monkey 执行约定
 
+## 当前协作规则（2026-10-26 覆盖旧 no-subagent 条款）
+
+执行 [通用模块开发规范](/Users/wangmeng/Documents/Manager/standards/MODULE-DEVELOPERS.md) 与 [任务模板](/Users/wangmeng/Documents/Manager/templates/module-developer-task.md)。人类来源已本聊天原生核验：总监 turn `01a1770e-aefa-7e00-81fa-8e64fada4a55` / human `01a1770e-af1d-7510-b494-867958dddf0e`。主开发保持现有配置并负责整个 v0.5、共享接口与集成；独立就绪模块可交项目内模块开发者，新增默认 `gpt-6-luna/high`，优先复用，动态 0～8 但不超过平台实际容量。不递归、不创建顶层聊天；精简登记见 `docs/TEAM-STATE.md`。
+
+本条覆盖下文历史单主开发/不新增 Agent 及逐包例行回报要求。对总监以版本交付/严重问题为节点，批准范围内持续推进。公共 CLI/schema/PLAN/依赖和原生 Editor 窗口由主开发单写/调度；模块只能写明确划定文件。仍限本地 v0.5 开发，原件/正式游戏/GREA/beaver 只读，不安装、发布或恢复暂停项目。
+
 本项目由用户于2026-10-22明确新建，路径Games/tools/monkey，语言Python。用户来源：总监local/01a14c8c-6402-7d03-bab8-ec7ea8051abf，turn01a1635b-cca0-7d72-83c4-8b7324514688 / message01a1635b-ccc9-7101-b901-a84b399ab0e3。
 
 - 当前唯一任务源`docs/PLAN.md`。总监定范围，开发者实现、维护进度并反馈成组交付/阻塞；不恢复项目经理或周期巡检。新会话实际工作目录必须为本目录，不能在Games根写产品代码。

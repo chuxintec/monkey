@@ -150,7 +150,22 @@ module.exports = {
             fs.mkdirSync(within(root,'Analysis/Readback'),{recursive:true});fs.writeFileSync(within(root,'Analysis/Readback/native-api-timing.json'),JSON.stringify({stage:'assets',apiTiming},null,2)+'\n',{flag:'wx'});
             execution.checkpoint('hierarchy',0,plan.nodes.length);
             const nativeDeadlineMs=execution.deadlineMs();
-            const nativePlan={...plan,assets,nativeDeadlineMs,components:plan.components.filter(c=>c.convertible),animations:(plan.animations||[]).filter(a=>a.convertible)};
+            const resourceProbes=plan.resourceProbes?JSON.parse(JSON.stringify(plan.resourceProbes)):null;
+            if(resourceProbes) {
+                if(resourceProbes.profile!=='creator-spine-3.8-v1'||resourceProbes.spines.length>16)throw Error('Unsupported resource probe scope');
+                for(const spec of resourceProbes.spines) {
+                    for(const file of spec.files)if(hash(fs.readFileSync(within(root,file.path)))!==file.sha256)throw Error('Resource probe original bytes changed');
+                    const skeleton=await timedReq('query-asset-info','db://'+spec.skeletonPath);
+                    if(!skeleton||skeleton.invalid||skeleton.uuid!==spec.skeletonUuid)throw Error('Native Spine import/UUID differs');
+                    for(const page of spec.pages) {
+                        const image=await timedReq('query-asset-info','db://'+page.path);
+                        const texture=await timedReq('query-asset-info','db://'+page.path+'/texture');
+                        if(!image||image.uuid!==page.imageUuid||!texture||texture.invalid)throw Error('Spine native page import differs');
+                        page.textureUuid=texture.uuid;
+                    }
+                }
+            }
+            const nativePlan={...plan,resourceProbes,assets,nativeDeadlineMs,components:plan.components.filter(c=>c.convertible),animations:(plan.animations||[]).filter(a=>a.convertible)};
             let result = await sceneJob('assemble',[nativePlan],'hierarchy');
             if (!result || (typeof result.serialized !== 'string'&&!result.assemblyId)) throw Error('No native scene serialization');
             const assemblyId=result.assemblyId;const savedPrefabs=[];

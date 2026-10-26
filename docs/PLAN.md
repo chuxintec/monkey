@@ -1,17 +1,19 @@
 # monkey 项目计划与执行进度
 
-## 当前执行：v0.5.0 / 05-C 资源与引用第一组修复（2026-10-26）
+## 当前执行：v0.5.0 / 资源代表与操作基础完成，精确 schema 阻断（2026-10-26）
 
-用户直接批准先做大工程预算/阶段复用，再做 adopt 并验证肥鹅/向僵尸。开发版本 **0.5.0.dev1**。后续人类批准 GREA/monkey/beaver 职责整改：monkey 负责独立恢复候选，开发工程采用事务交 beaver；已原生核验总监 human `01a1764c-0246-7541-88e4-9a84d3556574`。依据 [三产品计划](/Users/wangmeng/Documents/Manager/decisions/20261026-grea-monkey-beaver/PLAN.md) 与 [交接合同](/Users/wangmeng/Documents/Manager/decisions/20261026-grea-monkey-beaver/CONTRACT.md)，保留在途实现和失败记录，冻结后供 beaver 接手，不重新实现或继续扩展 monkey 工程事务。
+本地开发版本 **0.5.0.dev1**；已安装仍为 **0.4.0**，无推送/Release/全局安装。按续推事件 `monkey-v05-existing-plan-resume-20261026-01` 完成可独立推进的资源及使用基础，未把子集通过报成整版完成。正式肥鹅/GREA/beaver 只读，向僵尸保持暂停；本轮仅使用 monkey 自有资源探针和已冻结来源。
 
-| 工作包 | 本轮结果 | 状态与下一步 |
+| 工作包 | 已验证 | 当前出口 |
 |---|---|---|
-| 05-A 大工程预算/阶段复用 | 全输入 8 GiB/50 万文件，选择集 256 MiB/2 万，单文件 512 MiB；流式哈希/复制、有界 no-follow 读取；精确 reader/schema/依赖合同替代仅靠版本号。肥鹅双端和僵尸共 315,003 个文件逐项核验通过；肥鹅 inspect/normalize 无重解析/图片解码，僵尸全部 601 容器无 worker 复用 | 本轮子集通过；仍复用原有检查点，未声称任意历史版本/所有阶段均可续跑 |
-| 05-B adopt 在途实现 | 三方预览、身份/命名空间/依赖保护、Unity 原生移动与回滚。339 测试通过；肥鹅副本前一 WIP 原生移动/保存重开通过，并有真实失败后回滚证据；最新新增目录/资产仅离线编译与测试，未原生验证。僵尸全量预览通过，未启动其 Editor | **已由 beaver 接收并完成其本地 0.1.0 验收**；只读复用固定回执，不重测采用。旧 monkey 入口仍为 deprecated compatibility，消费者切换/退休另行闭合；冻结身份见 [交接清单](BEAVER-HANDOFF.md) |
-| 05-C 资源/引用阻断 | 36 对象补回 72 原生头引用，正文仍 unparsed；Unity 两个超长派生路径修复并独立重开；Creator 21 个超预算 Tiled 原生零诊断；僵尸 3 紧密 Sprite / 271 顶点 / 336 三角形及 UV、1 Prefab / 16 字段保存重载通过；72 定向测试通过 | **部分完成**；精确正文 schema/借用字段写回闭合、Spine 播放与 Shader 目标转换继续实施。详见 [资源引用验收](validation/2026-10-26-resource-reference-correctness.md) |
-| 05-D 诊断与使用基础 | 本组补充能力/预算声明与验收摘要 | 其他统一诊断、显式补取续跑、环境/CI/空间预览待实施 |
+| 05-A 大工程预算与阶段复用 | 肥鹅 Unity 75,710 文件 / 2,834,639,181 字节，Creator 74,694 / 2,789,086,480；僵尸 164,599 / 3,267,184,074；暖阶段禁止原包读/解码/worker 时实际复用，漂移/篡改拒绝 | 完成既定本地子集，复用 [预算验收](validation/2026-10-26-v050-budget-reuse-handoff.md)，未重导全量 |
+| 05-B adopt 移交 | 冻结采用实现已由 beaver 接收并完成其本地 0.1.0 验收；只读复核固定回执/wheel | 采用归 beaver；旧 monkey CLI 明确 deprecated compatibility，消费者切换/退休另列，不重复采用测试 |
+| 05-C 原生资源与引用 | 第一组 72 头引用、2 动画长名、21 Tiled、3 紧密 Sprite 几何/UV；新增 Spine 二进制/JSON 各 1 份原生引用/页图/时间/姿态保存重开；精确 Shader 的材质保存重导、编译/Metal 像素通过 | **仍阻断**：36 正文无可信精确 schema，字段写回不放行。8 非标准 Spine、其他 37 Effect、Unity Spine runtime 等继续隔离；[新验收](validation/2026-10-26-v050-operations-resources.md) |
+| 05-D 诊断与使用基础 | acquire-resources 的有限重试/已结束部分层续接；diagnose 的源身份/目标映射/动作；doctor、space-preview 无安装/删除；公开 CLI 与相关回归通过 | macOS 隔离 wheel/sdist 最终收尾；Linux/Windows CI 矩阵已写但未远端运行，不能声称跨平台已通过 |
 
-证据 `.private/v050-adoption-20261026/`；公开摘要 [本轮核验](validation/2026-10-26-v050-budget-reuse-handoff.md)。v0.5 尚未完成；日常安装仍为 v0.4.0，无推送/Release/全局安装。正式肥鹅/GREA 只读，向僵尸继续暂停；当前冻结点没有存活的采用 Editor/CLI 进程。
+**实际阻断**：19 Image、10 Text、3 TMP、4 自定义组件的精确 Unity `2021.3.30f1` / platform `20` / scriptId / typeHash 正文 schema 或相应可信原程序集未取得。逐对象原 hash、类型和动作已写 `.private/v050-continuation-20261026/source-schema-blockers.json`。独立参考与目标 GUID/localId/hash 写回门继续有效；不按通用类名套近似布局，不补默认值。已批准的独立工作已继续做到分发收口，v0.5 当前不能宣称完整验收。
+
+执行方式按 [模块登记](TEAM-STATE.md)；仅一个 Shader 完整模块开发者，公共接口/窗口/集成由主开发负责。Shader 已交付，不新增任务或循环回报；本次以精确 schema 阻断向总监成组报告。范围和后续版本见 [ENGINE-ROADMAP](ENGINE-ROADMAP.md)，操作见 [V0.5-OPERATIONS](V0.5-OPERATIONS.md)。
 
 ## 本轮完成：资源与引用第一组（2026-10-26）
 
