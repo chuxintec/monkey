@@ -50,4 +50,15 @@ C#文件数含辅助函数和未确定所有者的容器，不能当成原业务
 
 向僵尸继续使用已批准冻结来源：既有8个纯i64运算片段和精确WASM字节证据复用，关联仍有caller-map假设；13个状态方法不伪造正文，不再启动其原生工程。36个精确schema缺口继续约束不安全二进制字段写回，不妨碍有源JS初稿导出。真实游戏Mono样本、完整IL2CPP状态方法、全游戏业务/原UI/Player/视觉仍未验证。
 
-私有完整回执位于 `.private/v060-package-mainflow-20261026/`：`final-candidate-verification.json`、`final-large-stage-reuse.json`、`final-integration-tests.log`、`full-convert-03.log`。原样本、候选、诊断载荷和编译私有制品不纳入Git或发行包；分发身份由本目录后续`delivery.json`固定。稳定0.4不变。
+私有完整回执位于 `.private/v060-package-mainflow-20261026/`：`final-candidate-verification.json`、`final-large-stage-reuse.json`、`final-integration-tests.log`、`full-convert-03.log`。原样本、候选、诊断载荷和编译私有制品不纳入Git或发行包；分发身份由本目录`delivery.json`固定。稳定0.4不变。
+
+## 固定本地分发03
+
+源码提交 `d3f22ab7a3bffc580c326a40b776aaa5fdb1c19c`，tree `ff1c567d5c3d908878837c6f98dc9ad209242f79`。从`git archive`快照构建一次wheel/sdist，182个产品文件与提交及隔离安装副本逐字节一致；无游戏原件、私有样本、outputs或恢复DLL/WASM入包。
+
+| 制品 | 字节 | SHA-256 |
+|---|---:|---|
+| monkey_native-0.6.0.dev1-py3-none-any.whl | 719,239 | `59335598b8153988dfc9eafc5d5b733ef293a29bb32094ab005cd570d0d75d02` |
+| monkey_native-0.6.0.dev1.tar.gz | 1,054,967 | `23231fda81199cb16b8e891378c71ff89f2e4a5adf9dbb770656f73043aaa5de` |
+
+隔离安装实际执行capabilities、code-draft冷生成、code-draft逐文件hash复用、code-types数字方法自动类型提取4次调用，全部预期状态；小源为自有测试代码且从未执行。只验证新增主链，没有重复旧24CLI、16方法编译、WASM8或Unity/CUA6。路径为`.private/v060-package-mainflow-20261026/distribution-03/`；不作为全局安装或正式Release。
