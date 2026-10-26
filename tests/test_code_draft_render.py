@@ -366,6 +366,28 @@ class CodeDraftRenderTests(unittest.TestCase):
         self.assertIn("return recurseTarget();", result["source"])
         self.assertNotIn("root_function_target_mismatch", {d["code"] for d in result["diagnostics"]})
 
+    def test_plain_int32_literal_division_uses_double_but_other_operands_stay_unchanged(self):
+        raw = b"return left / right;"
+        def render_division(left, right, operator="/"):
+            expression = n("BinaryExpression", operator=operator, left=left, right=right)
+            ast = n("FunctionExpression", params=[], body=n("BlockStatement", body=[n("ReturnStatement", argument=expression)]))
+            return render_method({"name": "division", "sourceBytes": {"start": 0, "end": len(raw)}}, ast, raw)["source"]
+        literal = lambda value, **markers: n("Literal", value=value, **markers)
+        for left, right, expected in (
+            (1, 60, "((double)(1)) / 60"),
+            (4, 2, "((double)(4)) / 2"),
+            (0, 0, "((double)(0)) / 0"),
+            (1, 0, "((double)(1)) / 0"),
+        ):
+            self.assertIn(expected, render_division(literal(left), literal(right)))
+        self.assertIn("(true / 2)", render_division(literal(True), literal(2)))
+        self.assertIn('(\"1\" / 2)', render_division(literal("1"), literal(2)))
+        self.assertIn("(value / 2)", render_division(ident("value"), literal(2)))
+        self.assertIn("(2147483648 / 2)", render_division(literal(2147483648), literal(2)))
+        self.assertIn("(1 / 2)", render_division(literal(1, bigint="1"), literal(2)))
+        self.assertIn("(1 / 2)", render_division(literal(1, regex={"pattern": "1", "flags": ""}), literal(2)))
+        self.assertIn("(1 + 2)", render_division(literal(1), literal(2), operator="+"))
+
     def test_incomplete_binding_scan_reports_budget_and_skips_new_renames(self):
         raw = b"function f($,_){return $+_;}"
         dollar_param = n("Identifier", name="$", bindingId="budget-dollar", _draftIdentifierTarget="keptDollar")

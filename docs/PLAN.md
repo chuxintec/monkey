@@ -14,6 +14,8 @@
 
 2026-10-27 生成器绑定命名根因补修：已观测奖励动画`$`/`_`碰撞后，renderer仅依据明确bindingId为冲突局部分配稳定无碰撞名称，参数/局部/闭包/循环/catch/嵌套函数共用映射，公开成员和已有显式目标保持。无binding/目标冲突/预算截断具体诊断；截断不自动改名。根命名函数按可证公开签名保护，避免把递归引用改成不存在局部函数。31项renderer检查通过；独立.NET8用例03旧版CS0100、修复版零错误并得到`distinct=27,72`，用例04旧版虽编译成功但递归调用RuntimeBinderException，修复版得`recursive=15,0`。证据`RendererBindingBehavior03/receipt.json`与`RendererRecursiveBindingBehavior04/receipt.json`；仅合成代码执行，未来生成生效，冻结07/真实批处理候选不重导不改。全量实际进度1490/6445，第22批继续；无整版完成/编译或运行声明。
 
+2026-10-27 字面量除法根因及静态复核补充：renderer只在两端均普通int32数字Literal且无BigInt/正则标记的`/`中使用double；变量/动态/布尔/字符串/越界/其他运算符保持。32项模块检查通过；独立.NET8用例05复现旧版1/60=0与零除CS0020，修复后1/60=0.016666666666666666、0/0=NaN、1/0=正无穷、8/4=2，编译零警告/错误。证据`RendererLiteralDivisionBehavior05/receipt.json`，仅合成代码，不改冻结候选。另对1779份已接受代码补查未映射新增空方法29信号：9份精确原版空函数、20份新增discard辅助方法，回执`UnmappedEmptyAudit01/manual-source-review.json`；不外推语义。前25批28份尝试归档912个命令项静态记录复核，886段Python AST可解析，74个compile命中均re.compile；8份脱敏导致的解析缺口保留、3份原命令语法错误exit1、1份组合heredoc，不重建脱敏内容。所见无原JS/WASM/DLL/编译器/引擎/网络启动，限定日志信号证据`EventAudit01/manual-review.json`，不作为所有操作的绝对证明。全量实际1870/6445，第27批继续，全版未完成。
+
 ## 全量执行入口（本轮进行中）
 
 首轮全manifest实际为 **6,445份C# / 40,574,177字节 / 86批**：5,522份新初稿、914份旧具名草稿（原JS模块SHA全部精确匹配）、9份原生工程辅助代码；47,384函数/19,571索引方法和3,706字段映射另作分母。各弱标签均未过滤，唯一725,535字节文件保持完整。`ProjectRun01` 以0模型调用/0处理状态升级旧未运行5522清单，ScopeHistory保留原plan/request/state；完整资源工程复用原已拷贝清单，未重导资源。

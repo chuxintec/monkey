@@ -130,6 +130,14 @@ class _Renderer:
             return _identifier(value)
         return None
 
+    def _is_plain_int32_literal(self, node: Any) -> bool:
+        if not isinstance(node, dict) or node.get("type") != "Literal":
+            return False
+        if any(marker in node for marker in ("bigint", "regex", "regexp")):
+            return False
+        value = node.get("value")
+        return type(value) is int and -(2 ** 31) <= value <= (2 ** 31 - 1)
+
     def _method_name_and_collision(self) -> tuple[str, bool]:
         name = _identifier(self.method.get("targetName") or self.method.get("name") or "DraftMethod")
         collision = bool(self.class_name and name.lstrip("@").casefold() == self.class_name.lstrip("@").casefold())
@@ -608,7 +616,10 @@ class _Renderer:
                 return "new " + self.expr(callee, depth + 1) + "(" + ", ".join(args) + ")"
             if kind == "BinaryExpression":
                 op = node.get("operator")
-                left, right = self.expr(node.get("left"), depth + 1), self.expr(node.get("right"), depth + 1)
+                left_node, right_node = node.get("left"), node.get("right")
+                left, right = self.expr(left_node, depth + 1), self.expr(right_node, depth + 1)
+                if op == "/" and self._is_plain_int32_literal(left_node) and self._is_plain_int32_literal(right_node):
+                    left = "((double)(" + left + "))"
                 if op == "**":
                     return f"System.Math.Pow({left}, {right})"
                 if op == "instanceof":
