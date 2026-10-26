@@ -7,6 +7,8 @@ name = "monkey-native"
 version = "0.4.0"
 description = "Evidence-traceable game package recovery to editable native Unity 6 projects"
 requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
 dependencies = ["Pillow==12.2.0", "pypinyin==0.55.0"]
 
 [project.scripts]

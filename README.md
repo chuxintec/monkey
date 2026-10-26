@@ -1,5 +1,7 @@
 # monkey
 
+[MIT 开源许可](LICENSE) · [GitHub](https://github.com/chuxintec/monkey) · [v0.4.0 Release](https://github.com/chuxintec/monkey/releases/tag/v0.4.0)
+
 当前版本为 **0.4.0**，采用 [monkey-project/1 工程规范](docs/PROJECT-SPEC.md)。新增 Unity 字体/引用表分块读取和可配置解析预算，详见 [解析预算](docs/providers/UNITY-PARSE-BUDGETS.md) 和 [v0.4.0 发布说明](docs/RELEASE-v0.4.0.md)。资源候选、原生导入、画面及业务验收分别记录。
 
 新输出直接生成规范目录；`--format none|grea` 保留为弃用兼容参数。`convert --layout layout.json` 可使用游戏级命名覆盖；`layout-preview` 预览已完成转换的路径变化，`layout-migration` 按 GUID/UUID 生成旧候选到新候选的迁移清单。进度和未验证项见 [PLAN](docs/PLAN.md)，用法见 [USAGE](docs/USAGE.md)。
@@ -116,3 +118,7 @@ Python 最低 3.11，本次实际验证为 macOS arm64 / Python 3.14.7。Pillow 
 正式资源区包含已解析音频、完整纹理、SpriteFrame 图片、Spine 数据闭包与 Shader 来源代码，原件仍保留于 SourceRecovery。Scene/Prefab/Animation 由原生导入阶段生成。Shader 源文件、Spine 数据与原生渲染/播放分别验收；本轮不配置远端分组或构建。
 
 图片统一使用 `Textures/<Module>/`，不再生成 Sprites 目录。保留 Sprite 导入设置与引用；仅合并字节一致且无独立绑定要求的附加完整纹理，尺寸/裁切不同的图片不强行删除。`resource-catalog.json` 记录纹理别名；Spine/字体页图仍留在对应闭包旁。
+
+## 许可
+
+monkey 自有代码采用 [MIT License](LICENSE)，适用于本仓库及已发布版本中的自有代码。第三方代码保留各自版权和许可，见 [THIRD-PARTY-NOTICES](THIRD-PARTY-NOTICES.md)。游戏原包、素材、引擎和第三方工具不属于本项目的开源授权内容，也不随发行包提供。v0.4.0 已发布包保持原哈希，MIT LICENSE 作为该 Release 的独立附件提供；后续构建自动携带根许可证及 MIT 包元数据。
