@@ -128,9 +128,9 @@ class CodeDraftRenderTests(unittest.TestCase):
         ]))
         result = render_method({"name": "ambiguous", "sourceBytes": {"start": 0, "end": len(raw)}}, ast, raw)
         code = result["source"]
-        self.assertIn("_ = undefined;", code)
-        self.assertIn("_ = NaN;", code)
-        self.assertIn("_ = Infinity;", code)
+        self.assertIn("dynamic __draftDiscard0 = undefined;", code)
+        self.assertIn("dynamic __draftDiscard1 = NaN;", code)
+        self.assertIn("dynamic __draftDiscard2 = Infinity;", code)
         self.assertIn("new Array(2)", code)
         self.assertIn("(Math).max(1, 2)", code)
         self.assertIn("(cc).log(\"x\")", code)
@@ -156,6 +156,63 @@ class CodeDraftRenderTests(unittest.TestCase):
         ]))
         result = render_method({"name": "dynamicThis", "sourceBytes": {"start": 0, "end": len(raw)}}, ast, raw)
         self.assertIn("return this;", result["source"])
+
+    def test_provably_empty_source_body_returns_null_without_unknown_placeholder(self):
+        raw = b"function empty(){ /* comment only */ ; }"
+        empty_block = n("FunctionExpression", params=[], body=n("BlockStatement", body=[]))
+        result = render_method({"name": "empty", "sourceBytes": {"start": 0, "end": len(raw)}}, empty_block, raw)
+        self.assertIn("return null;", result["source"])
+        self.assertNotIn("NotImplementedException", result["source"])
+        empty_statements = n("FunctionExpression", params=[], body=n("BlockStatement", body=[
+            n("EmptyStatement"), n("BlockStatement", body=[n("EmptyStatement")])
+        ]))
+        result = render_method({"name": "emptyStatements", "sourceBytes": {"start": 0, "end": len(raw)}}, empty_statements, raw)
+        self.assertIn("return null;", result["source"])
+        self.assertNotIn("NotImplementedException", result["source"])
+
+    def test_deep_empty_blocks_are_not_proven_empty_past_renderer_budget(self):
+        raw = b"function deeplyNested(){ /* nested empty blocks */ }"
+        nested = n("EmptyStatement")
+        for _ in range(220):
+            nested = n("BlockStatement", body=[nested])
+        ast = n("FunctionExpression", params=[], body=n("BlockStatement", body=[nested]))
+        result = render_method({"name": "deeplyNested", "sourceBytes": {"start": 0, "end": len(raw)}}, ast, raw)
+        self.assertNotIn("return null;", result["source"])
+        self.assertIn("renderer_budget_omission", {d["code"] for d in result["diagnostics"]})
+        self.assertNotIn("empty_draft_body_blocked", {d["code"] for d in result["diagnostics"]})
+
+    def test_source_underscore_assignment_survives_generated_discard_and_closure(self):
+        raw = b"function use(_){ let __draftDiscard0=0; _ = _ + 1; let f=()=>{let _=2; _=_+1; 4;}; value + 2; }"
+        nested = n("ArrowFunctionExpression", params=[], body=n("BlockStatement", body=[
+            n("VariableDeclaration", kind="let", declarations=[n("VariableDeclarator", id=ident("_"), init=n("Literal", value=2))]),
+            n("ExpressionStatement", expression=n("AssignmentExpression", operator="=", left=ident("_"), right=n("BinaryExpression", operator="+", left=ident("_"), right=n("Literal", value=1)))),
+            n("ExpressionStatement", expression=n("Literal", value=4)),
+        ]))
+        ast = n("FunctionExpression", params=[ident("_")], body=n("BlockStatement", body=[
+            n("VariableDeclaration", kind="let", declarations=[n("VariableDeclarator", id=ident("__draftDiscard0"), init=n("Literal", value=0))]),
+            n("ExpressionStatement", expression=n("AssignmentExpression", operator="=", left=ident("_"), right=n("BinaryExpression", operator="+", left=ident("_"), right=n("Literal", value=1)))),
+            n("VariableDeclaration", kind="let", declarations=[n("VariableDeclarator", id=ident("f"), init=nested)]),
+            n("ExpressionStatement", expression=n("BinaryExpression", operator="+", left=ident("value"), right=n("Literal", value=2))),
+            n("ExpressionStatement", expression=n("SequenceExpression", expressions=[ident("_"), n("Literal", value=7)])),
+        ]))
+        result = render_method({"name": "use", "sourceBytes": {"start": 0, "end": len(raw)}}, ast, raw)
+        code = result["source"]
+        self.assertIn("use(dynamic _)", code)
+        self.assertIn("_ = (_ + 1);", code)
+        self.assertIn("dynamic __draftDiscard0 = 0", code)
+        self.assertIn("dynamic __draftDiscard2 = (value + 2);", code)
+        self.assertIn("dynamic _ = 2", code)
+        self.assertIn("dynamic __draftDiscard1 = 4;", code)
+        self.assertIn("dynamic __draftDiscard3 = _;", code)
+        self.assertIn("dynamic __draftDiscard4 = ((System.Func<dynamic>)", code)
+        self.assertEqual(2, code.count("_ = (_ + 1);"))
+        metadata_parameter = render_method({"name": "metadataParameter", "parameters": [{"name": "__draftDiscard0"}],
+            "sourceBytes": {"start": 0, "end": len(raw)}},
+            n("FunctionExpression", params=[], body=n("BlockStatement", body=[
+                n("ExpressionStatement", expression=n("Literal", value=8))
+            ])), raw)
+        self.assertIn("metadataParameter(dynamic __draftDiscard0)", metadata_parameter["source"])
+        self.assertIn("dynamic __draftDiscard1 = 8;", metadata_parameter["source"])
 
     def test_control_flow_calls_collections_math_string_and_callback_render_as_code(self):
         source = b'function update(x){ /* body */ }'

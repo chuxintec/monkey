@@ -1,5 +1,7 @@
 # v0.6 模块执行登记
 
+2026-10-27 已观测根因修复模块：复用 `/root/shader_profile`（既有目标gpt-6-luna/high；实际模型未另行回读），基线a3a80bb，仅单写code_draft_render.py/test_code_draft_render.py/CODE-DRAFT-RENDER.md，修复精确空源函数误抛异常与生成丢弃赋值覆盖真实`_`变量；已交付/父集成：renderer 22项及独立.NET8两方法编译/行为通过（真实下划线保持6、精确空函数null），不外推整版。合成定向反例，不读写.private/冻结07/实际队列、不调用Codex/Editor、不重导。父继续唯一实际串行CLI、PLAN/共享接口和集成，renderer只影响未来确定性输出；此项覆盖下方该实例空闲登记，不扩版本/权限。
+
 运行期性能/记录协议：codex_postprocess 已交付fixed JSON ledger与artifact级错误、26项检查并停止写入；父单写项目task/API/CLI、实际queue与采用。当前模型自然收尾后切换，不重跑已审阅批次，不把语义未知当未审阅，也不把未知ID算入验证覆盖。
 
 首批实际运行暴露预算过短：父维护项目pause/configure/CLI/运行资料；复用codex_postprocess在既有三文件内补低层合作式检查点和停机预算调整。真实CLI仍父唯一串行，既有工作进程自然退出后才交接，不重置耗时或尝试次数。

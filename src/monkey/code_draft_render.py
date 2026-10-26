@@ -72,6 +72,73 @@ class _Renderer:
         self.uses_linq = False
         self.embedded_functions: list[dict[str, Any]] = []
         self._embedded_ids: set[str] = set()
+        self._reserved_identifiers: set[str] = set()
+        self._discard_index = 0
+        self._reserve_ast_identifiers(ast)
+        metadata_parameters = method.get("parameters") if isinstance(method.get("parameters"), list) else []
+        for parameter in metadata_parameters:
+            raw_name = parameter.get("name") if isinstance(parameter, dict) else parameter
+            if isinstance(raw_name, str) and raw_name:
+                self._reserved_identifiers.add(_identifier(raw_name))
+        for capture in method.get("captureParameters", []) if isinstance(method.get("captureParameters"), list) else []:
+            if isinstance(capture, dict) and isinstance(capture.get("targetName"), str):
+                self._reserved_identifiers.add(_identifier(capture["targetName"]))
+
+    def _reserve_ast_identifiers(self, node: Any) -> None:
+        stack = [node]
+        seen: set[int] = set()
+        visited = 0
+        while stack and visited < MAX_NODES:
+            current = stack.pop()
+            if not isinstance(current, (dict, list)) or id(current) in seen:
+                continue
+            seen.add(id(current))
+            visited += 1
+            if isinstance(current, dict):
+                if current.get("type") == "Identifier":
+                    raw = current.get("_draftIdentifierTarget")
+                    name = raw if isinstance(raw, str) and re.fullmatch(r"[A-Za-z_$][A-Za-z0-9_$]*", raw) else current.get("name")
+                    if isinstance(name, str) and name:
+                        self._reserved_identifiers.add(_identifier(name))
+                stack.extend(value for key, value in current.items() if key not in ("start", "end"))
+            else:
+                stack.extend(current)
+
+    def _discard_local(self, expression: str) -> str:
+        while True:
+            name = f"__draftDiscard{self._discard_index}"
+            self._discard_index += 1
+            if name not in self._reserved_identifiers:
+                self._reserved_identifiers.add(name)
+                return f"dynamic {name} = {expression};"
+
+    def _is_provably_empty_body(self, statements: list[Any]) -> bool:
+        """Prove a body is only blocks/empty statements within renderer budgets."""
+        if len(statements) > MAX_NODES:
+            return False
+        stack = [(node, 1) for node in reversed(statements)]
+        seen: set[int] = set()
+        visited = 0
+        while stack:
+            node, depth = stack.pop()
+            if depth > MAX_DEPTH:
+                return False
+            if not isinstance(node, dict) or id(node) in seen:
+                return False
+            seen.add(id(node))
+            visited += 1
+            if visited > MAX_NODES:
+                return False
+            kind = node.get("type")
+            if kind == "EmptyStatement":
+                continue
+            if kind != "BlockStatement" or not isinstance(node.get("body"), list):
+                return False
+            children = node["body"]
+            if visited + len(stack) + len(children) > MAX_NODES:
+                return False
+            stack.extend((child, depth + 1) for child in reversed(children))
+        return True
 
     def _embed_marker(self, node: Any) -> str:
         if not isinstance(node, dict):
@@ -389,7 +456,7 @@ class _Renderer:
                     return "null"
                 rendered = [self.expr(item, depth + 1) for item in expressions]
                 self.diagnose(node, "sequence_expression_approximation", "Comma expression is lowered to an immediately invoked lambda", "dynamic evaluation order is retained but debugger shape differs")
-                prelude = " ".join("_ = " + item + ";" for item in rendered[:-1])
+                prelude = " ".join(self._discard_local(item) for item in rendered[:-1])
                 return f"((System.Func<dynamic>)(() => {{ {prelude} return {rendered[-1]}; }}))()"
             if kind in ("ArrowFunctionExpression", "FunctionExpression"):
                 params, init = self.parameters(node.get("params", []), node)
@@ -514,7 +581,7 @@ class _Renderer:
                 rendered = self.effect_expr(expression)
                 if expression.get("type") in ("AssignmentExpression", "UpdateExpression", "CallExpression", "NewExpression", "AwaitExpression"):
                     return [pad + rendered + ";"]
-                return [pad + "_ = " + rendered + ";"]
+                return [pad + self._discard_local(rendered)]
             if kind == "VariableDeclaration":
                 return [pad + line for line in self.declaration(node)]
             if kind == "ReturnStatement":
@@ -674,7 +741,9 @@ class _Renderer:
             # A parent may pass the method's BlockStatement directly.
             body = function if function.get("type") == "BlockStatement" else None
             params_ast = []
-        if not isinstance(body, dict) or body.get("type") != "BlockStatement":
+        has_source_block = (isinstance(body, dict) and body.get("type") == "BlockStatement"
+                            and isinstance(body.get("body"), list))
+        if not has_source_block:
             self.diagnose(function, "method_body_missing", "AST input has no block body; source span retained as a diagnostic comment", "draft method has no emitted source body")
             body = {"type": "BlockStatement", "body": [], "start": function.get("start"), "end": function.get("end")}
         meta_params = self.method.get("parameters")
@@ -725,11 +794,18 @@ class _Renderer:
             lines.append("        " + item)
         if self._has_unmapped_this(body) and static:
             self.diagnose(body, "static_this_approximation", "Static source method references this; draft retains it as C# this and may not compile", "owner/static classification may be incomplete")
+        source_statements = body.get("body", [])
+        if not isinstance(source_statements, list):
+            source_statements = []
+        source_empty = has_source_block and self._is_provably_empty_body(source_statements)
         emitted_body = []
-        for stmt in body.get("body", []):
-            emitted_body.extend(self.stmt(stmt, 2))
+        if source_empty:
+            emitted_body.append("        return null;")
+        else:
+            for stmt in source_statements:
+                emitted_body.extend(self.stmt(stmt, 2))
         meaningful = [line for line in emitted_body if line.strip() and not line.lstrip().startswith("//")]
-        if not meaningful:
+        if not source_empty and not meaningful:
             self.diagnose(body, "empty_draft_body_blocked", "No executable statement could be rendered; emitted an explicit NotImplementedException", "prevents empty/default-success C# body")
             emitted_body.append("        throw new System.NotImplementedException(\"No source statement was renderable\");")
         lines.extend(emitted_body)
