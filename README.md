@@ -1,8 +1,6 @@
 # monkey
 
-当前源码开发候选为 **0.3.0.dev2**：新增 Unity 字体/引用表分块读取和可配置解析预算，详见 [解析预算](docs/providers/UNITY-PARSE-BUDGETS.md)。已安装的 `0.3.0.dev1` Release 保持冻结；开发验证显式使用 `.venv/bin/python -m monkey.cli`。
-
-当前已发布版本 **0.3.0.dev1**，采用 [monkey-project/1 工程规范](docs/PROJECT-SPEC.md)。本版本以 GitHub prerelease 交付，旧版本保持冻结；资源候选、原生导入、画面及业务验收分别记录。
+当前版本为 **0.4.0**，采用 [monkey-project/1 工程规范](docs/PROJECT-SPEC.md)。新增 Unity 字体/引用表分块读取和可配置解析预算，详见 [解析预算](docs/providers/UNITY-PARSE-BUDGETS.md) 和 [v0.4.0 发布说明](docs/RELEASE-v0.4.0.md)。资源候选、原生导入、画面及业务验收分别记录。
 
 新输出直接生成规范目录；`--format none|grea` 保留为弃用兼容参数。`convert --layout layout.json` 可使用游戏级命名覆盖；`layout-preview` 预览已完成转换的路径变化，`layout-migration` 按 GUID/UUID 生成旧候选到新候选的迁移清单。进度和未验证项见 [PLAN](docs/PLAN.md)，用法见 [USAGE](docs/USAGE.md)。
 
@@ -10,16 +8,16 @@
 
 开发版`convert --numeric-code-contract numeric.json`可在同一命令里发现精确源模块、生成有据C#/默认TypeScript，再格式化。现有Label数值调用子域支持原组件绑定；新增静态数值方法子集按调用合同生成独立工具类。声明格式和分层验证见[CODE-SUBSET](docs/CODE-SUBSET.md)，未知业务方法继续保留待补。
 
-Python 驱动的原包恢复工程命令行工具。产品目标：Cocos各版本原包→Unity6/Cocos3.8.8/both；Unity、Laya/LayaAir、Egret、自研及其他引擎原包→Unity6。按来源逐步实现；结构化reader当前覆盖已验证的Cocos2.4.15子集，开发分支新增Cocos2.4.11、2.1.2/3.8.7资源子集、Unity显式Bundle/WebData来源，以及其他引擎原图gallery出口（原节点/方法范围见支持矩阵）。wxapkg/APK/已取得资源集合一键生成独立工程，含全部输入资源、恢复源码与目标代码初稿，交给AI继续开发。当前预发布为 [`v0.3.0.dev1`](https://github.com/chuxintec/monkey/releases/tag/v0.3.0.dev1)，仍非所有引擎与版本全兼容。具体恢复范围见 [支持矩阵](docs/SUPPORT-MATRIX.md)。
+Python 驱动的原包恢复工程命令行工具。产品目标：Cocos各版本原包→Unity6/Cocos3.8.8/both；Unity、Laya/LayaAir、Egret、自研及其他引擎原包→Unity6。按来源逐步实现；结构化reader当前覆盖已验证的Cocos2.4.15子集，开发分支新增Cocos2.4.11、2.1.2/3.8.7资源子集、Unity显式Bundle/WebData来源，以及其他引擎原图gallery出口（原节点/方法范围见支持矩阵）。wxapkg/APK/已取得资源集合一键生成独立工程，含全部输入资源、恢复源码与目标代码初稿，交给AI继续开发。当前正式版本为 [`v0.4.0`](https://github.com/chuxintec/monkey/releases/tag/v0.4.0)，仍非所有引擎与版本全兼容。具体恢复范围见 [支持矩阵](docs/SUPPORT-MATRIX.md)。
 
 
 本版完成向僵尸开炮 601 容器的全量导出与内容核查，补齐所有缺失 GUID 统计及精确纹理的无损 PNG 输出。核验范围和已知源缺件见 [本版验收](docs/validation/2026-10-25-zombie-release.md)。
 ## 安装与依赖
 
-Python 3.11+。从 [GitHub Release](https://github.com/chuxintec/monkey/releases/tag/v0.3.0.dev1) 下载 wheel、`SHA256SUMS` 与安装脚本，核对哈希后安装：
+Python 3.11+。从 [GitHub Release](https://github.com/chuxintec/monkey/releases/tag/v0.4.0) 下载 wheel、`SHA256SUMS` 与安装脚本，核对哈希后安装：
 
 ```sh
-python3 install_release.py --wheel monkey_native-0.3.0.dev1-py3-none-any.whl --sha256 <SHA256SUMS中的wheel哈希>
+python3 install_release.py --wheel monkey_native-0.4.0-py3-none-any.whl --sha256 <SHA256SUMS中的wheel哈希>
 monkey --version
 monkey capabilities --json
 ```
