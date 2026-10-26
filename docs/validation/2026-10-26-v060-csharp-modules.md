@@ -45,4 +45,9 @@ Mono 复用本机明确 ILSpy provider，只静态读取程序集。当前没有
 
 ## 分发与复核
 
-本地不可变提交、wheel/sdist 内容核对及 macOS 新隔离 venv 烟测待收口。Linux/Windows 未运行；没有推送、Release 或全局安装。本版使用方法见 [CODE-MODULES](../CODE-MODULES.md)、[CODE-PROFILES](../CODE-PROFILES.md)、[CODE-NATIVE-PROBE](../CODE-NATIVE-PROBE.md)。完整私有证据留在本工具 `.private/v060-csharp-20261026/`，不进入公开包。
+冻结产品源码提交 `8a536d31cab8722c392e1003761002ea50897419`，树 `75b2568e3bba393ce4179feca1bc2ab93b64a461`，从 git archive 构建。wheel/sdist 与该提交173个产品文件逐字节一致；新私有 venv 的173文件复核通过，Pillow/pypinyin从既有固定安装复制，不下载依赖。50项定向测试无skip通过，20项已安装CLI烟测通过。安装版在仓库外调用真实profile/JSON，生成23文件及manifest与profile06全部一致；安装版额外recipe原生准备的10个代码/配置文件也与窗口04实跑文件一致，无须重复启动Editor。
+
+- wheel：`monkey_native-0.6.0.dev1-py3-none-any.whl`，645,150字节，SHA256 `a94499f7a397870ee6334697e683dce44d3dd5d8de7eea4d6b074cc786423c2f`。
+- sdist：`monkey_native-0.6.0.dev1.tar.gz`，946,762字节，SHA256 `37ac71ae62079052c0949d2e030f3898baa12772db12ba1a318ac6825cf39d29`。
+
+本验收记录后续提交只补回执，不修改或重打冻结制品。完整机器证据为 `.private/v060-csharp-20261026/delivery.json`，源码与回执提交分别追溯。Linux/Windows 未运行；没有推送、Release 或全局安装。本版使用方法见 [CODE-MODULES](../CODE-MODULES.md)、[CODE-PROFILES](../CODE-PROFILES.md)、[CODE-NATIVE-PROBE](../CODE-NATIVE-PROBE.md)。完整私有证据留在本工具 `.private/v060-csharp-20261026/`，不进入公开包。

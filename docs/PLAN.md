@@ -14,7 +14,9 @@
 | C6 原字段/配置/资源键 | 原06-C/D、528JSON角色、精确PPtr/事件/加载调用 | 732行ElementMultiOrderPool原JSON/meta原样进入候选，源字段/顺序/数值/hash固定；C#运行时reader建立Map、真实递归9叶已离线通过，Unity TextAsset/Awake真实读取及保存重开通过；36正文仍局部拒绝 |
 | C7 可维护候选 | 原目标代码/命名与已实现/草稿分区 | 内置精确source profile一键发出3模块12方法；正常C#/asmdef/meta及完整未选方法索引，同输入确定性，无成功空壳 |
 | C8 增量重生/所有权 | 原后续代码指纹、依赖失效/人工冲突/新旧映射 | 模块已集成：1,800深链有界；真实12方法同输入全复用，合成方法变化仅自身/调用方失效，shared types保留，dirty拒绝；人工采用仍归beaver |
-| C9 编译/行为/AI交接 | 原07候选交接中C#部分、离线/原生语义层 | 12/16,384明确分母；Unity参考程序集离线编译+独立行为oracle通过；原生9方法/原JSON732行接入通过，分发收口中；视觉/物理输入/Player和完整游戏未验 |
+| C9 编译/行为/AI交接 | 原07候选交接中C#部分、离线/原生语义层 | 12/16,384明确分母；Unity参考程序集离线编译+独立行为oracle通过；原生9方法/原JSON732行接入、macOS隔离wheel/sdist173文件核对、20CLI烟测与安装版真实profile生成通过；视觉/物理输入/Player和完整游戏未验 |
+
+**本版本地限定实现已交付**：源码 `8a536d31cab8722c392e1003761002ea50897419`，50项定向测试无skip通过，完整[验收记录](validation/2026-10-26-v060-csharp-modules.md)。C1–C9以已声明语义/profile贯通，16,372未选方法及家族限制保留；不是完整游戏恢复或正式Release。证据 `.private/v060-csharp-20261026/delivery.json`；日常0.4不动。
 
 Unity Mono/IL2CPP-WASM来源独立模块按不同证据等级推进，缺真实Mono用自有合法夹具验证接口，不外推真实游戏；原方法/映射/元数据不互相冒充。泛新引擎/CDN能力后移，不再另排C# v0.7出口。正式游戏/账号/服务/GREA/beaver不写，无推送/Release/全局安装。模块登记见 [TEAM-STATE](TEAM-STATE.md)。持续实现整版，不逐包报告或等待ACK。
 
@@ -69,7 +71,7 @@ Unity Mono/IL2CPP-WASM来源独立模块按不同证据等级推进，缺真实M
 
 详情 [归属评审](GREA-RECOVERY-HANDOFF.md) 与 [机器清单](validation/2026-10-26-grea-recovery-handoff.json)。仅修改monkey文档和自有私有证据；db253cb的beaver采用冻结归档不变，05-C/05-D保持实施主线，不将归属评审算作资源问题修复或版本完成。
 
-## 当前：v0.5 – v0.7 统一版本规划（2026-10-26，职责整改后）
+## 历史：v0.5 – v0.7 统一版本规划（2026-10-26，已由本页 v0.6 合并计划覆盖）
 
 完整范围和出口见 [ENGINE-ROADMAP](ENGINE-ROADMAP.md)。制作目录沿用 `monkey-project/2.0.0`，不因产品拆分重排目录或改资产身份。
 
