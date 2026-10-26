@@ -1,8 +1,8 @@
 # monkey 项目计划与执行进度
 
-## 当前任务：MIT 开源（2026-10-26）
+## 已完成：MIT 开源（2026-10-26）
 
-用户明确要求 monkey 开源并选定 MIT。检查 GitHub main/全部发布 tag 可达历史及 Release 附件，补齐根 LICENSE、README 和后续包许可元数据。现有 v0.4.0 tag/包保持原 SHA，Release 单独附 MIT LICENSE；正常推送后将仓库设为 public，并通过未认证访问核验。公开状态待完成后回填。
+用户明确要求 monkey 开源并选定 MIT。检查 GitHub main/全部发布 tag 可达历史及 Release 附件，补齐根 LICENSE、README 和后续包许可元数据。现有 v0.4.0 tag/包保持原 SHA，Release 单独附 MIT LICENSE；正常推送后将仓库设为 public，并通过未认证访问核验。已完成：许可提交 6af9928，仓库 public；未认证 GitHub API 返回 private=false、MIT，未认证 LICENSE Release 附件下载逐字节一致。main/全部旧发布 tag 可达 867 个文件对象与 14 份原附件检查未发现私有目录、二进制游戏素材或常见凭据特征；第三方声明保留。后续 wheel 构建已验证 License-Expression: MIT 和 LICENSE，未替换既有 v0.4.0 附件/安装。回执 .private/release-v0.4.0/public-readback.json。
 
 ## 已完成：v0.4.0 正式发布与本地安装（2026-10-26）
 
