@@ -104,7 +104,7 @@ def _normalize_file_results(raw_results: object, selected: list[dict]) -> tuple[
         )
         if not valid:
             shape_ok = False; issues.append(f'{path}: malformed file result')
-            results[path] = {'path': path, 'status': 'partial', 'summary': 'File result schema was invalid; review required.',
+            results[path] = {'path': path, 'status': 'blocked', 'summary': 'File result schema was invalid; analysis was not accepted.',
                              'unresolved': ['Malformed or incomplete file result.'],
                              'membersReviewed': [], 'originalLogicPreserved': False}
             continue

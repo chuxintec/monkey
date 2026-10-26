@@ -7,7 +7,8 @@ import time
 import unittest
 
 import monkey.code_postprocess as postprocess
-from monkey.code_postprocess import _ledger_rows, configure_checkpoint, prepare, request_pause, run
+from monkey.code_postprocess import (_ledger_rows, _normalize_file_results,
+                                     configure_checkpoint, prepare, request_pause, run)
 from monkey.io import sha, encoded
 from monkey.sources.compiled import ParseError
 
@@ -342,6 +343,27 @@ response.write_text(json.dumps({{"status":"partial","changedPaths":[],"unresolve
     def test_project_result_ledger_requires_project_batch(self):
         with self.assertRaises(ParseError):
             self.make_prepared(project_result_ledger=True)
+
+    def test_malformed_per_file_row_without_stable_ids_is_blocked_but_valid_partial_survives(self):
+        selected = [{'path': 'Assets/NativeHelper.cs'}]
+        malformed = [{'path': 'Assets/NativeHelper.cs', 'status': 'partial',
+                      'summary': 'Reviewed helper but result is missing the required fields.',
+                      'membersReviewed': [], 'originalLogicPreserved': False}]
+        rows, issues, shape_ok = _normalize_file_results(malformed, selected)
+        self.assertFalse(shape_ok)
+        self.assertTrue(any('malformed file result' in issue for issue in issues))
+        self.assertEqual(rows[0]['status'], 'blocked')
+        self.assertEqual(rows[0]['membersReviewed'], [])
+        self.assertIn('analysis was not accepted', rows[0]['summary'])
+
+        valid_partial = [{'path': 'Assets/NativeHelper.cs', 'status': 'partial',
+                          'summary': 'Reviewed helper behavior and found a concrete semantic difference in retry handling.',
+                          'unresolved': ['Retry handling differs from the source behavior.'],
+                          'membersReviewed': [], 'originalLogicPreserved': False}]
+        rows, issues, shape_ok = _normalize_file_results(valid_partial, selected)
+        self.assertTrue(shape_ok)
+        self.assertEqual(rows[0]['status'], 'partial')
+        self.assertFalse(rows[0]['originalLogicPreserved'])
 
     def test_safe_blocker_summary_only_uses_cli_error_events(self):
         self.fake_cli('import sys\nsys.stdin.read()\nprint("{\\\"type\\\":\\\"turn.failed\\\",\\\"error\\\":{\\\"message\\\":\\\"Unauthorized: do not expose this raw message\\\"}}", flush=True)\nraise SystemExit(1)\n')
