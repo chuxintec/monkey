@@ -111,7 +111,7 @@ class ProjectPostprocessTests(unittest.TestCase):
  def test_completed_review_recheck_rejects_changed_payload_without_another_model(self):
   def invalid_review(prepared,**kw):
    result=self.fake_run(prepared,**kw)
-   result['fileResults'][0]['membersReviewed'].append('unknown-review-id')
+   result['fileResults'][0]['membersReviewed'].pop()
    (prepared.output/'manifest.json').write_bytes(encoded(result));return result
   with patch.object(project.worker,'prepare',side_effect=self.fake_prepare),patch.object(project.worker,'run',side_effect=invalid_review):
    result=project.run(self.output)
@@ -142,3 +142,43 @@ class ProjectPostprocessTests(unittest.TestCase):
   result=project.status(self.output)
   self.assertEqual(result['actuallyProcessed'],0);self.assertEqual(result['fileStates']['running'],1)
   self.assertEqual(result['batchStates']['running'],1);self.assertEqual(path.read_bytes(),before)
+ def test_finish_current_pause_accepts_result_and_stops_before_next_attempt(self):
+  def finish_then_pause(prepared,**kw):
+   project.request_pause(self.output,finish_current=True)
+   return self.fake_run(prepared,**kw)
+  with patch.object(project.worker,'prepare',side_effect=self.fake_prepare),patch.object(project.worker,'run',side_effect=finish_then_pause)as run,patch.object(project.worker,'request_pause')as interrupt:
+   result=project.run(self.output)
+  self.assertEqual(result['status'],'paused');self.assertEqual(result['actuallyProcessed'],1)
+  self.assertEqual(run.call_count,1);interrupt.assert_not_called()
+  state=json.loads((self.output/'state.json').read_bytes())
+  self.assertEqual([v['attempts']for v in state['batches'].values()],[1,0])
+ def test_honest_semantic_limitations_and_extra_ids_stay_partial_without_false_claims(self):
+  def honest_review(prepared,**kw):
+   result=self.fake_run(prepared,**kw)
+   for row in result['fileResults']:
+    row.update(originalLogicPreserved=False,unresolved=['JavaScript coercion equivalence is unconfirmed.'])
+    row['membersReviewed'].append('unproven-extra-id')
+   return result
+  with patch.object(project.worker,'prepare',side_effect=self.fake_prepare),patch.object(project.worker,'run',side_effect=honest_review):
+   result=project.run(self.output)
+  self.assertEqual(result['actuallyProcessed'],2);self.assertEqual(result['status'],'complete_with_partial')
+  state=json.loads((self.output/'state.json').read_bytes())
+  for row in state['files'].values():
+   self.assertIs(row['originalLogicPreservedClaim'],False)
+   self.assertNotIn('unproven-extra-id',row['membersReviewed']);self.assertIn('unproven-extra-id',row['reportedMembersReviewed'])
+   self.assertEqual(row['reviewMetadataIssues'][0]['ids'],['unproven-extra-id'])
+ def test_explicit_unprocessed_report_cannot_become_reviewed_partial(self):
+  def blocked_review(prepared,**kw):
+   result=self.fake_run(prepared,**kw)
+   for row in result['fileResults']:row.update(status='blocked',originalLogicPreserved=False,unresolved=['Not analyzed.'])
+   return result
+  with patch.object(project.worker,'prepare',side_effect=self.fake_prepare),patch.object(project.worker,'run',side_effect=blocked_review):
+   result=project.run(self.output)
+  self.assertEqual(result['actuallyProcessed'],0)
+ def test_invalid_ledger_reference_cannot_integrate_otherwise_valid_rows(self):
+  def invalid_artifact(prepared,**kw):
+   result=self.fake_run(prepared,**kw);result['fileResultsArtifactIssues']=['response references an unapproved ledger path'];return result
+  with patch.object(project.worker,'prepare',side_effect=self.fake_prepare),patch.object(project.worker,'run',side_effect=invalid_artifact):
+   result=project.run(self.output)
+  self.assertEqual(result['actuallyProcessed'],0)
+  for path in self.paths:self.assertIn('return 1',(self.output/'UnityProject'/path).read_text())

@@ -118,15 +118,16 @@ def status(root):
                 originalSourceExecuted=False, editorPlayerRun=False)
 
 
-def request_pause(root):
+def request_pause(root, *, finish_current=False):
     root=safe(root); _json(root/'request.json')
-    _save(root/'operator-control.json',dict(pauseRequested=True,requestedAt=time.time()))
+    _save(root/'operator-control.json',dict(pauseRequested=True,finishCurrentAttempt=bool(finish_current),requestedAt=time.time()))
     state=_json(root/'state.json'); batch=state.get('currentBatch')
-    if batch and state['batches'][batch].get('attemptRoots'):
+    if not finish_current and batch and state['batches'][batch].get('attemptRoots'):
         attempt=root/state['batches'][batch]['attemptRoots'][-1]
         if (attempt/'request.json').is_file(): worker.request_pause(attempt)
     return dict(status='pause_requested',report=str(root/'operator-control.json'),
-                childStopped=False,description='The supervisor will preserve the current exact-session checkpoint before exiting')
+                childStopped=False,finishCurrentAttempt=bool(finish_current),
+                description='Finish the current attempt, then stop before new work' if finish_current else 'The supervisor will preserve the current exact-session checkpoint before exiting')
 
 
 def _pause_requested(root):
@@ -219,7 +220,7 @@ def _contexts(root, request, plan, batch, paths, attempt):
 
 
 def _task(batch_id):
-    return f'''Process the COMPLETE assigned recovery batch {batch_id}; this is whole-project batch processing, not a sample. Read and substantively analyze EVERY selected C# file and all of its mapped source functions/fields, using __Context/file-mappings.json and exact original-source-fragments.json. Where exact original modules exist for older named drafts, recover supported source bodies rather than treating all existing placeholder bodies as final. Do not restrict this pass to formatting or directory statistics. Read large files in bounded chunks; listing filenames, counting lines or reporting hashes alone does not count as review. Repair reliable C# syntax, inferable local types, collection/API calls, closures and scope, declaration/reference consistency, cross-class calls and Unity adaptation drafts. Preserve original business logic and resource identities. Preserve exported class/member names and every existing source-function marker; do not delete functions, replace business bodies by stubs, invent services or fake success. Avoid unnecessary edits: unchanged is valid only with specific findings about the actual code. Unknown dynamic/engine/type semantics must be recorded per file as partial, with exact unresolved details. Review SDK/engine/auxiliary candidates too; labels do not exclude them. Do not execute original JS/WASM/DLL, engines, network tools, other Codex CLIs or agents. Only edit the selected .cs files, and only read the supplied immutable __Context files as evidence. Do not create/delete files or change __Context, Git metadata, model/configuration or credentials. For EVERY selected path return fileResults with concrete summary, status, all reviewed source function IDs in membersReviewed (including embedded callbacks; empty only if the file map has no functions), unresolved, and originalLogicPreserved. Do not claim a file reviewed if its body/mapped functions were not analyzed. Local unknowns may be partial; they must not stop review of the other selected files. Apply actual improvements where justified. Preserve a full useful continuation draft; full compilation/gameplay are not required. Return the exact structured response with changedPaths matching actual modified files.'''
+    return f'''Process the COMPLETE assigned recovery batch {batch_id}; this is whole-project batch processing, not a sample. Read and substantively analyze EVERY selected C# file and all of its mapped source functions/fields, using __Context/file-mappings.json and exact original-source-fragments.json. Where exact original modules exist for older named drafts, recover supported source bodies rather than treating all existing placeholder bodies as final. Do not restrict this pass to formatting or directory statistics. Read large files in bounded chunks; listing filenames, counting lines or reporting hashes alone does not count as review. Repair reliable C# syntax, inferable local types, collection/API calls, closures and scope, declaration/reference consistency, cross-class calls and Unity adaptation drafts. Preserve original business logic and resource identities. Preserve exported class/member names and every existing source-function marker; do not delete functions, replace business bodies by stubs, invent services or fake success. Avoid unnecessary edits: unchanged is valid only with specific findings about the actual code. Unknown dynamic/engine/type semantics must be recorded per file as partial, with exact unresolved details. Report originalLogicPreserved honestly: false with concrete semantic limitations is an analyzed partial draft, not a claim of equivalence; do not mark unexamined files as partial. Review SDK/engine/auxiliary candidates too; labels do not exclude them. Do not execute original JS/WASM/DLL, engines, network tools, other Codex CLIs or agents. Only edit the selected .cs files. You may additionally create exactly __Reviews/file-results.json for the complete review ledger as specified by the worker instructions; create no other files and delete none. Only read supplied immutable __Context files as evidence, and never change __Context, Git metadata, model/configuration or credentials. For EVERY selected path write a ledger entry with concrete summary, status, all required source function IDs from that file map in membersReviewed (including embedded callbacks; empty only if the file map has no functions), unresolved, and originalLogicPreserved. You may derive the exact reviewed ID lists from the map with a script after substantive analysis; do not invent IDs or mark other files processed because their nested source was encountered. Known field IDs may also be included. Do not claim a file reviewed if its body/mapped functions were not analyzed. Local unknowns may be partial; they must not stop review of the other selected files. Apply actual improvements where justified. Preserve a full useful continuation draft; full compilation/gameplay are not required. Return the exact structured response with changedPaths matching actual modified C# files and fileResultsArtifact pointing to the fixed ledger; the ledger is not a changed C# path.'''
 
 
 def _review_index(plan):
@@ -247,8 +248,10 @@ def _allowed_review_ids(metadata,index):
 
 def _valid_file(path, before, after, result, metadata, allowed_review_ids=None):
     issues = []
-    if result.get('path') != path or result.get('originalLogicPreserved') is not True:
-        issues.append('missing positive per-file logic-preservation result')
+    if result.get('path') != path or type(result.get('originalLogicPreserved'))is not bool:
+        issues.append('missing per-file path or explicit logic-preservation assessment')
+    if result.get('originalLogicPreserved')is False and (result.get('status')!='partial' or not result.get('unresolved')):
+        issues.append('unconfirmed logic preservation requires an explicit partial assessment with limitations')
     expected = {r['methodId'] for r in metadata.get('functions', [])}
     actual = set(result.get('membersReviewed', []))
     allowed=(expected|{r['fieldId']for r in metadata.get('fields',[])}) if allowed_review_ids is None else allowed_review_ids
@@ -319,7 +322,7 @@ def _attempt(root, request, plan, state, batch, remaining):
     for path in remaining: state['files'][path].update(status='running', attempts=state['files'][path].get('attempts',0)+1)
     _save(root/'state.json', state); _event(root, 'batch_started', batch=batch['id'], attempt=number, files=len(remaining))
     prepared = worker.prepare(request['sourceRoot'], remaining, request['sourceManifestSha256'], output, _task(batch['id']),
-                              context_root=evidence, context_files=context_files, project_batch=True,
+                              context_root=evidence, context_files=context_files, project_batch=True, project_result_ledger=True,
                               codex=request['codex'], timeout_seconds=request['batchSeconds'],
                               no_progress_seconds=request['idleSeconds'], max_resumes=request['maxResumesPerAttempt'])
     if _pause_requested(root): worker.request_pause(output)
@@ -343,18 +346,32 @@ def _consume(root, request, plan, state, batch, remaining, output, result):
     integration = []; rejected = []
     if result.get('sourceVerificationErrors'):
         fail('PROJECT_POSTPROCESS_SOURCE_CHANGED',request['sourceRoot'],'Original candidate/source verification failed during Codex processing')
-    unsafe_batch = bool(result.get('workspaceIntegrityErrors') or result.get('unexpectedPaths') or not result.get('gitBoundary',{}).get('valid'))
+    unsafe_batch = bool(result.get('workspaceIntegrityErrors') or result.get('unexpectedPaths') or
+                        result.get('fileResultsArtifactIssues') or not result.get('gitBoundary',{}).get('valid'))
     for path in remaining:
-        f = reported.get(path, {}); before = read(inside(Path(request['sourceRoot']), path), max_bytes=worker.FILE_BYTES)
+        raw_result=reported.get(path,{})
+        f=dict(raw_result);metadata_issues=[]
+        allowed=_allowed_review_ids(metadata[path],review_index)
+        unknown=set(f.get('membersReviewed',[]))-allowed
+        if unknown:
+            metadata_issues.append(dict(kind='unrecognized_review_ids',ids=sorted(unknown)))
+            f['membersReviewed']=[v for v in f.get('membersReviewed',[])if v in allowed]
+            f['status']='partial'
+            f['unresolved']=list(f.get('unresolved',[]))+['Unrecognized additional review IDs are excluded from verified coverage: '+', '.join(sorted(unknown))]
+        if f.get('originalLogicPreserved')is False:f['status']='partial'
+        before = read(inside(Path(request['sourceRoot']), path), max_bytes=worker.FILE_BYTES)
         if sha(before)!=metadata[path]['sha256']:
             fail('PROJECT_POSTPROCESS_SOURCE_CHANGED',path,'Original code bytes no longer match the prepared queue')
         after_path = output/'workspace'/path
         issues = ['workspace boundary violation'] if unsafe_batch else []
+        if raw_result.get('status')=='blocked':issues.append('model explicitly reported this file unprocessed/blocked')
+        if raw_result.get('originalLogicPreserved')is False and not raw_result.get('unresolved'):
+            issues.append('logic preservation is unconfirmed without concrete semantic limitations')
         try:
             after = read(safe(after_path), max_bytes=worker.FILE_BYTES)
             if sha(after)!=reviewed_hashes.get(path,metadata[path]['sha256']):
                 fail('PROJECT_POSTPROCESS_RESULT_CHANGED',path,'Batch workspace changed after its recorded review; it cannot be replayed')
-            issues.extend(_valid_file(path, before, after, f, metadata[path],_allowed_review_ids(metadata[path],review_index)))
+            issues.extend(_valid_file(path, before, after, f, metadata[path],allowed))
         except (OSError,ValueError)as error:
             if getattr(error,'code',None)=='PROJECT_POSTPROCESS_RESULT_CHANGED':raise
             after = before; issues.append('derived code file unavailable')
@@ -366,7 +383,9 @@ def _consume(root, request, plan, state, batch, remaining, output, result):
         state_name = f['status']
         record = dict(status=state_name, processed=True, attempts=state['files'][path]['attempts'],
                       summary=f['summary'], unresolved=f.get('unresolved',[]), membersReviewed=f['membersReviewed'],
-                      originalLogicPreservedClaim=True, sourceSha256=sha(before), currentSha256=sha(after),
+                      originalLogicPreservedClaim=f['originalLogicPreserved'],reportedStatus=raw_result.get('status'),
+                      reportedMembersReviewed=raw_result.get('membersReviewed',[]),reviewMetadataIssues=metadata_issues,
+                      sourceSha256=sha(before), currentSha256=sha(after),
                       changed=before!=after, batch=batch['id'], lastAttempt=str(output.relative_to(root)), sessionId=result.get('sessionId'))
         integration.append(dict(path=path, beforeSha256=sha(before), afterSha256=sha(after),
                                 payload=str(after_path), result=record))
@@ -496,6 +515,8 @@ def run(root):
                     if state.get('blockingCondition'):return status(root)
                 else:entry['status']='pending'
             while remaining and entry['attempts'] < entry.get('attemptLimit',request['maxAttempts']):
+                if _pause_requested(root):
+                    state.update(status='paused',updatedAt=time.time());_save(root/'state.json',state);return status(root)
                 try:remaining=_attempt(root,request,plan,state,batch,remaining)
                 except (OSError,ValueError) as error:
                     code=getattr(error,'code',type(error).__name__)

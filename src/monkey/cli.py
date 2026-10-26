@@ -207,6 +207,7 @@ def main(argv=None):
         if command=='code-project-resume':p.add_argument('--retry-failed',action='store_true',help='Explicitly grant a new finite retry window to exhausted failed batches')
     p=sub.add_parser('code-project-pause',help='Request cooperative pause and preserve the active exact-session checkpoint')
     p.add_argument('--run',required=True)
+    p.add_argument('--after-current-attempt',action='store_true',help='Let the current attempt finish before pausing; do not interrupt the active model')
     p=sub.add_parser('code-project-configure',help='Change finite batch budgets only while the supervisor and child are stopped')
     p.add_argument('--run',required=True);p.add_argument('--batch-seconds',type=int,required=True);p.add_argument('--idle-seconds',type=int,required=True)
     p=sub.add_parser('code-project-recheck',help='Revalidate completed saved reviews after validator fixes without a new model call')
@@ -450,7 +451,7 @@ def main(argv=None):
             print(json.dumps(result,ensure_ascii=False));return 0 if result['status'] in ('complete','complete_with_partial') or args.command=='code-project-status' else 1
         if args.command in ('code-project-pause','code-project-configure'):
             from . import code_project_postprocess as project
-            result=project.request_pause(args.run) if args.command=='code-project-pause' else project.configure(args.run,batch_seconds=args.batch_seconds,idle_seconds=args.idle_seconds)
+            result=project.request_pause(args.run,finish_current=args.after_current_attempt) if args.command=='code-project-pause' else project.configure(args.run,batch_seconds=args.batch_seconds,idle_seconds=args.idle_seconds)
             print(json.dumps(result,ensure_ascii=False));return 0
         if args.command=='code-project-recheck':
             from .code_project_postprocess import recheck
