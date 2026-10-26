@@ -2,6 +2,7 @@ import unittest
 import tempfile
 import hashlib
 from pathlib import Path
+from unittest.mock import patch
 
 from monkey.code_graph import facts
 from monkey.code_draft_render import render_field, render_method
@@ -239,6 +240,148 @@ class CodeDraftRenderTests(unittest.TestCase):
         self.assertIn("dynamic __draftDiscard1 = ((System.Func<dynamic>)", code)
         self.assertGreaterEqual(code.count("_ = (_ + 1)"), 2)
         self.assertGreaterEqual(code.count("dynamic __draftDiscard"), 6)
+
+    def test_binding_id_collision_maps_dollar_and_underscore_references_deterministically(self):
+        raw = b"function scale($, _){ return $ + _; }"
+        dollar = lambda: n("Identifier", name="$", bindingId="scale-dollar")
+        under = lambda: n("Identifier", name="_", bindingId="scale-under")
+        ast = n("FunctionExpression", params=[dollar(), under()], body=n("BlockStatement", body=[
+            n("ReturnStatement", argument=n("BinaryExpression", operator="+", left=dollar(), right=under()))
+        ]))
+        method = {"name": "scale", "sourceBytes": {"start": 0, "end": len(raw)}}
+        first = render_method(method, ast, raw)
+        second = render_method(method, ast, raw)
+        self.assertEqual(first["source"], second["source"])
+        signature = first["source"].splitlines()[0]
+        parameter_names = [part.strip().split(" ", 1)[1] for part in signature.split("(", 1)[1].split(")", 1)[0].split(",")]
+        self.assertEqual(2, len(set(parameter_names)))
+        return_line = next(line for line in first["source"].splitlines() if "return (" in line)
+        self.assertTrue(all(name in return_line for name in parameter_names))
+        self.assertNotIn("dynamic _,", signature)
+
+    def test_binding_id_mapping_handles_capture_shadow_and_local_loop_catch_names(self):
+        raw = b"function f($){ let _=2; let cb=(_)=>$+_; for(let $ of xs){} try{}catch(_){} }"
+        outer = lambda: n("Identifier", name="$", bindingId="outer-dollar")
+        local_ident = lambda: n("Identifier", name="_", bindingId="local-under")
+        inner = lambda: n("Identifier", name="_", bindingId="inner-under")
+        loop = n("ForOfStatement", left=n("VariableDeclaration", kind="let", declarations=[
+            n("VariableDeclarator", id=n("Identifier", name="$", bindingId="loop-dollar"), init=None)
+        ]), right=n("Identifier", name="xs", bindingId="xs-binding"), body=n("BlockStatement", body=[]))
+        ast = n("FunctionExpression", params=[outer()], body=n("BlockStatement", body=[
+            n("VariableDeclaration", kind="let", declarations=[n("VariableDeclarator", id=local_ident(), init=n("Literal", value=2))]),
+            n("VariableDeclaration", kind="let", declarations=[n("VariableDeclarator", id=ident("cb"), init=n("ArrowFunctionExpression", params=[inner()], body=n("BinaryExpression", operator="+", left=outer(), right=inner())))]),
+            loop,
+            n("TryStatement", block=n("BlockStatement", body=[]), handler=n("CatchClause", param=n("Identifier", name="_", bindingId="catch-under"), body=n("BlockStatement", body=[])))
+        ]))
+        result = render_method({"name": "f", "sourceBytes": {"start": 0, "end": len(raw)}}, ast, raw)
+        code = result["source"]
+        for binding in ("outer-dollar", "local-under", "inner-under", "loop-dollar", "catch-under"):
+            generated = "__draftBinding___" + hashlib.sha256(("str:" + binding).encode()).hexdigest()[:10]
+            self.assertIn(generated, code)
+        self.assertIn("foreach (dynamic __draftBinding___", code)
+
+    def test_explicit_targets_are_fixed_member_targets_unchanged_and_collisions_diagnosed(self):
+        raw = b"function f($, scale){ return $ + scale + owner.publicName; }"
+        dollar = n("Identifier", name="$", bindingId="explicit-dollar", _draftIdentifierTarget="scale")
+        other = n("Identifier", name="scale", bindingId="source-scale")
+        mapped_member = n("MemberExpression", computed=False, object=ident("owner"), property=ident("oldName"),
+                          _draftMember={"name": "PublicName", "ownerClass": "Thing", "receiver": "source"})
+        ast = n("FunctionExpression", params=[dollar, other], body=n("BlockStatement", body=[
+            n("ReturnStatement", argument=n("BinaryExpression", operator="+", left=dollar,
+                right=n("BinaryExpression", operator="+", left=other, right=mapped_member)))
+        ]))
+        result = render_method({"name": "f", "sourceBytes": {"start": 0, "end": len(raw)}}, ast, raw)
+        signature = result["source"].splitlines()[0]
+        self.assertIn("dynamic scale", signature)
+        self.assertIn("__draftBinding_scale_", signature)
+        self.assertIn("(owner).PublicName", result["source"])
+        fixed_underscore = n("Identifier", name="_", bindingId="fixed-under", _draftIdentifierTarget="_")
+        source_underscore = n("Identifier", name="_", bindingId="source-under")
+        underscore_result = render_method({"name": "underscoreTargets", "sourceBytes": {"start": 0, "end": len(raw)}},
+            n("FunctionExpression", params=[fixed_underscore, source_underscore], body=n("BlockStatement", body=[
+                n("ReturnStatement", argument=n("BinaryExpression", operator="+", left=fixed_underscore, right=source_underscore))
+            ])), raw)
+        underscore_signature = underscore_result["source"].splitlines()[0]
+        self.assertIn("dynamic _", underscore_signature)
+        self.assertIn("__draftBinding___", underscore_signature)
+        conflict = n("FunctionExpression", params=[
+            n("Identifier", name="$", bindingId="fixed-a", _draftIdentifierTarget="same"),
+            n("Identifier", name="_", bindingId="fixed-b", _draftIdentifierTarget="same")
+        ], body=n("BlockStatement", body=[n("ReturnStatement", argument=n("Literal", value=0))]))
+        conflict_result = render_method({"name": "fixedConflict", "sourceBytes": {"start": 0, "end": len(raw)}}, conflict, raw)
+        self.assertIn("fixedConflict(dynamic same, dynamic same)", conflict_result["source"])
+        self.assertIn("identifier_explicit_target_collision", {d["code"] for d in conflict_result["diagnostics"]})
+
+    def test_missing_binding_identity_reports_normalization_collision_without_guessing(self):
+        raw = b"return $ + _;"
+        ast = n("FunctionExpression", params=[], body=n("BlockStatement", body=[
+            n("ReturnStatement", argument=n("BinaryExpression", operator="+", left=ident("$"), right=ident("_")))
+        ]))
+        result = render_method({"name": "missingBindings", "sourceBytes": {"start": 0, "end": len(raw)}}, ast, raw)
+        self.assertIn("return (_ + _);", result["source"])
+        self.assertIn("identifier_collision_missing_binding_id", {d["code"] for d in result["diagnostics"]})
+
+    def test_root_function_binding_stays_on_public_signature_while_local_parameter_is_renamed(self):
+        raw = b"function _($){ return _($); }"
+        root_id = n("Identifier", name="_", bindingId="root-public")
+        parameter = n("Identifier", name="$", bindingId="dollar-parameter")
+        recursive = n("Identifier", name="_", bindingId="root-public")
+        parameter_ref = n("Identifier", name="$", bindingId="dollar-parameter")
+        ast = n("FunctionDeclaration", id=root_id, params=[parameter], body=n("BlockStatement", body=[
+            n("ReturnStatement", argument=n("CallExpression", callee=recursive, arguments=[parameter_ref]))
+        ]))
+        result = render_method({"name": "_", "sourceBytes": {"start": 0, "end": len(raw)}}, ast, raw)
+        generated_parameter = "__draftBinding___" + hashlib.sha256(b"str:dollar-parameter").hexdigest()[:10]
+        self.assertIn(f"public dynamic _(dynamic {generated_parameter})", result["source"])
+        self.assertIn(f"return _({generated_parameter});", result["source"])
+        self.assertNotIn("root_function_binding_unmatched", {d["code"] for d in result["diagnostics"]})
+
+    def test_unmatched_named_root_function_is_diagnosed_without_inventing_target(self):
+        raw = b"var f = function _($){ return _($); };"
+        ast = n("FunctionExpression", id=n("Identifier", name="_", bindingId="internal-root"),
+            params=[n("Identifier", name="$", bindingId="internal-parameter")], body=n("BlockStatement", body=[
+                n("ReturnStatement", argument=n("CallExpression", callee=n("Identifier", name="_", bindingId="internal-root"),
+                    arguments=[n("Identifier", name="$", bindingId="internal-parameter")]))
+            ]))
+        result = render_method({"name": "run", "sourceBytes": {"start": 0, "end": len(raw)}}, ast, raw)
+        parameter_name = "__draftBinding___" + hashlib.sha256(b"str:internal-parameter").hexdigest()[:10]
+        self.assertIn("public dynamic run(", result["source"])
+        self.assertIn(f"return _({parameter_name});", result["source"])
+        self.assertIn("root_function_binding_unmatched", {d["code"] for d in result["diagnostics"]})
+        no_identity = n("FunctionDeclaration", id=ident("_"), params=[], body=n("BlockStatement", body=[
+            n("ReturnStatement", argument=n("CallExpression", callee=ident("_"), arguments=[]))
+        ]))
+        no_identity_result = render_method({"name": "run", "sourceBytes": {"start": 0, "end": len(raw)}}, no_identity, raw)
+        self.assertIn("public dynamic run()", no_identity_result["source"])
+        self.assertIn("return _();", no_identity_result["source"])
+        self.assertIn("root_function_binding_identity_missing", {d["code"] for d in no_identity_result["diagnostics"]})
+
+    def test_explicit_root_function_target_keeps_existing_signature_mapping(self):
+        raw = b"function _(){ return _(); }"
+        ast = n("FunctionDeclaration", id=n("Identifier", name="_", bindingId="root-explicit", _draftIdentifierTarget="recurseTarget"),
+            params=[], body=n("BlockStatement", body=[n("ReturnStatement", argument=n("CallExpression",
+                callee=n("Identifier", name="_", bindingId="root-explicit", _draftIdentifierTarget="recurseTarget"), arguments=[]))]))
+        result = render_method({"name": "_", "targetName": "recurseTarget", "sourceBytes": {"start": 0, "end": len(raw)}}, ast, raw)
+        self.assertIn("public dynamic recurseTarget()", result["source"])
+        self.assertIn("return recurseTarget();", result["source"])
+        self.assertNotIn("root_function_target_mismatch", {d["code"] for d in result["diagnostics"]})
+
+    def test_incomplete_binding_scan_reports_budget_and_skips_new_renames(self):
+        raw = b"function f($,_){return $+_;}"
+        dollar_param = n("Identifier", name="$", bindingId="budget-dollar", _draftIdentifierTarget="keptDollar")
+        under_param = n("Identifier", name="_", bindingId="budget-under")
+        ast = n("FunctionExpression", params=[dollar_param, under_param], body=n("BlockStatement", body=[
+            n("ReturnStatement", argument=n("BinaryExpression", operator="+",
+                left=n("Identifier", name="$", bindingId="budget-dollar", _draftIdentifierTarget="keptDollar"),
+                right=n("Identifier", name="_", bindingId="budget-under")))
+        ]), plannerNoise=[ident(f"noise{index}") for index in range(32)])
+        with patch("monkey.code_draft_render.MAX_NODES", 8):
+            result = render_method({"name": "f", "sourceBytes": {"start": 0, "end": len(raw)}}, ast, raw)
+        codes = {diagnostic["code"] for diagnostic in result["diagnostics"]}
+        self.assertIn("identifier_binding_scan_budget_exceeded", codes)
+        self.assertNotIn("__draftBinding_", result["source"])
+        self.assertIn("dynamic keptDollar", result["source"])
+        self.assertIn("return (keptDollar + _);", result["source"])
 
     def test_control_flow_calls_collections_math_string_and_callback_render_as_code(self):
         source = b'function update(x){ /* body */ }'

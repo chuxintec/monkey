@@ -83,6 +83,223 @@ class _Renderer:
         for capture in method.get("captureParameters", []) if isinstance(method.get("captureParameters"), list) else []:
             if isinstance(capture, dict) and isinstance(capture.get("targetName"), str):
                 self._reserved_identifiers.add(_identifier(capture["targetName"]))
+        self._binding_names: dict[str, str] = {}
+        self._prepare_binding_names(ast)
+
+    def _binding_identity(self, value: Any) -> str | None:
+        if isinstance(value, str) and value:
+            return "str:" + value
+        if isinstance(value, int) and not isinstance(value, bool):
+            return "int:" + str(value)
+        return None
+
+    def _is_binding_identifier_position(self, node: dict[str, Any], parent: Any, key: Any) -> bool:
+        if not isinstance(parent, dict):
+            return True
+        parent_type = parent.get("type")
+        if parent_type == "MemberExpression" and key == "property" and not parent.get("computed"):
+            return False
+        if parent_type in ("Property", "MethodDefinition", "PropertyDefinition") and key == "key":
+            return bool(parent.get("computed")) if parent_type == "Property" else False
+        if parent_type in ("LabeledStatement", "BreakStatement", "ContinueStatement") and key == "label":
+            return False
+        return True
+
+    def _identifier_nodes(self, root: Any) -> tuple[list[dict[str, Any]], bool]:
+        found: list[dict[str, Any]] = []
+        stack = [(root, None, None)]
+        seen: set[int] = set()
+        visited = 0
+        while stack and visited < MAX_NODES:
+            node, parent, key = stack.pop()
+            if not isinstance(node, (dict, list)) or id(node) in seen:
+                continue
+            seen.add(id(node))
+            visited += 1
+            if isinstance(node, dict):
+                if node.get("type") == "Identifier" and self._is_binding_identifier_position(node, parent, key):
+                    found.append(node)
+                stack.extend((value, node, child_key) for child_key, value in node.items()
+                             if child_key not in ("start", "end") and child_key not in ("_draftMember", "_draftUnresolvedMember"))
+            else:
+                stack.extend((value, parent, key) for value in node)
+        return found, not stack
+
+    def _safe_target(self, value: Any) -> str | None:
+        if isinstance(value, str) and re.fullmatch(r"[A-Za-z_$][A-Za-z0-9_$]*", value):
+            return _identifier(value)
+        return None
+
+    def _method_name_and_collision(self) -> tuple[str, bool]:
+        name = _identifier(self.method.get("targetName") or self.method.get("name") or "DraftMethod")
+        collision = bool(self.class_name and name.lstrip("@").casefold() == self.class_name.lstrip("@").casefold())
+        return (name + "_DraftMethod" if collision else name), collision
+
+    def _prepare_binding_names(self, ast: dict[str, Any]) -> None:
+        """Rename only proven lexical bindings whose distinct source spellings collapse in C#."""
+        identifiers, complete = self._identifier_nodes(ast)
+        if not complete:
+            self.diagnose(ast, "identifier_binding_scan_budget_exceeded",
+                          f"Lexical binding prepass stopped at MAX_NODES={MAX_NODES}; automatic binding renames were skipped",
+                          "explicit per-node _draftIdentifierTarget annotations remain in effect")
+            return
+        has_ast_parameters = False
+        root = ast.get("value", {}) if ast.get("type") in ("MethodDefinition", "PropertyDefinition") else ast
+        if isinstance(root, dict) and root.get("type") in ("FunctionDeclaration", "FunctionExpression", "ArrowFunctionExpression"):
+            has_ast_parameters = bool(root.get("params"))
+        if not has_ast_parameters:
+            metadata_parameters = self.method.get("parameters") if isinstance(self.method.get("parameters"), list) else []
+            for parameter in metadata_parameters:
+                if isinstance(parameter, dict):
+                    node = {"type": "Identifier", **{key: parameter[key] for key in ("name", "bindingId", "_draftIdentifierTarget") if key in parameter}}
+                else:
+                    node = {"type": "Identifier", "name": str(parameter)}
+                identifiers.append(node)
+
+        root_function = ast.get("value", {}) if ast.get("type") in ("MethodDefinition", "PropertyDefinition") else ast
+        root_function_id = (root_function.get("id") if isinstance(root_function, dict)
+                            and root_function.get("type") in ("FunctionDeclaration", "FunctionExpression") else None)
+        root_identity = self._binding_identity(root_function_id.get("bindingId")) if isinstance(root_function_id, dict) else None
+        root_group_info = None
+        if isinstance(root_function_id, dict) and root_identity is None:
+            root_name = root_function_id.get("name")
+            public_name, _ = self._method_name_and_collision()
+            explicit_target = self._safe_target(root_function_id.get("_draftIdentifierTarget"))
+            if (not isinstance(root_name, str) or _identifier(root_name) != public_name
+                    or (explicit_target is not None and explicit_target != _identifier(root_name))):
+                self.diagnose(root_function_id, "root_function_binding_identity_missing",
+                              f"root function name {root_name!r} cannot be aligned with emitted method {public_name!r} without a usable bindingId", "the renderer keeps the source spelling and does not invent a recursive method target")
+        if root_identity is not None:
+            root_nodes = [node for node in identifiers if self._binding_identity(node.get("bindingId")) == root_identity]
+            root_name = root_function_id.get("name")
+            root_spelling = root_name if isinstance(root_name, str) else "_draftName"
+            spellings = {node.get("name") for node in root_nodes if isinstance(node.get("name"), str)}
+            targets = {target for node in root_nodes if (target := self._safe_target(node.get("_draftIdentifierTarget"))) is not None}
+            public_name, _ = self._method_name_and_collision()
+            conflict = False
+            if len(targets) > 1:
+                conflict = True
+                root_base = sorted(targets)[0]
+                self.diagnose(root_function_id, "root_function_target_conflict",
+                              f"root function bindingId {root_identity} has conflicting explicit targets {sorted(targets)}; per-node targets remain authoritative", "root references are not automatically unified")
+            elif targets:
+                root_base = next(iter(targets))
+                self._binding_names[root_identity] = root_base
+                if root_base != public_name:
+                    conflict = True
+                    self.diagnose(root_function_id, "root_function_target_mismatch",
+                                  f"explicit root function target {root_base!r} differs from emitted method name {public_name!r}; explicit target is preserved", "recursive references may not resolve to the emitted public method")
+            elif isinstance(root_name, str) and root_name in (self.method.get("name"), self.method.get("targetName")):
+                root_base = public_name
+                self._binding_names[root_identity] = public_name
+            else:
+                root_base = _identifier(root_name)
+                conflict = True
+                self.diagnose(root_function_id, "root_function_binding_unmatched",
+                              f"root function name {root_name!r} has no consistent match to emitted method name {public_name!r}; it is protected from local renaming", "the renderer will not invent a recursive method target")
+            if len(spellings) > 1:
+                conflict = True
+                self.diagnose(root_function_id, "root_function_binding_spelling_conflict",
+                              f"root function bindingId {root_identity} appears with multiple source spellings {sorted(spellings)}; automatic root binding substitution is limited", "per-node explicit targets remain authoritative")
+                self._binding_names.pop(root_identity, None)
+            root_group_info = {"base": root_base, "spelling": spellings or {root_spelling}, "fixed": True,
+                               "conflict": conflict, "node": root_function_id}
+
+        groups: dict[str, list[dict[str, Any]]] = {}
+        unbound: list[dict[str, Any]] = []
+        for node in identifiers:
+            name = node.get("name")
+            if not isinstance(name, str) or not name:
+                continue
+            identity = self._binding_identity(node.get("bindingId"))
+            if identity is None:
+                unbound.append(node)
+                continue
+            if identity == root_identity:
+                continue
+            groups.setdefault(identity, []).append(node)
+
+        group_info: dict[str, dict[str, Any]] = {}
+        for identity, nodes in groups.items():
+            spellings = {node["name"] for node in nodes}
+            targets = {target for node in nodes if (target := self._safe_target(node.get("_draftIdentifierTarget"))) is not None}
+            if len(targets) > 1:
+                self.diagnose(nodes[0], "identifier_binding_target_conflict",
+                              f"bindingId {identity} has conflicting explicit target names {sorted(targets)}; explicit annotations are preserved", "unannotated occurrences keep their source spelling")
+                group_info[identity] = {"base": sorted(targets)[0], "spelling": spellings, "fixed": True, "conflict": True, "node": nodes[0]}
+                continue
+            if len(spellings) > 1:
+                self.diagnose(nodes[0], "identifier_binding_spelling_conflict",
+                              f"bindingId {identity} is attached to multiple source spellings {sorted(spellings)}; no binding rename was inferred", "all explicit targets remain unchanged")
+                group_info[identity] = {"base": next(iter(targets), _identifier(sorted(spellings)[0])), "spelling": spellings, "fixed": True, "conflict": True, "node": nodes[0]}
+                continue
+            base = next(iter(targets), _identifier(next(iter(spellings))))
+            group_info[identity] = {"base": base, "spelling": spellings, "fixed": bool(targets), "conflict": False, "node": nodes[0]}
+            if targets:
+                self._binding_names[identity] = base
+
+        collision_records: dict[str, list[dict[str, Any]]] = {}
+        if root_identity is not None and root_group_info is not None:
+            collision_records.setdefault(root_group_info["base"], []).append({"identity": root_identity, **root_group_info})
+        for identity, info in group_info.items():
+            collision_records.setdefault(info["base"], []).append({"identity": identity, **info})
+        for node in unbound:
+            spelling = node.get("name")
+            target = self._safe_target(node.get("_draftIdentifierTarget"))
+            base = target or _identifier(spelling)
+            collision_records.setdefault(base, []).append({"identity": None, "base": base, "spelling": {spelling},
+                                                           "fixed": True, "conflict": False, "node": node})
+
+        for base, records in collision_records.items():
+            if len(records) < 2:
+                continue
+            spellings = set().union(*(record["spelling"] for record in records))
+            if len(spellings) < 2 and not any(record["fixed"] or record["conflict"] for record in records):
+                continue
+            if any(record["identity"] is None for record in records):
+                self.diagnose(records[0]["node"], "identifier_collision_missing_binding_id",
+                              f"distinct source names {sorted(spellings)} normalize to {base!r}, but at least one lacks a usable bindingId; names were retained", "the renderer did not infer which references share a lexical binding")
+                continue
+            fixed = [record for record in records if record["fixed"]]
+            if len(fixed) > 1:
+                self.diagnose(fixed[0]["node"], "identifier_explicit_target_collision",
+                              f"multiple lexical bindings explicitly target {base!r}; explicit target names are preserved", "the parent symbol plan must resolve this name collision")
+            mutable = [record for record in records if not record["fixed"]]
+            if not mutable:
+                if not any(record["conflict"] for record in records):
+                    self.diagnose(records[0]["node"], "identifier_explicit_target_collision",
+                                  f"multiple lexical bindings explicitly target {base!r}; explicit target names are preserved", "the parent symbol plan must resolve this name collision")
+                continue
+            for record in mutable:
+                identity = record["identity"]
+                digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()
+                stem = re.sub(r"[^A-Za-z0-9_]", "_", base.lstrip("@")) or "local"
+                candidate = None
+                for width in range(10, len(digest) + 1, 2):
+                    trial = f"__draftBinding_{stem}_{digest[:width]}"
+                    if trial not in self._reserved_identifiers:
+                        candidate = trial
+                        break
+                if candidate is None:
+                    suffix = 0
+                    while True:
+                        trial = f"__draftBinding_{stem}_{digest}_{suffix}"
+                        if trial not in self._reserved_identifiers:
+                            candidate = trial
+                            break
+                        suffix += 1
+                self._binding_names[identity] = candidate
+                self._reserved_identifiers.add(candidate)
+
+    def _identifier_name(self, node: Any, fallback: Any = None) -> str:
+        if isinstance(node, dict):
+            target = self._safe_target(node.get("_draftIdentifierTarget"))
+            if target:
+                return target
+            identity = self._binding_identity(node.get("bindingId"))
+            if identity is not None and identity in self._binding_names:
+                return self._binding_names[identity]
+        return _target_identifier(node, fallback)
 
     def _reserve_ast_identifiers(self, node: Any) -> None:
         stack = [node]
@@ -213,7 +430,7 @@ class _Renderer:
                     return "double.PositiveInfinity"
                 if not isinstance(name, str):
                     return self._unknown_expression(node, "identifier has no name")
-                return _identifier(name)
+                return self._identifier_name(node, name)
             if kind == "ThisExpression":
                 static_owner = _qualified_identifier(node.get("_draftStaticThisOwner"))
                 if static_owner:
@@ -500,14 +717,14 @@ class _Renderer:
         setup: list[str] = []
         for index, param in enumerate(params):
             if isinstance(param, dict) and param.get("type") == "Identifier":
-                rendered.append("dynamic " + _target_identifier(param, param.get("name")))
+                rendered.append("dynamic " + self._identifier_name(param, param.get("name")))
             elif isinstance(param, dict) and param.get("type") == "AssignmentPattern" and param.get("left", {}).get("type") == "Identifier":
-                name = _target_identifier(param["left"], param["left"].get("name"))
+                name = self._identifier_name(param["left"], param["left"].get("name"))
                 rendered.append("dynamic " + name)
                 setup.append("// Draft note: JS default parameter retained at declaration source; invocation semantics are not reproduced.")
                 self.diagnose(param, "default_parameter_approximation", "JavaScript default parameter is represented as a required dynamic argument", "optional call default not applied")
             elif isinstance(param, dict) and param.get("type") == "RestElement" and param.get("argument", {}).get("type") == "Identifier":
-                name = _target_identifier(param["argument"], param["argument"].get("name"))
+                name = self._identifier_name(param["argument"], param["argument"].get("name"))
                 rendered.append("params dynamic[] " + name)
                 self.diagnose(param, "rest_parameter_approximation", "JavaScript rest parameter maps to params dynamic[]", "array identity and argument coercion may differ")
             else:
@@ -524,7 +741,7 @@ class _Renderer:
         for decl in node.get("declarations", []):
             ident = decl.get("id", {})
             if ident.get("type") == "Identifier":
-                name = _target_identifier(ident, ident.get("name"))
+                name = self._identifier_name(ident, ident.get("name"))
                 init = self.expr(decl.get("init")) if decl.get("init") else "null"
                 if decl.get("init") is None:
                     self.diagnose(decl, "uninitialized_local_approximation", "Uninitialized JavaScript local is initialized to null in the draft", "undefined-to-null")
@@ -660,7 +877,7 @@ class _Renderer:
                 left = node.get("left", {})
                 if left.get("type") == "VariableDeclaration":
                     names = left.get("declarations", [{}])[0].get("id", {})
-                    variable = _target_identifier(names, names.get("name")) if names.get("type") == "Identifier" else "__draftItem"
+                    variable = self._identifier_name(names, names.get("name")) if names.get("type") == "Identifier" else "__draftItem"
                 else:
                     variable = self.expr(left, depth + 1)
                 right = self.expr(node.get("right"), depth + 1)
@@ -687,7 +904,7 @@ class _Renderer:
                     lines.append(pad + "catch (System.Exception __draftException)")
                     lines.append(pad + "{")
                     if param and param.get("type") == "Identifier":
-                        lines.append(pad + "    dynamic " + _target_identifier(param, param.get("name")) + " = __draftException;")
+                        lines.append(pad + "    dynamic " + self._identifier_name(param, param.get("name")) + " = __draftException;")
                     elif param:
                         lines.append(pad + "    // Draft omission: catch binding pattern " + self._comment(self.snippet(param)))
                         self.diagnose(param, "catch_pattern_approximation", "Catch destructuring binding is not reconstructed", "exception remains available as __draftException")
@@ -708,7 +925,7 @@ class _Renderer:
                 return [pad + "// Draft omission: debugger; " + self._comment(self.snippet(node))]
             if kind == "FunctionDeclaration":
                 params, init = self.parameters(node.get("params", []), node)
-                name = _target_identifier(node.get("id", {}), node.get("id", {}).get("name", "DraftFunction"))
+                name = self._identifier_name(node.get("id", {}), node.get("id", {}).get("name", "DraftFunction"))
                 marker = self._embed_marker(node)
                 lines = ([pad + marker.rstrip()] if marker else [])
                 lines.append(pad + "dynamic " + name + "(" + ", ".join(params) + ")")
@@ -748,14 +965,15 @@ class _Renderer:
             body = {"type": "BlockStatement", "body": [], "start": function.get("start"), "end": function.get("end")}
         meta_params = self.method.get("parameters")
         if isinstance(meta_params, list) and not params_ast:
-            params_ast = [{"type": "Identifier", "name": p.get("name")} if isinstance(p, dict) else {"type": "Identifier", "name": str(p)} for p in meta_params]
+            params_ast = [({"type": "Identifier", **{key: p[key] for key in ("name", "bindingId", "_draftIdentifierTarget") if key in p}}
+                           if isinstance(p, dict) else {"type": "Identifier", "name": str(p)}) for p in meta_params]
         params, setup = self.parameters(params_ast, function)
         original_names = set()
         for param in params_ast:
             if isinstance(param, dict):
                 ident_node = param.get("left") if param.get("type") == "AssignmentPattern" else param.get("argument") if param.get("type") == "RestElement" else param
                 if isinstance(ident_node, dict) and ident_node.get("type") == "Identifier":
-                    original_names.add(_qualified_identifier(ident_node.get("_draftIdentifierTarget")) or _identifier(ident_node.get("name")))
+                    original_names.add(self._identifier_name(ident_node, ident_node.get("name")))
         capture_params: list[str] = []
         captures = self.method.get("captureParameters", [])
         if isinstance(captures, list):
@@ -771,9 +989,8 @@ class _Renderer:
                     continue
                 capture_params.append(target_name)
                 params.append("dynamic " + target_name)
-        name = _identifier(self.method.get("targetName") or self.method.get("name") or "DraftMethod")
-        if self.class_name and name.lstrip("@").casefold() == self.class_name.lstrip("@").casefold():
-            name += "_DraftMethod"
+        name, method_name_collision = self._method_name_and_collision()
+        if method_name_collision:
             self.diagnose(function, "method_name_class_collision", "Method name matches its containing class and was suffixed for C# syntax", "parent mapping must use the emitted targetName")
         async_flag = bool(function.get("async") or self.method.get("async"))
         if async_flag or self._contains_type(body, "AwaitExpression"):

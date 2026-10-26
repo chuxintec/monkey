@@ -12,6 +12,8 @@
 
 2026-10-27 增量内容复核03：前20批1400/6445实际审阅集成，第21批90文件继续执行。新增321文件（前两轮已核1079之外）源/当前哈希全部匹配、无55%以下体积收缩；4个新增空/null-only方法信号逐一回读精确原文均为空函数。另1处新增NotSupportedException经差异/原文复核是原空壳XHR类新增部分方法后的未知事件分支，未用异常替换既有正文；任意事件名/this绑定/send及WeakMap等仍明确未恢复、originalLogicPreserved=false。回执`ContentAudit03/accepted-code-audit.json`与`manual-signal-review.json`保留原信号及人工判断；不是全语义/编译/运行证明，不外推后续未审文件。
 
+2026-10-27 生成器绑定命名根因补修：已观测奖励动画`$`/`_`碰撞后，renderer仅依据明确bindingId为冲突局部分配稳定无碰撞名称，参数/局部/闭包/循环/catch/嵌套函数共用映射，公开成员和已有显式目标保持。无binding/目标冲突/预算截断具体诊断；截断不自动改名。根命名函数按可证公开签名保护，避免把递归引用改成不存在局部函数。31项renderer检查通过；独立.NET8用例03旧版CS0100、修复版零错误并得到`distinct=27,72`，用例04旧版虽编译成功但递归调用RuntimeBinderException，修复版得`recursive=15,0`。证据`RendererBindingBehavior03/receipt.json`与`RendererRecursiveBindingBehavior04/receipt.json`；仅合成代码执行，未来生成生效，冻结07/真实批处理候选不重导不改。全量实际进度1490/6445，第22批继续；无整版完成/编译或运行声明。
+
 ## 全量执行入口（本轮进行中）
 
 首轮全manifest实际为 **6,445份C# / 40,574,177字节 / 86批**：5,522份新初稿、914份旧具名草稿（原JS模块SHA全部精确匹配）、9份原生工程辅助代码；47,384函数/19,571索引方法和3,706字段映射另作分母。各弱标签均未过滤，唯一725,535字节文件保持完整。`ProjectRun01` 以0模型调用/0处理状态升级旧未运行5522清单，ScopeHistory保留原plan/request/state；完整资源工程复用原已拷贝清单，未重导资源。

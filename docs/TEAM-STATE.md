@@ -4,6 +4,8 @@
 
 2026-10-27 同一renderer模块控制流补修已交付并停止写入：生成discard声明增加独立block，新增无花括号if/else、while、for反例；父复跑23项通过，独立.NET8 baseline CS1023 / 修复编译与`embedded=7,7`行为通过。父已接管集成，仍只有一条真实全量CLI，冻结候选不重导。
 
+2026-10-27 同一renderer实例`$`/`_`局部命名冲突补修已交付/停止写入：仅依明确bindingId分配稳定无碰撞名；无binding/显式映射冲突/预算截断只诊断，截断禁自动名，根函数公开签名和成员映射保护。父复跑31项通过，并独立.NET8验证参数分离27/72与递归15/0（旧版分别CS0100/RuntimeBinderException）。合成证据03/04，不跨模块/实际候选写入；父已接管集成，实际唯一全量CLI继续。
+
 运行期性能/记录协议：codex_postprocess 已交付fixed JSON ledger与artifact级错误、26项检查并停止写入；父单写项目task/API/CLI、实际queue与采用。当前模型自然收尾后切换，不重跑已审阅批次，不把语义未知当未审阅，也不把未知ID算入验证覆盖。
 
 首批实际运行暴露预算过短：父维护项目pause/configure/CLI/运行资料；复用codex_postprocess在既有三文件内补低层合作式检查点和停机预算调整。真实CLI仍父唯一串行，既有工作进程自然退出后才交接，不重置耗时或尝试次数。
