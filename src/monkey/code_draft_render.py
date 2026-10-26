@@ -581,7 +581,7 @@ class _Renderer:
                 rendered = self.effect_expr(expression)
                 if expression.get("type") in ("AssignmentExpression", "UpdateExpression", "CallExpression", "NewExpression", "AwaitExpression"):
                     return [pad + rendered + ";"]
-                return [pad + self._discard_local(rendered)]
+                return [pad + "{", pad + "    " + self._discard_local(rendered), pad + "}"]
             if kind == "VariableDeclaration":
                 return [pad + line for line in self.declaration(node)]
             if kind == "ReturnStatement":

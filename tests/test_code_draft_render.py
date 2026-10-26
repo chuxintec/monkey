@@ -214,6 +214,32 @@ class CodeDraftRenderTests(unittest.TestCase):
         self.assertIn("metadataParameter(dynamic __draftDiscard0)", metadata_parameter["source"])
         self.assertIn("dynamic __draftDiscard1 = 8;", metadata_parameter["source"])
 
+    def test_unbraced_control_flow_wraps_generated_discard_locals_in_blocks(self):
+        raw = b"if(true) (_+100,99); else (_=_+1,42); while(_<7) (_=_+1,42); for(var i=0;i<1;i++) (i+1,0);"
+        seq = lambda left, right: n("SequenceExpression", expressions=[left, right])
+        assignment = n("AssignmentExpression", operator="=", left=ident("_"),
+                       right=n("BinaryExpression", operator="+", left=ident("_"), right=n("Literal", value=1)))
+        ast = n("FunctionExpression", params=[ident("_")], body=n("BlockStatement", body=[
+            n("IfStatement", test=n("Literal", value=True),
+              consequent=n("ExpressionStatement", expression=seq(n("BinaryExpression", operator="+", left=ident("_"), right=n("Literal", value=100)), n("Literal", value=99))),
+              alternate=n("ExpressionStatement", expression=seq(assignment, n("Literal", value=42)))),
+            n("WhileStatement", test=n("BinaryExpression", operator="<", left=ident("_"), right=n("Literal", value=7)),
+              body=n("ExpressionStatement", expression=seq(assignment, n("Literal", value=42)))),
+            n("ForStatement", init=n("VariableDeclaration", kind="var", declarations=[n("VariableDeclarator", id=ident("i"), init=n("Literal", value=0))]),
+              test=n("BinaryExpression", operator="<", left=ident("i"), right=n("Literal", value=1)),
+              update=n("UpdateExpression", operator="++", prefix=False, argument=ident("i")),
+              body=n("ExpressionStatement", expression=seq(n("BinaryExpression", operator="+", left=ident("i"), right=n("Literal", value=1)), n("Literal", value=0))))
+        ]))
+        result = render_method({"name": "unbraced", "sourceBytes": {"start": 0, "end": len(raw)}}, ast, raw)
+        code = result["source"]
+        self.assertIn("if (true)\n        {", code)
+        self.assertIn("else\n        {", code)
+        self.assertIn("while ((_ < 7))\n        {", code)
+        self.assertIn("for (dynamic i = 0; (i < 1); i++)\n        {", code)
+        self.assertIn("dynamic __draftDiscard1 = ((System.Func<dynamic>)", code)
+        self.assertGreaterEqual(code.count("_ = (_ + 1)"), 2)
+        self.assertGreaterEqual(code.count("dynamic __draftDiscard"), 6)
+
     def test_control_flow_calls_collections_math_string_and_callback_render_as_code(self):
         source = b'function update(x){ /* body */ }'
         ast = n("FunctionExpression", **{"async": False}, params=[ident("x")], body=n("BlockStatement", body=[
