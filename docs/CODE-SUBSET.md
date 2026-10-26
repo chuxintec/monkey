@@ -1,3 +1,5 @@
+> 2026-10-26最新用户裁定：默认全量C#初稿导出，允许类型/语法/API缺口；本文的严格typed/profile子集为可选增强，不再作为其他有源方法导出的门槛。现行进度和完整候选链见 [PLAN](PLAN.md)。
+
 # 当前 v0.6：C# 代码恢复与模块构建
 
 执行 [统一C1–C9计划](PLAN.md) 和 [完整范围](/Users/wangmeng/Documents/Manager/decisions/20261026-grea-monkey-beaver/MONKEY-V06-CSHARP-PLAN.md)。本版新增投入为完整模块符号/类型/方法体/跨模块依赖、Unity生命周期事件与原字段配置/资源绑定、确定性C#候选/增量/编译行为/AI交接，原后续C#内容不再另排v0.7。CLI只有实装后才登记能力。下方历史数值子集仍兼容，不代表本大版验收。

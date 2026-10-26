@@ -1,6 +1,9 @@
 # v0.6 模块执行登记
 
-沿通用 MODULE-DEVELOPERS；主开发保持模型、公共IR/Schema/CLI/manifest/注册/依赖/版本/Editor单写。真实容量6，不满编；2个独立模块实例均已完成、空闲，默认Luna High；不为等待或报告新开工作。
+沿通用 MODULE-DEVELOPERS；主开发保持模型、公共IR/Schema/CLI/manifest/注册/依赖/版本/Editor单写。真实容量6，不满编；2个独立模块实例均已完成、停止写入，默认Luna High；不为等待或报告新开工作。
+
+
+全量初稿收尾已验（最新用户裁定）：父维护 worker/公开包级convert/候选清单与最终真实样本核验；code_regeneration 仅维护 code_drafts.py、test_code_drafts.py、CODE-DRAFTS.md 的全量writer/字段归组/报告分片/复用；shader_profile 仅维护 code_draft_render.py、test_code_draft_render.py、CODE-DRAFT-RENDER.md 的局部尽力转写与机械语法修复。两既有实例复用，无新Agent/Editor；字段运行时写入不能被提成静态初始化。静态this未知语义保留诊断，不猜原绑定。最终3源19,571索引方法/47,384函数、3,706字段记录的实际输出和beaver全112,758文件只读验证通过；24,263文件暖阶段禁用parser/render仍复用。writer12与主链集成21定向检查通过。
 
 | 模块 / 实例 | 目标 / 观测模型 | 基线与可写区 | 依赖 / 状态 |
 |---|---|---|---|

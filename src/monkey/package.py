@@ -83,7 +83,7 @@ def _input_entries(unit):
     return entries(unit['path'])
 
 
-def convert_package(source, target, output, namespace='monkey-project',offline=False,input_set_path=None,resume_state=None,reuse_source_stages=None,format_profile='none',code_contract=None,cocos_code_language='ts',layout_path=None):
+def convert_package(source, target, output, namespace='monkey-project',offline=False,input_set_path=None,resume_state=None,reuse_source_stages=None,format_profile='none',code_contract=None,cocos_code_language='ts',layout_path=None,typed_modules=None):
     if format_profile not in ('none','grea'):fail('FORMAT_PROFILE',str(format_profile),'Expected none or grea')
     from .layout import load_overrides,VERSION as LAYOUT_VERSION
     overrides,overrides_sha=load_overrides(safe(layout_path) if layout_path else None)
@@ -95,11 +95,13 @@ def convert_package(source, target, output, namespace='monkey-project',offline=F
         from .package_code import declaration
         code_spec=declaration(code_contract,cocos_code_language)
         if resume_state or reuse_source_stages:fail('PACKAGE_CODE_FRESH_ONLY',str(code_contract),'Code projection currently requires fresh source stages')
+    if typed_modules and (target not in ('unity','unity6','unity-6000.6.2f1-ugui') or code_spec or resume_state):
+        fail('PACKAGE_MODULE_TARGET','$','Typed modules require a fresh Unity6 package candidate')
     selection=input_set(input_set_path) if input_set_path else None
     source=safe(input_set_path or source)
     roots=selection['inputs'] if selection else [dict(id='source',path=source,config=None)]
     profiles=[unity.PROFILE,cocos.PROFILE] if target=='both' else [TARGETS[target]]
-    out=safe(output) if resume_state else new_output(output,[source,*[r['path'] for r in roots],*([safe(code_contract)]if code_spec else []),*([safe(layout_path)] if layout_path else [])]);stage='inventory'
+    out=safe(output) if resume_state else new_output(output,[source,*[r['path'] for r in roots],*([safe(code_contract)]if code_spec else []),*([safe(layout_path)] if layout_path else []),*([v for v in typed_modules.values() if v] if typed_modules else [])]);stage='inventory'
     report=dict(schemaVersion=1,toolVersion=__version__,status='partial',workflowStatus='partial' if offline else 'needs_action',resultKind='candidate',
                 completed=False,mode='package',namespace=namespace,sourceKind='input-set' if selection else 'directory' if source.is_dir() else source.suffix.lower()[1:],
                 gameIdentity=dict(appId='unknown',appVersion='unknown',validation='not_verified'),
@@ -192,6 +194,28 @@ def convert_package(source, target, output, namespace='monkey-project',offline=F
                     for mod in found:
                         mod['entryType']='module_candidate';mod['sourceFile']=row['path'];mod['sourceSnapshotPath']=row['inputRoot']+'/'+row['localPath'];mod['sourceId']=row['sourceId']+'#'+str(mod['name'] or mod['candidate_id'])+'@'+str(mod['source_bytes']['start'])
                         recovered.append(mod)
+        full_drafts=[]
+        if target in ('unity','unity6','unity-6000.6.2f1-ugui','both'):
+            stage='full-csharp-drafts'
+            from .package_modules import prepare_drafts,cached_drafts
+            draft_reuse={}
+            if reuse_source_stages:
+                previous=safe(reuse_source_stages);previous_receipt=load(read(previous/'conversion-result.json'))
+                old_project=previous_receipt['projects'][0]
+                from .candidate_snapshot import snapshot
+                old_root,old_manifest,old_rows,old_pin=snapshot(previous/old_project['path'])
+                if old_pin!=old_project['manifestSha256']:fail('REPLAN_STAGE_DRIFT','manifest','Cached full draft candidate changed')
+                draft_reuse=cached_drafts(old_root,old_manifest,old_rows)
+            full_drafts=prepare_drafts([(spool/row['sha256'],row['path']) for row in rows if row.get('suffix')=='.js' and row.get('category')=='Code'],reuse=draft_reuse)
+            parsed=any(item.get('stageReuse',{}).get('parserExecuted',True)for item in full_drafts)
+            report['fullCSharpParserExecuted']=parsed
+            report['sourceCodeParserExecuted']=report.get('sourceCodeParserExecuted',False) or parsed
+            report['fullCSharpStages']=[dict(sourceSha256=item['report']['source']['sha256'],stage=item.get('stageReuse'))for item in full_drafts]
+        typed_prepared=None
+        if typed_modules:
+            stage='typed-module-recovery'
+            from .package_modules import prepare as prepare_typed
+            typed_prepared=prepare_typed(typed_modules,rows)
         code_emission=None
         if code_spec:
             stage='source-code-emission'
@@ -509,6 +533,15 @@ Neither target requires monkey, Python, the source tree, the other target or the
             write_json(find_analysis(project,'resource-ledger.json'),dict(schemaVersion=1,coverage=coverage,files=dispositions))
             from .layout.records import project_docs
             project_docs(project,engine,profile,__version__,overrides,code_layout.report())
+            if typed_prepared:
+                stage='typed-module-assembly'
+                from .package_modules import install as install_typed
+                install_typed(typed_prepared,project,native_manifest)
+                report['codeModules']=native_manifest['codeModules']
+            if profile==unity.PROFILE:
+                from .package_modules import install_drafts
+                install_drafts(full_drafts,project,native_manifest)
+                report['codeDrafts']=native_manifest['codeDrafts']
             files=[dict(path=p.relative_to(project).as_posix(),sha256=fingerprint(p),bytes=p.stat().st_size,owner='generated')
                    for p in sorted(project.rglob('*')) if p.is_file() and p!=project/'manifest.json']
             from .identities import assigned

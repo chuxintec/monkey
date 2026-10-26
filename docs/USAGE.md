@@ -1,6 +1,6 @@
 # 当前开发分支：monkey-project/2
 
-稳定安装为 `0.4.0`，本地开发为 `0.5.0.dev1`，新操作命令见 [v0.5 说明](V0.5-OPERATIONS.md)。日常使用已安装 Release 的 `monkey`；仓库入口仅转发，源码开发显式使用 `.venv/bin/python -m monkey.cli`。新输出布局以 [PROJECT-SPEC](PROJECT-SPEC.md) 为准，以下历史格式化说明不适用于新输出；`--format none|grea` 都是弃用别名。
+稳定安装为 `0.4.0`，本地开发为 `0.6.0.dev1`，新操作命令见 [v0.5 说明](V0.5-OPERATIONS.md)。日常使用已安装 Release 的 `monkey`；仓库入口仅转发，源码开发显式使用 `.venv/bin/python -m monkey.cli`。新输出布局以 [PROJECT-SPEC](PROJECT-SPEC.md) 为准，以下历史格式化说明不适用于新输出；`--format none|grea` 都是弃用别名。
 
 ```sh
 monkey convert --help
@@ -9,6 +9,28 @@ monkey layout-migration --from /path/to/old/UnityProject --to /path/to/new/Unity
 ```
 
 预览读取转换输出中的 Structured 计划；迁移命令读取工程 Assets/assets 的 meta 身份，拒绝重复 GUID/UUID。清单列出移动、未移动、仅旧工程存在及新增资产；它不修改游戏工程，也不证明内容、导入设置或玩法一致。新输出目录必须不存在。
+
+
+## v0.6 全量 C# 初稿与资源候选
+
+源码开发入口仍须显式调用项目环境。Unity 包级转换默认输出全量可取得的 JS C# 初稿，不需要类型合同：
+
+```sh
+PYTHONPATH=src .venv/bin/python -m monkey.cli convert --source /path/to/package --target unity6 --out /path/to/new-candidate --offline
+PYTHONPATH=src .venv/bin/python -m monkey.cli code-draft --source /path/to/game.js --out /path/to/new-code-drafts
+```
+
+已有资源候选可按精确 owning manifest 哈希在新目录组装，不重新解包/解码或启动 Editor：
+
+```sh
+PYTHONPATH=src .venv/bin/python -m monkey.cli convert --reuse-candidate /path/to/frozen/UnityProject --expected-candidate <manifest-sha256> --target unity6 --out /path/to/new-complete-candidate --offline
+```
+
+若既有 Editor 保存的 Scene/Prefab 尚未登记在旧清单，先用 `freeze-resource-candidate --candidate <project> --expected-manifest <sha256> --expected-readback <sha256> --out <new-frozen-root>` 封存。它只接受精确版本、已保存重开的 nativeFiles 哈希与明确列出的 Editor 状态，不接受未知资产/代码，不启动 Editor。
+
+再次复用已含完整初稿的候选时，工具按生成器签名、原源码哈希与每个生成文件的 owning hash 校验整源阶段；一致时跳过 AST worker 和转写。生成器变化会要求冷阶段，篡改/人工所有权不被当成可复用内容。`--reuse-source-stages` 也使用相同初稿阶段校验；报告分别记录 source/full-CSharp parser 是否执行。
+
+`Docs/CSHARP-DRAFTS.md` 是接续入口；`Analysis/Code/package-csharp-drafts.json` 汇总各源分母和报告路径。逐源报告将完整字段/方法/诊断分为 Details 分片；每条映射包含源位置/hash和实际目标文件。全部草稿在 `SourceRecovery/CSharp/<source-hash>/`，位于 Unity 编译目录之外。`code-types`、`--module-selectors` 和 `--module-contract` 仅用于可选的强类型增强。未编译/未验证的候选通常退出码为 1，须结合 `completed`、`status` 与具体诊断判断；退出码 1 不自动表示转换中断。
 
 以下保留旧版本用法及历史验收说明。
 

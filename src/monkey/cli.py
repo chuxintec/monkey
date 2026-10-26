@@ -84,6 +84,12 @@ def main(argv=None):
     p.add_argument('--unity-reuse-inspection',help='Reuse an exact same-worker complete inspect-unity --bundle-manifest snapshot')
     p.add_argument('--unity-code-evidence',help='Frozen metadata/declaration/source-code evidence manifest for a self-contained AI handoff')
     p.add_argument('--unity-schema-manifest',help='Frozen bundle pool for exact missing TypeTree lookup during Unity conversion')
+    p.add_argument('--code-source',help='Exact original JS file present by SHA/bytes in this package or frozen resource candidate')
+    p.add_argument('--module-contract',help='Reviewed source-bound typed module contract for the complete Unity candidate')
+    p.add_argument('--module-selectors',help='Exact classId/methodId roots; infer provable types and close dependencies, optionally using --module-contract as evidence')
+    p.add_argument('--configuration-table',help='Exact source-bound runtime JSON table accepted by the selected module configuration adapter')
+    p.add_argument('--reuse-candidate',help='Frozen complete resource candidate to compose with recovered modules, without redecoding source resources')
+    p.add_argument('--expected-candidate',help='Required exact SHA256 of the frozen candidate owning manifest')
     p.add_argument('--numeric-code-contract',help='Explicit source identity and numeric Label-field or reviewed static Number-method contract; fresh package conversion only')
     p.add_argument('--cocos-code-language',choices=['ts','js'],default='ts',help='Cocos code output; TypeScript first; JS uses an explicit ESM package boundary')
     p.add_argument('--reuse-source-stages',help='Fresh package output using verified source stages; supports names-v1 metadata migration')
@@ -177,6 +183,13 @@ def main(argv=None):
     p.add_argument('--numeric-field',action='append',default=[],help='Explicit numeric call-subdomain contract; not a global JS type inference')
     p.add_argument('--cocos-code-language',choices=['ts','js'],default='ts')
     p.add_argument('--out',required=True)
+    p = sub.add_parser('freeze-resource-candidate',help='Seal existing native readback assets and retained Editor state into a complete new resource candidate; no Editor launch')
+    p.add_argument('--candidate',required=True);p.add_argument('--expected-manifest',required=True);p.add_argument('--expected-readback',required=True);p.add_argument('--out',required=True)
+    p = sub.add_parser('code-draft',help='Export every available source method/function as best-effort C# drafts; type/syntax/API gaps do not gate export')
+    p.add_argument('--source',required=True);p.add_argument('--expected-source');p.add_argument('--out',required=True)
+    p.add_argument('--reuse-from');p.add_argument('--expected-manifest')
+    p = sub.add_parser('code-types',help='Extract only statically proven source types/dependencies and write named fillable evidence gaps')
+    p.add_argument('--source',required=True);p.add_argument('--selectors',required=True);p.add_argument('--type-evidence');p.add_argument('--namespace');p.add_argument('--out',required=True)
     p = sub.add_parser('code-select',help='Select reviewed source methods, close typed dependencies and check actual lowering; no source execution')
     p.add_argument('--source',required=True);p.add_argument('--selectors',required=True);p.add_argument('--out',required=True)
     group=p.add_mutually_exclusive_group(required=True)
@@ -334,7 +347,7 @@ def main(argv=None):
             from .output_limits import policy
             print(json.dumps(dict(version=__version__, profiles=[PROFILE,PROJECT_PROFILE,'cocos-2.4.11-bundle','cocos-3.8.7-bundle','cocos-3.4.1-bundle','cocos-2.1.2-resource','generic-image-resources-v1','egret-custom-resource-plist-v1'], targetProfiles=[UNITY_PROFILE,cocos.PROFILE],
                 ownership=dict(recoveryCandidates='monkey',developmentProjectOperations='beaver',workflow='GREA'),
-                codeRecovery=dict(status='partial',sourceExecution=False,lexicalGraph='complete-source-static-binding-and-utf8-spans',typedModules='explicit-source-class-method-hashes-and-call-domain',moduleProfiles=['foodstreet-demand-health-v1','foodstreet-motion-math-v1'],selection='bounded-source-method-roots;typed-dependency-closure;actual-lowering-preflight',methods='real-bodies-and-closed-cross-class-calls;unknowns-excluded',incremental='owned-candidate-fingerprints-and-hash-verified-reuse',mono='static-decompiler-drafts;legal-fixture-target-compiled',il2cpp='v29-exact-WASM-body-evidence;8-pure-i64-operator-fragments;caller-map-assumption;stateful-bodies-not-lifted',native='separate-probe-required;not-implied-by-emission'),
+                codeRecovery=dict(status='partial',sourceExecution=False,lexicalGraph='complete-source-static-binding-and-utf8-spans',typedModules='explicit-source-class-method-hashes-and-call-domain',moduleProfiles=['foodstreet-demand-health-v1','foodstreet-motion-math-v1'],selection='optional-strict-typed-dependency-closure-and-lowering',methods='default-full-source-best-effort-CSharp-bodies;unknown-fragments-retained',fullDrafts=dict(commands=['code-draft','convert'],typeContractRequired=False,sourceMethods='all-indexed-plus-auxiliary-functions',fields='known-class-or-unresolved-owner-binding',diagnostics='source-linked-bounded-shards',compilation='excluded;syntax-and-API-errors-allowed'),packageComposition='exact-frozen-resource-reuse;one-manifest-with-Scene-Prefab-JSON-and-CSharp',incremental='owned-candidate-fingerprints-and-hash-verified-reuse',mono='static-decompiler-drafts;legal-fixture-target-compiled',il2cpp='v29-exact-WASM-body-evidence;8-pure-i64-operator-fragments;caller-map-assumption;stateful-bodies-not-lifted',native='separate-probe-required;not-implied-by-emission'),
                 recoveryOperations=dict(commands=['acquire-resources','diagnose','doctor','space-preview','resource-probe'],
                     resume='same-manifest-and-input-set; completed-partial-receipt-to-fresh-layer; rehash-selected-payloads',
                     retries='1..3; transient-network-or-408-429-5xx-only; fixed-byte-time-budgets',
@@ -344,11 +357,11 @@ def main(argv=None):
                 projectOperations=dict(status='deprecated-compatibility',owner='beaver',commands=['adopt','adopt-recover','register','apply'],replacement='beaver-0.1.0-local-verified;consumer-switch-pending',scope='frozen-transition-implementation; not a new monkey mainline capability',unityNative='representative-move-and-reopen-verified-on-predecessor-WIP; latest-add-folder-runtime-not_run',creatorNative='unsupported'),
                 outputPolicy=dict(wholeInput=policy({'scopeMode':'whole-input'}),selection=policy({}),hashChunkBytes=1048576,sourceDecoderBudgets='independent'),
                 additionalPackageProfiles={'cocos-3.4.1-bundle':dict(scope='version-proven-node-ui-prefab-and-resource-subset',graphs='856-of-857-source-graphs;22503-nodes;52-instances;one-null-quaternion-rejected',native='5-source-frames-plus-6-prefabs-331-nodes-8-instances-7-mounted-nodes-1-mounted-widget-both-targets-verified',operations=['package-convert']), 'egret-custom-resource-plist-v1':dict(scope='reviewed-custom-resource-manifest-plist-binjson-v2',targets=['unity6'],sourceSkins='typed-data-only-native-layout-pending',remoteAcquisition='explicit-manifest-cache-and-bounded-fetch',native='132-source-frames-verified; expanded-atlas-set-pending',operations=['package-convert']), 'cocos-2.1.2-resource':dict(scope='version-proven-resource-subset',native='211-source-frames-both-targets-verified',graphs='pending',operations=['package-convert']), 'generic-image-resources-v1':dict(scope='derived-original-image-gallery-only',families=['laya','layaair','egret','eraget','custom','other'],targets=['unity6'],native='Egret-16-derived-images-verified',sourceGraphs='not-restored',operations=['package-convert']), 'cocos-2.4.11-bundle':dict(scope='version-proven-published-bundle-subset',native='91-source-graphs-both-targets-verified',operations=['package-convert']), 'cocos-3.8.7-bundle':dict(scope='version-proven-node-ui-template-and-resource-subset',native='83-static-graphs-plus-4-prefab-5-native-relations-and-16-node-dynamic-ui-representatives-both-targets-verified',graphs='114-root-closures-static;5-graphs-missing-6-exact-templates;not-all-native-validated',operations=['package-convert'])},
-                schemaVersion=1, dynamicUi=dict(probeVersion=2,verifiedLayoutGroups=6,verifiedLayoutStates=54,native='historical-v02-grid-scale-constraints-child-resize-and-linear-scale-representatives',timing='Editor-native-forced-update;Player-not_run',unityFlowReplacement=dict(status='verified-subset',sourcePrefabs=48,sourceComponents=63,aggregateAssets=50,representatives=6,scope='horizontal-flexible-unscaled-uniform-grid-or-proven-single-row',otherLayouts='review-required;no-source-flow-runtime-fallback',sourceText='questionnaire-Label-not-recovered;Rect-resize-only')), formatting=dict(implemented=['unity-creator-unimported-owned-grea-v1','fresh-package-convert-none-grea'],pending=['unity-general-scene-native-format','unity-source-positive-native-move-sample'],rejected=['materialized-native-assets-require-a-future-native-move-adapter']), unitySourceProfile=dict(inspectionPolicy=dict(defaultObjectValues=250000,defaultContainerValues=8000000,maxObjectValues=1000000,maxContainerValues=16000000,maxDepth=96,streamedFields=['Font.m_FontData','AssetBundle.m_PreloadTable'],chunkElements=8192,maxPayloadBytes=268435456),name='unityfs-unitypy-1.25.3-assetripper-2.0.0',status='partial',inputs='explicit-unity-bundle-or-webdata-files-and-exact-local-texture-cache',additionalContainers=['UnityWebData1.0'],invalidTexturePolicy='block-default-explicit-quarantine-retains-original',dependencyClosure='explicit-frozen-pool-exact-serialized-file-closure',editor='one-prefab-schema-reference-save-reload-verified',publicNative=True,nativeProfile='unity-leaf-prefab-sprite-array-v1',nativeFormatting='typed-resource-moves-with-dynamic-path-pins; real sample pinned all 134 assets',methodsRecovered=0), implemented=['acquire-resources','diagnose','doctor','space-preview','resource-probe','query-methods','query-tables','inspect-aliases','adopt','adopt-recover','unity-field-plan','convert','catalog','inspect','normalize','plan','export','verify','handoff','diff','register','apply','preflight','native-import','research-matrix','code-model','code-emit','code-select','wasm-code-source','wasm-code-candidate','unity-code-source','unity-code-candidate','code-native-probe','format-project','project-model','inspect-unity','export-unity','unity-code-model','index-unity','hydrate-unity','code-handoff','native-finish-plan','native-finish','acquire-unity-textures','prepare-unity-bulk','export-unity-bulk','freeze-handoff','freeze-unity-handoff','native-layout-audit','native-layout-prepare','native-layout-patch','native-layout-finish','native-layout-bundle'], planned=[],
+                schemaVersion=1, dynamicUi=dict(probeVersion=2,verifiedLayoutGroups=6,verifiedLayoutStates=54,native='historical-v02-grid-scale-constraints-child-resize-and-linear-scale-representatives',timing='Editor-native-forced-update;Player-not_run',unityFlowReplacement=dict(status='verified-subset',sourcePrefabs=48,sourceComponents=63,aggregateAssets=50,representatives=6,scope='horizontal-flexible-unscaled-uniform-grid-or-proven-single-row',otherLayouts='review-required;no-source-flow-runtime-fallback',sourceText='questionnaire-Label-not-recovered;Rect-resize-only')), formatting=dict(implemented=['unity-creator-unimported-owned-grea-v1','fresh-package-convert-none-grea'],pending=['unity-general-scene-native-format','unity-source-positive-native-move-sample'],rejected=['materialized-native-assets-require-a-future-native-move-adapter']), unitySourceProfile=dict(inspectionPolicy=dict(defaultObjectValues=250000,defaultContainerValues=8000000,maxObjectValues=1000000,maxContainerValues=16000000,maxDepth=96,streamedFields=['Font.m_FontData','AssetBundle.m_PreloadTable'],chunkElements=8192,maxPayloadBytes=268435456),name='unityfs-unitypy-1.25.3-assetripper-2.0.0',status='partial',inputs='explicit-unity-bundle-or-webdata-files-and-exact-local-texture-cache',additionalContainers=['UnityWebData1.0'],invalidTexturePolicy='block-default-explicit-quarantine-retains-original',dependencyClosure='explicit-frozen-pool-exact-serialized-file-closure',editor='one-prefab-schema-reference-save-reload-verified',publicNative=True,nativeProfile='unity-leaf-prefab-sprite-array-v1',nativeFormatting='typed-resource-moves-with-dynamic-path-pins; real sample pinned all 134 assets',methodsRecovered=0), implemented=['code-draft','code-types','freeze-resource-candidate','acquire-resources','diagnose','doctor','space-preview','resource-probe','query-methods','query-tables','inspect-aliases','adopt','adopt-recover','unity-field-plan','convert','catalog','inspect','normalize','plan','export','verify','handoff','diff','register','apply','preflight','native-import','research-matrix','code-model','code-emit','code-select','wasm-code-source','wasm-code-candidate','unity-code-source','unity-code-candidate','code-native-probe','format-project','project-model','inspect-unity','export-unity','unity-code-model','index-unity','hydrate-unity','code-handoff','native-finish-plan','native-finish','acquire-unity-textures','prepare-unity-bulk','export-unity-bulk','freeze-handoff','freeze-unity-handoff','native-layout-audit','native-layout-prepare','native-layout-patch','native-layout-finish','native-layout-bundle'], planned=[],
                 targetValidation={UNITY_PROFILE:dict(static='implemented',editor='representative-subset-verified',visual='not_run'),cocos.PROFILE:dict(static='implemented',editor='representative-subset-verified',visual='not_run')},
                 compiledFormats=['compiled-v1','pack-v1','texture-pack-v1'],
                 containerFormats=['plain-wxapkg','APK-ZIP','Cocos-resource-directory'],
-                packageWorkflow=dict(fileAccounting='implemented',staticModuleRecovery='partial',codeDrafts='source-linked-contracts',
+                packageWorkflow=dict(fileAccounting='implemented',staticModuleRecovery='partial',codeDrafts='default-full-source-actual-CSharp-drafts-with-source-linked-sharded-diagnostics',
                                      nativeObjectRecovery='shared-ir-supported-subset',packageResume='hash-checked',inputSets='explicit-local-roots',editorOrchestration='manifest-bound-native-import-command',remoteAcquisition='explicit-manifest-bounded-fetch',cocosCodeLanguages=['ts','js'],defaultCocosCodeLanguage='ts',numericCodeContracts=['numeric-call-subdomain-v1','static-number-methods-v1'],staticNumericScope='reviewed-Creator3-descriptor-helper-and-lexical-dependency; no component binding'),
                 imageFormats=['PNG','JPEG','ASTC (optional pinned decoder)'],animationSchemaVersion=1,
                 animationSubset=['local-position','local-scale','opacity','linear','constant-step','Normal','Loop'],animationEvents='manual-contract-only', targetEditorValidation='representative-subsets-only'), ensure_ascii=False))
@@ -381,6 +394,22 @@ def main(argv=None):
                 from .code_emit import emit
                 result=emit(args.source,args.code_model,args.out,args.numeric_field,args.cocos_code_language,args.namespace)
             print(json.dumps(result,ensure_ascii=False));return 1
+        if args.command == 'freeze-resource-candidate':
+            from .package_modules import freeze_native_resources
+            print(json.dumps(freeze_native_resources(args.candidate,args.expected_manifest,args.expected_readback,args.out),ensure_ascii=False));return 0
+        if args.command == 'code-draft':
+            from .code_drafts import emit
+            result=emit(args.source,args.out,expected_source_sha256=args.expected_source,reuse_from=args.reuse_from,expected_manifest_sha256=args.expected_manifest)
+            print(json.dumps(result,ensure_ascii=False));return 1
+        if args.command == 'code-types':
+            from .code_type_evidence import extract_type_evidence
+            from .io import load,read,safe,new_output,write_json
+            source=safe(args.source);selectors=safe(args.selectors);evidence=safe(args.type_evidence) if args.type_evidence else None
+            result=extract_type_evidence(source,load(read(selectors,max_bytes=64*1024)),load(read(evidence,max_bytes=128*1024)) if evidence else None,namespace=args.namespace if evidence else args.namespace or 'Game.Domain.Recovered')
+            out=new_output(args.out,[source,selectors]+([evidence] if evidence else []));write_json(out/'type-evidence.json',result)
+            if result['status']=='ready' and result.get('contract'):write_json(out/'module-contract.json',result['contract'])
+            if result.get('fillableContract'):write_json(out/'missing-types.json',result['fillableContract'])
+            print(json.dumps(dict(status=result['status'],report=str(out/'type-evidence.json'),contract=str(out/'module-contract.json') if result['status']=='ready' and result.get('contract') else None,missing=str(out/'missing-types.json') if result.get('fillableContract') else None),ensure_ascii=False));return 0 if result['status']=='ready' else 1
         if args.command == 'code-select':
             from .code_selection import write_selection
             result=write_selection(args.source,args.selectors,args.out,type_evidence=args.type_evidence,module_profile=args.module_profile)
@@ -524,6 +553,25 @@ def main(argv=None):
             print(json.dumps(discover(args.root,args.out),ensure_ascii=False))
             return 0
         if args.command == 'convert':
+            typed_requested=any((args.code_source,args.module_contract,args.module_selectors,args.configuration_table,args.reuse_candidate,args.expected_candidate))
+            typed_settings=None
+            if typed_requested:
+                if args.target not in ('unity','unity6',UNITY_PROFILE) or not args.out: parser.error('Typed package modules require --target unity6 and a fresh --out')
+                if any((args.numeric_code_contract,args.resume,args.recipe,args.asset_index,args.all_assets,args.bindings,args.animation,args.native,args.remote_manifest)):
+                    parser.error('Typed package modules use fresh local package/candidate assembly; numeric/slice/resume/native/remote flags cannot combine')
+                from .package_modules import settings as module_settings
+                typed_settings=module_settings(args.code_source,args.module_contract,args.module_selectors,args.configuration_table)
+                if args.reuse_candidate:
+                    if not args.expected_candidate or any((args.source,args.input_set,args.reuse_source_stages,args.layout,args.namespace,args.provider_python,args.asset_ripper,args.format)):
+                        parser.error('Frozen candidate composition requires --expected-candidate and excludes fresh source/layout/provider options')
+                    from .package_modules import assemble
+                    result=assemble(args.reuse_candidate,args.expected_candidate,args.out,typed_settings)
+                    drafts=result.get('codeDrafts') or {}
+                    draft_summary={k:v for k,v in drafts.items() if k!='files'}
+                    draft_summary['generatedFiles']=len(drafts.get('files',[]))
+                    print(json.dumps(dict(status=result['status'],completed=result['completed'],projects=result['projects'],codeModules=result.get('codeModules'),codeDrafts=draft_summary,report=str(Path(args.out).resolve()/'conversion-result.json')),ensure_ascii=False));return 1
+                if args.expected_candidate: parser.error('--expected-candidate requires --reuse-candidate')
+                if args.source_family not in ('auto','cocos'): parser.error('Fresh typed JS package conversion currently requires Cocos; use frozen Unity resources for other source routes')
             if args.numeric_code_contract and any((args.resume,args.recipe,args.reuse_source_stages,args.asset_index,args.bindings,args.animation)):
                 parser.error('--numeric-code-contract requires fresh package source stages')
             if args.cocos_code_language!='ts' and not args.numeric_code_contract:parser.error('--cocos-code-language requires --numeric-code-contract')
@@ -538,6 +586,7 @@ def main(argv=None):
                 if generic_selection['sourceProfile']=='generic-image-resources-v1':generic_family='other'
                 elif generic_selection['sourceProfile']=='egret-custom-resource-plist-v1':generic_family='egret'
             if generic_family:
+                if typed_settings: parser.error('Typed JS modules require a Cocos package or an explicit frozen resource candidate')
                 if args.target not in ('unity','unity6',UNITY_PROFILE):parser.error('Non-Cocos sources target Unity 6 only')
                 if not all((args.source or args.input_set,args.target,args.out))or args.source and args.input_set:parser.error('Image-resource conversion requires --source or --input-set, --target unity6 and --out')
                 if args.source_profile and args.source_profile not in ('generic-image-resources-v1','egret-custom-resource-plist-v1'):parser.error('Resource sources require a supported explicit resource profile')
@@ -583,6 +632,7 @@ def main(argv=None):
                 from .sources.unity_serialized import container_kind
                 with safe_source(source_file).open('rb') as stream:unity_source=container_kind(stream.read(16)) is not None
             if unity_source:
+                if typed_settings: parser.error('Reuse the frozen Unity resource candidate for source-bound module assembly')
                 if args.numeric_code_contract or args.cocos_code_language!='ts':parser.error('Numeric JS code contracts/language selection require Cocos package sources')
                 if args.native and args.offline:parser.error('--native cannot combine with --offline')
                 if args.native and (not args.unity_editor or args.creator_editor):parser.error('Unity source --native requires only --unity-editor')
@@ -649,7 +699,7 @@ def main(argv=None):
             source_path=Path(args.source) if args.source else None
             package_mode=args.input_set or args.package or args.target in ('both','unity6','cocos38') or (source_path is not None and
                 (source_path.suffix.lower() in ('.apk','.wxapkg') or source_path.is_dir() and not args.asset_index and not args.recipe))
-            if args.numeric_code_contract and not package_mode:parser.error('--numeric-code-contract requires package conversion')
+            if (args.numeric_code_contract or typed_settings) and not package_mode:parser.error('Source-bound code contracts require package conversion')
             if package_mode:
                 if not all((args.source or args.input_set,args.target,args.out)) or args.source and args.input_set or any((args.resume,args.recipe,args.asset_index,
                         args.dependency_source,args.evidence_source,args.bindings,args.animation,args.source_profile)):
@@ -678,7 +728,7 @@ def main(argv=None):
                     acquired=acquire(remote_settings,args.offline);conversion_input_set=str(acquired['inputSet'])
                     if args.reuse_source_stages and Path(conversion_input_set).resolve()!=Path(args.input_set).resolve():
                         raise ValueError('New acquired files require fresh source stages; acquired evidence is preserved')
-                result=convert_package(args.source,args.target,args.out,args.namespace or 'monkey-project',args.offline,conversion_input_set,reuse_source_stages=args.reuse_source_stages,format_profile=args.format or 'none',code_contract=args.numeric_code_contract,cocos_code_language=args.cocos_code_language,layout_path=args.layout)
+                result=convert_package(args.source,args.target,args.out,args.namespace or 'monkey-project',args.offline,conversion_input_set,reuse_source_stages=args.reuse_source_stages,format_profile=args.format or 'none',code_contract=args.numeric_code_contract,cocos_code_language=args.cocos_code_language,layout_path=args.layout,typed_modules=typed_settings)
                 if acquired:
                     from .acquisition import attach
                     attach(result,args.out,acquired)

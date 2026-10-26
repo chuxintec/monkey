@@ -131,6 +131,53 @@ const bodyFacts=(fn,row)=>{
 for(const fn of functions){const row=methodByFunction.get(fn);if(row)bodyFacts(fn,row);}
 const functionById=new Map(functions.filter(fn=>methodByFunction.has(fn)).map(fn=>[methodByFunction.get(fn).id,fn]));
 const mode=process.argv[2]||'index';let selected=[];
+if(mode==='draft-stream'){
+ let total=0;const send=row=>{const line=JSON.stringify(row,(_,v)=>typeof v==='bigint'?{unsupportedBigInt:v.toString()}:v)+'\n';total+=Buffer.byteLength(line);if(total>1024*1024*1024)throw Error('CODE_DRAFT_STREAM_BUDGET');fs.writeSync(1,line);};
+ const convert=n=>{if(Array.isArray(n))return n.map(convert);if(!n||typeof n!=='object')return n;const out={};for(const[k,v]of Object.entries(n))if(k==='start'||k==='end')out[k]=offsets[v];else out[k]=convert(v);return out;};
+ send({record:'header',schemaVersion:1,source:{sha256:hash(raw),bytes:raw.length},sourceExecuted:false,
+   summary:{astNodes:nodes,classes:classes.length,methods:methods.length,functions:functions.length},classes,registrations});
+ let emitted=0,flattened=0,containers=0,fieldCount=0;
+ const boundedNodes=(start,limit)=>{const todo=[start];let count=0;while(todo.length){const n=todo.pop();if(++count>limit)return count;for(const[k,v]of Object.entries(n)){if(k==='start'||k==='end')continue;if(Array.isArray(v)){for(const x of v)if(x&&typeof x.type==='string')todo.push(x);}else if(v&&typeof v.type==='string')todo.push(v);}}return count;};
+ const byClassBinding=new Map();for(const c of classes){byClassBinding.set(c.bindingId,c);byClassBinding.set(c.constructorBindingId,c);}
+ const knownOwners=new Set(methods.map(m=>m.ownerBindingId).filter(Boolean));for(const k of byClassBinding.keys())knownOwners.add(k);
+ const fieldContexts=new WeakMap();
+ const fieldContext=n=>{
+  let enclosing=parent.get(n);while(enclosing&&!isFunction(enclosing))enclosing=parent.get(enclosing);
+  if(!enclosing)return 'program';
+  if(fieldContexts.has(enclosing))return fieldContexts.get(enclosing);
+  const context=factoryClass.has(enclosing)?'class_factory':!methodByFunction.has(enclosing)&&boundedNodes(enclosing,300000)>300000?'module':'runtime_write';
+  fieldContexts.set(enclosing,context);return context;
+ };
+ const fieldsTodo=[ast];
+ while(fieldsTodo.length){
+  const n=fieldsTodo.pop();
+  if(n.type==='AssignmentExpression'&&n.operator==='='&&n.left.type==='MemberExpression'&&n.left.object.type==='Identifier'&&!isFunction(n.right)){
+   const receiver=n.left.object,b=resolve(receiver.name,ownerScope.get(n)),name=property(n.left);
+   if(b&&!b.ambiguous&&knownOwners.has(b.id)&&name&&name!=='prototype'){
+    const c=byClassBinding.get(b.id);const field={id:'field@'+offsets[n.start],name,ownerAlias:receiver.name,ownerBindingId:b.id,classId:c?.id??null,static:true,initializationContext:fieldContext(n),sourceBytes:range(n),sourceSha256:digest(n)};
+    const value=boundedNodes(n.right,100000)>100000?{type:'UnsupportedDraftFragment',start:offsets[n.right.start],end:offsets[n.right.end],reason:'Large field initializer retained for repair'}:convert(n.right);
+    send({record:'field',field,ast:value});fieldCount++;
+   }
+  }
+  for(const[k,v]of Object.entries(n)){if(k==='start'||k==='end')continue;if(Array.isArray(v)){for(const x of v)if(x&&typeof x.type==='string')fieldsTodo.push(x);}else if(v&&typeof v.type==='string')fieldsTodo.push(v);}
+ }
+ for(const fn of functions){
+  if(factoryClass.has(fn)){flattened++;continue;}
+  const existing=methodByFunction.get(fn),c=enclosingClass(fn);
+  if(!existing&&boundedNodes(fn,300000)>300000){containers++;continue;}
+  const method=existing||{id:'function@'+offsets[fn.start],name:fn.id?.name||'Function'+offsets[fn.start],classId:c?.id??null,
+    ownerAlias:c?.constructorAlias??null,ownerBindingId:null,static:false,sourceBytes:range(fn),functionBytes:range(fn),sourceSha256:digest(fn),bodySha256:digest(fn.body),parameters:fn.params.map(n=>({name:n.type==='Identifier'?n.name:null,binding:n.type})),async:!!fn.async,generator:!!fn.generator,calls:[],captures:[]};
+  let astRow;
+  if(existing&&boundedNodes(fn,300000)>300000){
+   astRow={type:fn.type,start:offsets[fn.start],end:offsets[fn.end],params:convert(fn.params),body:{type:'BlockStatement',start:offsets[fn.body.start],end:offsets[fn.body.end],body:fn.body.body.map(n=>boundedNodes(n,100000)>100000?{type:'UnsupportedDraftFragment',start:offsets[n.start],end:offsets[n.end],reason:'Large source fragment retained locally; other statements continue'}:convert(n))}};
+  }else astRow=convert(fn);
+  let record={record:'function',kind:existing?'indexed_method':'auxiliary_function',method,ast:astRow};
+  if(Buffer.byteLength(JSON.stringify(record))>64*1024*1024)record={record:'function',kind:existing?'indexed_method':'auxiliary_function',method,ast:null,diagnostic:'AST fragment exceeds64MiB; exact source is retained for local transcription'};
+  send(record);emitted++;
+ }
+ send({record:'footer',functionsEmitted:emitted,classFactoriesFlattened:flattened,moduleContainersFlattened:containers,staticFields:fieldCount,indexedMethods:methods.length,sourceExecuted:false});process.exit(0);
+}
+
 if(mode==='methods'){
  const request=JSON.parse(fs.readFileSync(process.argv[3],'utf8'));
  if(!Array.isArray(request)||request.length>256||new Set(request).size!==request.length)throw Error('CODE_METHOD_SELECTION');

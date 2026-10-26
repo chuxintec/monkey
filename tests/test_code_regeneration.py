@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from monkey.code_regeneration import plan_modules, select_reuse, _fingerprints, _validate_requests
+from monkey.code_regeneration import plan_modules, select_reuse, _fingerprints, _validate_requests, _candidate_inventory
 from monkey.io import sha
 from monkey.sources.compiled import ParseError
 
@@ -74,6 +74,36 @@ class CodeRegenerationTests(unittest.TestCase):
         self.assertEqual(result['reusableFiles']['Assets/Game/Logic/Rules.cs'], b'// callee\n')
         caller = next(row for row in result['moduleRecords'] if row['id'] == 'caller')
         self.assertEqual(caller['sourceMethodMappings'][0]['sourceMethodId'], 'old:1')
+
+    def test_whole_draft_budget_requires_exact_candidate_kind_and_retains_guard(self):
+        manifest=json.loads((self.root/'manifest.json').read_bytes())
+        manifest['scopeMode']='whole-input'
+        manifest['candidateKind']='unrelated-candidate'
+        with self.assertRaisesRegex(ParseError,'MANIFEST'):
+            _candidate_inventory(self.root,manifest)
+        manifest['candidateKind']='full-source-csharp-drafts'
+        # Exercise declared budget accounting without allocating hundreds of MiB.
+        manifest['files'][0]['bytes']=300*1024**2
+        _candidate_inventory(self.root,manifest)
+        manifest['scopeMode']='code-modules-only'
+        with self.assertRaisesRegex(ParseError,'TOTAL_BUDGET'):
+            _candidate_inventory(self.root,manifest)
+        manifest['scopeMode']='whole-input'
+        manifest['files']=manifest['files'][:1]*28
+        for i,row in enumerate(manifest['files']):
+            manifest['files'][i]=dict(row,path='SourceRecovery/CSharp/File'+str(i)+'.cs')
+        with self.assertRaisesRegex(ParseError,'TOTAL_BUDGET'):
+            _candidate_inventory(self.root,manifest)
+
+    def test_whole_draft_reuse_keeps_dirty_file_protection(self):
+        manifest=json.loads((self.root/'manifest.json').read_bytes())
+        manifest.update(scopeMode='whole-input',candidateKind='full-source-csharp-drafts')
+        raw=json.dumps(manifest).encode();(self.root/'manifest.json').write_bytes(raw)
+        self.assertTrue(all(r['action']=='reuse'for r in self.choose(expected=sha(raw))['moduleRecords']))
+        path=self.root/self.modules[0]['targetPaths'][0];path.write_text('// human edit')
+        result=self.choose(expected=sha(raw))
+        self.assertEqual(result['actions']['callee']['action'],'blocked')
+        self.assertEqual(path.read_text(),'// human edit')
 
     def test_changed_callee_regenerates_caller_but_not_unrelated_module(self):
         changed = [module('callee', 'callee-v2', [], ['Assets/Game/Logic/Rules.cs']),

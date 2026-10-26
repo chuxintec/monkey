@@ -42,3 +42,46 @@ def inspect(source,output,expected_sha256=None,selected=()):
     report.update(status='source_indexed; methods_not_yet_recovered',compiled='not_run',behavior='not_run',nativeBinding='not_run')
     write_json(out/'code-graph.json',report);finish(out,dict(schemaVersion=1,scopeMode='code-source-index',diagnostics=[]))
     return dict(status='source_indexed',source=report['source'],summary=report['summary'],report=str(out/'code-graph.json'),sourceExecuted=False)
+
+
+def draft_records(source):
+    """Parse complete input once and stream every source function as bounded AST data.
+
+    Class factory wrappers are flattened into their classes/methods. Indexed
+    methods and other functions have separate coverage denominators. The worker
+    never executes source; JSONL is a temporary static bridge, not a runtime IR.
+    """
+    source=safe(source);raw=read(source);identity=dict(sha256=sha(raw),bytes=len(raw))
+    node=shutil.which('node')
+    if not node:fail('DEPENDENCY_MISSING','Node','Static full-source parser requires existing Node')
+    env={k:v for k,v in os.environ.items()if k not in ('NODE_OPTIONS','NODE_PATH')}
+    with tempfile.TemporaryDirectory(prefix='monkey-draft-ast-') as tmp:
+        spool=Path(tmp)/'functions.jsonl'
+        with source.open('rb') as src,spool.open('wb') as dst:
+            try:
+                result=subprocess.run([node,'--max-old-space-size=768',str(Path(__file__).with_name('code-graph.cjs')),'draft-stream'],stdin=src,stdout=dst,stderr=subprocess.DEVNULL,timeout=240,env=env)
+            except subprocess.TimeoutExpired:fail('CODE_DRAFT_PARSE_TIMEOUT',source.name,'Static draft stream exceeded240 seconds')
+        if result.returncode:fail('CODE_DRAFT_PARSE_FAILED',source.name,'Static parser could not finish; no source program executed')
+        if spool.stat().st_size>1024*1024**2:fail('CODE_DRAFT_AST_BUDGET',source.name,'Static AST bridge exceeds1GiB')
+        if sha(read(source))!=identity['sha256']:fail('SOURCE_CHANGED',source.name,'Source changed while parsing drafts')
+        with spool.open('rb') as stream:
+            first=True;finished=False
+            while line:=stream.readline(64*1024**2+1):
+                if len(line)>64*1024**2:fail('CODE_DRAFT_AST_LINE_BUDGET',source.name,'AST record exceeds64MiB')
+                try:
+                    row=load(line,max_nodes=3_000_000,max_depth=600)
+                except (RecursionError,ValueError):
+                    marker=b',"ast":';metadata,found,_=line.partition(marker)
+                    if not found:fail('CODE_DRAFT_AST_RECORD',source.name,'Source AST record could not be decoded')
+                    row=load(metadata+b'}',max_nodes=500_000,max_depth=96)
+                    row['ast']=None;row['diagnostic']='AST decode failed locally; exact source span retained for repair'
+
+                if first:
+                    if row.get('record')!='header' or row.get('source')!=identity or row.get('sourceExecuted')is not False:fail('CODE_DRAFT_SOURCE_IDENTITY',source.name,'Draft source identity differs')
+                    first=False
+                if row.get('record')in ('function','field'):
+                    m=row['method'] if row['record']=='function' else row['field'];a,b=m['sourceBytes']['start'],m['sourceBytes']['end']
+                    if not 0<=a<b<=len(raw) or sha(raw[a:b])!=m['sourceSha256']:fail('CODE_DRAFT_METHOD_IDENTITY',m['id'],'Source method range/hash differs')
+                if row.get('record')=='footer':finished=True
+                yield row
+            if not finished:fail('CODE_DRAFT_INCOMPLETE',source.name,'Static stream did not complete')

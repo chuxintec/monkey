@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from monkey.code_graph import facts
+from monkey.code_graph import facts, draft_records
 from monkey.io import sha
 from monkey.sources.compiled import ParseError
 
@@ -17,6 +17,19 @@ throw new Error("Original source must never run");
 
 
 class CodeGraphTests(unittest.TestCase):
+    def test_full_draft_fields_keep_runtime_writes_out_of_static_initializers(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source=Path(tmp).resolve()/'source.js'
+            source.write_text('var Rules=(function(){function C(){} C.Value=1; C.Change=function(){C.Value=this.next;C.Value=2;};return C;})();')
+            rows=list(draft_records(source))
+            fields=[r['field'] for r in rows if r.get('record')=='field']
+            self.assertEqual(len(fields),3)
+            self.assertEqual(sum(r['initializationContext']=='class_factory'for r in fields),1)
+            self.assertEqual(sum(r['initializationContext']=='runtime_write'for r in fields),2)
+            raw=source.read_bytes()
+            for row in fields:
+                span=row['sourceBytes'];self.assertEqual(sha(raw[span['start']:span['end']]),row['sourceSha256'])
+
     def test_complete_lexical_scope_and_utf8_selected_span(self):
         with tempfile.TemporaryDirectory() as tmp:
             source=Path(tmp).resolve()/'source.js'; source.write_bytes(SOURCE)

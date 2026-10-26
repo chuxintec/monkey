@@ -2,6 +2,10 @@
 
 ## 当前 v0.6 C# 大版本（2026-10-26）
 
+最新用户全量C#裁定已本聊天原生核验：总监turn `01a17807-bfde-7210-ac1a-06412c7f108f` / human `01a17807-bffc-72c3-af7b-6551a18f424f`。按重写的 MONKEY-V06-CSHARP-PLAN.md 全量导出实际C#初稿，允许语法/类型/API错误，类型合同/编译/语义证明不再是导出门槛。已有严格16方法及主流程WIP保留作增强；逐片段失败继续，不用索引/统一空壳代替有源方法。默认批量完整肥鹅，统一资源/Scene/Prefab/JSON候选交接；源未得WASM正文不编造。仍不执行原JS/WASM/DLL、不写正式游戏、不发布/全局安装。下文冲突的严格导出门槛作历史。
+
+事件 `monkey-v06-direction-mainflow-20261026-01` 继续既定v0.6：以 Manager/reviews/20261026-grea-responsibility-review/MONKEY-BEAVER-DIRECTION.md 为本次方向补正。5a2ce31/89332be、16方法/8WASM/6CUA及分发02保留，不重验；补公开包级convert/冻结资源候选组装、通用可证明类型提取、同一manifest和beaver接续。先前local_c1_c9_candidate_ready不等于整版主流程已完成；不为数量加profile、不再重复整套打包/原生/安装。
+
 事件`monkey-v06-delivery-gap-correction-20261026-01`要求保留8a536d3/de7c556首候选并继续合并大版本；执行Manager同目录MONKEY-V06-DELIVERY-REVIEW.md。不得把一个12方法内置profile的local_declared_subset等同整版完成；核已存在的僵尸segment/map/body、模块选择/类型依赖与真实发射、Unity可操作有限流程。不重跑旧50测试/旧窗口，不执行源WASM，不改正式游戏。
 
 续推事件 `monkey-v06-continue-development-20261026-01` 已原生回读真实人类 turn `01a17778-4eb2-7d43-b89e-53a8b46d986d` / human `01a17778-4ed4-7223-8255-df15ac647275`“推进开发”。继续现有 v0.6 WIP/模块实例，禁止以旧 v0.5 复核或单组结束代替整版接续。

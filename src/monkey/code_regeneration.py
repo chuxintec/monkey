@@ -14,7 +14,7 @@ import unicodedata
 from pathlib import Path, PurePosixPath
 
 from .io import load, read, safe, sha
-from .output_limits import CHUNK_BYTES
+from .output_limits import CHUNK_BYTES, WHOLE_BYTES, WHOLE_FILES
 from .sources.compiled import ParseError, fail
 
 _HEX = re.compile(r"[0-9a-f]{64}\Z")
@@ -69,8 +69,9 @@ def _file_digest(path: Path, declared_bytes: int, location: str) -> tuple[str, i
     return digest.hexdigest(), size
 
 
-def _validate_requests(modules: object, generator_signature: str) -> tuple[dict, list[str], dict]:
-    if not isinstance(modules, list) or len(modules) > _MAX_FILES:
+def _validate_requests(modules: object, generator_signature: str, *, whole_input=False) -> tuple[dict, list[str], dict]:
+    max_files = WHOLE_FILES if whole_input else _MAX_FILES
+    if not isinstance(modules, list) or len(modules) > max_files:
         fail('CODE_REGENERATION_REQUESTS', '$.modules', 'Expected a bounded module array')
     _digest(generator_signature, '$.generator_signature')
     specs: dict[str, dict] = {}
@@ -99,8 +100,8 @@ def _validate_requests(modules: object, generator_signature: str) -> tuple[dict,
         if not isinstance(targets, list) or not targets:
             fail('CODE_REGENERATION_TARGETS', mid, 'At least one output path is required')
         target_count += len(targets)
-        if target_count > _MAX_FILES:
-            fail('CODE_REGENERATION_GRAPH_BUDGET', mid, 'Module request exceeds 20,000 target paths')
+        if target_count > max_files:
+            fail('CODE_REGENERATION_GRAPH_BUDGET', mid, 'Module request exceeds its target path budget')
         canonical = sorted(_path(x, mid) for x in targets)
         if len(set(canonical)) != len(canonical):
             fail('CODE_REGENERATION_PATH_COLLISION', mid, 'Repeated target path')
@@ -240,9 +241,9 @@ def _graph_blocking(specs: dict, graph_issues: dict) -> tuple[dict[str, str], li
     return blocked, diagnostics
 
 
-def plan_modules(modules, generator_signature) -> dict:
+def plan_modules(modules, generator_signature, *, whole_input=False) -> dict:
     """Plan a fresh generation pass without reading an existing candidate."""
-    specs, order, graph_issues = _validate_requests(modules, generator_signature)
+    specs, order, graph_issues = _validate_requests(modules, generator_signature, whole_input=whole_input)
     fingerprints = _fingerprints(specs, order, generator_signature)
     blocked, diagnostics = _graph_blocking(specs, graph_issues)
     actions = {}
@@ -262,12 +263,18 @@ def plan_modules(modules, generator_signature) -> dict:
                 moduleRecords=records, actions=actions, diagnostics=diagnostics)
 
 
+def _full_drafts(manifest):
+    return manifest.get('scopeMode') == 'whole-input' and manifest.get('candidateKind') == 'full-source-csharp-drafts'
+
+
 def _candidate_inventory(root: Path, manifest: dict) -> tuple[dict[str, dict], dict[str, dict], list[str]]:
-    if manifest.get('schemaVersion') != 1 or manifest.get('scopeMode') != 'code-modules-only':
-        fail('CODE_REGENERATION_MANIFEST', str(root), 'Expected schemaVersion=1 and scopeMode=code-modules-only')
+    whole = _full_drafts(manifest)
+    if manifest.get('schemaVersion') != 1 or not (whole or manifest.get('scopeMode') == 'code-modules-only'):
+        fail('CODE_REGENERATION_MANIFEST', str(root), 'Expected code module candidate or explicitly identified full-source drafts')
+    max_files, max_total = (WHOLE_FILES, WHOLE_BYTES) if whole else (_MAX_FILES, _MAX_TOTAL)
     rows = manifest.get('files')
     records = manifest.get('codeModules')
-    if not isinstance(rows, list) or len(rows) > _MAX_FILES or not isinstance(records, list) or len(records) > _MAX_FILES:
+    if not isinstance(rows, list) or len(rows) > max_files or not isinstance(records, list) or len(records) > max_files:
         fail('CODE_REGENERATION_MANIFEST', str(root), 'Invalid or oversized files/codeModules arrays')
     files: dict[str, dict] = {}
     folded = {}
@@ -285,8 +292,8 @@ def _candidate_inventory(root: Path, manifest: dict) -> tuple[dict[str, dict], d
         if type(size) is not int or not 0 <= size <= _MAX_FILE:
             fail('CODE_REGENERATION_FILE_BUDGET', path, 'Invalid or oversized file record')
         total += size
-        if total > _MAX_TOTAL:
-            fail('CODE_REGENERATION_TOTAL_BUDGET', str(root), 'Candidate exceeds the 256 MiB read budget')
+        if total > max_total:
+            fail('CODE_REGENERATION_TOTAL_BUDGET', str(root), 'Candidate exceeds its bounded read budget')
         files[path] = row
     modules = {}
     for i, rec in enumerate(records):
@@ -328,7 +335,8 @@ def select_reuse(candidate, expected_manifest_sha256, modules, generator_signatu
     if sha(raw_manifest) != expected_manifest_sha256:
         fail('CODE_REGENERATION_IDENTITY', str(manifest_path), 'Candidate manifest does not match expected SHA-256')
     manifest = load(raw_manifest, max_nodes=8_000_000, max_depth=128)
-    specs, order, graph_issues = _validate_requests(modules, generator_signature)
+    whole = _full_drafts(manifest)
+    specs, order, graph_issues = _validate_requests(modules, generator_signature, whole_input=whole)
     fingerprints = _fingerprints(specs, order, generator_signature)
     files, old_modules, _ = _candidate_inventory(root, manifest)
 
@@ -428,8 +436,8 @@ def select_reuse(candidate, expected_manifest_sha256, modules, generator_signatu
                     invalid = 'candidate_file_hash_changed:' + path
                     break
                 reusable_total += actual_size
-                if reusable_total > _MAX_TOTAL:
-                    fail('CODE_REGENERATION_TOTAL_BUDGET', str(root), 'Reusable bytes exceed 256 MiB')
+                if reusable_total > (WHOLE_BYTES if whole else _MAX_TOTAL):
+                    fail('CODE_REGENERATION_TOTAL_BUDGET', str(root), 'Reusable bytes exceed the candidate read budget')
             if invalid:
                 action, reason = 'blocked', invalid
             else:
