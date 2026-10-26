@@ -6,6 +6,7 @@ import uuid
 from . import __version__
 from .io import safe, inside, read, load, sha, encoded, write_json, new_output, finish, diagnostic, stage_document
 from .sources.compiled import fail
+from .output_limits import digest_file, check_inventory, copy_verified, MANIFEST_BYTES, MANIFEST_NODES
 from .layout import standard
 from .layout.standard import find_analysis
 
@@ -34,36 +35,26 @@ def managed(profile,relative,current=False):
 
 
 def snapshot(candidate):
-    root=safe(candidate);raw=read(root/'manifest.json');m=load(raw)
-    if m.get('schemaVersion')!=1 or m.get('targetProfile') not in PROFILES or not isinstance(m.get('namespace'),str) or not m['namespace']:
-        fail('UNSUPPORTED_CANDIDATE',str(root),'Expected versioned monkey target manifest')
-    files={};total=0;current=standard.current(m)
-    for f in m['files']:
-        relative=f['path']
-        if not isinstance(relative,str) or '\\' in relative or any(x in ('','..','.') for x in relative.split('/')):
-            fail('UNSAFE_PATH',str(relative),'Manifest paths must be canonical POSIX relative paths')
-        inside(root,relative)
-        if relative in files or relative=='manifest.json':fail('INVALID_MANIFEST',relative,'Duplicate/reserved file path')
-        if f.get('owner') not in ('generated','retained','manual'):fail('INVALID_OWNER',relative,'Unknown ownership')
-        if not isinstance(f.get('sha256'),str) or len(f['sha256'])!=64 or any(c not in '0123456789abcdef' for c in f['sha256']):
-            fail('INVALID_HASH',relative,'Expected SHA-256')
-        if type(f.get('bytes')) is not int or f['bytes']<0:fail('INVALID_MANIFEST',relative,'Invalid byte count')
-        total+=f['bytes'];files[relative]=f
+    from .candidate_snapshot import snapshot as inventory
+    root,m,files,h=inventory(candidate)
+    if m['_manifestName']!='manifest.json':
+        fail('ADOPT_REQUIRED',str(root),'Unity-source recovery inventories use adopt, not legacy apply')
+    current=standard.current(m)
+    for relative,f in files.items():
         if not (managed(m['targetProfile'],relative,current) or manual(m['targetProfile'],relative,current)):
             fail('UNMANAGED_PATH',relative,'File is outside target ownership boundary')
         if not current and f['owner']=='manual' and not manual(m['targetProfile'],relative):
             fail('MANUAL_BOUNDARY',relative,'Manual ownership is confined to the declared manual area')
         if not current and manual(m['targetProfile'],relative) and f['owner']=='generated':
             fail('MANUAL_BOUNDARY',relative,'Generator cannot own manual work')
-    if total>256*1024*1024 or len(files)>20000:fail('OUTPUT_BUDGET',str(root),'Candidate exceeds budget')
-    return root,m,files,sha(raw)
+    return root,m,files,h
 
 
 def actual(root,relative):
     path=inside(root,relative)
     if not path.exists():return None
     if not path.is_file():return 'not-a-file'
-    return sha(read(path))
+    return digest_file(path)
 
 
 def check_content(root,files):
@@ -106,6 +97,7 @@ def diff_data(before,after):
     if current:prefixes=CURRENT_SCAN[_engine(b['targetProfile'])]
     else:prefixes=('Assets/Generated','Assets/Monkey/Editor','Packages','ProjectSettings','Analysis') if b['targetProfile'].startswith('unity-') else ('assets/generated','extensions/monkey-import','Analysis')
     scanned=[]
+    prefixes=tuple(p for p in dict.fromkeys(prefixes) if not any(p!=q and p.startswith(q+'/') for q in prefixes))
     for relative in prefixes:
         folder=inside(br,relative)
         if folder.is_dir():scanned.extend(folder.rglob('*'))
@@ -114,7 +106,7 @@ def diff_data(before,after):
         if p.is_file():
             relative=p.relative_to(br).as_posix()
             if relative not in bf and relative!='manifest.json' and managed(b['targetProfile'],relative,current):
-                if not any(x['path']==relative for x in conflicts):conflicts.append(dict(path=relative,reason='untracked-generated-file',actual=sha(read(p)),expected=None))
+                if not any(x['path']==relative for x in conflicts):conflicts.append(dict(path=relative,reason='untracked-generated-file',actual=digest_file(p),expected=None))
     return dict(schemaVersion=1,beforeRoot=str(br),afterRoot=str(ar),beforeManifestSha256=bh,afterManifestSha256=ah,
                 targetProfile=a['targetProfile'],namespace=a['namespace'],entries=entries,manualConflicts=conflicts,
                 counts={state:sum(e['state']==state for e in entries) for state in ['added','changed','removed','unchanged','manual']})
@@ -214,15 +206,15 @@ def apply(target,candidate,expected_manifest,output,workspace,write=False,previe
             transaction=inside(state,'transactions/'+uuid.uuid4().hex);transaction.mkdir(parents=True)
             changes=[p for p in d['writePaths'] if p in af]
             # Every prior file stays recoverable; removed files remain at their original paths.
-            backups={p:read(inside(root,p)) if p in bf else None for p in changes}
-            payloads={p:read(inside(incoming,p)) for p in changes}
-            before_manifest=read(root/'manifest.json');before_registry=read(registry_path)
+            backups={p:(bf[p] if p in bf else None) for p in changes}
+            before_manifest=read(root/'manifest.json',max_bytes=MANIFEST_BYTES);before_registry=read(registry_path)
             for p,raw in backups.items():
                 if raw is not None:
-                    dest=inside(transaction,'before/'+p);dest.parent.mkdir(parents=True,exist_ok=True);dest.write_bytes(raw)
+                    dest=inside(transaction,'before/'+p)
+                    copy_verified(inside(root,p),dest,raw['sha256'],raw['bytes'])
             (transaction/'before-manifest.json').write_bytes(before_manifest)
             (transaction/'before-registry.json').write_bytes(before_registry)
-            merged=dict(a)
+            merged=dict(a);merged.pop('_manifestName',None)
             merged['files']=[dict(f,owner=bf[p]['owner']) if p in bf and bf[p]['owner']!='generated' else dict(f) for p,f in af.items() if f['owner']!='manual' and not (p in bf and bf[p]['owner']=='manual')]
             merged['files'] += [dict(f) for f in bf.values() if f['owner']=='manual']
             merged['files'] += [dict(bf[p],owner='manual' if bf[p]['owner']=='manual' else 'retained') for p in d['retainedPaths']]
@@ -237,10 +229,9 @@ def apply(target,candidate,expected_manifest,output,workspace,write=False,previe
                 journal['state']='committing';write_json(transaction/'journal.json',journal)
                 for p in changes:
                     if actual(root,p)!=(bf[p]['sha256'] if p in bf else None):fail('TARGET_DRIFT',p,'Target changed during apply')
-                    if sha(payloads[p])!=af[p]['sha256']:fail('SOURCE_CHANGED',p,'Incoming payload changed')
                     journal['written'].append(p);write_json(transaction/'journal.json',journal)
-                    atomic(inside(root,p),payloads[p])
-                if sha(read(root/'manifest.json'))!=bh:fail('TARGET_DRIFT','manifest.json','Manifest changed during apply')
+                    copy_verified(inside(incoming,p),inside(root,p),af[p]['sha256'],af[p]['bytes'])
+                if sha(read(root/'manifest.json',max_bytes=MANIFEST_BYTES))!=bh:fail('TARGET_DRIFT','manifest.json','Manifest changed during apply')
                 for f in merged['files']:
                     if f['owner']!='manual' and actual(root,f['path'])!=f['sha256']:fail('TARGET_DRIFT',f['path'],'Final content differs before manifest adoption')
                 atomic(root/'manifest.json',after_manifest)
@@ -250,11 +241,11 @@ def apply(target,candidate,expected_manifest,output,workspace,write=False,previe
                 recovery=[]
                 for p in reversed(journal['written']):
                     current_file=actual(root,p)
-                    if current_file==(sha(backups[p]) if backups[p] is not None else None):continue
+                    if current_file==(backups[p]['sha256'] if backups[p] is not None else None):continue
                     if current_file!=af[p]['sha256']:recovery.append(p);continue
                     if backups[p] is None:inside(root,p).unlink()
-                    else:atomic(inside(root,p),backups[p])
-                current=sha(read(root/'manifest.json'))
+                    else:copy_verified(inside(transaction,'before/'+p),inside(root,p),backups[p]['sha256'],backups[p]['bytes'])
+                current=sha(read(root/'manifest.json',max_bytes=MANIFEST_BYTES))
                 if current==sha(after_manifest):atomic(root/'manifest.json',before_manifest)
                 elif current!=bh:recovery.append('manifest.json')
                 # Registry changes are restored only if this transaction wrote its baseline.

@@ -1,5 +1,30 @@
 # monkey 项目计划与执行进度
 
+## 当前执行：v0.5.0 / 05-A 收口、05-B 冻结交接（2026-10-26）
+
+用户直接批准先做大工程预算/阶段复用，再做 adopt 并验证肥鹅/向僵尸。开发版本 **0.5.0.dev1**。后续人类批准 GREA/monkey/beaver 职责整改：monkey 负责独立恢复候选，开发工程采用事务交 beaver；已原生核验总监 human `01a1764c-0246-7541-88e4-9a84d3556574`。依据 [三产品计划](/Users/wangmeng/Documents/Manager/decisions/20261026-grea-monkey-beaver/PLAN.md) 与 [交接合同](/Users/wangmeng/Documents/Manager/decisions/20261026-grea-monkey-beaver/CONTRACT.md)，保留在途实现和失败记录，冻结后供 beaver 接手，不重新实现或继续扩展 monkey 工程事务。
+
+| 工作包 | 本轮结果 | 状态与下一步 |
+|---|---|---|
+| 05-A 大工程预算/阶段复用 | 全输入 8 GiB/50 万文件，选择集 256 MiB/2 万，单文件 512 MiB；流式哈希/复制、有界 no-follow 读取；精确 reader/schema/依赖合同替代仅靠版本号。肥鹅双端和僵尸共 315,003 个文件逐项核验通过；肥鹅 inspect/normalize 无重解析/图片解码，僵尸全部 601 容器无 worker 复用 | 本轮子集通过；仍复用原有检查点，未声称任意历史版本/所有阶段均可续跑 |
+| 05-B adopt 在途实现 | 三方预览、身份/命名空间/依赖保护、Unity 原生移动与回滚。339 测试通过；肥鹅副本前一 WIP 原生移动/保存重开通过，并有真实失败后回滚证据；最新新增目录/资产仅离线编译与测试，未原生验证。僵尸全量预览通过，未启动其 Editor | **移交 beaver**；冻结文件/哈希、依赖、调用方、实际验证层和剩余项见 [交接清单](BEAVER-HANDOFF.md)。旧入口明确 deprecated compatibility，替代未就绪前不假转发/不删实现 |
+| 05-C 资源/引用阻断 | 36 未解析对象、借用字段写回、紧密图集、Tiled、超长动画名、Spine/Shader 代表子集 | 待实施，仍属 monkey 候选正确性；不能用边界迁移抹除缺口 |
+| 05-D 诊断与使用基础 | 本组补充能力/预算声明与验收摘要 | 其他统一诊断、显式补取续跑、环境/CI/空间预览待实施 |
+
+证据 `.private/v050-adoption-20261026/`；公开摘要 [本轮核验](validation/2026-10-26-v050-budget-reuse-handoff.md)。v0.5 尚未完成；日常安装仍为 v0.4.0，无推送/Release/全局安装。正式肥鹅/GREA 只读，向僵尸继续暂停；当前冻结点没有存活的采用 Editor/CLI 进程。
+
+## 当前：v0.5 – v0.7 统一版本规划（2026-10-26，职责整改后）
+
+完整范围和出口见 [ENGINE-ROADMAP](ENGINE-ROADMAP.md)。制作目录沿用 `monkey-project/2.0.0`，不因产品拆分重排目录或改资产身份。
+
+| 版本 | monkey 的结果 | 工作包 | 状态 |
+|---|---|---|---|
+| v0.5.0 | 可复用、可追溯的大工程恢复候选与资源阻断治理 | 05-A 预算/复用；05-B 冻结移交；05-C 资源/引用；05-D 诊断/使用基础 | 开发中，05-A 本轮子集通过 |
+| v0.6.0 | 有据恢复源方法、字段、事件和原配置 | 06-A 大 JS/有限转写；06-B 源字段/事件/组件绑定；06-C 原配置角色/类型证据与保真 JSON；06-D 原动态键映射/效果子集 | 待实施 |
+| v0.7.0 | 明确 source profile 和原版远端资源闭包 | 07-A 精确 CDN 清单/缓存/续取；07-B 明确来源扩展；07-C 按恢复语义深化覆盖；07-D 候选交接验收 | 待实施 |
+
+开发工程 DTO/配置制作、运行时框架/UI 生成、AssetBundle/Addressables/Creator Bundle 构建、微信打包、内容更新回退归 beaver；GREA 维护方法与调用路由。monkey 不引入第二套人工工程修改器。57 缺失 GUID/17,495 引用与待核“87 缺失脚本”口径不混用，528 JSON 先分类；不靠空壳清缺脚本，不承诺找回 404。原始脚本不执行，未知业务持续隔离。
+
 ## 已完成：MIT 开源（2026-10-26）
 
 用户明确要求 monkey 开源并选定 MIT。检查 GitHub main/全部发布 tag 可达历史及 Release 附件，补齐根 LICENSE、README 和后续包许可元数据。现有 v0.4.0 tag/包保持原 SHA，Release 单独附 MIT LICENSE；正常推送后将仓库设为 public，并通过未认证访问核验。已完成：许可提交 6af9928，仓库 public；未认证 GitHub API 返回 private=false、MIT，未认证 LICENSE Release 附件下载逐字节一致。main/全部旧发布 tag 可达 867 个文件对象与 14 份原附件检查未发现私有目录、二进制游戏素材或常见凭据特征；第三方声明保留。后续 wheel 构建已验证 License-Expression: MIT 和 LICENSE，未替换既有 v0.4.0 附件/安装。回执 .private/release-v0.4.0/public-readback.json。

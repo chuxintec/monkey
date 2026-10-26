@@ -15,5 +15,9 @@ def phase_signatures():
         'emit':['targets/dynamic_ui.py','targets/layout.py','project_model.py',*[str(p.relative_to(root)) for p in sorted((root/'targets').glob('*.cs'))],*[str(p.relative_to(root)) for p in sorted((root/'targets').glob('*.js'))]]
     }
     # Include only actual dependencies present in this distribution.
-    return {name:dict(sha256=sha(encoded(files)),files=files) for name,paths in groups.items()
+    result = {name:dict(sha256=sha(encoded(files)),files=files) for name,paths in groups.items()
             for files in [{p:sha((root/p).read_bytes()) for p in [*paths,'signatures.py','structured.py','names.py'] if (root/p).is_file()}]}
+
+    from .stage_contracts import source_contracts
+    result.update(source_contracts())
+    return result

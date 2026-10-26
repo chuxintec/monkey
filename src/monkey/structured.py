@@ -37,10 +37,11 @@ def recover(tree, roots, configs, source_profile, out, profiles, namespace, code
         write_json(stage/'recovery.json',result);return result
     try:
         from .signatures import phase_signatures
+        from .stage_contracts import compatible
         signatures=phase_signatures();signature_path=stage/'stage-signatures.json'
         previous_signatures=load(read(signature_path)) if signature_path.exists() else {}
         def check_signature(name):
-            if previous_signatures.get(name)!=signatures[name]:
+            if not compatible(previous_signatures,signatures,name):
                 from .sources.compiled import fail
                 fail('STAGE_ALGORITHM_CHANGED',name,'Checkpoint algorithm signature differs or is absent; use a fresh output, keep existing candidates')
         if not previous_signatures:
@@ -53,7 +54,7 @@ def recover(tree, roots, configs, source_profile, out, profiles, namespace, code
         if (stage/'inspect/manifest.json').exists():
             check_signature('inspect')
             inspected=stage_document(existing)
-            if inspected.get('toolVersion')!=__version__ or inspected.get('sourceProfile')!=source_profile:
+            if inspected.get('sourceProfile')!=source_profile:
                 raise ValueError('Source stage tool/profile mismatch')
             for name,root in inspected['sourceRoots'].items():
                 if not Path(root).is_relative_to(tree):raise ValueError('Source stage escaped the immutable input snapshot')
@@ -95,7 +96,7 @@ def recover(tree, roots, configs, source_profile, out, profiles, namespace, code
         if (stage/'normalize/manifest.json').exists():
             check_signature('normalize')
             ir=stage_document(stage/'normalize/ir.json')
-            if ir.get('toolVersion')!=__version__ or ir['sourceManifestSha256']!=sha(stage_bytes(existing)):
+            if ir['sourceManifestSha256']!=sha(stage_bytes(existing)):
                 raise ValueError('Normalized stage source/tool changed')
             result.setdefault('reused',[]).append(dict(stage='normalize',sha256=sha(stage_bytes(stage/'normalize/ir.json'))))
         else:ir=normalize(stage/'inspect/source-manifest.json',stage/'normalize')

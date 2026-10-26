@@ -10,6 +10,14 @@
 ---
 
 
+## 2026-10-26 职责覆盖：候选输出与开发工程分开
+
+本规范继续由 monkey 单写恢复候选路径/身份/归属和映射，目录合同仍为 `monkey-project/2.0.0`。源解析、恢复型代码/Prefab/原配置转换、候选差异与未解析诊断归 monkey；对人工开发工程三方合并、移动/改名、apply/rollback、DTO/配置制作、UI/框架生成和构建发布支持归 beaver。GREA 维护可读方法、选择与工具路由。
+
+用户批准依据：总监 human `01a1764c-0246-7541-88e4-9a84d3556574`；[三产品合同](/Users/wangmeng/Documents/Manager/decisions/20261026-grea-monkey-beaver/CONTRACT.md)。后文迁移步骤如涉及**已有开发工程**，由 beaver 消费冻结候选及映射，不授权 monkey 直接改人工工程；候选内部原生生成/验证仍属 monkey。未完成转写不得以生成业务骨架/DTO 掩盖。原始资源与只读证据不并入新工具发行。
+
+原 05-B adopt WIP 与兼容 CLI 保留，状态/提取范围见 [BEAVER-HANDOFF](BEAVER-HANDOFF.md)；替代验证前不删、不空实现、不依赖对方可变工作树。正式肥鹅由其开发者维护，向僵尸继续暂停；规划中的双端测试不恢复暂停的游戏开发。
+
 ## 2026-10-25 最新确认：统一类型优先目录（覆盖旧布局示例）
 
 用户明确指定：Unity `Assets/Game/Content/<Type>/<Module>/`；Cocos `assets/resources/<Type>/<Module>/`。两端类型、模块目录均为 PascalCase；`assets`、`resources` 和扩展入口是固定例外。取消自动 Group、Boot/Common 分区、GameRemote、ContentOriginal/ContentSnapshot 及自定义 Bundle 根；源包、采集容器只记录为来源信息。

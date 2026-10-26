@@ -6,6 +6,7 @@ from .io import safe,inside,read,load,sha,write_json,stage_manifest,stage_docume
 from .sources.containers import fingerprint
 from .sources.compiled import fail
 from .signatures import phase_signatures
+from .stage_contracts import compatible
 from .names import source_names
 from .layout.standard import analysis_rel
 
@@ -26,7 +27,7 @@ def reuse_source_stages(previous,out,selection,namespace):
         fail('REPLAN_SOURCE_IDENTITY',str(old),'Completed input-set and namespace must match exactly')
     signatures=load(read(old/'Structured/stage-signatures.json'));current=phase_signatures()
     pair=tuple(signatures[k]['sha256'] for k in ('inspect','normalize'))
-    if pair not in (_NAMES_V1_FROM,_NAMES_V1_C3,tuple(current[k]['sha256'] for k in ('inspect','normalize'))):
+    if pair not in (_NAMES_V1_FROM,_NAMES_V1_C3) and not all(compatible(signatures,current,k) for k in ('inspect','normalize')):
         fail('REPLAN_ALGORITHM_UNSUPPORTED',str(old),'Only exact current stages or the reviewed names-v1 metadata migration are accepted')
     stages={k:stage_manifest(old/'Structured'/k) for k in ('inspect','normalize')}
     for k,manifest in stages.items():
@@ -60,9 +61,9 @@ def reuse_source_stages(previous,out,selection,namespace):
         for f in manifest['files']:
             if f['path']==document:continue
             a=inside(old/'Structured'/kind,f['path']);b=inside(target,f['path']);b.parent.mkdir(parents=True,exist_ok=True)
-            try:os.link(a,b)
-            except OSError:shutil.copyfile(a,b)
-    provenance=dict(schemaVersion=1,mode='source-name-metadata-v1',sourceOutput=str(old),
+            from .output_limits import copy_verified
+            copy_verified(a,b,f['sha256'],f['bytes'])
+    provenance=dict(schemaVersion=1,mode='verified-source-stages-v2',sourceOutput=str(old),
         oldStageSignatures=dict(zip(('inspect','normalize'),pair)),pixelDecoderExecuted=False,sourceReaderExecuted=False,
         sourceStageManifests={k:fingerprint(old/'Structured'/k/'manifest.json') for k in stages})
     source['sourceRoots']={k:str(p) for k,p in roots.items()}

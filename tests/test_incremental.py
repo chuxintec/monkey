@@ -76,13 +76,13 @@ class IncrementalTests(unittest.TestCase):
             w=Path(temp).resolve();a=candidate(w/'outputs/a',{'assets/generated/a.txt':b'a','assets/generated/b.txt':b'b'})
             b=candidate(w/'outputs/b',{'assets/generated/a.txt':b'A','assets/generated/b.txt':b'B'})
             inc.register(a,w);expected=sha(read(a/'manifest.json'));inc.apply(a,b,expected,w/'dry',w)
-            real_atomic=inc.atomic;failed=False
-            def interrupted(path,raw):
+            real_copy=inc.copy_verified;failed=False
+            def interrupted(source,path,expected,size):
                 nonlocal failed
-                if path==a/'assets/generated/b.txt' and raw==b'B' and not failed:
+                if path==a/'assets/generated/b.txt' and expected==sha(b'B') and not failed:
                     failed=True;raise OSError('simulated disk write failure')
-                return real_atomic(path,raw)
-            with patch.object(inc,'atomic',interrupted):
+                return real_copy(source,path,expected,size)
+            with patch.object(inc,'copy_verified',interrupted):
                 with self.assertRaises(OSError):inc.apply(a,b,expected,w/'write',w,True,w/'dry/application.json')
             self.assertEqual(read(a/'assets/generated/a.txt'),b'a');self.assertEqual(read(a/'assets/generated/b.txt'),b'b')
             self.assertEqual(sha(read(a/'manifest.json')),expected)
