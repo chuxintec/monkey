@@ -44,3 +44,11 @@
 46 项 draft/renderer/symbol 检查、9 项后处理进程/边界/精确恢复检查、6 项包级集成检查通过；公开 CLI 隔离夹具调用通过。既有严格16方法、8WASM、6CUA与旧引擎/安装整套结果沿用，没有重复运行。新分发仅对新增能力检查，身份另记本组 delivery。
 
 完整私有回执在 `.private/v060-draft-quality-20261026/`：`final-candidate-verification.json`、`sample-quality.json`、`final-stage-reuse.json`、`CodexRevision02/manifest.json`/`changes.patch`、`ai-revision-verification.json`。原始游戏片段、候选、prompt/JSONL 和私有编译产物不纳入 Git/发行包。完整游戏、全项目编译、Player/视觉，以及既有36精确schema阻断均未因本组变为通过。
+
+## 冻结源码与新增分发检查
+
+源码 `3a0391abce7922cfe1355fde53f75ea4f41b0768` / tree `186398b15881d2c582d67b79bd31d502d7a6d29e`；184 产品文件在冻结 git archive、wheel、sdist 和隔离安装中逐字节相同。实际模型调用时的 wrapper SHA 与该提交字节相同。wheel 738,905 字节，SHA `bc89d6468fb9434c9eba1c96ba9cb624bf61433462b500212f81d642365c4cfd`；sdist 1,090,428 字节，SHA `01db4e0240275be446090ca366a1bc63857f88c38ac8ab572063985cfd5d7cec`。
+
+隔离安装仅执行新能力 capabilities、code-postprocess prepare-only（无模型）、拒绝非checkpoint精确session恢复三条CLI检查；没有重跑旧安装/类型/引擎套件，没有额外模型调用。安装产物仅位于本项目私有分发目录，不替换全局0.4。
+
+本轮中间04/05/06输出的清单和日志已留档后清理，移除清单逻辑体积10,423,337,634字节（不推断APFS物理回收量）；最终07、AI修订、旧03及冻结资源基线保留。总回执 `.private/v060-draft-quality-20261026/delivery.json` SHA `394d28bbb8637346836fd210d99b63aee8ea278fc409bc5b28be40205246af1b`。
