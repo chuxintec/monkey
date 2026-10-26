@@ -1,8 +1,8 @@
 # monkey 项目计划与执行进度
 
-## 当前任务：v0.4.0 正式发布与本地安装（2026-10-26）
+## 已完成：v0.4.0 正式发布与本地安装（2026-10-26）
 
-用户本聊天直接要求提交当前版本至 GitHub、发布 v0.4.0 并安装本地。将已验 0.3.0.dev2 功能提升为 0.4.0；当前只改版本和发布说明，不扩大转换能力。执行测试、wheel/sdist 分发内容核验、精确暂存清单、main 正常快进和不可变 tag/Release；从 GitHub 下载正式附件、核对 SHA 后安装并验证唯一日常 CLI。旧版本保留回滚，原包、outputs、私有证据不上传。发布与安装结果待完成后记录。
+用户本聊天直接要求提交当前版本至 GitHub、发布 v0.4.0 并安装本地。将已验 0.3.0.dev2 功能提升为 0.4.0；当前只改版本和发布说明，不扩大转换能力。执行测试、wheel/sdist 分发内容核验、精确暂存清单、main 正常快进和不可变 tag/Release；从 GitHub 下载正式附件、核对 SHA 后安装并验证唯一日常 CLI。旧版本保留回滚，原包、outputs、私有证据不上传。发布与安装已完成：源码/tag 提交 `7f602cbfa6542d124f2d36cfd3e5d35451b92a9b`，GitHub 正式 Release v0.4.0（非 prerelease）；API 与 ls-remote 回读一致。318 测试通过；wheel/sdist 140 产品文件与提交快照一致，4 份 GitHub 附件重新下载 SHA/字节一致。本地唯一 PATH 入口 ~/.local/bin/monkey → releases/0.4.0，实际版本和 140 安装文件已核验；独立目录双端合成样本导出/静态 verify 通过（convert 明确返回 partial/1，保留未知输入），未运行引擎。详情见 docs/validation/2026-10-26-v0.4.0-release.md，机器回执 .private/release-v0.4.0/delivery.json。
 
 ## 已完成：解析预算优化与向僵尸开炮复测（2026-10-26）
 
