@@ -6,22 +6,22 @@
 
 | 工作组 | 既有待办合并与本版结果 | 当前状态 |
 |---|---|---|
-| C1 来源/符号 | 原06-A大JS与方法证据、Unity代码来源；完整源位置/模块/类/继承/成员/依赖 | 完整7,147,892字节静态图：2,033,299 AST节点、928类/16,384方法，UTF8字节与词法binding精确；旧RF914区域不再作为完整上下文。Mono合法夹具静态反编译/候选隔离；真实游戏Mono未验，IL2CPP保持元数据/方法体分层 |
+| C1 来源/符号 | 原06-A大JS与方法证据、Unity代码来源；完整源位置/模块/类/继承/成员/依赖 | 完整7,147,892字节静态图：2,033,299 AST节点、928类/16,384方法，UTF8字节与词法binding精确；旧RF914区域不再作为完整上下文。Mono合法夹具静态反编译/候选隔离；僵尸压缩源→segment/map/body精确字节链已实装，8纯运算片段已验，caller-map假设保留；真实游戏Mono未验 |
 | C2 类型/语义/调用图 | 原06-A类型子域、06-B字段归属、后续跨类绑定 | 显式Number/Index/bool/string/record/List/有序Map/Set/Optional/委托及局部递归类型；冲突/未知拒绝，非全动态推断。继承/重载/未知异步不假恢复 |
-| C3 实际方法体 | 分支/循环/集合/字段/字符串/调用/返回异常、明确闭包等后续C#能力 | 真实OrderRules汇总/排序/筛选、RecipeCatalog递归展开、HealthState生命/连击回调共12方法已自动转写；离线编译和独立预期行为通过，原JS未执行 |
+| C3 实际方法体 | 分支/循环/集合/字段/字符串/调用/返回异常、明确闭包等后续C#能力 | OrderRules/RecipeCatalog/HealthState原12方法加MotionMath4方法，共4模块16唯一方法自动转写/合并编译及独立行为通过；僵尸另8纯i64候选片段，源未执行 |
 | C4 跨模块构建 | 依赖闭包、类型/namespace/asmdef、循环与冲突 | OrderRules→RecipeCatalog真实跨源类调用已闭合，稳定meta/asmdef、纯排序与必要强类型helper；缺callee/重复成员拒绝 |
-| C5 Unity原生适配 | 原06-B及原建议07生命周期/事件/组件、有限时序 | Unity6000.6.2f1原生9方法链、生命周期初始化/销毁解绑、持久UnityEvent、Scene保存重开/JSON和脚本GUID-localId通过；早期依赖/调度失败保留，最终窗口exit0/reaped；新adapter不称原UI/生命周期恢复 |
+| C5 Unity原生适配 | 原06-B及原建议07生命周期/事件/组件、有限时序 | Unity6000.6.2f1原生9方法链/原JSON/事件/Scene引用通过；续推6次实际CUA系统指针完成有限流程、销毁解绑/重开，窗口exit0/reaped；新adapter不称原UI/生命周期恢复 |
 | C6 原字段/配置/资源键 | 原06-C/D、528JSON角色、精确PPtr/事件/加载调用 | 732行ElementMultiOrderPool原JSON/meta原样进入候选，源字段/顺序/数值/hash固定；C#运行时reader建立Map、真实递归9叶已离线通过，Unity TextAsset/Awake真实读取及保存重开通过；36正文仍局部拒绝 |
-| C7 可维护候选 | 原目标代码/命名与已实现/草稿分区 | 内置精确source profile一键发出3模块12方法；正常C#/asmdef/meta及完整未选方法索引，同输入确定性，无成功空壳 |
+| C7 可维护候选 | 原目标代码/命名与已实现/草稿分区 | code-select按入口闭合已审类型/依赖并实际lowering；裁剪3方法链/新数学4方法/合并16方法均真实生成；同源record见证、具名缺口及完整未选索引，无成功空壳 |
 | C8 增量重生/所有权 | 原后续代码指纹、依赖失效/人工冲突/新旧映射 | 模块已集成：1,800深链有界；真实12方法同输入全复用，合成方法变化仅自身/调用方失效，shared types保留，dirty拒绝；人工采用仍归beaver |
-| C9 编译/行为/AI交接 | 原07候选交接中C#部分、离线/原生语义层 | 12/16,384明确分母；Unity参考程序集离线编译+独立行为oracle通过；原生9方法/原JSON732行接入、macOS隔离wheel/sdist173文件核对、20CLI烟测与安装版真实profile生成通过；视觉/物理输入/Player和完整游戏未验 |
+| C9 编译/行为/AI交接 | 原07候选交接中C#部分、离线/原生语义层 | 16/16,384明确分母；独立行为及原生9方法/6指针流程分层；分发02的178产品文件逐字节核对、24CLI烟测和4条安装版实际命令通过；完整游戏/原UI/Player/视觉未验 |
 
 **首个本地限定候选已交付，合并大版本继续开发**：源码 `8a536d31cab8722c392e1003761002ea50897419`，50项定向测试无skip通过，完整[验收记录](validation/2026-10-26-v060-csharp-modules.md)。该候选贯通已声明语义/profile，不能据此认定原C1–C9大版本完成；16,372项是未选，不能统称不支持或无源。证据 `.private/v060-csharp-20261026/delivery.json`；日常0.4不动。
 
 续推按 [交付审阅](/Users/wangmeng/Documents/Manager/decisions/20261026-grea-monkey-beaver/MONKEY-V06-DELIVERY-REVIEW.md)、事件`monkey-v06-delivery-gap-correction-20261026-01`继续：模块选择/类型依赖预检与裁剪发射、已存在僵尸segment/map的同源核验和有据body恢复、Unity实际按钮可操作有限流程。僵尸已有完整segment和selected-method-map-07，先前仅核压缩来源的结论不能外推为全部材料缺失。
 
 
-**续推实现已完成，分发02正在核验**：三项审阅差额均有实际出口，见[续推验收](validation/2026-10-26-v060-continuation.md)。通用 `code-select` 支持有界入口/类型依赖/实际lowering与裁剪发射；合并4模块16方法编译通过（新4数学方法+原12字节保持），16,368未选择不标不可恢复。Unity独立窗口6次CUA系统指针流程/JSON/事件/销毁解绑/保存重开通过、exit0/reaped。僵尸两压缩源→精确segment/map/body已核，8纯i64方法生成片段并编译/行为通过；13波次/触发方法保留精确布局/调用缺口，caller-map关联假设不冒充独立证明。26不同定向用例通过，首50测试/旧自动原生链沿用。C1–C9本地候选和交接按声明子集收口，完整游戏、原UI/生命周期、Player/视觉、无真实Mono/其他平台未验；正式总监裁定另列。
+**C1–C9本地候选实现与验证完成，独立总监验收待回读**：三项审阅差额均有实际出口，见[续推验收](validation/2026-10-26-v060-continuation.md)。通用 `code-select` 支持有界入口/类型依赖/实际lowering与裁剪发射；合并4模块16方法编译通过（新4数学方法+原12字节保持），16,368未选择不标不可恢复。Unity独立窗口6次CUA系统指针流程/JSON/事件/销毁解绑/保存重开通过、exit0/reaped。僵尸两压缩源→精确segment/map/body已核，8纯i64方法生成片段并编译/行为通过；13波次/触发方法保留精确布局/调用缺口，caller-map关联假设不冒充独立证明。26不同定向用例通过，首50测试/旧自动原生链沿用。源码 `5a2ce31c517e1ada130ecaddf651903290859d86`；隔离分发02的178产品文件与源码/wheel/sdist/安装副本完全一致，24CLI烟测与4条真实安装版命令通过。首候选包hash未变。总回执 `.private/v060-csharp-continuation-20261026/delivery.json` SHA `6af5eca03c06d4a964a6ba29450e97375a9f442487c53d91602ba5bbeef8a873`。C1–C9本地候选和交接按声明子集收口，完整游戏、原UI/生命周期、Player/视觉、无真实Mono/其他平台未验；正式总监裁定另列。
 
 Unity Mono/IL2CPP-WASM来源独立模块按不同证据等级推进，缺真实Mono用自有合法夹具验证接口，不外推真实游戏；原方法/映射/元数据不互相冒充。泛新引擎/CDN能力后移，不再另排C# v0.7出口。正式游戏/账号/服务/GREA/beaver不写，无推送/Release/全局安装。模块登记见 [TEAM-STATE](TEAM-STATE.md)。持续实现整版，不逐包报告或等待ACK。
 

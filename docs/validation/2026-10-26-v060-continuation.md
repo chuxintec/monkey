@@ -48,4 +48,13 @@ receipt SHA `fcbe85ed1b37cdd5b958d810b15e6d6ebc0de779063fbc2700add229d024e265`�
 
 本轮26个不同定向用例通过（首轮24，后增混版本/重复报告与新profile2例；新守卫关联8例复测），另新候选离线编译/行为、真实CLI和Unity实际操作按上文分别记录。原50用例/旧自动窗口不重复跑。无全库/全资源重导。
 
-新源码和不可变快照分发02的精确commit/文件清单、wheel/sdist及隔离安装hash写项目内 `.private/v060-csharp-continuation-20261026/distribution-02/` 与总 `delivery.json`，分发完成后在PLAN补记结果。首候选制品原样保留；日常0.4、v0.5、输入、正式游戏/GREA/beaver不改；无GitHub推送/Release/全局安装。此本地交付支持已声明的类型/语义子集，不承诺全部源方法、未知异步/继承/反射、36正文、完整玩法或其他未运行平台。
+新源码和不可变快照分发02的精确commit/文件清单、wheel/sdist及隔离安装hash写项目内 `.private/v060-csharp-continuation-20261026/distribution-02/` 与总 `delivery.json`，分发02已完成：178产品文件在源码、wheel、sdist及隔离安装中逐字节相同；24CLI烟测通过，仓库外4条真实命令完成选择/16方法+JSON生成、WASM片段生成和交互探针准备，候选26文件（含manifest）完全一致，探针准备字节与真实Unity证据一致。没有再启动Editor。首候选制品原样保留；日常0.4、v0.5、输入、正式游戏/GREA/beaver不改；无GitHub推送/Release/全局安装。此本地交付支持已声明的类型/语义子集，不承诺全部源方法、未知异步/继承/反射、36正文、完整玩法或其他未运行平台。
+
+源码提交 `5a2ce31c517e1ada130ecaddf651903290859d86`，精确暂存27文件；验收文档后续提交与产品源码提交分别登记。分发02：
+
+| 制品 | 字节 | SHA256 |
+|---|---:|---|
+| wheel | 673,981 | `1f22da0160f30b859c7d8596d3c564899d603b5d9ceb5e94c8348c520de852e9` |
+| sdist | 989,489 | `584e14162aac73a47253e6fb71e4b4d077c1d7893c31610ebb182ec37ccaeae8` |
+
+总回执 `delivery.json` SHA `6af5eca03c06d4a964a6ba29450e97375a9f442487c53d91602ba5bbeef8a873`；其中逐项列已验/未验和证据hash，不把 `local_c1_c9_candidate_ready` 写成全游戏或独立总监已接受。未新增来源/发布/全局安装权限。
