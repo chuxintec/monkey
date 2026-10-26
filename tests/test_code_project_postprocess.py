@@ -196,3 +196,20 @@ class ProjectPostprocessTests(unittest.TestCase):
   model.assert_not_called();self.assertEqual(result['actuallyProcessed'],2)
   state=json.loads(path.read_bytes());record=state['files'][entry['files'][0]]
   self.assertEqual(record['lastAttempt'],entry['attemptRoots'][0]);self.assertEqual(state['batches'][batch]['attempts'],2)
+ def test_saved_wrapped_ledger_revalidates_without_rewriting_and_hash_change_refuses(self):
+  prepared=self.fake_prepare(self.source,[self.paths[0]],self.pin,self.base/'saved-ledger','own task')
+  result=self.fake_run(prepared);raw=encoded(dict(fileResults=result['fileResults']));out=prepared.output;archive=out/'file-results-ledger-00.json';archive.write_bytes(raw)
+  result.update(selected=[dict(path=self.paths[0])],fileResults=[],fileResultIssues=['old missing result'],fileResultsArtifact=dict(archivePath=archive.name,sha256=sha(raw),bytes=len(raw)))
+  manifest=out/'manifest.json';manifest.write_bytes(encoded(result));before=manifest.read_bytes()
+  replayed=project._load_saved_result(out)
+  self.assertEqual(len(replayed['fileResults']),1);self.assertEqual(replayed['fileResultIssues'],[])
+  self.assertEqual(replayed['ledgerRevalidatedFrom']['format'],'fileResults-wrapper')
+  self.assertEqual(manifest.read_bytes(),before);self.assertEqual(archive.read_bytes(),raw)
+  archive.write_bytes(raw+b'\n')
+  with self.assertRaises(ParseError)as error:project._load_saved_result(out)
+  self.assertEqual(error.exception.code,'PROJECT_POSTPROCESS_RESULT_CHANGED')
+ def test_saved_invalid_ledger_shape_stays_isolated_and_unaccepted(self):
+  out=self.base/'invalid-ledger';out.mkdir();raw=encoded(dict(unapproved=[]));archive=out/'file-results-ledger-00.json';archive.write_bytes(raw)
+  result=dict(fileResults=[],selected=[],fileResultsArtifact=dict(archivePath=archive.name,sha256=sha(raw),bytes=len(raw)))
+  (out/'manifest.json').write_bytes(encoded(result));replayed=project._load_saved_result(out)
+  self.assertEqual(replayed['fileResults'],[]);self.assertTrue(replayed['fileResultsArtifactIssues'])

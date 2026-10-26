@@ -137,6 +137,16 @@ def _normalize_file_results(raw_results: object, selected: list[dict]) -> tuple[
     return normalized, issues, shape_ok
 
 
+def _ledger_rows(parsed: object) -> list:
+    """Return rows from either supported ledger JSON shape, rejecting wrappers with extras."""
+    if isinstance(parsed, list):
+        return parsed
+    if isinstance(parsed, dict) and set(parsed) == {'fileResults'} and isinstance(parsed['fileResults'], list):
+        return parsed['fileResults']
+    fail('POSTPROCESS_LEDGER_SHAPE', '__Reviews/file-results.json',
+         'Ledger must be an array or an exact {"fileResults": [...]} object')
+
+
 def _read_result_ledger(root: Path, workspace: Path, attempt: int) -> tuple[object, dict | None, list[str]]:
     relative = '__Reviews/file-results.json'
     ledger = workspace / relative
@@ -159,7 +169,9 @@ def _read_result_ledger(root: Path, workspace: Path, attempt: int) -> tuple[obje
         _atomic(root / metadata['archivePath'], raw)
         raw.decode('utf-8')
         parsed = load(raw, max_nodes=LEDGER_NODES, max_depth=32)
-        return parsed, metadata, []
+        if isinstance(parsed, dict): metadata['format'] = 'fileResults-wrapper'
+        else: metadata['format'] = 'array'
+        return _ledger_rows(parsed), metadata, []
     except Exception as error:
         issue = f'fileResults ledger unavailable or invalid: {getattr(error, "code", type(error).__name__)}'
         return None, metadata, [issue]
@@ -648,7 +660,8 @@ def _build_prompt(task: str, selected: list[tuple[str, Path, bytes]],
         chunks.append(f'\n--- BEGIN READ-ONLY EVIDENCE DATA {relative} sha256={digest} ---\n{content}\n--- END READ-ONLY EVIDENCE DATA {relative} ---')
     if project_batch:
         ledger_instruction = (' Write the complete fileResults array to the sole additional writable artifact '
-                             '`__Reviews/file-results.json` as UTF-8 JSON, then return only '
+                             '`__Reviews/file-results.json` as UTF-8 JSON, either as a direct JSON array '
+                             'or the exact wrapper `{"fileResults":[...]}`, then return only '
                              '`fileResultsArtifact` with that exact path; do not duplicate the array in the response.'
                              if project_result_ledger else '')
         chunks.append('\nFor each selected C# file, provide one fileResults item with path, status (processed/unchanged/partial/blocked), a concrete file-specific summary, unresolved, membersReviewed source member ids (empty only if no stable ids exist; never substitute the filename), and originalLogicPreserved. Use blocked when a file was missing or not actually reviewed. Use partial only for a file that was reviewed and has a concrete unresolved issue or semantic difference; explain that difference and set originalLogicPreserved accurately. Use processed or unchanged only when review is complete with no unresolved issue and original logic is preserved.' + ledger_instruction + ' The ledger is only a serialization channel: perform the same actual per-file analysis for every selected source file. You may use a script to copy source member IDs from the supplied read-only mapping after reviewing each file. Do not place the ledger path in changedPaths. Keep top-level changedPaths equal to actual modified selected C# paths; report every edit and every remaining issue.')

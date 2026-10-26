@@ -337,6 +337,30 @@ def _attempt(root, request, plan, state, batch, remaining):
     return _consume(root, request, plan, state, batch, remaining, output, result)
 
 
+def _load_saved_result(output):
+    result=_json(output/'manifest.json');artifact=result.get('fileResultsArtifact')
+    if not isinstance(artifact,dict):return result
+    name=artifact.get('archivePath','')
+    if not isinstance(name,str)or not re.fullmatch(r'file-results-ledger-[0-9]{2}\.json',name):
+        fail('PROJECT_POSTPROCESS_RESULT_CHANGED',str(output),'Saved review ledger archive identity is invalid')
+    archive=output/name
+    if archive.is_symlink()or not archive.is_file()or archive.stat().st_nlink!=1:
+        fail('PROJECT_POSTPROCESS_RESULT_CHANGED',str(archive),'Saved ledger must remain an independent regular file')
+    raw=read(archive,max_bytes=worker.LEDGER_BYTES)
+    if sha(raw)!=artifact.get('sha256')or len(raw)!=artifact.get('bytes'):
+        fail('PROJECT_POSTPROCESS_RESULT_CHANGED',str(archive),'Saved review ledger changed after its recorded hash')
+    try:
+        parsed=load(raw,max_nodes=worker.LEDGER_NODES,max_depth=32)
+        rows=worker._ledger_rows(parsed)
+    except ValueError as error:
+        return {**result,'fileResultsArtifactIssues':list(result.get('fileResultsArtifactIssues',[]))+
+                ['saved ledger shape remains invalid: '+str(getattr(error,'code',type(error).__name__))]}
+    normalized,issues,_=worker._normalize_file_results(rows,result['selected'])
+    return {**result,'fileResults':normalized,'fileResultIssues':issues,
+            'ledgerRevalidatedFrom':dict(sha256=artifact['sha256'],archivePath=name,
+                format='fileResults-wrapper'if isinstance(parsed,dict)else'array',rows=len(rows))}
+
+
 def _consume(root, request, plan, state, batch, remaining, output, result):
     entry = state['batches'][batch['id']]; number = entry['attempts']
     metadata = {r['path']: r for r in plan['files']}
@@ -394,7 +418,8 @@ def _consume(root, request, plan, state, batch, remaining, output, result):
         state['integration'] = 'integration.json'; _save(root/'state.json', state); _integrate(root, request, state)
     entry['lastResult'] = dict(status=result['status'], sessionId=result.get('sessionId'), usage=result.get('usage'),
                                model=result.get('model'), reasoningEffort=result.get('reasoningEffort'),
-                               blockingCondition=result.get('blockingCondition'), diffSha256=result.get('diffSha256'), rejectedFiles=len(rejected))
+                               blockingCondition=result.get('blockingCondition'), diffSha256=result.get('diffSha256'), rejectedFiles=len(rejected),
+                               ledgerRevalidatedFrom=result.get('ledgerRevalidatedFrom'))
     if result.get('blockingCondition'):
         state['blockingCondition'] = dict(kind=result['blockingCondition'], batch=batch['id'], attempt=number,
                                          report=str((output/'manifest.json').relative_to(root)))
@@ -429,7 +454,7 @@ def recheck(root):
             for attempt in reversed(entry['attemptRoots']):
                 output=root/attempt
                 if not(output/'manifest.json').is_file():continue
-                result=_json(output/'manifest.json')
+                result=_load_saved_result(output)
                 if result.get('blockingCondition') or not result.get('fileResults'):continue
                 reported={r['path']for r in result['fileResults']}
                 paths=[p for p in batch['paths']if not state['files'][p].get('processed')and p in reported]
@@ -509,7 +534,7 @@ def run(root):
                     entry['status']='running'
                     for path in remaining:state['files'][path]['status']='running'
                     state['updatedAt']=time.time();_save(root/'state.json',state)
-                    result=_json(old/'manifest.json')
+                    result=_load_saved_result(old)
                     checkpoint=_json(old/'request.json')
                     if checkpoint.get('state')=='prepared' and result.get('blockingCondition')=='operator_pause':
                         result=worker.run(old);checkpoint=_json(old/'request.json')

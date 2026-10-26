@@ -7,7 +7,7 @@ import time
 import unittest
 
 import monkey.code_postprocess as postprocess
-from monkey.code_postprocess import configure_checkpoint, prepare, request_pause, run
+from monkey.code_postprocess import _ledger_rows, configure_checkpoint, prepare, request_pause, run
 from monkey.io import sha, encoded
 from monkey.sources.compiled import ParseError
 
@@ -239,6 +239,26 @@ response.write_text(json.dumps({{"status":"complete","changedPaths":["Assets/Exa
         self.assertEqual(artifact['bytes'], len(ledger_bytes))
         self.assertEqual((self.output / artifact['archivePath']).read_bytes(), ledger_bytes)
         self.assertEqual(revision['fileResults'][0]['membersReviewed'], ['Assembly.Example::Update'])
+
+    def test_project_result_ledger_accepts_exact_file_results_wrapper(self):
+        result = {'path': 'Assets/Example.cs', 'status': 'unchanged',
+                  'summary': 'Reviewed the generated member mapping and found no mechanical correction needed.',
+                  'unresolved': [], 'membersReviewed': ['Assembly.Example::Update'],
+                  'originalLogicPreserved': True}
+        wrapped = encoded({'fileResults': [result]})
+        self.fake_cli(f'''import json, pathlib, sys
+pathlib.Path('__Reviews/file-results.json').write_bytes({wrapped!r})
+response=pathlib.Path(sys.argv[sys.argv.index('-o')+1])
+response.write_text(json.dumps({{"status":"complete","changedPaths":[],"unresolved":[],"summary":"Reviewed the selected source.","fileResultsArtifact":"__Reviews/file-results.json"}}))
+''')
+        revision = run(self.make_prepared(project_batch=True, project_result_ledger=True))
+        self.assertEqual(revision['status'], 'complete')
+        self.assertEqual(revision['fileResults'][0]['path'], 'Assets/Example.cs')
+        self.assertEqual(revision['fileResultsArtifact']['format'], 'fileResults-wrapper')
+        self.assertEqual(_ledger_rows([result]), [result])
+        self.assertEqual(_ledger_rows({'fileResults': [result]}), [result])
+        with self.assertRaises(ParseError):
+            _ledger_rows({'fileResults': [result], 'extra': True})
 
     def test_project_result_ledger_path_is_not_a_declared_code_change(self):
         result = {'path': 'Assets/Example.cs', 'status': 'unchanged',
