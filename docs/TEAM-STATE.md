@@ -1,5 +1,7 @@
 # v0.6 模块执行登记
 
+2026-10-27 中断后当前实例覆盖：旧实例不存在，父恢复唯一实际CLI与共享集成；worker_recovery（Luna/high）单写postprocess恢复及module桥接/专测，保留父既有layer guard；core_content（Luna/high）Content08已交付，接最小JSON资产producer，排除音频；core_session（Luna/high）仅NativeCoreSessionRevision01 typed核心会话/源状态与明确Pending merge；core_presentation（Luna/high）仅NativeCoreBoardPresentation01 View/input/旧API兼容。父单写CLI/PLAN/TEAM、CoreBoardBootstrap与真实candidate/Editor；无并发模型批/Editor，无递归、发布或正式游戏写入。
+
 当前执行：按Manager计划§7，父让旧模型自然收尾至31结果，互斥锁交接后旧supervisor停止，request/结果不变。公开continuation新建NativeCorePriority02、保留其模型前permission失败后接NativeCorePriority03，原位复用31结果、优先Content/Production/Orders/Street/Tutorial/Bootstrap并在Bootstrap后留集成检查点；全47范围保留。父唯一实际CLI、公共合同/PLAN/候选/Editor单写，主链未通/整工程未编译。
 
 - code_regeneration：NativeServicesContent06交付Inventory单例/四表；继续仅NativeCoreContent07，真实MergeBoard等核心JSON→DTO→aggregate/TextAsset端口；与会话模块协调真实Board DTO，不造假类型。旧成果停止写入。

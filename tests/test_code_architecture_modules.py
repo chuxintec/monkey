@@ -1,8 +1,10 @@
 import hashlib
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
+import uuid
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -13,6 +15,82 @@ from monkey.sources.compiled import ParseError
 
 
 class ArchitectureModuleWorkflowTests(unittest.TestCase):
+    def test_gameplay_cannot_construct_service_store_but_services_can_implement_gameplay_port(self):
+        record=dict(name='Coordinator',kind='class',layer='Gameplay',module='Session',
+                    namespace='Demo.Gameplay.Session',plannedMethods=[],plannedFields=[])
+        bad=b'using Demo.Services.Session; namespace Demo.Gameplay.Session { public class Coordinator { private VersionedStore store; } }'
+        self.assertIn('layer-dependency-reference:Services',modules._implementation_markers(bad,record))
+        harmless=b'namespace Demo.Gameplay.Session { public class Coordinator { /* Demo.Services.Session */ public string Note = "Demo.Services.Session"; } }'
+        self.assertNotIn('layer-dependency-reference:Services',modules._implementation_markers(harmless,record))
+        service=dict(record,layer='Services',namespace='Demo.Services.Session')
+        allowed=b'using Demo.Gameplay.Session; namespace Demo.Services.Session { public class Coordinator { public int Revision; } }'
+        self.assertEqual(modules._implementation_markers(allowed,service),[])
+
+    def _prepare_recoverable_module(self, root):
+        stage, _, _, _, _ = self.make_stage(root)
+        out = root / 'Module'
+        with patch.object(modules.worker, 'prepare', side_effect=self.fake_worker_prepare):
+            modules.prepare(stage, 'Recipe', out)
+        module_request = json.loads((out / 'request.json').read_bytes())
+        module_manifest = json.loads((out / modules.MANIFEST).read_bytes())
+        task_root = out / 'Task'; workspace = task_root / 'workspace'
+        selected = []
+        for row in module_manifest['files']:
+            path = row['targetPath']; seed = (out / 'Seed' / path).read_bytes()
+            selected.append({'path': path, 'bytes': len(seed), 'sha256': sha(seed),
+                             'sourceKind': 'architecture-seed'})
+        worker_context = {}
+        for name, pin in module_request['contextFiles'].items():
+            workspace_name = '__Context/' + name
+            worker_context[workspace_name] = {'sourcePath': name, 'sha256': pin['sha256'], 'bytes': pin['bytes']}
+            copy = workspace / workspace_name
+            copy.chmod(0o400)
+        for directory in sorted((workspace / '__Context').rglob('*'), reverse=True):
+            if directory.is_dir():
+                directory.chmod(0o500)
+        (workspace / '__Context').chmod(0o500)
+        modules.worker._init_isolated_git(workspace)
+        baseline = {}
+        for path in workspace.rglob('*'):
+            relative = path.relative_to(workspace).as_posix()
+            if relative == '.git' or relative.startswith('.git/') or path.is_dir():
+                continue
+            baseline[relative] = sha(path.read_bytes())
+        (task_root / 'baseline.json').write_bytes(encoded(baseline))
+        codex = root / 'codex'; codex.write_text('#!/bin/sh\nexit 0\n'); codex.chmod(0o755)
+        _, codex_identity = modules.worker._resolve_codex(codex)
+        seed_manifest_raw = (out / 'Seed/manifest.json').read_bytes()
+        seed_identity = json.loads(seed_manifest_raw)['identity']
+        task_request = {
+            'schemaVersion': 1, 'state': 'prepared', 'runId': str(uuid.uuid4()),
+            'taskSha256': 'a' * 64, 'codexPath': str(codex), 'codexIdentity': codex_identity,
+            'base': {'candidateRoot': str(out / 'Seed'), 'manifestPath': 'manifest.json',
+                     'manifestSha256': sha(seed_manifest_raw), 'candidateIdentity': seed_identity},
+            'selected': selected, 'contextFiles': worker_context,
+            'workspaceBudgetBytes': 64 * 1024 * 1024, 'selectedFileMaxBytes': 16 * 1024 * 1024,
+            'projectBatch': False, 'projectResultLedger': False,
+            'producer': {'version': 'test'},
+        }
+        (task_root / 'request.json').write_bytes(encoded(task_request))
+        rel = selected[0]['path']; generated = b'namespace Demo.Domain.Recipe { public sealed class RecipeCatalog { public int Count; public int GetCount() => 7; } }\n'
+        (workspace / rel).write_bytes(generated)
+        response = {'status': 'partial', 'changedPaths': [rel], 'unresolved': ['review pending'],
+                    'summary': 'Completed isolated response awaiting review.'}
+        events = [
+            {'type': 'thread.started', 'thread_id': '123e4567-e89b-42d3-a456-426614174000'},
+            {'type': 'item.completed', 'item': {'id': 'item_1', 'type': 'agent_message',
+             'text': json.dumps(response)}},
+            {'type': 'turn.completed', 'usage': {'input_tokens': 4, 'output_tokens': 5}},
+        ]
+        (task_root / 'events.jsonl').write_bytes(b''.join(
+            (json.dumps(event, separators=(',', ':')) + '\n').encode() for event in events))
+        process = {'state': 'running', 'pid': 2147483000, 'attempt': 0, 'sessionId': None,
+                   'startedAtUnix': 1.0}
+        (task_root / 'process.json').write_bytes(encoded(process))
+        active = root / 'active.json'
+        active.write_bytes(encoded({'state': 'running', 'pid': process['pid'], 'attempt': 0}))
+        return out, task_root, module_request, rel, generated, active
+
     def make_stage(self, root):
         stage = root / 'Global'
         (stage / 'Evidence' / 'Sources').mkdir(parents=True)
@@ -334,6 +412,84 @@ class ArchitectureModuleWorkflowTests(unittest.TestCase):
             with patch.object(modules.worker, 'prepare', side_effect=self.fake_worker_prepare):
                 with self.assertRaises(ParseError):
                     modules.prepare(stage, 'App', root / 'AppModule2', dependency_roots=[out])
+
+    def test_recover_materializes_completed_worker_output_and_recheck_is_read_only(self):
+        with tempfile.TemporaryDirectory(dir='/private/tmp') as directory:
+            root = Path(directory); out, task_root, _, rel, _, active = self._prepare_recoverable_module(root)
+            with patch.object(modules.worker, 'GLOBAL_LOCK_PATH', root / 'worker.lock'), \
+                    patch.object(modules.worker, 'ACTIVE_PROCESS_PATH', active):
+                result = modules.recover(out)
+                self.assertEqual(result['status'], 'generated_unreviewed')
+                manifest = json.loads((out / modules.MANIFEST).read_bytes())
+                self.assertEqual(manifest['workerRecovery']['status'], 'completed-event-recovered')
+                self.assertEqual(manifest['workerRecovery']['exitCode'], None)
+                self.assertEqual(manifest['workerRecovery']['returnCode'], None)
+                protected = [out / modules.MANIFEST, out / modules.MANIFEST_SHA, out / 'state.json',
+                             out / 'worker-active-original.json',
+                             out / rel, task_root / 'request.json', task_root / 'process.json',
+                             task_root / 'manifest.json', task_root / 'recovery-receipt.json']
+                before = [sha(path.read_bytes()) for path in protected]
+                checked = modules.recheck(out)
+                after = [sha(path.read_bytes()) for path in protected]
+            self.assertEqual(before, after)
+            self.assertEqual(checked['status'], 'rechecked')
+            self.assertEqual(checked['workerRecovery']['exitStatus'], 'exit-not-recorded')
+
+    def test_recover_rejects_incomplete_event_stream_without_materializing(self):
+        with tempfile.TemporaryDirectory(dir='/private/tmp') as directory:
+            root = Path(directory); out, task_root, _, rel, _, active = self._prepare_recoverable_module(root)
+            (task_root / 'events.jsonl').write_bytes(b'{"type":"item.completed"}\n')
+            state_before = (out / 'state.json').read_bytes()
+            with patch.object(modules.worker, 'GLOBAL_LOCK_PATH', root / 'worker.lock'), \
+                    patch.object(modules.worker, 'ACTIVE_PROCESS_PATH', active):
+                with self.assertRaises(ParseError):
+                    modules.recover(out)
+            self.assertEqual((out / 'state.json').read_bytes(), state_before)
+            self.assertFalse((out / rel).exists())
+            self.assertFalse((task_root / 'manifest.json').exists())
+
+    def test_recover_rejects_global_active_attempt_or_run_mismatch(self):
+        for field, value in (('attempt', 9), ('runId', '123e4567-e89b-42d3-a456-426614174001')):
+            with self.subTest(field=field), tempfile.TemporaryDirectory(dir='/private/tmp') as directory:
+                root = Path(directory); out, task_root, _, rel, _, active = self._prepare_recoverable_module(root)
+                active_record = json.loads(active.read_bytes())
+                active_record[field] = value
+                active.write_bytes(encoded(active_record))
+                with patch.object(modules.worker, 'GLOBAL_LOCK_PATH', root / 'worker.lock'), \
+                        patch.object(modules.worker, 'ACTIVE_PROCESS_PATH', active), \
+                        patch.object(modules.worker, 'recover_completed') as worker_recover:
+                    with self.assertRaises(ParseError):
+                        modules.recover(out)
+                worker_recover.assert_not_called()
+                self.assertFalse((task_root / 'manifest.json').exists())
+                self.assertFalse((out / rel).exists())
+
+    def test_read_only_recheck_still_rejects_ordinary_nonzero_worker_exit(self):
+        with tempfile.TemporaryDirectory(dir='/private/tmp') as directory:
+            root = Path(directory); out, task_root, _, _, _, _ = self._prepare_recoverable_module(root)
+            (task_root / 'request.json').write_bytes(encoded({'state': 'finalized', 'exitCode': 7}))
+            (task_root / 'process.json').write_bytes(encoded({'state': 'exited', 'returnCode': 7}))
+            (task_root / 'manifest.json').write_bytes(encoded({'status': 'partial', 'exitCode': 7,
+                'stopReason': 'nonzero-exit', 'contextFiles': {}, 'actualChanges': [],
+                'declaredChangedPaths': [], 'gitBoundary': {'valid': True}}))
+            with self.assertRaises(ParseError):
+                modules.recheck(out)
+
+    def test_recover_rejects_forged_worker_recovery_hash_without_materializing(self):
+        with tempfile.TemporaryDirectory(dir='/private/tmp') as directory:
+            root = Path(directory); out, task_root, _, rel, _, active = self._prepare_recoverable_module(root)
+            with patch.object(modules.worker, 'GLOBAL_LOCK_PATH', root / 'worker.lock'), \
+                    patch.object(modules.worker, 'ACTIVE_PROCESS_PATH', active):
+                worker_receipt = modules.worker.recover_completed(task_root)
+                forged = {**worker_receipt, 'completionEvidence': {
+                    **worker_receipt['completionEvidence'], 'eventsSha256': '0' * 64}}
+                (task_root / 'manifest.json').write_bytes(encoded(forged))
+                state_before = (out / 'state.json').read_bytes()
+                with patch.object(modules.worker, 'recover_completed', return_value=forged):
+                    with self.assertRaises(ParseError):
+                        modules.recover(out)
+            self.assertEqual((out / 'state.json').read_bytes(), state_before)
+            self.assertFalse((out / rel).exists())
 
             with tempfile.TemporaryDirectory(dir='/private/tmp') as second:
                 stage2, _, _, _, _ = self.make_stage(Path(second))

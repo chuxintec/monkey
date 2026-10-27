@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import time
 from pathlib import Path
@@ -617,6 +618,21 @@ def _implementation_markers(raw, class_record):
         return markers
     body = code[body_open + 1:body_close]
 
+    layer=class_record.get('layer');module=class_record.get('module')
+    suffix=f'.{layer}.{module}' if module else None
+    root_namespace=(expected_namespace[:-len(suffix)] if suffix and expected_namespace.endswith(suffix)
+                    else expected_namespace.rpartition(f'.{layer}.')[0])
+    forbidden_layers={
+        'Domain':('Gameplay','Presentation','Services','Bootstrap'),
+        'Gameplay':('Presentation','Services','Bootstrap'),
+        'Presentation':('Services','Bootstrap'),
+        'Services':('Presentation','Bootstrap'),
+    }
+    if root_namespace:
+        for target_layer in forbidden_layers.get(layer,()):
+            if re.search(r'\b'+re.escape(root_namespace)+r'\s*\.\s*'+target_layer+r'\b',code):
+                markers.append('layer-dependency-reference:'+target_layer)
+
     if class_record.get('layer') in ('Domain', 'Gameplay'):
         forbidden = ('UnityEngine', 'UnityEditor', 'MonoBehaviour', 'ScriptableObject')
         for symbol in forbidden:
@@ -844,7 +860,13 @@ def _prepare(architecture_stage, module_id, output, *, dependency_roots=(), prev
         "implementation there and integrate its actual typed API instead of pretending it is absent. These are "
         "candidate-native implementation inputs, not proof of original source ownership or remote success. "
         "Do not rewrite their read-only files or invent API signatures. Preserve exact ownership and declared class paths. Seeds are placeholders, "
-        "not implementations. Do not add/delete/rename files or claim compile/runtime completion."
+        "not implementations. Planned field/method lists are a required baseline, not a cap: within your owned classes, "
+        "add typed source-evidenced state and helpers needed for mapped algorithms. A state field missing from the initial "
+        "architecture plan is not a reason to make every rule Unavailable. Implement evidenced local computation and "
+        "validation, then use typed proposals/pending outcomes at unknown authority boundaries; never invent remote "
+        "success or rewards. Core composition must use narrow typed ports rather than unfinished activity aggregates. "
+        "Preserve legacy public contracts and source behavior when extending them. "
+        "Do not add/delete/rename files or claim compile/runtime completion."
     )
     target_paths = [row['path'] for row in seed_rows]
     prepared = worker.prepare(seed_root, target_paths, seed_manifest_sha, root / 'Task', task,
@@ -917,6 +939,103 @@ def _verify_pins(root, request):
     return stage
 
 
+def _verify_recovery_evidence(task_root, task_request, task_manifest):
+    """Read-only cross-check of the worker's completed-event recovery pins."""
+    reason = 'completed-event-recovered/exit-not-recorded'
+    evidence = task_manifest.get('completionEvidence')
+    required = {'schemaVersion', 'status', 'exitStatus', 'exitCode', 'returnCode', 'observedAtUnix',
+                'runId', 'requestSha256', 'eventsSha256', 'processRecordPath', 'processRecordSha256',
+                'responseSource', 'requestRecordPath'}
+    if (task_manifest.get('stopReason') != reason or task_manifest.get('status') != 'partial'
+            or task_manifest.get('exitCode') is not None or task_manifest.get('returnCode') is not None
+            or not isinstance(evidence, dict) or set(evidence) != required
+            or evidence.get('status') != 'completed-event-recovered'
+            or evidence.get('exitStatus') != 'exit-not-recorded'
+            or evidence.get('exitCode') is not None or evidence.get('returnCode') is not None
+            or task_request.get('state') != 'finalized' or task_request.get('exitCode') is not None):
+        fail('CODE_ARCH_MODULE_RECOVERY', str(task_root), 'Worker receipt is not an exact completed-event recovery')
+    original_request_raw = read(inside(task_root, 'recovery-request-original.json'), max_bytes=2 * 1024 * 1024)
+    original_process_raw = read(inside(task_root, 'recovery-process-original.json'), max_bytes=1024 * 1024)
+    event_raw = read(inside(task_root, 'events.jsonl'), max_bytes=worker.LOG_BYTES)
+    current_process_raw = read(inside(task_root, 'process.json'), max_bytes=1024 * 1024)
+    original_request = load(original_request_raw, max_nodes=8_000_000)
+    original_process = load(original_process_raw, max_nodes=100_000)
+    process = load(current_process_raw, max_nodes=100_000)
+    if (sha(original_request_raw) != evidence['requestSha256']
+            or sha(original_process_raw) != evidence['processRecordSha256']
+            or sha(event_raw) != evidence['eventsSha256']
+            or task_manifest.get('taskSha256') != original_request.get('taskSha256')
+            or evidence.get('runId') != original_request.get('runId')
+            or task_request.get('runId') != original_request.get('runId')
+            or current_process_raw != original_process_raw
+            or process.get('state') != 'running' or type(process.get('pid')) is not int):
+        fail('CODE_ARCH_MODULE_RECOVERY', str(task_root), 'Worker recovery request/process/event pins differ')
+    event_session_ids = set()
+    for line in event_raw.splitlines():
+        event = json.loads(line)
+        for record in (event, event.get('payload') if isinstance(event.get('payload'), dict) else {}):
+            value = record.get('thread_id') or record.get('session_id')
+            if isinstance(value, str):
+                event_session_ids.add(value)
+    event_session = worker._extract_session_id(inside(task_root, 'events.jsonl'))
+    if (len(event_session_ids) != 1 or event_session not in event_session_ids
+            or not event_session or task_manifest.get('sessionId') != event_session
+            or task_request.get('lastSessionId') != event_session):
+        fail('CODE_ARCH_MODULE_RECOVERY', str(task_root), 'Completed event stream has no exact recoverable session identity')
+    try:
+        os.kill(process['pid'], 0)
+    except ProcessLookupError:
+        pass
+    except PermissionError:
+        fail('CODE_ARCH_MODULE_RECOVERY', str(task_root), 'Recovered worker PID may still be active')
+    else:
+        fail('CODE_ARCH_MODULE_RECOVERY', str(task_root), 'Recovered worker PID is live or may have been reused')
+    pinned_request_fields = ('taskSha256', 'codexPath', 'codexIdentity', 'base', 'selected', 'contextFiles',
+                             'workspaceBudgetBytes', 'selectedFileMaxBytes', 'budgets', 'producer', 'runId')
+    if any(original_request.get(key) != task_request.get(key) for key in pinned_request_fields):
+        fail('CODE_ARCH_MODULE_RECOVERY', str(task_root), 'Finalized request differs from its immutable prepared pins')
+    if worker._source_integrity(task_request):
+        fail('CODE_ARCH_MODULE_RECOVERY', str(task_root), 'Worker candidate source pins no longer verify')
+    response, _ = worker._completed_event_response(inside(task_root, 'events.jsonl'), original_request)
+    saved_response = _json(inside(task_root, 'final-response.json'), maximum=1024 * 1024)
+    standalone = _json(inside(task_root, 'recovery-receipt.json'), maximum=1024 * 1024)
+    if (response != saved_response or standalone != evidence
+            or task_manifest.get('gitBoundary', {}).get('valid') is not True
+            or task_manifest.get('unexpectedPaths') or task_manifest.get('workspaceIntegrityErrors')
+            or task_manifest.get('sourceVerificationErrors')):
+        fail('CODE_ARCH_MODULE_RECOVERY', str(task_root), 'Worker recovery response or boundary receipt differs')
+    workspace = inside(task_root, 'workspace')
+    if (worker._workspace_integrity(workspace, task_request)
+            or not worker._check_git_boundary(workspace).get('valid')):
+        fail('CODE_ARCH_MODULE_RECOVERY', str(task_root), 'Recovered workspace no longer satisfies read-only/Git pins')
+    actual = worker._workspace_changes(workspace, task_request, task_request['workspaceBudgetBytes'])
+    declared = task_manifest.get('declaredChangedPaths')
+    if (actual != task_manifest.get('actualChanges') or not isinstance(declared, list)
+            or len(declared) != len(set(declared))
+            or set(declared) != {row['path'] for row in actual}
+            or any(row.get('budgetExceeded') for row in actual)):
+        fail('CODE_ARCH_MODULE_RECOVERY', str(task_root), 'Recorded actualChanges do not match pinned workspace bytes')
+    return evidence
+
+
+def _verify_recovery_active_snapshot(root, task_root, module_manifest, task_manifest):
+    identity = module_manifest.get('workerProcessIdentity')
+    if not isinstance(identity, dict) or identity.get('path') != 'worker-active-original.json':
+        fail('CODE_ARCH_MODULE_RECOVERY', str(root), 'Module manifest lacks the original global active-process pin')
+    raw = read(inside(root, identity['path']), max_bytes=1024 * 1024)
+    active = load(raw, max_nodes=100_000)
+    process = _json(inside(task_root, 'recovery-process-original.json'), maximum=1024 * 1024)
+    request = _json(inside(task_root, 'recovery-request-original.json'), maximum=2 * 1024 * 1024)
+    if (sha(raw) != identity.get('sha256') or active.get('state') != 'running'
+            or active.get('pid') != process.get('pid') or active.get('attempt') != process.get('attempt')
+            or (active.get('runId') is not None and active.get('runId') != request.get('runId'))
+            or identity.get('pid') != process.get('pid')
+            or identity.get('attempt') != process.get('attempt')
+            or identity.get('sessionId') != task_manifest.get('sessionId')):
+        fail('CODE_ARCH_MODULE_RECOVERY', str(root), 'Original global active-process identity differs from worker pins')
+    return identity
+
+
 def run(output, *, session_id=None):
     root = safe(output); request = _json(root / 'request.json')
     state = _json(root / 'state.json')
@@ -943,9 +1062,86 @@ def run(output, *, session_id=None):
         _save(root / 'state.json', {'status': 'checkpoint', 'moduleId': request['moduleId'],
             'sessionId': result.get('sessionId'), 'implementation': 'incomplete', 'compilation': 'not_run', 'runtime': 'not_run'})
         return status(root)
+    return _materialize_result(root, request, result)
+
+
+def recover(output):
+    """Recover one completed worker event stream, then materialize the same way as run()."""
+    root = safe(output); request = _json(root / 'request.json')
+    state = _json(root / 'state.json')
+    if state.get('status') not in ('prepared', 'checkpoint'):
+        fail('CODE_ARCH_MODULE_STATE', str(root), 'Only a prepared/checkpoint module stage can recover')
+    _verify_pins(root, request)
+    for name, pin in request['contextFiles'].items():
+        raw = read(inside(root / 'Evidence', name), max_bytes=worker.FILE_BYTES)
+        if len(raw) != pin['bytes'] or sha(raw) != pin['sha256']:
+            fail('CODE_ARCH_MODULE_CONTEXT', name, 'Pinned module context changed before recovery')
+
+    task_root = root / 'Task'
+    task_request = _json(task_root / 'request.json', maximum=2 * 1024 * 1024)
+    manifest = _json(root / MANIFEST, maximum=MANIFEST_BYTES)
+    seed_manifest_raw = read(inside(root / 'Seed', 'manifest.json'), max_bytes=worker.MANIFEST_BYTES)
+    seed_manifest = load(seed_manifest_raw, max_nodes=8_000_000)
+    candidate_identity = seed_manifest.get('identity', seed_manifest.get('candidateId'))
+    expected_base = {'candidateRoot': str((root / 'Seed').resolve()), 'manifestPath': 'manifest.json',
+                     'manifestSha256': sha(seed_manifest_raw), 'candidateIdentity': candidate_identity}
+    if task_request.get('base') != expected_base:
+        fail('CODE_ARCH_MODULE_RECOVERY', str(task_root), 'Worker base manifest differs from the module seed pin')
+    expected_context = {'__Context/' + name: {'sourcePath': name, 'sha256': pin['sha256'], 'bytes': pin['bytes']}
+                        for name, pin in request['contextFiles'].items()}
+    if task_request.get('contextFiles') != expected_context:
+        fail('CODE_ARCH_MODULE_RECOVERY', str(task_root), 'Worker read-only context differs from module evidence pins')
+    for name, pin in request['contextFiles'].items():
+        context_copy = inside(task_root / 'workspace' / '__Context', name)
+        copied = read(context_copy, max_bytes=worker.FILE_BYTES)
+        if len(copied) != pin['bytes'] or sha(copied) != pin['sha256']:
+            fail('CODE_ARCH_MODULE_RECOVERY', name, 'Worker context copy differs from module evidence pins')
+    expected = {record['path'] for record in manifest.get('classes', [])}
+    selected = task_request.get('selected')
+    if (not isinstance(selected, list) or {row.get('path') for row in selected} != expected
+            or len(selected) != len(expected)):
+        fail('CODE_ARCH_MODULE_RECOVERY', str(task_root), 'Prepared worker selection differs from module class ownership')
+    for row in selected:
+        seed = read(inside(root / 'Seed', row['path']), max_bytes=worker.FILE_BYTES)
+        if row.get('sha256') != sha(seed) or row.get('bytes') != len(seed):
+            fail('CODE_ARCH_MODULE_RECOVERY', row.get('path', ''), 'Prepared worker class pin differs from module seed')
+
+    process_raw = read(inside(task_root, 'process.json'), max_bytes=1024 * 1024)
+    process = load(process_raw, max_nodes=100_000)
+    active_path = worker.ACTIVE_PROCESS_PATH
+    active_raw = read(safe(active_path), max_bytes=1024 * 1024)
+    active = load(active_raw, max_nodes=100_000)
+    if (process.get('state') != 'running' or active.get('state') != 'running'
+            or active.get('pid') != process.get('pid')
+            or (active.get('attempt') is not None and active.get('attempt') != process.get('attempt'))
+            or (active.get('runId') is not None and active.get('runId') != task_request.get('runId'))):
+        fail('CODE_ARCH_MODULE_RECOVERY', str(task_root), 'Global active-process marker does not match the prepared child')
+    active_copy = root / 'worker-active-original.json'
+    if active_copy.exists():
+        fail('CODE_ARCH_MODULE_RECOVERY', str(active_copy), 'Original active-process evidence already exists; refusing overwrite')
+
+    result = worker.recover_completed(task_root)
+    task_request = _json(task_root / 'request.json', maximum=2 * 1024 * 1024)
+    evidence = _verify_recovery_evidence(task_root, task_request, result)
+    if (result.get('stopReason') != 'completed-event-recovered/exit-not-recorded'
+            or result.get('exitCode') is not None or result.get('returnCode') is not None):
+        fail('CODE_ARCH_MODULE_RECOVERY', str(task_root), 'Worker recovery result does not preserve unknown exit status')
+    event_session = worker._extract_session_id(inside(task_root, 'events.jsonl'))
+    active_identity = {'path': active_copy.name, 'sha256': sha(active_raw),
+                       'pid': process['pid'], 'attempt': process.get('attempt'),
+                       'sessionId': event_session}
+    worker._atomic(active_copy, active_raw); active_copy.chmod(0o400)
+    return _materialize_result(root, request, result, recovery_evidence=evidence,
+                               recovery_active_identity=active_identity)
+
+
+def _materialize_result(root, request, result, *, recovery_evidence=None, recovery_active_identity=None):
+    """Materialize a worker result using the same path and class checks for run/recover."""
+    task_root = root / 'Task'
     if result.get('unexpectedPaths') or result.get('workspaceIntegrityErrors') or result.get('sourceVerificationErrors') or not result.get('gitBoundary', {}).get('valid'):
         fail('CODE_ARCH_MODULE_BOUNDARY', str(root), 'Worker changed paths, source pins, or workspace boundary failed')
-    if result.get('stopReason') or result.get('status') == 'failed':
+    if ((result.get('stopReason') and recovery_evidence is None)
+            or result.get('status') == 'failed'):
         _save(root / 'state.json', {'status': 'stage_incomplete', 'moduleId': request['moduleId'],
             'reason': result.get('stopReason'), 'implementation': 'incomplete', 'compilation': 'not_run', 'runtime': 'not_run'})
         return status(root)
@@ -988,12 +1184,16 @@ def run(output, *, session_id=None):
     manifest.update({'status': module_status, 'classes': class_rows, 'files': artifact_rows,
         'modelStatus': result.get('status'), 'unresolved': result.get('unresolved', []),
         'compilation': 'not_run', 'runtime': 'not_run', 'acceptance': 'not_reviewed'})
+    if recovery_evidence is not None:
+        manifest['workerRecovery'] = recovery_evidence
+        manifest['workerProcessIdentity'] = recovery_active_identity
     _write_manifest(root, manifest)
     _save(root / 'state.json', {'status': module_status, 'moduleId': request['moduleId'],
         'implementation': 'model_output_unreviewed', 'classCount': len(class_rows),
-        'compilation': 'not_run', 'runtime': 'not_run'})
+        'compilation': 'not_run', 'runtime': 'not_run',
+        **({'workerRecovery': recovery_evidence,
+            'workerProcessIdentity': recovery_active_identity} if recovery_evidence is not None else {})})
     return status(root)
-
 
 def status(output):
     root = safe(output)
@@ -1022,6 +1222,8 @@ def status(output):
     if process.is_file():
         child = _json(process, maximum=1024 * 1024)
         state = {**state, 'childState': child.get('state'), 'childPid': child.get('pid')}
+        if manifest.get('workerRecovery'):
+            state.update(childState='completed_event_exit_not_recorded', recordedChildState=child.get('state'))
         if child.get('state') in ('starting', 'running') and state.get('status') in ('prepared', 'checkpoint'):
             state['status'] = 'running'
     return {**state, 'moduleId': manifest.get('moduleId'), 'manifestPath': str(root / MANIFEST),
@@ -1053,11 +1255,22 @@ def recheck(output):
     process = _json(inside(task_root, 'process.json'), maximum=1024 * 1024)
     task_manifest_raw = read(inside(task_root, 'manifest.json'), max_bytes=worker.FILE_BYTES)
     task_manifest = load(task_manifest_raw, max_nodes=2_000_000)
-    if task_request.get('state') != 'finalized' or process.get('state') != 'exited':
-        fail('CODE_ARCH_MODULE_RECHECK_STATE', str(root), 'Read-only recheck requires a finalized task and an exited child')
-    if process.get('returnCode') != 0 or task_request.get('exitCode') != 0 or task_manifest.get('exitCode') != 0:
-        fail('CODE_ARCH_MODULE_RECHECK_STATE', str(task_root), 'Task did not exit successfully; saved implementation cannot be reclassified as a completed output')
-    if task_manifest.get('status') not in ('complete', 'partial') or task_manifest.get('stopReason'):
+    recovered = task_manifest.get('stopReason') == 'completed-event-recovered/exit-not-recorded'
+    recovery_evidence = None
+    if recovered:
+        if process.get('state') != 'running':
+            fail('CODE_ARCH_MODULE_RECHECK_STATE', str(task_root), 'Recovered process record must remain unchanged')
+        recovery_evidence = _verify_recovery_evidence(task_root, task_request, task_manifest)
+        if manifest.get('workerRecovery') != recovery_evidence:
+            fail('CODE_ARCH_MODULE_RECHECK_STATE', str(root), 'Module manifest recovery evidence differs from worker pins')
+        _verify_recovery_active_snapshot(root, task_root, manifest, task_manifest)
+    else:
+        if task_request.get('state') != 'finalized' or process.get('state') != 'exited':
+            fail('CODE_ARCH_MODULE_RECHECK_STATE', str(root), 'Read-only recheck requires a finalized task and an exited child')
+        if process.get('returnCode') != 0 or task_request.get('exitCode') != 0 or task_manifest.get('exitCode') != 0:
+            fail('CODE_ARCH_MODULE_RECHECK_STATE', str(task_root), 'Task did not exit successfully; saved implementation cannot be reclassified as a completed output')
+    if (task_manifest.get('status') not in ('complete', 'partial')
+            or (task_manifest.get('stopReason') and not recovered)):
         fail('CODE_ARCH_MODULE_RECHECK_STATE', str(task_root), 'Task result is not a finalized complete/partial worker record')
     if task_manifest.get('unexpectedPaths') or task_manifest.get('workspaceIntegrityErrors') or task_manifest.get('sourceVerificationErrors'):
         fail('CODE_ARCH_MODULE_RECHECK_BOUNDARY', str(task_root), 'Worker task recorded boundary or source verification errors')
@@ -1218,6 +1431,7 @@ def recheck(output):
         'taskState': task_request.get('state'), 'childState': process.get('state'),
         'classification': aggregate, 'classificationCounts': counts, 'files': class_rows,
         'sourceFiles': list(source_hashes.values()), 'contextFiles': context_hashes,
+        **({'workerRecovery': recovery_evidence} if recovery_evidence is not None else {}),
         'compilation': manifest.get('compilation'), 'runtime': manifest.get('runtime'),
         'semanticValidation': 'not_performed', 'manifestRewritten': False,
         'stateRewritten': False, 'reviewScope': 'read-only lexical classification refresh; no semantic, compile, Editor, or runtime acceptance'}

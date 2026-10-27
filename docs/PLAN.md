@@ -1,4 +1,8 @@
 # monkey 项目计划与执行进度
+
+2026-10-27 核心接续实绩：Orders34 已通过公开 module-recover 离线物化64类，worker receipt 明确 partial / exit-not-recorded，事件SHA ce4917e326cfeb8af4876bdb6dbe6b759367c688a3e808e6538b5dbb047945f3；公开只读 recheck 64类通过。没有伪造OS退出0或重跑模型。当前唯一串行 supervisor 接续 NativeCorePriority03，34终态、Street35在途（以run状态为准）。恢复、module/revision/pipeline与JSON producer共102定向测试通过；新JSON producer只附加明确自编local-test资产，未补音频。五层词法守卫禁止Gameplay反向Services等依赖；未完成类型不会生成空壳。启动helper已写WIP，核心View拆纯core helper以切断legacy GameSnapshot44活动依赖，完整旧API与全量类型继续保留。整候选编译/真实启动未完成。
+
+2026-10-27 中断接续：NativeCorePriority03 的 Content32、Production33 已终态；Orders34 模型事件已含最终JSON及turn.completed，但父supervisor中断，未记录OS退出码。未重跑模型；先补严格离线恢复，共用普通worker校验，明确exitCode/returnCode=null并保留原request/process/event SHA，随后继续Street/Tutorial/Bootstrap。当前核心整合：Content08真实11 JSON helper已交付；CoreSession typed role JSON/事务存储与源Board28格、CorePresentation旧API兼容及真实输入/metadata、父CoreBoardBootstrap正在统一编译。Bootstrap新WIP保留旧全量root、显式Editor candidate-local-test，无原版认证/远端成功声明。全47范围继续，所有活动aggregate尚未闭合，整工程与运行仍未验收。不新增音频/进度条证明。
 ## 2026-10-27 当前目标：整体原生Unity架构恢复
 
 用户新要求已本聊天原生核验：总监turn `01a17b0d-59e9-7d63-81fa-329046f0007c` / human `01a17b0d-5a06-7f73-8d96-4057429299ba`；事件`monkey-v06-architecture-first-stop-old-20261027-01`。**旧逐文件修补方向被替代，不再以6445旧文件逐个审过为出口。** 目标为Bootstrap/Domain/Gameplay/Presentation/Services五层架构，先确定全项目模块、核心类及功能类，再把来源代码段和字段依赖归入语义化类，编译及代表业务链拉通。不能只改名/搬目录，不能复刻JS/Cocos运行时或用空壳补业务。新独立候选按版本化架构/符号/所有权计划生成，旧“本批不可增删文件/不可改类名”限制不再用于新架构；正式游戏与原始证据不变。

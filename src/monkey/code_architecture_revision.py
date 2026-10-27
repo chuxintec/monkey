@@ -107,13 +107,13 @@ def _validate_csharp(raw, path, expected_type, layer, expected_namespace, expect
     kind, namespace = _type_identity(raw, path, expected_type)
     if kind != expected_kind or namespace != expected_namespace:
         _fail('SEMANTIC_OWNER', path, 'Type declaration kind or namespace differs from the verified original architecture owner')
-    class_record = {'name': expected_type, 'kind': expected_kind, 'layer': layer,
+    class_record = {'name': expected_type, 'kind': expected_kind, 'layer': layer,'module':_layer_module(path,path)[1],
                     'namespace': expected_namespace, 'fields': [], 'plannedMethods': []}
     markers = modules._implementation_markers(raw, class_record)
     owner_errors = {'invalid-utf8-csharp', 'file-scoped-namespace-not-allowed',
                     'block-namespace-missing', 'planned-type-or-namespace-declaration-missing',
                     'planned-type-not-namespace-level', 'planned-type-body-missing'}
-    core_errors = ('core-engine-reference:', 'core-dynamic-keyword', 'core-untyped-string-object-dictionary')
+    core_errors = ('core-engine-reference:', 'core-dynamic-keyword', 'core-untyped-string-object-dictionary','layer-dependency-reference:')
     if any(marker in owner_errors or marker.startswith(core_errors) for marker in markers):
         code = 'CORE_DEPENDENCY' if any(marker.startswith(core_errors) for marker in markers) else 'SEMANTIC_OWNER'
         _fail(code, path, 'Revision violates established architecture module checks: ' + ', '.join(markers))

@@ -923,6 +923,25 @@ def _invoke(root: Path, workspace: Path, request: dict, codex: Path,
         if pending_pause:
             _write_pause_state(root, request, pending_pause, 'not_needed',
                                reason='child-exited-before-pause', stoppedAtUnix=time.time())
+    return _finalize_saved(root, workspace, request, code=code, reason=reason,
+                           started_monotonic=start, pause_acknowledged=pause_acknowledged,
+                           pause_request=pause_request, cli_version=cli_version,
+                           codex_identity=codex_identity, session_id=session_id)
+
+
+def _finalize_saved(root: Path, workspace: Path, request: dict, *, code: int | None,
+                    reason: str | None, started_monotonic: float, pause_acknowledged: bool,
+                    pause_request: dict | None, cli_version: str,
+                    codex_identity: dict, session_id: str | None,
+                    recovery: dict | None = None) -> dict:
+    """Run the shared strict output validation and persist an invocation receipt.
+
+    `recovery` marks a completed event stream whose operating-system exit status
+    was not observed. Such a receipt is always partial and never implies CLI success.
+    """
+    log_path = root / 'events.jsonl'
+    response_path = root / 'final-response.json'
+    start = started_monotonic
     ledger_enabled = request.get('projectResultLedger', False)
     actual = _workspace_changes(workspace, request, request['workspaceBudgetBytes'])
     if any(row.get('budgetExceeded') for row in actual): reason = reason or 'workspace-output-budget'
@@ -937,21 +956,7 @@ def _invoke(root: Path, workspace: Path, request: dict, codex: Path,
         except Exception:
             response = None
     declared = response if isinstance(response, dict) else {}
-    expected_response_keys = ({'status', 'changedPaths', 'unresolved', 'summary', 'fileResultsArtifact'}
-                              if request.get('projectBatch') and ledger_enabled else
-                              {'status', 'changedPaths', 'unresolved', 'summary', 'fileResults'}
-                              if request.get('projectBatch') else
-                              {'status', 'changedPaths', 'unresolved', 'summary'})
-    response_valid = (
-        isinstance(declared.get('status'), str) and declared.get('status') in ('complete', 'partial', 'failed')
-        and isinstance(declared.get('changedPaths'), list)
-        and all(isinstance(path, str) for path in declared.get('changedPaths', []))
-        and len(declared.get('changedPaths', [])) == len(set(declared.get('changedPaths', [])))
-        and isinstance(declared.get('unresolved'), list)
-        and all(isinstance(item, str) for item in declared.get('unresolved', []))
-        and isinstance(declared.get('summary'), str)
-        and set(declared) == expected_response_keys
-    )
+    response_valid = _valid_final_response_shape(declared, request)
     file_results = []; file_result_issues = []; ledger_metadata = None
     ledger_issues = []; reference_issues = []
     if request.get('projectBatch'):
@@ -1000,7 +1005,9 @@ def _invoke(root: Path, workspace: Path, request: dict, codex: Path,
     file_work_complete = all(row['status'] in ('processed', 'unchanged')
                              and row['originalLogicPreserved'] and not row['unresolved']
                              for row in file_results) if request.get('projectBatch') else True
-    if source_errors:
+    if recovery:
+        status = 'partial'; reason = 'completed-event-recovered/exit-not-recorded'
+    elif source_errors:
         status = 'failed'; reason = 'source-identity-changed'
     elif blocker:
         status = 'partial' if actual else 'failed'; reason = f"{blocker['kind']}-blocked"
@@ -1020,7 +1027,7 @@ def _invoke(root: Path, workspace: Path, request: dict, codex: Path,
         status = 'partial'
     else:
         status = 'complete'
-    child_seconds = round(time.monotonic() - start, 3)
+    child_seconds = 0.0 if recovery else round(time.monotonic() - start, 3)
     cumulative_seconds = round(request.get('childElapsedSeconds', 0) + child_seconds, 3)
     observations = _parse_events(log_path)
     session_id_result = _extract_session_id(log_path) or request.get('sessionId')
@@ -1047,6 +1054,7 @@ def _invoke(root: Path, workspace: Path, request: dict, codex: Path,
         'declaredChangedPaths': [str(item)[:512] for item in declared_paths[:MAX_FILES]],
         'responseSummary': declared.get('summary') if response_valid else None,
         'exitCode': code, 'stopReason': reason,
+        **({'returnCode': None} if recovery else {}),
         'sessionId': session_id_result,
         'cliVersion': cli_version, 'executable': codex_identity,
         'model': observations['model'], 'reasoningEffort': observations['reasoningEffort'],
@@ -1056,8 +1064,11 @@ def _invoke(root: Path, workspace: Path, request: dict, codex: Path,
         'beforeManifestPath': 'before-manifest.json',
         'finalResponsePath': 'final-response.json' if response else None,
         'taskSha256': request['taskSha256'],
+        **({'completionEvidence': recovery} if recovery else {}),
     }
     _atomic(root / 'manifest.json', encoded(revision))
+    if recovery:
+        _atomic(root / 'recovery-receipt.json', encoded(revision['completionEvidence']))
     checkpointable = (pause_acknowledged or
                        (reason in ('timeout', 'no-progress', 'output-budget', 'workspace-output-budget', 'termination-timeout')
                         and revision['sessionId'] and not source_errors))
@@ -1068,6 +1079,184 @@ def _invoke(root: Path, workspace: Path, request: dict, codex: Path,
     _atomic(root / 'request.json', encoded(request))
     return revision
 
+
+def _completed_event_response(events_path: Path, request: dict) -> tuple[dict, str]:
+    """Read one complete JSONL stream and extract its exact terminal agent response."""
+    raw = read(events_path, max_bytes=LOG_BYTES)
+    if not raw.endswith(b'\n'):
+        fail('POSTPROCESS_RECOVERY_EVENTS', str(events_path), 'Event stream is truncated')
+    events = []
+    for number, line in enumerate(raw.splitlines(), 1):
+        if not line:
+            fail('POSTPROCESS_RECOVERY_EVENTS', str(events_path), f'Blank event line {number}')
+        try:
+            event = json.loads(line)
+        except (ValueError, UnicodeDecodeError):
+            fail('POSTPROCESS_RECOVERY_EVENTS', str(events_path), f'Invalid JSON event on line {number}')
+        if not isinstance(event, dict) or not isinstance(event.get('type'), str):
+            fail('POSTPROCESS_RECOVERY_EVENTS', str(events_path), f'Malformed event on line {number}')
+        events.append(event)
+    if not events or events[-1].get('type') != 'turn.completed':
+        fail('POSTPROCESS_RECOVERY_EVENTS', str(events_path), 'The final event must be turn.completed')
+    if any(event.get('type') in ('turn.failed', 'error') for event in events):
+        fail('POSTPROCESS_RECOVERY_EVENTS', str(events_path), 'Failed or error event prevents recovery')
+    completed = [event for event in events if event.get('type') == 'turn.completed']
+    if len(completed) != 1:
+        fail('POSTPROCESS_RECOVERY_EVENTS', str(events_path), 'Expected exactly one completed turn')
+    messages = [event for event in events[:-1]
+                if event.get('type') == 'item.completed'
+                and isinstance(event.get('item'), dict)
+                and event['item'].get('type') == 'agent_message']
+    if not messages or events[-2] is not messages[-1]:
+        fail('POSTPROCESS_RECOVERY_EVENTS', str(events_path),
+             'turn.completed must immediately follow the final completed agent_message')
+    text_value = messages[-1]['item'].get('text')
+    if not isinstance(text_value, str) or not text_value.strip():
+        fail('POSTPROCESS_RECOVERY_RESPONSE', str(events_path), 'Final agent_message has no response JSON')
+    try:
+        response = json.loads(text_value)
+    except ValueError:
+        fail('POSTPROCESS_RECOVERY_RESPONSE', str(events_path), 'Final agent_message is not valid JSON')
+    if not isinstance(response, dict):
+        fail('POSTPROCESS_RECOVERY_RESPONSE', str(events_path), 'Final response must be a JSON object')
+    if not _valid_final_response_shape(response, request):
+        fail('POSTPROCESS_RECOVERY_RESPONSE', str(events_path),
+             'Final response does not match the prepared output schema')
+    return response, sha(raw)
+
+
+def recover_completed(prepared_root: str | Path) -> dict:
+    """Finalize saved output after a completed Codex event stream and lost supervisor.
+
+    This function is offline: it never launches Codex and never infers an exit code.
+    It only accepts an unfinished prepared run whose recorded child PID is absent.
+    """
+    root = safe(prepared_root)
+    existing = root / 'recovery-receipt.json'
+    request_path = safe(root / 'request.json')
+    request_raw = read(request_path, max_bytes=1024 * 1024)
+    request = load(request_raw)
+    already_recovered = existing.is_file() and request.get('state') == 'finalized'
+    if request.get('state') not in ('prepared', 'checkpoint') and not already_recovered:
+        fail('POSTPROCESS_RECOVERY_STATE', str(root), 'Only prepared or checkpoint runs can be recovered')
+    if not isinstance(request.get('runId'), str) or not _SESSION.fullmatch(request['runId']):
+        fail('POSTPROCESS_RECOVERY_PIN', str(request_path), 'A stable run identity is required')
+    _, codex_identity = _resolve_codex(request.get('codexPath', ''))
+    pinned_codex = request.get('codexIdentity')
+    if not isinstance(pinned_codex, dict) or codex_identity.get('sha256') != pinned_codex.get('sha256'):
+        fail('POSTPROCESS_RECOVERY_PIN', str(request_path), 'Prepared Codex executable identity changed')
+    if (root / 'manifest.json').exists() and not already_recovered:
+        fail('POSTPROCESS_RECOVERY_STATE', str(root), 'A finalized receipt already exists')
+    if existing.exists() and not already_recovered:
+        fail('POSTPROCESS_RECOVERY_STATE', str(root), 'A recovery receipt exists without matching finalized state')
+    if not already_recovered and any((root / name).exists() for name in
+                                     ('recovery-request-original.json', 'recovery-process-original.json')):
+        fail('POSTPROCESS_RECOVERY_STATE', str(root), 'Unpaired recovery evidence already exists; refusing overwrite')
+
+    lock_path = GLOBAL_LOCK_PATH
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open('a+b') as lock_stream:
+        try:
+            fcntl.flock(lock_stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            fail('POSTPROCESS_BUSY', str(lock_path), 'A Codex post-process task is already running')
+
+        if already_recovered:
+            evidence = load(read(safe(existing), max_bytes=1024 * 1024))
+            original_request = read(safe(root / 'recovery-request-original.json'), max_bytes=1024 * 1024)
+            original_process = read(safe(root / 'recovery-process-original.json'), max_bytes=1024 * 1024)
+            response, event_digest = _completed_event_response(safe(root / 'events.jsonl'), request)
+            saved_response = load(read(safe(root / 'final-response.json'), max_bytes=1024 * 1024))
+            workspace = safe(root / 'workspace')
+            if (sha(original_request) != evidence.get('requestSha256')
+                    or sha(original_process) != evidence.get('processRecordSha256')
+                    or sha(read(safe(root / 'events.jsonl'), max_bytes=LOG_BYTES)) != evidence.get('eventsSha256')
+                    or event_digest != evidence.get('eventsSha256') or response != saved_response
+                    or _source_integrity(request)
+                    or _workspace_integrity(workspace, request, require_ledger=False)
+                    or not _check_git_boundary(workspace)['valid']):
+                fail('POSTPROCESS_RECOVERY_PIN', str(root), 'Saved recovery pins changed; replay is not idempotent')
+            return load(read(safe(root / 'manifest.json'), max_bytes=1024 * 1024))
+
+        process_path = safe(root / 'process.json')
+        process_raw = read(process_path, max_bytes=1024 * 1024)
+        process_record = load(process_raw)
+        pid = process_record.get('pid')
+        if process_record.get('state') != 'running' or type(pid) is not int or pid <= 1:
+            fail('POSTPROCESS_RECOVERY_PROCESS', str(process_path), 'Expected the original running process record')
+        if (process_record.get('attempt') != request.get('resumeCount', 0)
+                or process_record.get('sessionId') != request.get('sessionId')):
+            fail('POSTPROCESS_RECOVERY_PROCESS', str(process_path), 'Process attempt/session does not match request pins')
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            pass
+        except PermissionError:
+            fail('POSTPROCESS_RECOVERY_PROCESS_ACTIVE', str(process_path), 'Recorded PID may still be active')
+        else:
+            fail('POSTPROCESS_RECOVERY_PROCESS_ACTIVE', str(process_path),
+                 'Recorded PID is live or has been reused; refusing recovery')
+
+        workspace = safe(root / 'workspace')
+        if request.get('state') == 'checkpoint':
+            checkpoint = load(read(safe(root / 'checkpoint-files.json'), max_bytes=MANIFEST_BYTES))
+            if _snapshot(workspace) != checkpoint:
+                fail('POSTPROCESS_RECOVERY_BOUNDARY', str(workspace), 'Checkpoint workspace differs from its saved snapshot')
+        if (_source_integrity(request) or _workspace_integrity(workspace, request, require_ledger=False)
+                or not _check_git_boundary(workspace)['valid']):
+            fail('POSTPROCESS_RECOVERY_BOUNDARY', str(root), 'Source, workspace, context, or Git pins failed')
+        # The same diff/output accounting used by ordinary completion enforces path and byte budgets.
+        actual = _workspace_changes(workspace, request, request['workspaceBudgetBytes'])
+        if any(row.get('budgetExceeded') for row in actual):
+            fail('POSTPROCESS_RECOVERY_BOUNDARY', str(workspace), 'Workspace output budget was exceeded')
+
+        active_path = ACTIVE_PROCESS_PATH
+        active_raw = None
+        if active_path.exists():
+            active_raw = read(safe(active_path), max_bytes=1024 * 1024)
+            active = load(active_raw)
+            if active.get('pid') != pid or active.get('state') != 'running':
+                fail('POSTPROCESS_RECOVERY_PROCESS', str(active_path),
+                     'Global active-process identity does not match this prepared run')
+
+        response, event_digest = _completed_event_response(safe(root / 'events.jsonl'), request)
+        final_path = root / 'final-response.json'
+        if final_path.exists():
+            existing_response = load(read(safe(final_path), max_bytes=1024 * 1024))
+            if existing_response != response:
+                fail('POSTPROCESS_RECOVERY_RESPONSE', str(final_path),
+                     'Saved final response differs from terminal agent_message')
+        else:
+            _atomic(final_path, encoded(response))
+
+        observed_at = time.time()
+        original_process_path = root / 'recovery-process-original.json'
+        _atomic(original_process_path, process_raw)
+        original_process_path.chmod(0o400)
+        original_request_path = root / 'recovery-request-original.json'
+        _atomic(original_request_path, request_raw)
+        original_request_path.chmod(0o400)
+        evidence = {
+            'schemaVersion': 1, 'status': 'completed-event-recovered',
+            'exitStatus': 'exit-not-recorded', 'exitCode': None, 'returnCode': None,
+            'observedAtUnix': observed_at, 'runId': request['runId'],
+            'requestSha256': sha(request_raw), 'eventsSha256': event_digest,
+            'processRecordPath': 'recovery-process-original.json',
+            'processRecordSha256': sha(process_raw), 'responseSource': 'terminal-item.completed-agent_message',
+            'requestRecordPath': 'recovery-request-original.json',
+        }
+        revision = _finalize_saved(
+            root, workspace, request, code=None, reason='completed-event-recovered/exit-not-recorded',
+            started_monotonic=time.monotonic(), pause_acknowledged=False, pause_request=None,
+            cli_version='unknown', codex_identity=request.get('codexIdentity') or {},
+            session_id=request.get('sessionId'), recovery=evidence)
+        if active_raw is not None:
+            active = load(active_raw)
+            active.update(state='exited', observedAtUnix=observed_at,
+                          returnCode=None, recoveryStatus='exit-not-recorded',
+                          receiptPath='recovery-receipt.json')
+            _atomic(active_path, encoded(active))
+        return revision
 
 def _cli_version(codex: Path) -> str:
     try:
@@ -1272,6 +1461,26 @@ def _write_unified_diff(root: Path, workspace: Path, changes: list[dict]) -> byt
         fail('POSTPROCESS_DIFF_BUDGET', str(root), 'Unified diff exceeds 256MiB')
     _atomic(root / 'changes.patch', raw)
     return raw
+
+
+def _valid_final_response_shape(declared: object, request: dict) -> bool:
+    if not isinstance(declared, dict):
+        return False
+    expected_keys = ({'status', 'changedPaths', 'unresolved', 'summary', 'fileResultsArtifact'}
+                     if request.get('projectBatch') and request.get('projectResultLedger') else
+                     {'status', 'changedPaths', 'unresolved', 'summary', 'fileResults'}
+                     if request.get('projectBatch') else
+                     {'status', 'changedPaths', 'unresolved', 'summary'})
+    return (
+        isinstance(declared.get('status'), str) and declared.get('status') in ('complete', 'partial', 'failed')
+        and isinstance(declared.get('changedPaths'), list)
+        and all(isinstance(path, str) for path in declared.get('changedPaths', []))
+        and len(declared.get('changedPaths', [])) == len(set(declared.get('changedPaths', [])))
+        and isinstance(declared.get('unresolved'), list)
+        and all(isinstance(item, str) for item in declared.get('unresolved', []))
+        and isinstance(declared.get('summary'), str)
+        and set(declared) == expected_keys
+    )
 
 
 def _parse_events(path: Path) -> dict:
