@@ -7,6 +7,8 @@
 
 ### 当前执行记录（2026-10-27 架构阶段）
 
+当前主链运行以`NativeCorePriority03`为准：02在模型初始化前受沙箱app-server/readonly database限制，0模型session/0代码变更，失败完整保留；新03固定02/01 lineage和31模块原始pins，正常用户运行时权限已获执行层批准。Content四类已实际生成，Production运行中；下方02描述保留交接历史，不代表当前活动目录。补充native implementation context已可通过公开module prepare的hash-pinned `--supplemental-csharp-spec`传递给后续Bootstrap：只读C#实际API、非原来源归属，缺pin/篡改/重复输入拒绝。19项module检查与9项pipeline检查通过；不重跑旧组件/原生验收。
+
 **当前主链（§7纠偏）**：已核验总监人类turn `01a17c1d-92eb-7df2-9a66-3b03bf87c8ce` / human `01a17c1d-9448-7822-903e-d4fe113396ab`及Manager计划§7。NativeProject01在31份终态结果后安全收尾：当前模型自然退出，父取得既有worker互斥锁阻止下一模型启动，supervisor因`POSTPROCESS_BUSY`退出；Production仅prepared，无进程被杀、旧request/终态模块未改。新公开`code-native-continue`生成`.private/v060-architecture-first-20261027/NativeCorePriority02`，以旧request/state与31模块manifest pins原位复用，不复制私有context、不重跑31模型；优先Content→Production→Orders→Street→Tutorial→Bootstrap，在Bootstrap自然结束后返回integration_checkpoint供集成。剩余ProgressBoard/Settings/SmileBuff/Social/SurpriseBox/UpgradeRace/WeekTask/WeightRace/WoodGame/GooseSimulation全部保留，下一次run继续，不缩范围。当前Content模型实际运行；旧47终态后才集成的安排被覆盖。
 
 当前完整可编译候选**尚未产生**：冻结资源基线为`.private/v060-draft-quality-20261026/FullDraftCandidate07/UnityProject`；新完整架构实现在上述NativeCorePriority02加只读复用的NativeProject01模块；首个核心整合目标为`.private/v060-architecture-first-20261027/NativeCoreIntegration01/UnityProject`（待主链模块/修订到齐创建，不宣称目录已存在）。`code-native-reassemble --allow-incomplete`现可在停止的集成检查点生成含全资源/全classPaths且明确missing的候选，不伪造未生成类型；普通reassemble仍要求全部终态。50项candidate/revision/pipeline/reassembly定向检查通过。

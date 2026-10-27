@@ -693,13 +693,13 @@ def _previous(previous_module, module_id, source_pin, module_plan_sha):
     return {'root': str(root), 'manifestSha256': digest, 'files': files}
 
 
-def prepare(architecture_stage, module_id, output, *, dependency_roots=(), previous_module=None,
+def prepare(architecture_stage, module_id, output, *, dependency_roots=(), previous_module=None, supplemental_sources=(),
             codex=worker.DEFAULT_CODEX, timeout_seconds=3600, idle_seconds=900):
     """Prepare a module; retain failed new evidence outside its executable slot."""
     created = []
     try:
         return _prepare(architecture_stage, module_id, output,
-            dependency_roots=dependency_roots, previous_module=previous_module,
+            dependency_roots=dependency_roots, previous_module=previous_module, supplemental_sources=supplemental_sources,
             codex=codex, timeout_seconds=timeout_seconds, idle_seconds=idle_seconds,
             _created=created)
     except Exception as error:
@@ -722,7 +722,7 @@ def prepare(architecture_stage, module_id, output, *, dependency_roots=(), previ
         raise
 
 
-def _prepare(architecture_stage, module_id, output, *, dependency_roots=(), previous_module=None,
+def _prepare(architecture_stage, module_id, output, *, dependency_roots=(), previous_module=None, supplemental_sources=(),
              codex=worker.DEFAULT_CODEX, timeout_seconds=3600, idle_seconds=900,
              _created=None):
     """Prepare one complete designed module as an isolated architecture-stage worker task.
@@ -776,6 +776,29 @@ def _prepare(architecture_stage, module_id, output, *, dependency_roots=(), prev
     asset_context = asset_contexts.write_module_context(stage, classes, context_root, files,
         cache_root=stage['root'].parent / 'AssetBindingIndex')
     unity_environment = _copy_unity_environment(stage, context_root, files)
+    if not isinstance(supplemental_sources,(list,tuple)) or len(supplemental_sources)>512:
+        fail('CODE_ARCH_MODULE_SUPPLEMENT',module_id,'Supplemental C# input requires at most 512 explicit pins')
+    supplemental=[];seen_supplements=set()
+    for entry in supplemental_sources:
+        if not isinstance(entry,dict) or set(entry)!={'path','sha256'}:
+            fail('CODE_ARCH_MODULE_SUPPLEMENT',module_id,'Each supplemental source requires exactly path and sha256')
+        path=safe(entry['path'])
+        if path.suffix!='.cs' or path==root or path.is_relative_to(root):
+            fail('CODE_ARCH_MODULE_SUPPLEMENT',str(path),'Expected an independent C# implementation input')
+        raw=read(path,worker.FILE_BYTES)
+        try:raw.decode('utf-8','strict')
+        except UnicodeDecodeError:fail('CODE_ARCH_MODULE_SUPPLEMENT',str(path),'Supplemental C# must be UTF-8')
+        if not raw or sha(raw)!=entry['sha256'] or str(path) in seen_supplements:
+            fail('CODE_ARCH_MODULE_SUPPLEMENT',str(path),'Supplemental source bytes/hash differ or input is duplicated')
+        seen_supplements.add(str(path))
+        name=f'SupplementalNative/{sha(raw)}.cs'
+        target=inside(context_root,name);target.parent.mkdir(parents=True,exist_ok=True)
+        worker._atomic(target,raw);files[name]=dict(sha256=sha(raw),bytes=len(raw))
+        supplemental.append(dict(sourcePath=str(path),sha256=sha(raw),bytes=len(raw),contextPath='__Context/'+name,
+            role='native-integration-input;not-original-source-ownership'))
+    if supplemental:
+        name='supplemental-native-inputs.json';raw=encoded(dict(schemaVersion=1,files=supplemental))
+        worker._atomic(context_root/name,raw);files[name]=dict(sha256=sha(raw),bytes=len(raw))
     internal_types = {row['id'] for row in classes}
     external_types = sorted({dep for row in classes for dep in row.get('typeDependencies', []) if dep not in internal_types})
     dependency_contexts, pending_implementations = _read_dependency_roots(dependency_roots, external_types,
@@ -817,7 +840,10 @@ def _prepare(architecture_stage, module_id, output, *, dependency_roots=(), prev
         "do not add dependencies or assume Newtonsoft.Json or System.Text.Json. Do not use JsonUtility for dictionary or "
         "numeric-key data when it loses structure; if no evidenced supported reader fits the source, report the gap. "
         "Make unknown service behavior explicitly Unavailable; "
-        "never fake a successful backend. Preserve exact ownership and declared class paths. Seeds are placeholders, "
+        "never fake a successful backend. If supplemental-native-inputs.json is supplied, read every pinned native "
+        "implementation there and integrate its actual typed API instead of pretending it is absent. These are "
+        "candidate-native implementation inputs, not proof of original source ownership or remote success. "
+        "Do not rewrite their read-only files or invent API signatures. Preserve exact ownership and declared class paths. Seeds are placeholders, "
         "not implementations. Do not add/delete/rename files or claim compile/runtime completion."
     )
     target_paths = [row['path'] for row in seed_rows]

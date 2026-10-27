@@ -128,12 +128,16 @@ def _stage(root,request):
     stage=modules._pin_stage(request['architectureStage'])
     if stage['pins']!={key:request.get(key)for key in stage['pins']}:
         fail('CODE_NATIVE_SOURCE',str(root),'Global architecture or frozen source identity changed')
-    prior=request.get('continuation')
-    if prior:
+    prior=request.get('continuation');seen={str(root)}
+    while prior:
         old=safe(prior['previousRoot'])
+        if str(old) in seen or len(seen)>32:
+            fail('CODE_NATIVE_REUSE',str(old),'Continuation lineage is cyclic or exceeds its bound')
+        seen.add(str(old))
         if (sha(read(old/'request.json',128*1024*1024))!=prior['previousRequestSha256'] or
                 sha(read(old/'state.json',128*1024*1024))!=prior['previousStateSha256']):
             fail('CODE_NATIVE_REUSE',str(old),'Frozen predecessor schedule changed after continuation')
+        prior=modules._json(old/'request.json').get('continuation')
     return stage
 
 

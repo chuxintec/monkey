@@ -209,6 +209,37 @@ class ArchitectureModuleWorkflowTests(unittest.TestCase):
             self.assertEqual((output / 'keep.txt').read_bytes(), b'owned by caller')
             self.assertEqual(list(root.glob('Module.prepare-failed-*')), [])
 
+    def test_supplemental_native_integration_api_is_pinned_readonly_context_not_source_ownership(self):
+        with tempfile.TemporaryDirectory(dir='/private/tmp') as directory:
+            root=Path(directory);stage,_,_,_,_=self.make_stage(root);out=root/'Module'
+            helper=root/'NativeCoordinator.cs';raw=b'namespace Demo.Gameplay { public class NativeCoordinator { public int Revision; } }'
+            helper.write_bytes(raw)
+            with patch.object(modules.worker,'prepare',side_effect=self.fake_worker_prepare):
+                modules.prepare(stage,'Recipe',out,supplemental_sources=[dict(path=str(helper),sha256=sha(raw))])
+            request=json.loads((out/'request.json').read_text())
+            copied=out/'Evidence/SupplementalNative'/f'{sha(raw)}.cs'
+            self.assertEqual(copied.read_bytes(),raw)
+            listing=json.loads((out/'Evidence/supplemental-native-inputs.json').read_text())
+            self.assertEqual(listing['files'][0]['role'],'native-integration-input;not-original-source-ownership')
+            self.assertEqual(helper.read_bytes(),raw)
+            self.assertIn(f'SupplementalNative/{sha(raw)}.cs',request['contextFiles'])
+            # Drift in the frozen context is rejected before a model can run.
+            copied.write_bytes(raw+b'changed')
+            with patch.object(modules.worker,'run') as running:
+                with self.assertRaises(ParseError):modules.run(out)
+                running.assert_not_called()
+
+    def test_supplemental_hash_mismatch_never_starts_model_and_preserves_failure(self):
+        with tempfile.TemporaryDirectory(dir='/private/tmp') as directory:
+            root=Path(directory);stage,_,_,_,_=self.make_stage(root);out=root/'Module'
+            helper=root/'Native.cs';helper.write_text('namespace Demo { class Native {} }')
+            with patch.object(modules.worker,'prepare') as preparing:
+                with self.assertRaises(ParseError) as error:
+                    modules.prepare(stage,'Recipe',out,supplemental_sources=[dict(path=str(helper),sha256='0'*64)])
+                preparing.assert_not_called()
+            self.assertEqual(error.exception.code,'CODE_ARCH_MODULE_SUPPLEMENT')
+            self.assertFalse(out.exists());self.assertEqual(len(list(root.glob('Module.prepare-failed-*'))),1)
+
     def test_prepare_pins_exact_module_source_config_and_empty_seed(self):
         with tempfile.TemporaryDirectory(dir='/private/tmp') as directory:
             root = Path(directory)

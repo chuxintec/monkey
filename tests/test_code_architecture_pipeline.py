@@ -117,6 +117,20 @@ class NativePipelineTests(unittest.TestCase):
                 with self.assertRaises(ParseError):pipeline.continue_run(self.output,self.base/'New',priority)
         self.assertFalse((self.base/'New').exists())
 
+    def test_nested_continuation_rejects_changed_earlier_ancestor(self):
+        self.prepare()
+        from monkey.io import load
+        second=self.base/'Second';third=self.base/'Third'
+        with patch.object(pipeline.modules,'_pin_stage',return_value=self.stage):
+            pipeline.continue_run(self.output,second,['UI'])
+            pipeline.continue_run(second,third,['Core'])
+            request=load((third/'request.json').read_bytes())
+            pipeline._stage(third,request)
+            old=load((self.output/'state.json').read_bytes());old['status']='changed'
+            pipeline.modules._save(self.output/'state.json',old)
+            with self.assertRaises(ParseError) as error:pipeline._stage(third,request)
+        self.assertEqual(error.exception.code,'CODE_NATIVE_REUSE')
+
     def test_core_integration_checkpoint_stops_between_modules_then_resumes_full_scope(self):
         self.prepare()
         from monkey.io import load

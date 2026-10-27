@@ -48,3 +48,5 @@ moved intact to a sibling `<name>.prepare-failed-<id>/` with a
 retains failed input evidence while leaving the intended pipeline slot absent
 for a later corrected prepare. The archive is not an executable/resumable task.
 Directories that already existed before the call are rejected and never moved.
+
+Integration tasks may receive `--supplemental-csharp-spec /absolute/native-inputs.json`: an explicit JSON array of `{ "path": "/absolute/NativeCoordinator.cs", "sha256": "..." }` entries. Preparation copies bounded UTF-8 C# inputs into immutable `SupplementalNative` context and records each hash/path and its native-design role. These implementations supply actual candidate APIs for Bootstrap and module integration; they never establish original-source ownership or trusted backend behavior. Context drift is rejected before the model runs, and original files are read-only. This avoids asking a later composition task to invent APIs for already completed native revisions.
