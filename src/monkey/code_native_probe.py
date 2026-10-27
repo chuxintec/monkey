@@ -192,7 +192,7 @@ def _check_recipe_contract(report: dict[str, Any], config_source: bytes, catalog
     if (not isinstance(table, dict) or len(table) != 732 or not isinstance(probe_row, dict) or
             probe_row.get("elementIdWeight", {}).get("2015015") != 0):
         fail("CODE_NATIVE_RECIPE_JSON_CONTRACT", RECIPE_JSON, "Expected 732 rows and row 293's elementIdWeight entry for probe dish 2015015")
-    meta_match = re.search(rb"(?m)^guid: ([0-9a-f]{32})$", recipe_json_meta)
+    meta_match = re.search(rb"(?m)^guid: ([0-9a-f]{32})\r?$", recipe_json_meta)
     if not meta_match:
         fail("CODE_NATIVE_RECIPE_META", RECIPE_JSON_META, "Recipe TextAsset .meta has no valid GUID")
     return {"catalogMethods": sorted(required), "loaderOverloads": ["Load(TextAsset)", "Load(string)"],

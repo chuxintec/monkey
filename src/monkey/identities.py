@@ -13,7 +13,7 @@ def assigned(root,manifest):
         if not path.startswith(prefix)or not path.endswith('.meta'):continue
         raw=read(inside(root,path))
         if prefix=='Assets/':
-            values=re.findall(rb'^guid: ([0-9a-f]{32})$',raw,re.M)
+            values=re.findall(rb'^guid: ([0-9a-f]{32})\r?$',raw,re.M)
             if len(values)!=1:fail('ASSET_META_IDENTITY',path,'Expected one assigned Unity GUID')
             value=values[0].decode()
         else:
@@ -31,7 +31,7 @@ def verify(root,manifest):
         try:
             raw=read(inside(root,path));value=None
             if unity:
-                values=re.findall(rb'^guid: ([0-9a-f]{32})$',raw,re.M);value=values[0].decode()if len(values)==1 else None
+                values=re.findall(rb'^guid: ([0-9a-f]{32})\r?$',raw,re.M);value=values[0].decode()if len(values)==1 else None
             else:value=load(raw).get('uuid')
             if value!=entry['id']:errors.append(diagnostic('ASSIGNED_NATIVE_IDENTITY_CHANGED',path,'Pre-existing resource/script identity changed'))
         except (OSError,ValueError):errors.append(diagnostic('ASSIGNED_NATIVE_IDENTITY_CHANGED',path,'Pre-existing meta missing or invalid'))

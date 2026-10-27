@@ -89,7 +89,7 @@ def install(prepared, project, manifest):
     old_ids={row['id']:row['path'] for row in manifest.get('assignedAssetIdentities',[])}
     for rel,raw in files.items():
         if not rel.startswith('Assets/') or not rel.endswith('.meta'): continue
-        found=re.findall(rb'^guid: ([0-9a-f]{32})$',raw,re.M)
+        found=re.findall(rb'^guid: ([0-9a-f]{32})\r?$',raw,re.M)
         if len(found)!=1: fail('PACKAGE_MODULE_META',rel,'Generated asset requires one stable GUID')
         identity=found[0].decode();target=rel[:-5]
         if (identity in old_ids and old_ids[identity]!=target) or (identity in new_ids and new_ids[identity]!=target):

@@ -290,7 +290,7 @@ def prepare_assets(table_path, source_path, output, *, root_dish_id: int = REPRE
         meta_text = meta_bytes.decode('utf-8')
     except UnicodeDecodeError:
         fail('CODE_CONFIG_META', str(meta_path), 'Unity meta must be UTF-8')
-    match = re.search(r'^guid: ([0-9a-f]{32})$', meta_text, re.MULTILINE)
+    match = re.search(r'^guid: ([0-9a-f]{32})\r?$', meta_text, re.MULTILINE)
     if not match or 'fileFormatVersion: 2' not in meta_text:
         fail('CODE_CONFIG_META', str(meta_path), 'Expected the exact Unity text-asset meta identity')
     reader_path = safe(Path(__file__).parent / 'targets/RecipeJsonConfiguration.cs')

@@ -60,7 +60,7 @@ class OperationsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             r=Path(temp).resolve();exe=r/'Unity.app/Contents/MacOS/Unity';exe.parent.mkdir(parents=True);exe.write_text('not executable')
             (exe.parent.parent/'Info.plist').write_bytes(plistlib.dumps(dict(CFBundleVersion='6000.6.2f1')))
-            with patch('monkey.operations.subprocess.run',side_effect=AssertionError('Editor must not launch')):
+            with patch('monkey.operations.platform.machine',return_value='test-architecture'), patch('monkey.operations.subprocess.run',side_effect=AssertionError('Editor must not launch')):
                 result=doctor(r/'out',unity_editor=exe)
             self.assertEqual(next(x for x in result['checks']if x['name']=='unity')['status'],'pass')
 

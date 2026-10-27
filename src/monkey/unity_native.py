@@ -49,7 +49,7 @@ def owned(project):
 
 
 def guid(project, asset):
-    matches = re.findall(rb'^guid: ([0-9a-f]{32})$', read(inside(project, asset+'.meta')), re.M)
+    matches = re.findall(rb'^guid: ([0-9a-f]{32})\r?$', read(inside(project, asset+'.meta')), re.M)
     require(len(matches) == 1, 'Exact native metadata GUID required: '+asset)
     return matches[0].decode()
 

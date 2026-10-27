@@ -7,6 +7,7 @@ Formal MIT-licensed release of the Python `monkey-native` package and `monkey` C
 - Large-project parse budgets, stage reuse, exact resource identities, ownership-aware exports and explicit missing-source classifications.
 - Source-linked C# drafts and Bootstrap/Domain/Gameplay/Presentation/Services architecture workflows, including bounded module execution, checkpoint recovery, inherited-member evidence and immutable candidate revisions.
 - Seven source toolkit commands received through `monkey tool <id>`: `laya_contract_audit`, `read_elf_values`, `unpack_xapk`, `shader_probe`, `decrypt_v1mmwx_wxapkg`, `unpack_wxapkg`, `export_config_tables`.
+- Unity GUID sealing and verification accept both LF and Windows CRLF metadata while still rejecting duplicate or malformed identity declarations.
 - Public documentation and examples remove private project, machine and coordination details. Stable compatibility identifiers, public source URLs and required license attribution remain. Original private evidence is retained outside the release tree.
 
 ## Compatibility

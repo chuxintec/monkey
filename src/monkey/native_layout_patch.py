@@ -61,7 +61,7 @@ def audit(candidate,output,expected_manifest):
     structured=load(read(find_analysis(root,'structured-objects.json'),max_bytes=LIMIT),max_nodes=16_000_000,max_depth=128)
     assets={a['sourceId']:a for a in structured['objects']};nodes={n['sourceId']:n for n in plan['nodes']};native={n['sourceId']:n for n in rb['nodes']}
     prefabs={p['sourceId']:p for p in plan['sourcePrefabs']};native_prefabs={p['sourceId']:p for p in rb['sourcePrefabs']}
-    flow_path='Assets/Generated/Views/NativeFlowLayoutGroup.cs';flow_guid=re.search(rb'^guid: ([0-9a-f]{32})$',read(inside(root,flow_path+'.meta')),re.M)[1].decode()
+    flow_path='Assets/Generated/Views/NativeFlowLayoutGroup.cs';flow_guid=re.search(rb'^guid: ([0-9a-f]{32})\r?$',read(inside(root,flow_path+'.meta')),re.M)[1].decode()
     cases=[];documents={}
     def document(sid):
         if sid not in documents:documents[sid]=load(read(inside(root,assets[sid]['decodedEvidence']),max_bytes=LIMIT),max_nodes=16_000_000,max_depth=128)['document']['instances']
@@ -206,7 +206,7 @@ def prepare(audit_directory,output,previous_execution=None):
     for asset in report['aggregators']:
         body=read(inside(root,asset['path']),max_bytes=LIMIT)
         if sha(body)!=asset['sha256']:fail('LAYOUT_PATCH_ASSET_CHANGED',asset['path'],'Frozen aggregate changed')
-        meta=read(inside(root,asset['path']+'.meta'));guid=re.search(rb'^guid: ([0-9a-f]{32})$',meta,re.M)[1].decode()
+        meta=read(inside(root,asset['path']+'.meta'));guid=re.search(rb'^guid: ([0-9a-f]{32})\r?$',meta,re.M)[1].decode()
         identities=aggregate_node_ids(body,plan);subset=selected(report['cases'])
         targets.append(dict(asset,guid=guid,sourceId=asset['kind'],aggregate=True,cases=serialized_layout_ids(body,report['flowScriptGuid'],identities,report['cases']),baseline=[global_baseline[sid]for sid in subset],identities=[identities[sid]for sid in subset]))
     # No external serialized object may point to a retired component local ID.
@@ -455,7 +455,7 @@ def bundle(delta_directory,output):
         operation=dict(changes[path]);operations.append(operation)
         if operation['kind']=='removed':continue
         copy(path,path);meta=path+'.meta';copy(meta,meta)
-        operation.update(expectedMetaSha256=indexed[meta]['sha256'],guid=assets[path]['guid']if path in assets else re.search(rb'^guid: ([0-9a-f]{32})$',read(inside(root,meta)),re.M)[1].decode())
+        operation.update(expectedMetaSha256=indexed[meta]['sha256'],guid=assets[path]['guid']if path in assets else re.search(rb'^guid: ([0-9a-f]{32})\r?$',read(inside(root,meta)),re.M)[1].decode())
     for name in ['NativeFlowLayoutGroup.cs.txt','NativeFlowLayoutGroup.cs.meta.txt','NativeLinearLayoutGroup-parent-context.cs.txt','cocos-layout-mit.txt','README.md']:
         copy('SourceRecovery/RetiredLayout/'+name,'SourceAttribution/'+name)
     for relative in ['Analysis/Readback/layout-patch-readback.json','Analysis/Readback/layout-patch-summary.json','Docs/NATIVE-LAYOUT-PATCH.md','Docs/PROJECT-STRUCTURE.md']:
