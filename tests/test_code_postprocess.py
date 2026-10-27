@@ -39,8 +39,7 @@ class CodePostprocessTests(unittest.TestCase):
         self.fake_cli('import sys\nsys.stdin.read()\n')
 
     def tearDown(self):
-        before = self.root / 'revision' / 'before'
-        if before.exists():
+        for before in self.root.glob('*/before'):
             for path in before.rglob('*'):
                 if path.is_dir(): path.chmod(0o700)
                 elif path.is_file(): path.chmod(0o600)
@@ -61,6 +60,34 @@ if '--version' in sys.argv:
         return prepare(self.candidate, ['Assets/Example.cs'], self.manifest_hash,
                        self.output, 'Fix only mechanically clear C# issues.',
                        codex=self.codex, **kwargs)
+
+    def architecture_inputs(self, files, *, contract=True):
+        rows = []
+        for relative, (content, owner) in files.items():
+            path = self.candidate.joinpath(*relative.split('/'))
+            path.parent.mkdir(parents=True, exist_ok=True)
+            raw = content if isinstance(content, bytes) else content.encode('utf-8')
+            path.write_bytes(raw)
+            rows.append({'path': relative, 'owner': owner, 'sha256': sha(raw), 'bytes': len(raw)})
+        manifest = {'schemaVersion': 1, 'candidateId': 'architecture-seed-test', 'files': rows}
+        manifest_path = self.candidate / 'manifest.json'
+        manifest_path.write_bytes(encoded(manifest))
+        self.manifest = manifest
+        self.manifest_hash = sha(manifest_path.read_bytes())
+        contract_path = self.candidate / 'architecture-contract.json'
+        if contract:
+            contract_path.write_bytes(encoded({'schemaVersion': 1, 'targetTypes': [],
+                                               'ownership': [], 'sourceMappings': []}))
+        elif contract_path.exists():
+            contract_path.unlink()
+        return contract_path
+
+    def prepare_architecture(self, paths, output=None, **kwargs):
+        return prepare(self.candidate, paths, self.manifest_hash,
+                       output or self.output, 'Build the selected architecture seed capsule.',
+                       context_files=kwargs.pop('context_files', ['architecture-contract.json']),
+                       context_root=self.candidate, codex=self.codex,
+                       architecture_stage=True, **kwargs)
 
     def test_prepare_copies_only_selected_generated_cs_and_keeps_source_immutable(self):
         evidence = self.candidate / 'map.json'
@@ -516,6 +543,109 @@ else:
         run(prepared)
         receipt = request_pause(prepared.output)
         self.assertEqual(receipt['outcome'], 'pause_not_needed')
+
+    def test_architecture_mode_allows_only_planned_seed_extensions_and_records_source_kind(self):
+        files = {
+            'Assets/Game/Domain/Board.cs': ('namespace Seed; public class Board {}', 'generated'),
+            'Assets/Game/Config/items.json': ('{"items":[]}', 'generated'),
+            'Assets/Game/Gameplay/Game.asmdef': ('{"name":"Seed.Gameplay"}', 'generated'),
+            'Analysis/Architecture/target-types.json': ('{"targets":[]}', 'generated'),
+            'Analysis/Mappings/source-map.json': ('{"mappings":[]}', 'generated'),
+        }
+        self.architecture_inputs(files)
+        prepared = self.prepare_architecture(list(files))
+        request = json.loads((prepared.output / 'request.json').read_text())
+        self.assertFalse(request['projectBatch'])
+        self.assertFalse(request['projectResultLedger'])
+        self.assertEqual(request['architectureStage']['selectedSourceKind'], 'architecture-seed')
+        self.assertEqual({row['sourceKind'] for row in request['selected']}, {'architecture-seed'})
+        self.assertEqual(request['architectureStage']['contract']['path'], '__Context/architecture-contract.json')
+        self.assertEqual(request['architectureStage']['contract']['version'], 1)
+        self.assertEqual(json.loads((prepared.output / 'output-schema.json').read_text())['required'],
+                         ['status', 'changedPaths', 'unresolved', 'summary'])
+        self.assertEqual((prepared.workspace / '__Context/architecture-contract.json').stat().st_mode & 0o222, 0)
+
+    def test_default_mode_still_rejects_planned_json_targets(self):
+        files = {'Assets/Game/Config/items.json': ('{"items":[]}', 'generated')}
+        self.architecture_inputs(files)
+        with self.assertRaises(ParseError):
+            prepare(self.candidate, list(files), self.manifest_hash, self.output,
+                    'Review a planned JSON seed.', codex=self.codex)
+
+    def test_architecture_mode_rejects_missing_contract_and_mixed_project_batch(self):
+        files = {'Assets/Game/Domain/Board.cs': ('public class Board {}', 'generated')}
+        self.architecture_inputs(files, contract=False)
+        with self.assertRaises(ParseError):
+            self.prepare_architecture(list(files), self.root / 'no-contract', context_files=[])
+        self.architecture_inputs(files)
+        with self.assertRaises(ParseError):
+            self.prepare_architecture(list(files), self.root / 'mixed-batch', project_batch=True)
+        with self.assertRaises(ParseError):
+            self.prepare_architecture(list(files), self.root / 'mixed-ledger', project_result_ledger=True)
+
+    def test_architecture_mode_rejects_unplanned_roots_extensions_and_non_generated_entries(self):
+        cases = [
+            {'Assets/Other/Board.cs': ('public class Board {}', 'generated')},
+            {'Assets/Game/Notes.txt': ('notes', 'generated')},
+            {'Assets/Game/Manual.cs': ('public class Manual {}', 'manual')},
+        ]
+        for index, files in enumerate(cases):
+            with self.subTest(files=list(files)):
+                self.architecture_inputs(files)
+                with self.assertRaises(ParseError):
+                    self.prepare_architecture(list(files), self.root / f'invalid-{index}')
+
+    def test_architecture_prompt_uses_contract_without_legacy_name_or_marker_lock(self):
+        files = {'Assets/Game/Gameplay/OrderService.cs':
+                 ('// source marker: src-123\npublic class Function_001 {}', 'generated')}
+        self.architecture_inputs(files)
+        prepared = self.prepare_architecture(list(files))
+        prompt = (prepared.output / 'prompt.txt').read_text()
+        self.assertIn('architecture-contract.json', prompt)
+        self.assertIn('architecture seed', prompt.lower())
+        self.assertIn('Do not preserve old anonymous class names or source-function markers', prompt)
+        self.assertNotIn('Preserve every existing source-function marker and exported declaration name exactly.', prompt)
+
+    def test_architecture_mode_rechecks_source_and_contract_context_after_cli(self):
+        files = {'Assets/Game/Domain/Board.cs': ('public class Board {}', 'generated')}
+        contract_path = self.architecture_inputs(files)
+        source_path = self.candidate / 'Assets/Game/Domain/Board.cs'
+        original_source = source_path.read_bytes()
+        self.fake_cli(f'''import json, pathlib, sys
+if '--help' in sys.argv:
+    print('usage: resume [SESSION_ID] [PROMPT] --json -o')
+    raise SystemExit(0)
+sys.stdin.read()
+pathlib.Path({str(source_path)!r}).write_text('public class TamperedBoard {{}}')
+response=pathlib.Path(sys.argv[sys.argv.index('-o')+1])
+response.write_text(json.dumps({{"status":"complete","changedPaths":[],"unresolved":[],"summary":"Reviewed architecture seed and its contract."}}))
+''')
+        prepared = self.prepare_architecture(list(files))
+        source_revision = run(prepared)
+        self.assertEqual(source_revision['status'], 'failed')
+        self.assertEqual(source_revision['stopReason'], 'source-identity-changed')
+        source_path.write_bytes(original_source)
+
+        self.output = self.root / 'revision-context-tamper'
+        context_copy = self.output / 'workspace/__Context/architecture-contract.json'
+        self.fake_cli(f'''import json, pathlib, sys
+if '--help' in sys.argv:
+    print('usage: resume [SESSION_ID] [PROMPT] --json -o')
+    raise SystemExit(0)
+sys.stdin.read()
+context=pathlib.Path({str(context_copy)!r})
+context.chmod(0o600)
+context.write_text('{{"schemaVersion":1,"tampered":true}}')
+response=pathlib.Path(sys.argv[sys.argv.index('-o')+1])
+response.write_text(json.dumps({{"status":"complete","changedPaths":[],"unresolved":[],"summary":"Reviewed architecture seed and its contract."}}))
+''')
+        prepared = self.prepare_architecture(list(files), self.output)
+        request = json.loads((self.output / 'request.json').read_text())
+        self.assertEqual(postprocess._workspace_changes(prepared.workspace, request, request['workspaceBudgetBytes']), [])
+        context_revision = run(prepared)
+        self.assertNotEqual(context_revision['status'], 'complete')
+        self.assertTrue(any('read-only context bytes changed' in issue
+                            for issue in context_revision['workspaceIntegrityErrors']))
 
 
 if __name__ == '__main__':
