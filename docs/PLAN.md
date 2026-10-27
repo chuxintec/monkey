@@ -7,6 +7,10 @@
 
 ### 当前执行记录（2026-10-27 架构阶段）
 
+2026-10-27 配置上下文根因补修：实际Audio旧manifest configPaths=[]，但Global05三Definition的configPaths/fieldKeyMap及冻结CookSound/PropSound/SFX完整存在。producer此前只取integrationChains.configPaths，现取所选classes.configPaths与相关chain并集，继续验证catalog/完整字节/SHA/预算；15项模块定向检查通过（新增类独有配置/篡改反例）。NativeConfigurationContext01实际只读重建AudioContext02并完整携带三表；静态影响18模块、180个模块内遗漏路径引用，非180份唯一文件。既有运行supervisor已加载旧函数，不热改当前队列或旧context；完整实现经独立版本化修订消费真实证据后再集成，未据此自动宣称旧输出恢复完成。
+
+BigDaySourceBehavior01以146份Domain编译产物实际读取原BigDay/BigDayRaceStage JSON，对四段精确源公式独立Python binary64转写的1,005分数/阶段/进度向量及9毫秒时钟边界执行通过，.NET8编译0警告/错误。原JS未执行，仅实际JSON、安全整数及秒→毫秒合同子集；活动启动/奖励/结算/服务端、Unity与整工程仍未验收。
+
 2026-10-27 原生引用接线前置核验：bindings模块已从原始Cocos2.4 pack/config准确恢复CardSeasonMainWindow 16个序列化属性，UUID index3137、pack0621940b9 section2640；42源节点与冻结Prefab child-index路径/名称逐项同构，既有保存重开readback确认42身份。12个显式字段映射均有真实源引用及目标路径，其中10个类型兼容；progressBar目标只有Image而C#要求Slider，label_title缺TMP文本，另4源属性缺新C#字段。NativeBindingPlan04 SHA `05e94087f9a55a02f58b8b7d887979562407a5073063ddf9b5d56f4e2be721bb`保留具体缺口；新Script GUID/MonoScript未固定，0个Prefab写入操作，不宣称已挂接。12项定向测试及py_compile通过，后续批量所有已终结View的真实盘点继续。
 
 NativeDomainCompile01完成13模块中146份无外部待生成类型依赖Domain源码的实际C#9/.NET Standard2.1编译，0诊断、无Unity引用；仅使用上述ShopColumn显式语法修订。GameSnapshot/RemoteReply依赖未生成功能状态，明确排除并保留分母；没有假类型或空壳补依赖，不代表Gameplay/Presentation/整工程编译、原生运行或业务等价已过。

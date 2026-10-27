@@ -302,6 +302,13 @@ def _copy_stage_context(stage, module_classes, module_row, context_root):
 
     selected_class_ids = {cls['id'] for cls in module_classes}
     config_paths = set()
+    # A definition's JSON can be required even when no representative
+    # integration chain mentions it. Keep its full frozen payload in context.
+    for cls in module_classes:
+        paths = cls.get('configPaths', [])
+        if not isinstance(paths, list) or any(not isinstance(path, str) or not path for path in paths):
+            fail('CODE_ARCH_MODULE_CONFIG', cls['id'], 'Class configPaths must be an array of non-empty paths')
+        config_paths.update(paths)
     for chain in stage['plan'].get('integrationChains', []):
         if selected_class_ids.intersection(chain.get('classIds', [])):
             config_paths.update(chain.get('configPaths', []))

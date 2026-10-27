@@ -150,6 +150,34 @@ class ArchitectureModuleWorkflowTests(unittest.TestCase):
         (output / 'request.json').write_bytes(encoded({'state': 'prepared'}))
         return SimpleNamespace(output=output)
 
+    def test_class_owned_config_is_supplied_without_representative_chain(self):
+        with tempfile.TemporaryDirectory(dir='/private/tmp') as directory:
+            root = Path(directory)
+            stage_path, _, config, _, _ = self.make_stage(root)
+            stage = modules._pin_stage(stage_path)
+            cls = stage['plan']['classes'][0]
+            config_path = stage['catalog']['configurations'][0]['path']
+            cls['configPaths'] = [config_path, config_path]
+            stage['plan']['integrationChains'][0]['configPaths'] = []
+            files, summary = modules._copy_stage_context(stage, [cls], stage['plan']['modules'][0], root / 'Context')
+            self.assertEqual(summary['configPaths'], [config_path])
+            self.assertEqual(len(summary['configFiles']), 1)
+            self.assertEqual((root / 'Context/Config/000.json').read_bytes(), config)
+            self.assertEqual(files['Config/000.json']['sha256'], sha(config))
+
+    def test_class_owned_config_keeps_hash_and_catalog_guards(self):
+        with tempfile.TemporaryDirectory(dir='/private/tmp') as directory:
+            root = Path(directory)
+            stage_path, _, _, _, _ = self.make_stage(root)
+            stage = modules._pin_stage(stage_path)
+            cls = stage['plan']['classes'][0]
+            cls['configPaths'] = [stage['catalog']['configurations'][0]['path']]
+            stage['plan']['integrationChains'][0]['configPaths'] = []
+            (stage_path / 'Evidence/Config/0.json').write_bytes(b'{"items":[999]}')
+            with self.assertRaises(ParseError) as caught:
+                modules._copy_stage_context(stage, [cls], stage['plan']['modules'][0], root / 'Context')
+            self.assertEqual(caught.exception.code, 'CODE_ARCH_MODULE_CONFIG')
+
     def test_prepare_pins_exact_module_source_config_and_empty_seed(self):
         with tempfile.TemporaryDirectory(dir='/private/tmp') as directory:
             root = Path(directory)
