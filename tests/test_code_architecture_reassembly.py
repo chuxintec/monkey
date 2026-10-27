@@ -177,6 +177,41 @@ class ArchitectureReassemblyTests(unittest.TestCase):
         self.assertEqual(caught.exception.code, 'CODE_ARCH_REASSEMBLY_NOT_TERMINAL')
         self.assertFalse(self.output.exists())
 
+    def test_explicit_stopped_checkpoint_records_unfinished_classes_without_shells(self):
+        self.plan['modules'].append(dict(id='Later',classIds=['later'],sourceUnitIds=[]))
+        self.plan['classes'].append(dict(id='later',name='LaterState',layer='Domain',module='Later',sourceUnitIds=[],fields=[],methods=[]))
+        later='Assets/Game/Domain/Later/LaterState.cs'
+        self.validation['classPaths']['later']=later
+        self.plan_raw=encoded(self.plan);self.plan_pin=sha(self.plan_raw)
+        (self.architecture/'architecture.json').write_bytes(self.plan_raw)
+        self.validation_raw=encoded(self.validation);self.validation_pin=sha(self.validation_raw)
+        (self.architecture/'validation.json').write_bytes(self.validation_raw)
+        self.pins.update(architectureSha256=self.plan_pin,validationSha256=self.validation_pin)
+        self.request.update(self.pins,moduleOrder=['Core','Later'])
+        (self.pipeline/'request.json').write_bytes(encoded(self.request))
+        self.state['status']='integration_checkpoint'
+        self.state['modules'].append(dict(id='Later',status='pending',task='Modules/0002'))
+        old_state=encoded(self.state);(self.pipeline/'state.json').write_bytes(old_state)
+        receipt=self._recheck_receipt()
+        with patch.object(modules,'_pin_stage',return_value=self.stage), \
+             patch.object(modules,'status',return_value=dict(status='generated_unreviewed',manifestSha256=self.module_pin)), \
+             patch.object(modules,'recheck',return_value=receipt):
+            report=reassemble(self.pipeline,self.output,allow_incomplete=True)
+        self.assertTrue(report['incompleteCheckpoint'])
+        self.assertFalse((self.output/'UnityProject'/later).exists())
+        manifest=load((self.output/'UnityProject/manifest.json').read_bytes())
+        self.assertIn(later,manifest['missingClassPaths'])
+        self.assertEqual(report['modules'][1]['classification'],'not_generated')
+        self.assertEqual((self.pipeline/'state.json').read_bytes(),old_state)
+
+    def test_checkpoint_option_does_not_allow_a_running_writer(self):
+        self.state['status']='running';self.state['modules'][0]['status']='running'
+        (self.pipeline/'state.json').write_bytes(encoded(self.state))
+        with patch.object(modules,'_pin_stage',return_value=self.stage):
+            with self.assertRaises(ParseError) as error:reassemble(self.pipeline,self.output,allow_incomplete=True)
+        self.assertEqual(error.exception.code,'CODE_ARCH_REASSEMBLY_NOT_STOPPED')
+        self.assertFalse(self.output.exists())
+
     def test_module_manifest_pin_mismatch_rejects_without_output(self):
         self.state['modules'][0]['manifestSha256'] = 'f' * 64
         (self.pipeline / 'state.json').write_bytes(encoded(self.state))

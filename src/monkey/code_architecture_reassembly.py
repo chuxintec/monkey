@@ -51,13 +51,16 @@ def _pins_match(request, stage):
     return pins
 
 
-def _validate_pipeline(root):
+def _validate_pipeline(root, allow_incomplete=False):
     request_raw = read(inside(root, 'request.json'), MAX_PIPELINE_JSON)
     state_raw = read(inside(root, 'state.json'), MAX_PIPELINE_JSON)
     request = load(request_raw, max_nodes=2_000_000)
     state = load(state_raw, max_nodes=2_000_000)
     architecture_root = safe(request.get('architectureStage'))
     stage = modules._pin_stage(architecture_root)
+    if request.get('continuation'):
+        from .code_architecture_pipeline import _stage
+        _stage(root, request)
     pins = _pins_match(request, stage)
     state_modules = state.get('modules')
     requested_order = request.get('moduleOrder')
@@ -71,9 +74,11 @@ def _validate_pipeline(root):
         _fail('STATE', root, 'Pipeline module list does not cover the pinned architecture plan modules')
     all_terminal = all(isinstance(row, dict) and row.get('status') in TERMINAL_MODULE_STATES
                        for row in state_modules)
-    if state.get('status') != 'candidate_assembled_unvalidated' and not all_terminal:
+    if allow_incomplete and state.get('status') not in ('blocked','integration_checkpoint','prepared','candidate_assembled_unvalidated'):
+        _fail('NOT_STOPPED', root, 'Checkpoint assembly requires a stopped supervisor')
+    if not allow_incomplete and state.get('status') != 'candidate_assembled_unvalidated' and not all_terminal:
         _fail('NOT_TERMINAL', root, 'Pipeline is incomplete; no reassembly output was created')
-    if not all_terminal:
+    if not all_terminal and not allow_incomplete:
         _fail('NOT_TERMINAL', root, 'Every module must be terminal before reassembly')
     if request.get('sourceManifestSha256') != pins.get('sourceManifestSha256'):
         _fail('GLOBAL_PINS', root, 'Candidate source manifest pin differs from global stage')
@@ -88,7 +93,8 @@ def _recheck_module(root, row, stage):
                 'files': [], 'missingClassIds': []}, []
     if not isinstance(row.get('manifestSha256'), str):
         _fail('MODULE_PIN', module_id, 'Terminal implementation module lacks a manifest SHA pin')
-    task_root = inside(root, row.get('task'))
+    from .code_architecture_pipeline import task_root as resolve_task_root
+    task_root = resolve_task_root(root,row)
     status = modules.status(task_root)
     if status.get('manifestSha256') != row['manifestSha256']:
         _fail('MODULE_PIN', module_id, 'Saved module manifest SHA differs from pipeline state')
@@ -202,7 +208,7 @@ def _recheck_module(root, row, stage):
     return summary, copy_rows
 
 
-def reassemble(pipeline_root, output_root):
+def reassemble(pipeline_root, output_root, *, allow_incomplete=False):
     """Reclassify terminal modules and assemble a new, unreviewed candidate.
 
     The pipeline, original module manifests, module files, and previous
@@ -213,7 +219,7 @@ def reassemble(pipeline_root, output_root):
     output = safe(output_root)
     if output.exists():
         _fail('OUTPUT_EXISTS', output, 'Use a fresh output directory for reassembly')
-    request_raw, state_raw, request, state, stage, pins = _validate_pipeline(pipeline)
+    request_raw, state_raw, request, state, stage, pins = _validate_pipeline(pipeline,allow_incomplete)
     source_root = safe(stage['request']['sourceRoot'])
     for input_root in (pipeline, stage['root'], source_root):
         if output == input_root or output.is_relative_to(input_root) or input_root.is_relative_to(output):
@@ -224,7 +230,17 @@ def reassemble(pipeline_root, output_root):
     seen_class_ids = set()
     seen_class_paths = set()
     for row in state['modules']:
-        summary, selected = _recheck_module(pipeline, row, stage)
+        if row['status'] not in TERMINAL_MODULE_STATES:
+            # Explicit integration checkpoint: keep every unfinished class in
+            # coverage, without creating a type shell or upgrading its status.
+            planned=[c for c in stage['plan']['classes'] if c['module']==row['id']]
+            summary=dict(moduleId=row['id'],priorState=row['status'],classification='not_generated',
+                files=[dict(classId=c['id'],path=stage['validation']['classPaths'][c['id']],
+                    classification='not_generated',reason='Module has no terminal implementation receipt') for c in planned],
+                missingClassIds=[c['id'] for c in planned])
+            selected=[]
+        else:
+            summary, selected = _recheck_module(pipeline, row, stage)
         for item in summary['files']:
             if item['classId'] in seen_class_ids or item['path'] in seen_class_paths:
                 _fail('DUPLICATE_OWNER', item['path'], 'Multiple module receipts claim a global class or target path')
@@ -239,6 +255,12 @@ def reassemble(pipeline_root, output_root):
         _fail('RECHECK_COVERAGE', pipeline, f'Module receipts differ from global plan classes (missing={missing_ids[:8]!r}, extra={extra_ids[:8]!r})')
     if len({item[1]['path'] for item in selected_rows}) != len(selected_rows):
         _fail('DUPLICATE_OWNER', pipeline, 'Two module receipts claim the same generated target path')
+    from .code_architecture_pipeline import task_root as resolve_task_root
+    for row in state['modules']:
+        if row['status'] in TERMINAL_MODULE_STATES and row['status']!='evidence_only':
+            task=resolve_task_root(pipeline,row,request)
+            if output==task or output.is_relative_to(task) or task.is_relative_to(output):
+                _fail('OUTPUT_OVERLAP',output,'Reassembly must not overlap reused module evidence')
 
     output.parent.mkdir(parents=True, exist_ok=True)
     output.mkdir(mode=0o700)
@@ -314,9 +336,9 @@ def reassemble(pipeline_root, output_root):
         if stage_after['pins'] != pins:
             _fail('SOURCE_RACE', stage['root'], 'Global architecture/source pins changed during reassembly')
         for row in state['modules']:
-            if row['status'] == 'evidence_only':
+            if row['status'] == 'evidence_only' or row['status'] not in TERMINAL_MODULE_STATES:
                 continue
-            task = inside(pipeline, row['task'])
+            task = resolve_task_root(pipeline,row,request)
             raw = read(inside(task, modules.MANIFEST), FILE_BYTES)
             if sha(raw) != row['manifestSha256']:
                 _fail('SOURCE_RACE', row['id'], 'Old module manifest changed during reassembly')
@@ -338,6 +360,7 @@ def reassemble(pipeline_root, output_root):
             'status': 'candidate_assembled_unvalidated',
             'implementationStatus': 'partial_unreviewed',
             'pipelineStatus': state.get('status'),
+            'incompleteCheckpoint': any(row['status'] not in TERMINAL_MODULE_STATES for row in state['modules']),
             'globalPins': pins,
             'pipelineRequestSha256': sha(request_raw),
             'pipelineStateSha256': sha(state_raw),

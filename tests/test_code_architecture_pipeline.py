@@ -79,3 +79,70 @@ class NativePipelineTests(unittest.TestCase):
         with patch.object(pipeline.modules,'_pin_stage',return_value=self.stage),patch.object(pipeline.modules,'run')as running:
             with self.assertRaises(ParseError)as error:pipeline.run(self.output)
         self.assertEqual(error.exception.code,'CODE_NATIVE_SOURCE');running.assert_not_called()
+
+    def test_continuation_reuses_exact_terminal_receipts_without_mutating_predecessor(self):
+        self.prepare()
+        old_request=(self.output/'request.json').read_bytes()
+        from monkey.io import load
+        state=load((self.output/'state.json').read_bytes())
+        terminal=self.output/state['modules'][0]['task'];terminal.mkdir(parents=True)
+        raw=encoded({'moduleId':'Core'});(terminal/pipeline.modules.MANIFEST).write_bytes(raw)
+        state['modules'][0].update(status='generated_unreviewed',manifestSha256=sha(raw))
+        state['status']='blocked';pipeline.modules._save(self.output/'state.json',state)
+        old_state=(self.output/'state.json').read_bytes();next_root=self.base/'Continuation'
+        with patch.object(pipeline.modules,'_pin_stage',return_value=self.stage), \
+             patch.object(pipeline.modules,'status',return_value=dict(status='generated_unreviewed',manifestSha256=sha(raw))), \
+             patch.object(pipeline.modules,'run') as running:
+            report=pipeline.continue_run(self.output,next_root,['UI'],stop_after_module='UI')
+            request=load((next_root/'request.json').read_bytes())
+            self.assertEqual(pipeline.task_root(next_root,report['modules'][0],request),terminal)
+            self.assertEqual(report['modules'][1]['status'],'pending')
+            self.assertEqual(request['moduleOrder'],['Core','UI'])
+            self.assertEqual(request['stopAfterModule'],'UI')
+            running.assert_not_called()
+            (terminal/pipeline.modules.MANIFEST).write_bytes(b'changed')
+            with self.assertRaises(ParseError):pipeline.task_root(next_root,report['modules'][0],request)
+        self.assertEqual((self.output/'request.json').read_bytes(),old_request)
+        self.assertEqual((self.output/'state.json').read_bytes(),old_state)
+
+    def test_continuation_rejects_running_predecessor_and_invalid_priorities(self):
+        self.prepare()
+        from monkey.io import load
+        state=load((self.output/'state.json').read_bytes());state['status']='running'
+        pipeline.modules._save(self.output/'state.json',state)
+        with patch.object(pipeline.modules,'_pin_stage',return_value=self.stage):
+            with self.assertRaises(ParseError):pipeline.continue_run(self.output,self.base/'New',['UI'])
+            state['status']='blocked';pipeline.modules._save(self.output/'state.json',state)
+            for priority in (['UI','UI'],['absent']):
+                with self.assertRaises(ParseError):pipeline.continue_run(self.output,self.base/'New',priority)
+        self.assertFalse((self.base/'New').exists())
+
+    def test_core_integration_checkpoint_stops_between_modules_then_resumes_full_scope(self):
+        self.prepare()
+        from monkey.io import load
+        request=load((self.output/'request.json').read_bytes());request['stopAfterModule']='Core'
+        pipeline.modules._save(self.output/'request.json',request)
+        def preparing(*args,**kwargs):Path(args[2]).mkdir(parents=True)
+        with patch.object(pipeline.modules,'_pin_stage',return_value=self.stage), \
+             patch.object(pipeline.modules,'prepare',side_effect=preparing), \
+             patch.object(pipeline.modules,'status',return_value=dict(status='prepared')), \
+             patch.object(pipeline.modules,'run',return_value=dict(status='generated_unreviewed',manifestSha256='d'*64)) as running, \
+             patch.object(pipeline,'_collect') as collecting:
+            report=pipeline.run(self.output)
+            self.assertEqual(report['status'],'integration_checkpoint')
+            self.assertEqual(running.call_count,1);collecting.assert_not_called()
+            self.assertEqual(report['modules'][1]['status'],'pending')
+        # The stop marker belongs to the completed module, so the next run does
+        # not replay it or stop before starting the remaining full scope.
+        def assemble(*args,**kwargs):
+            target=Path(args[8]);target.mkdir();(target/'manifest.json').write_bytes(encoded(dict(status='partial')))
+            return dict(status='partial')
+        with patch.object(pipeline.modules,'_pin_stage',return_value=self.stage), \
+             patch.object(pipeline.modules,'prepare',side_effect=preparing), \
+             patch.object(pipeline.modules,'status',return_value=dict(status='prepared')), \
+             patch.object(pipeline.modules,'run',return_value=dict(status='generated_unreviewed',manifestSha256='e'*64)) as running, \
+             patch.object(pipeline,'_collect',return_value=(self.output/'Implementation','d'*64)), \
+             patch('monkey.code_architecture_candidate.assemble_native_candidate',side_effect=assemble):
+            report=pipeline.run(self.output)
+            self.assertEqual(running.call_count,1)
+            self.assertEqual(report['status'],'candidate_assembled_unvalidated')

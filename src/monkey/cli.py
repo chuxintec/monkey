@@ -234,8 +234,13 @@ def main(argv=None):
     for command in ('code-native-run','code-native-status'):
         p=sub.add_parser(command,help='Run ready modules serially through candidate assembly, or read durable progress')
         p.add_argument('--run',required=True)
+    p=sub.add_parser('code-native-continue',help='Version a stopped module schedule, reusing pinned terminal outputs and prioritizing unfinished core modules')
+    p.add_argument('--run',required=True);p.add_argument('--out',required=True)
+    p.add_argument('--priority',action='append',required=True)
+    p.add_argument('--stop-after',help='Natural module boundary for integration; a later run continues the remaining full scope')
     p=sub.add_parser('code-native-reassemble',help='Read-only reclassify terminal module outputs and assemble a fresh unvalidated candidate')
     p.add_argument('--run',required=True);p.add_argument('--out',required=True)
+    p.add_argument('--allow-incomplete',action='store_true',help='Explicit stopped integration checkpoint; preserve all ungenerated classes as missing, never fabricate shells')
     p=sub.add_parser('code-native-revise',help='Apply a hash-pinned C# ownership revision to a fresh native candidate')
     p.add_argument('--candidate',required=True);p.add_argument('--expected-manifest',required=True)
     p.add_argument('--revision',required=True);p.add_argument('--expected-revision',required=True);p.add_argument('--out',required=True)
@@ -472,7 +477,7 @@ def main(argv=None):
                 manifestPath=str(path),manifestSha256=sha(read(path,max_bytes=128*1024*1024)),fileCount=len(manifest['files']),
                 revisionId=revision['revisionId'],revisionPlanSha256=revision['revisionPlanSha256'],changedFileCount=len(revision['changes']),
                 compileStatus=manifest['compileStatus'],runtimeStatus=manifest['runtimeStatus']),ensure_ascii=False));return 0
-        if args.command in ('code-native-prepare','code-native-run','code-native-status','code-native-reassemble'):
+        if args.command in ('code-native-prepare','code-native-run','code-native-status','code-native-reassemble','code-native-continue'):
             from . import code_architecture_pipeline as native
             if args.command=='code-native-prepare':
                 from .io import load,read,safe
@@ -480,11 +485,12 @@ def main(argv=None):
                 result=native.prepare(args.architecture,args.out,codex=args.codex,timeout_seconds=args.budget_seconds,
                     idle_seconds=args.idle_seconds,external_references=references,retained_support_paths=args.retained_support_path)
             elif args.command=='code-native-run':result=native.run(args.run)
+            elif args.command=='code-native-continue':result=native.continue_run(args.run,args.out,args.priority,stop_after_module=args.stop_after)
             elif args.command=='code-native-reassemble':
                 from .code_architecture_reassembly import reassemble
-                result=reassemble(args.run,args.out)
+                result=reassemble(args.run,args.out,allow_incomplete=args.allow_incomplete)
             else:result=native.status(args.run)
-            print(json.dumps(result,ensure_ascii=False));return 0 if result['status']in ('prepared','candidate_assembled_unvalidated')or args.command=='code-native-status' else 1
+            print(json.dumps(result,ensure_ascii=False));return 0 if result['status']in ('prepared','candidate_assembled_unvalidated','integration_checkpoint')or args.command=='code-native-status' else 1
         if args.command in ('code-architecture-module-prepare','code-architecture-module-run','code-architecture-module-status','code-architecture-module-recheck'):
             from . import code_architecture_modules as module
             if args.command=='code-architecture-module-prepare':

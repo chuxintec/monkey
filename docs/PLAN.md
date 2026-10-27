@@ -7,6 +7,14 @@
 
 ### 当前执行记录（2026-10-27 架构阶段）
 
+**当前主链（§7纠偏）**：已核验总监人类turn `01a17c1d-92eb-7df2-9a66-3b03bf87c8ce` / human `01a17c1d-9448-7822-903e-d4fe113396ab`及Manager计划§7。NativeProject01在31份终态结果后安全收尾：当前模型自然退出，父取得既有worker互斥锁阻止下一模型启动，supervisor因`POSTPROCESS_BUSY`退出；Production仅prepared，无进程被杀、旧request/终态模块未改。新公开`code-native-continue`生成`.private/v060-architecture-first-20261027/NativeCorePriority02`，以旧request/state与31模块manifest pins原位复用，不复制私有context、不重跑31模型；优先Content→Production→Orders→Street→Tutorial→Bootstrap，在Bootstrap自然结束后返回integration_checkpoint供集成。剩余ProgressBoard/Settings/SmileBuff/Social/SurpriseBox/UpgradeRace/WeekTask/WeightRace/WoodGame/GooseSimulation全部保留，下一次run继续，不缩范围。当前Content模型实际运行；旧47终态后才集成的安排被覆盖。
+
+当前完整可编译候选**尚未产生**：冻结资源基线为`.private/v060-draft-quality-20261026/FullDraftCandidate07/UnityProject`；新完整架构实现在上述NativeCorePriority02加只读复用的NativeProject01模块；首个核心整合目标为`.private/v060-architecture-first-20261027/NativeCoreIntegration01/UnityProject`（待主链模块/修订到齐创建，不宣称目录已存在）。`code-native-reassemble --allow-incomplete`现可在停止的集成检查点生成含全资源/全classPaths且明确missing的候选，不伪造未生成类型；普通reassemble仍要求全部终态。50项candidate/revision/pipeline/reassembly定向检查通过。
+
+首条链仍具体缺：Content实际TextAsset端口/配置聚合，Board.element源冒号格式→真实CellState初值，Session核心唯一写者/本地文件恢复与MergeBoardController有效提交，原生Toucher与Render真实绑定/刷新，以及Bootstrap装配。已实现可复用部分为严格JSON reader与Session/Audio/Inventory等表工厂、MergeBoard的Select/BeginDrag/Move/Cancel规则及PointerRouter、string AccountId/long RoleId分离的版本化本地store；现Controller仍整体Unavailable、原View.Render仅保存Snapshot，不能报主链通过。会话/配置/Presentation三个模块正协同补这些缺口；Production/Orders/Street在新优先队列生成，不能因未知原服把本地交互全部禁用。合法测试角色须显式candidate-local-test且不冒充远端认证/奖励；合成2×2只能单测，不能代替真实配置主链。完整工程编译/运行仍not_run。
+
+非主链专项暂停新增：音频Integration03未写入；派生资源producer两文件未验证WIP完整封存在`CorePriorityHandoff01/DeferredResourceProducerWip01`，未接CLI。已完成音频/进度条/公式/绑定证据保留并复用，不继续扩向量或重验。Unity授权分流已成功且窗口结束，不需用户重新登录；不再为同一问题重启Editor。
+
 NativeAudioNativeProbe01实际原生验收通过：Unity6000.6.2f1导入357路径（356冻结Content+1有receipt的派生WAV），0失败；67 cue、31个独立AudioSource的序列化引用、Prefab保存重开及service可用性通过。方法16秒、own launcher退出0且回收，窗口结束后无Editor残留。633源音频行重新哈希全一致、冻结07 manifest不变。首轮沙箱因授权数据库只读在方法前退出198，保留失败记录；只读核实既有Unity Personal有效后，正常用户运行时权限复测通过，无激活/安装。隔离probe锁文件仅内置audio依赖depth从1变0，版本仍1.0.0；记录差异，不篡改原ownership。`Evidence/latest-editor-probe.json` SHA `5edafc7e35691fa3a200f294dd3081ac224288ecf2daacc9bd04e17110abe985`，postrun回执固定输入与输出。没有调用Play，声音播放/游戏触发/整工程仍未验收。
 
 当前29/47终态、Playable运行中（实时以run为准）。AudioControllerRevision02显式JSON初值及74组件断言通过，legacy Session测试替身明确排除候选；继续NativeAudioIntegration03修正本地播放/停播与cue前缀，不能以gain0冒充停播。NativeServicesContent06接实际Inventory聚合/singleton与reader，不发明配置键。通用新增资源producer开发中，仅向fresh candidate新增有pin的JSON/WAV及派生meta，不借C# revision偷写资源或修改旧07。

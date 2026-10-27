@@ -18,4 +18,17 @@ Next stages generate native assemblies and module tasks, implement the source-ba
 
 After a designed architecture is accepted, `code-native-prepare --architecture STAGE --out NEW_PIPELINE` prepares every module. `code-native-run --run NEW_PIPELINE` executes them serially, resumes precise saved checkpoints, pins their outputs, and assembles an isolated Unity candidate. `code-native-status --run NEW_PIPELINE` reads progress. Existing native layout helpers and package assembly references require explicit retained paths/reference input; old anonymous drafts do not enter the production code directories. Module output remains unreviewed, incomplete classes remain explicit, and the assembled candidate is unvalidated until whole-project compilation and real cross-layer integration run.
 
+Core configuration, transactions, input and Bootstrap should be integrated before peripheral feature generation finishes. If an existing schedule puts these last, let its active worker finish and stop the supervisor at a safe boundary, then prepare a new schedule:
+
+```sh
+.venv/bin/python -m monkey.cli code-native-continue --run STOPPED_PIPELINE \
+  --out NEW_PIPELINE --priority Content --priority Orders --priority Bootstrap \
+  --stop-after Bootstrap
+.venv/bin/python -m monkey.cli code-native-run --run NEW_PIPELINE
+.venv/bin/python -m monkey.cli code-native-reassemble --run NEW_PIPELINE \
+  --out NEW_CHECKPOINT --allow-incomplete
+```
+
+Continuation pins the predecessor request/state and reuses terminal module receipts in place, without copying source contexts, changing old requests, or repeating their model calls. Every unfinished module remains scheduled; priorities change execution order, not scope. `--stop-after` returns `integration_checkpoint` only after that module finishes naturally. A later `code-native-run` continues the remaining modules. Explicit incomplete reassembly requires a stopped supervisor, records unfinished classes as missing and creates no placeholder types. It produces an unvalidated integration candidate, not a complete or compiled game. Mutated reused receipts or predecessor state are rejected.
+
 A finalized model plan can be checked again with `code-architecture-recheck --run STAGE` after validator repairs without a model call. Architecture JSON may use the existing 16MiB worker output bound; normal source/context files keep their 8MiB limit. Accepted model payload bytes are preserved exactly. Module contexts shard the complete architecture by module, retaining all class records and global coverage/chain metadata. `code-architecture-refine --run OLD_STAGE --out NEW_STAGE` prepares a bounded consistency repair with the previous exact model payload, immutable original context, recorded diagnostics and lineage; it never overwrites the previous result or marks ownership inconsistencies as recovered behavior.

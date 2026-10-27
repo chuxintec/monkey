@@ -15,6 +15,76 @@ from .io import encoded, inside, read, safe, sha
 from .output_limits import copy_verified
 from .sources.compiled import fail
 
+TERMINAL = frozenset({'generated_unreviewed','partial_unimplemented_seed','evidence_only'})
+
+
+def task_root(root, item, request=None):
+    """Resolve an immutable reused task without copying its private evidence."""
+    request = request or modules._json(root/'request.json')
+    reused = request.get('reusedModules', {}).get(item['id'])
+    if reused is None:
+        return inside(root,item['task'])
+    if item['status'] not in TERMINAL or reused.get('manifestSha256') != item.get('manifestSha256'):
+        fail('CODE_NATIVE_REUSE',item['id'],'Only a pinned terminal module can be reused')
+    path=safe(reused['root'])
+    if sha(read(path/modules.MANIFEST,worker.FILE_BYTES)) != reused['manifestSha256']:
+        fail('CODE_NATIVE_REUSE',item['id'],'Reused module receipt changed')
+    return path
+
+
+def continue_run(previous_root, output, priority_modules, *, stop_after_module=None):
+    """Version a stopped schedule; preserve old requests and reuse terminal outputs."""
+    previous=safe(previous_root);root=safe(output)
+    if root.exists() or root==previous or root.is_relative_to(previous) or previous.is_relative_to(root):
+        fail('CODE_NATIVE_OUTPUT',str(root),'Continuation requires a fresh non-overlapping directory')
+    with (previous/'pipeline.lock').open('a+b') as lock:
+        try:fcntl.flock(lock.fileno(),fcntl.LOCK_EX|fcntl.LOCK_NB)
+        except BlockingIOError:fail('CODE_NATIVE_BUSY',str(previous),'Wait for the previous supervisor to exit naturally')
+        request_raw=read(previous/'request.json',128*1024*1024)
+        state_raw=read(previous/'state.json',128*1024*1024)
+        request=modules._json(previous/'request.json');state=modules._json(previous/'state.json')
+        stage=_stage(previous,request)
+        for source in (safe(stage['root']),safe(stage['request']['sourceRoot'])):
+            if root==source or root.is_relative_to(source) or source.is_relative_to(root):
+                fail('CODE_NATIVE_OUTPUT',str(root),'Continuation must not overlap architecture or frozen source')
+        if state.get('status')=='running':fail('CODE_NATIVE_BUSY',str(previous),'Previous supervisor is not recorded as stopped')
+        rows=state.get('modules',[]);ids=[row['id'] for row in rows]
+        if ids!=request.get('moduleOrder') or set(ids)!={m['id'] for m in stage['plan']['modules']} or len(set(ids))!=len(ids):
+            fail('CODE_NATIVE_REUSE',str(previous),'Previous module order/coverage differs from the architecture')
+        if not isinstance(priority_modules,(list,tuple)) or not priority_modules:
+            fail('CODE_NATIVE_PRIORITY',str(root),'An explicit priority list is required')
+        priorities=list(priority_modules)
+        if len(set(priorities))!=len(priorities) or any(mid not in ids for mid in priorities):
+            fail('CODE_NATIVE_PRIORITY',str(root),'Priority modules must be unique existing architecture IDs')
+        pending=[row['id'] for row in rows if row['status'] not in TERMINAL]
+        if stop_after_module is not None and stop_after_module not in pending:
+            fail('CODE_NATIVE_PRIORITY',str(root),'Stop-after must name an unfinished module')
+        completed=[row for row in rows if row['status'] in TERMINAL];reused={}
+        for row in completed:
+            if row['status']=='evidence_only':continue
+            path=task_root(previous,row,request);current=modules.status(path)
+            if root==path or root.is_relative_to(path) or path.is_relative_to(root):
+                fail('CODE_NATIVE_OUTPUT',str(root),'Continuation must not overlap reused module evidence')
+            if current['status']!=row['status'] or current['manifestSha256']!=row.get('manifestSha256'):
+                fail('CODE_NATIVE_REUSE',row['id'],'Terminal module bytes/state differ from the saved receipt')
+            reused[row['id']]=dict(root=str(path),manifestSha256=current['manifestSha256'])
+        order=[row['id'] for row in completed]+[mid for mid in priorities if mid in pending]+[mid for mid in pending if mid not in priorities]
+        next_rows=[];by_id={row['id']:row for row in completed}
+        for index,mid in enumerate(order):
+            row=dict(by_id[mid]) if mid in by_id else dict(id=mid,status='pending')
+            row['task']=f'Modules/{index+1:04d}';next_rows.append(row)
+        next_request={**request,'moduleOrder':order,'reusedModules':reused,'createdAt':time.time(),
+            'continuation':dict(schemaVersion=1,previousRoot=str(previous),previousRequestSha256=sha(request_raw),
+                previousStateSha256=sha(state_raw),previousOrder=ids,priorityModules=priorities),
+            'stopAfterModule':stop_after_module}
+        # Re-pin the old inputs immediately before publishing the new schedule.
+        if read(previous/'request.json',128*1024*1024)!=request_raw or read(previous/'state.json',128*1024*1024)!=state_raw:
+            fail('CODE_NATIVE_REUSE',str(previous),'Previous schedule changed during continuation preparation')
+        root.mkdir(parents=True)
+        modules._save(root/'request.json',next_request)
+        modules._save(root/'state.json',dict(status='prepared',modules=next_rows,implementation='in_progress',compilation='not_run',runtime='not_run'))
+    return status(root)
+
 
 def module_order(plan):
     """Prefer implemented dependencies; retain cycles as explicit contract edges."""
@@ -58,6 +128,12 @@ def _stage(root,request):
     stage=modules._pin_stage(request['architectureStage'])
     if stage['pins']!={key:request.get(key)for key in stage['pins']}:
         fail('CODE_NATIVE_SOURCE',str(root),'Global architecture or frozen source identity changed')
+    prior=request.get('continuation')
+    if prior:
+        old=safe(prior['previousRoot'])
+        if (sha(read(old/'request.json',128*1024*1024))!=prior['previousRequestSha256'] or
+                sha(read(old/'state.json',128*1024*1024))!=prior['previousStateSha256']):
+            fail('CODE_NATIVE_REUSE',str(old),'Frozen predecessor schedule changed after continuation')
     return stage
 
 
@@ -70,7 +146,7 @@ def _collect(root,stage,state):
     for item in state['modules']:
         module_rows.append(dict(id=item['id'],status='partial' if item['status']!='evidence_only' else 'evidence_only'))
         if item['status']=='evidence_only':continue
-        task=inside(root,item['task']);report=modules.status(task)
+        task=task_root(root,item);report=modules.status(task)
         if report['manifestSha256']!=item['manifestSha256']:
             fail('CODE_NATIVE_MODULE',str(task),'Module receipt changed after generation')
         manifest=modules._json(task/modules.MANIFEST)
@@ -112,7 +188,7 @@ def run(output):
                 item.update(status='evidence_only');modules._save(root/'state.json',state);continue
             try:
                 if not task.exists():
-                    dependencies=[str(inside(root,prior['task']))for prior in state['modules']if prior['status']in ('generated_unreviewed','partial_unimplemented_seed')]
+                    dependencies=[str(task_root(root,prior,request))for prior in state['modules']if prior['status']in ('generated_unreviewed','partial_unimplemented_seed')]
                     modules.prepare(stage['root'],item['id'],task,dependency_roots=dependencies,codex=request['codex'],
                         timeout_seconds=request['timeoutSeconds'],idle_seconds=request['idleSeconds'])
                 current=modules.status(task)
@@ -128,6 +204,10 @@ def run(output):
                 state.update(status='blocked',blocker=current.get('blocker')or current.get('reason')or current['status'])
                 modules._save(root/'state.json',state);return status(root)
             item.update(status=current['status'],manifestSha256=current['manifestSha256']);modules._save(root/'state.json',state)
+            if item['id']==request.get('stopAfterModule'):
+                state.update(status='integration_checkpoint',implementation='model_outputs_unreviewed')
+                state.pop('activeModule',None);modules._save(root/'state.json',state)
+                return status(root)
         aggregate,pin=_collect(root,stage,state)
         from .code_architecture_candidate import assemble_native_candidate
         assembled=assemble_native_candidate(stage['request']['sourceRoot'],request['sourceManifestSha256'],stage['root']/'architecture.json',
