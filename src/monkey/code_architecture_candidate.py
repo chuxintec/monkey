@@ -26,7 +26,7 @@ MAX_MANIFEST = 128 * 1024 * 1024
 SHA_RE = re.compile(r'^[0-9a-f]{64}$')
 NATIVE_LAYOUT_SUPPORT = frozenset({
     'IntrinsicGridLayoutGroup', 'NativeLinearLayoutGroup',
-    'NativeRectConstraints', 'NativeTextLineBox',
+    'NativeRectConstraints', 'NativeTextLineBox', 'NativeHorizontalProgressFill',
 })
 
 
@@ -327,7 +327,7 @@ def assemble_native_candidate(candidate_root, candidate_manifest_sha256,
         path = _relative(value, 'retained_support_paths')
         match = re.fullmatch(r'Assets/Game/Presentation/Common/Layout/([A-Za-z_][A-Za-z0-9_]*)(\.cs(?:\.meta)?|\.meta)', path)
         if not match or match.group(1) not in NATIVE_LAYOUT_SUPPORT:
-            _fail('SUPPORT_PATHS', path, 'Only the four approved native Presentation/Common/Layout helpers may be retained')
+            _fail('SUPPORT_PATHS', path, 'Only approved native Presentation/Common/Layout helpers may be retained')
         support_pairs.setdefault(match.group(1), set()).add(match.group(2))
     for name, suffixes in support_pairs.items():
         if suffixes != {'.cs', '.cs.meta'}:

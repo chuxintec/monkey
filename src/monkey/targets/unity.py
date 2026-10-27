@@ -191,7 +191,7 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
             if cursor['sourceId'] in seen:
                 fail('NODE_CYCLE',n['sourceId'],'Parent cycle')
             seen.add(cursor['sourceId']);cursor=next(v for v in nodes if v['sourceId']==cursor['parent'])
-    native_types={'cc.Sprite','cc.Label','cc.Widget','cc.Mask','cc.ScrollView','cc.Layout','cc.Button','cc.LabelOutline'}
+    native_types={'cc.Sprite','cc.Label','cc.Widget','cc.Mask','cc.ScrollView','cc.Layout','cc.Button','cc.LabelOutline','cc.ProgressBar'}
     native_materials={f['sourceId'] for f in ir.get('materials',[]) if f['nativeRole']=='standard-ugui'}
     def resolve_id(value):
         seen=set()
@@ -332,6 +332,8 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
                 c[state+'ClipPath']=naming.derived_path(c['sourceId']+'@'+state,c['controllerPath'],'_'+state,'.anim')
     from .common import reject_layout_conflicts
     diagnostics.extend(reject_layout_conflicts(components))
+    from .progress import configure_progress
+    diagnostics.extend(configure_progress(components,by_node))
     from ..assets.animation import plan_clips
     animations,animation_gaps=plan_clips(ir,namespace,PROFILE,animation_selection,naming)
     if animation_selection:
@@ -402,7 +404,7 @@ def export(plan_path, output):
             ('IntrinsicGridLayoutGroup.cs',standard.UNITY_LAYOUT_DIR+'/IntrinsicGridLayoutGroup.cs','intrinsic-grid-script'),
             ('UnityNumericCode.cs',standard.unity('numericCode'),'numeric-code-editor'),
             ('UnityPrefabInstances.cs',standard.unity('prefabInstances'),'prefab-instances-editor'),
-            *[(name,standard.UNITY_LAYOUT_DIR+'/'+name,'native-ui/'+name) for name in ('NativeLinearLayoutGroup.cs','NativeRectConstraints.cs','NativeTextLineBox.cs')],
+            *[(name,standard.UNITY_LAYOUT_DIR+'/'+name,'native-ui/'+name) for name in ('NativeLinearLayoutGroup.cs','NativeRectConstraints.cs','NativeTextLineBox.cs','NativeHorizontalProgressFill.cs')],
             ('UnityDynamicUi.cs',standard.unity('dynamicUi'),'native-ui/UnityDynamicUi.cs'),
             ('UnityButtonAnimations.cs',Path(standard.unity('importer')).with_name('NativeButtonAnimations.cs').as_posix(),'button-animations-editor'),
             ('UnityImporter.cs',standard.unity('importer'),'editor-adapter')]:

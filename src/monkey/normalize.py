@@ -435,6 +435,15 @@ def component_ir(namespace, index, obj):
         base.update(content=ref(obj.get('_N$content'),namespace),horizontal=obj.get('horizontal',True),vertical=obj.get('vertical',True))
         known={'_N$content','horizontal','vertical','_N$horizontalScrollBar','_N$verticalScrollBar','bounceDuration','brake','elastic','inertia','scrollEvents','cancelInnerEvents'}
         if obj.get('scrollEvents'):gaps.append('scroll events need business binding')
+    elif typ == 'cc.ProgressBar':
+        # Do not supply direction or progress defaults: omitted aliases require
+        # the target planner to prove the supported geometry independently.
+        base.update(barSprite=ref(obj.get('_N$barSprite'),namespace),
+                    progress=obj.get('_N$progress'),totalLength=obj.get('_N$totalLength'),
+                    progressMode=obj.get('_N$mode'),progressReverse=obj.get('_N$reverse'))
+        known={'_N$barSprite','_N$progress','_N$totalLength','_N$mode','_N$reverse','_materials'}
+        if any(key not in obj for key in ('_N$barSprite','_N$progress','_N$totalLength')):
+            gaps.append('progress needs explicit source bar, progress and total length')
     elif typ == 'cc.Layout':
         if '_N$cellSize'in obj and '_cellSize'in obj and vector(obj['_N$cellSize'],['width','height'],[40,40])!=vector(obj['_cellSize'],['width','height'],[40,40]):
             fail('CONFLICTING_LAYOUT_CELL_SIZE',str(index),'Source cell-size aliases disagree')

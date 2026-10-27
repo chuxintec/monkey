@@ -49,6 +49,7 @@ public static partial class MonkeyImporter
     [Serializable] public class ComponentSpec {
         public string codeClassName,codeNamespace,codeScriptGuid,sourceScriptIdentity; public NumericMethodsSpec numericMethods;
         public string sourceId, type, node, spriteFrame, font, text, nativeLayoutMode;
+        public string barNode; public float progress,totalLength;
         public float[] nativeCellSize;
         public int mode, sizeMode, horizontalAlign, verticalAlign, overflow; public float fontSize,lineHeight;
         public bool enabled, convertible, trim, wrap, bold, italic; public float spacing; public BitmapProbe bitmapProbe;
@@ -627,6 +628,22 @@ public static partial class MonkeyImporter
                 scroll.content=(RectTransform)nodeMap[spec.content].transform;scroll.viewport=(RectTransform)scroll.content.parent;
                 scroll.horizontal=spec.horizontal;scroll.vertical=spec.vertical;scroll.inertia=false;
             }
+            else if(spec.type=="cc.ProgressBar") {
+                var fill=(RectTransform)nodeMap[spec.barNode].transform;
+                var image=fill.GetComponent<UnityEngine.UI.Image>();
+                if(image==null || image.sprite==null || image.type!=UnityEngine.UI.Image.Type.Tiled || fill.parent!=rect ||
+                    go.GetComponent<UnityEngine.UI.Selectable>()!=null ||
+                    Mathf.Abs(fill.rect.width-spec.totalLength*spec.progress)>.01f)
+                    throw new InvalidOperationException("Progress source geometry/component conflict: "+spec.sourceId);
+                var slider=go.AddComponent<UnityEngine.UI.Slider>();
+                slider.transition=UnityEngine.UI.Selectable.Transition.None;
+                slider.navigation=new UnityEngine.UI.Navigation {mode=UnityEngine.UI.Navigation.Mode.None};
+                slider.interactable=false;slider.fillRect=null;slider.handleRect=null;
+                slider.minValue=0;slider.maxValue=1;slider.wholeNumbers=false;slider.normalizedValue=spec.progress;
+                var driver=go.AddComponent<NativeHorizontalProgressFill>();
+                driver.Configure(slider,fill,spec.totalLength);
+                driver.enabled=spec.enabled;slider.enabled=spec.enabled;
+            }
             else if(spec.type=="cc.Button") {
                 var button=go.AddComponent<UnityEngine.UI.Button>();button.enabled=spec.enabled;button.interactable=spec.interactable;
                 button.targetGraphic=go.GetComponent<UnityEngine.UI.Graphic>();
@@ -718,6 +735,12 @@ public static partial class MonkeyImporter
                         var button=go.GetComponent<UnityEngine.UI.Button>();valid=button!=null&&button.targetGraphic==go.GetComponent<UnityEngine.UI.Graphic>();
                     } else if(c.type=="cc.ScrollView") {
                         var scroll=go.GetComponent<UnityEngine.UI.ScrollRect>();valid=scroll!=null&&mapped.ContainsKey(c.content)&&scroll.content==mapped[c.content];
+                    } else if(c.type=="cc.ProgressBar") {
+                        var slider=go.GetComponent<UnityEngine.UI.Slider>();
+                        var driver=go.GetComponent<NativeHorizontalProgressFill>();
+                        valid=slider!=null&&driver!=null&&driver.Progress==slider&&mapped.ContainsKey(c.barNode)&&
+                            driver.Fill==mapped[c.barNode]&&Mathf.Abs(driver.FullLength-c.totalLength)<.001f&&
+                            Mathf.Abs(slider.normalizedValue-c.progress)<.0001f&&slider.fillRect==null&&slider.handleRect==null&&!slider.interactable;
                     } else if(c.type=="cc.Mask")valid=go.GetComponent<UnityEngine.UI.RectMask2D>()!=null;
                     else if(c.type=="cc.Layout")valid=go.GetComponent<UnityEngine.UI.LayoutGroup>()!=null;
                     if(!valid)referenceFailures.Add(c.sourceId);

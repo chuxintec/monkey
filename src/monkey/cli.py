@@ -552,8 +552,8 @@ def main(argv=None):
             result=write_selection(args.source,args.selectors,args.out,type_evidence=args.type_evidence,module_profile=args.module_profile)
             print(json.dumps(result,ensure_ascii=False));return 0 if result['status']=='selected_ready' else 1
         if args.command == 'unity-code-source':
-            from .unity_code_sources import inspect
-            result=inspect(args.source,args.out,expected_sha256=args.expected_source,family=args.family,provider=args.provider,metadata=args.metadata,method_map=args.method_map,expected_metadata_sha256=args.expected_metadata,expected_method_map_sha256=args.expected_method_map)
+            from .unity_code_sources import inspect as inspect_code_source
+            result=inspect_code_source(args.source,args.out,expected_sha256=args.expected_source,family=args.family,provider=args.provider,metadata=args.metadata,method_map=args.method_map,expected_metadata_sha256=args.expected_metadata,expected_method_map_sha256=args.expected_method_map)
             print(json.dumps(result,ensure_ascii=False));return 1
         if args.command == 'unity-code-candidate':
             from .unity_code_candidate import prepare_candidate
