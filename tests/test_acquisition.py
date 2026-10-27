@@ -155,7 +155,12 @@ class AcquisitionTests(unittest.TestCase):
                 seen.append(candidate)
                 return dict(processExited=True,nativeProgress=dict(status='completed'),verification=dict(editor='pass',diagnostics=0))
             stream=io.StringIO()
-            with contextlib.redirect_stdout(stream),patch.object(acquisition,'build_opener',return_value=Opener()),patch.object(orchestration,'native_import',side_effect=native):
+            original_write_text=Path.write_text
+            def portable_write_text(path,data,*args,**kwargs):
+                encoding=kwargs.get('encoding',args[0] if args else None)
+                if not data.isascii():self.assertEqual(encoding,'utf-8','Unicode output must not depend on the host locale')
+                return original_write_text(path,data,*args,**kwargs)
+            with contextlib.redirect_stdout(stream),patch.object(Path,'write_text',portable_write_text),patch.object(acquisition,'build_opener',return_value=Opener()),patch.object(orchestration,'native_import',side_effect=native):
                 code=main(['convert','--input-set',str(selection['path']),'--remote-manifest',str(manifest),'--target','both','--out',str(root/'candidate'),
                            '--native','--unity-editor',editors[0],'--creator-editor',editors[1]])
             result=json.loads(stream.getvalue());self.assertEqual(code,1);self.assertEqual(len(seen),2)

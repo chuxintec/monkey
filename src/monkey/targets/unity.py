@@ -438,7 +438,7 @@ def export(plan_path, output):
         '仅首次导入新候选；已生成 Prefab/Scene 存在时拒绝覆盖。\n'
         '或用独立 batchmode -projectPath 此目录 -executeMethod MonkeyImporter.ImportBatch。\n'
         '导入成功后删除 '+standard.ROOTS['unity']['conversion']+' 仍保留原生可编辑资产；Player 不读取转换 JSON。\n'
-        '真实编辑器/画面对照/业务尚未验证，见 Analysis。\n')
+        '真实编辑器/画面对照/业务尚未验证，见 Analysis。\n',encoding='utf-8')
     from ..assets.animation import module_report
     write_json(find_analysis(out,'animation-module.json'),module_report(p.get('animations',[])))
     groups={}
