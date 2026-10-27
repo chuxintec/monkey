@@ -6,6 +6,7 @@ from . import __version__
 from .io import safe, inside, read, load, sha, encoded, new_output, finish, write_json, diagnostic, stage_document, stage_bytes
 from .sources.compiled import fail, ParseError
 from .assets.bitmap import normalize_font
+from .assets.audio import AudioDecodeError, decode_m4a
 
 MAX_PIXELS = 16_777_216
 Image.MAX_IMAGE_PIXELS = MAX_PIXELS
@@ -83,7 +84,7 @@ def sprite(atlas, frame):
                               colorSpace='unknown', premultipliedAlpha='unknown')
 
 
-def normalize(manifest_path, output):
+def normalize(manifest_path, output, *, audio_provider=None):
     manifest_path = safe(manifest_path)
     m = stage_document(manifest_path)
     if m.get('sourceProfile') not in ('cocos-2.4.15-bundle','cocos-2.4.15-project','cocos-3.8.7-bundle','cocos-3.4.1-bundle','cocos-2.4.11-bundle','cocos-2.1.2-resource') or m.get('schemaVersion') != 1:
@@ -198,7 +199,21 @@ def normalize(manifest_path, output):
                 path = asset.get('native')
                 if path and kind not in ('cc.Texture2D','cc.ImageAsset'):
                     suffix = Path(path).suffix.lower()
-                    if suffix in ('.ttf', '.mp3', '.wav', '.ogg', '.png', '.jpg', '.jpeg'):
+                    if kind == 'cc.AudioClip' and suffix == '.m4a':
+                        raw=checked(path,asset.get('bundle',m['bundle']))
+                        try:
+                            wav,audio_evidence=decode_m4a(raw,provider=audio_provider)
+                        except AudioDecodeError as error:
+                            issue=diagnostic(error.code,path,str(error),sid)
+                            issue['severity']='error'
+                            diagnostics.append(issue)
+                            continue
+                        target='assets/'+name+'.wav'
+                        (out/target).write_bytes(wav)
+                        result['assets'].append(dict(sourceId=sid,kind=kind,path=target,
+                            audioDecode=dict(sourcePath=path,sourceBundle=asset.get('bundle',m['bundle']),
+                                logicalPath=asset.get('logicalPath'),**audio_evidence)))
+                    elif suffix in ('.ttf', '.mp3', '.wav', '.ogg', '.png', '.jpg', '.jpeg'):
                         target = 'assets/' + name + suffix
                         raw=checked(path,asset.get('bundle',m['bundle']))
                         metadata={}
