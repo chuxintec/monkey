@@ -220,6 +220,30 @@ def main(argv=None):
     p.add_argument('--run',required=True);p.add_argument('--session')
     p=sub.add_parser('code-architecture-status',help='Read architecture-stage status without running a model')
     p.add_argument('--run',required=True)
+    p=sub.add_parser('code-architecture-recheck',help='Revalidate a saved finalized architecture patch without another model invocation')
+    p.add_argument('--run',required=True)
+    p=sub.add_parser('code-architecture-refine',help='Prepare a bounded ownership repair over a previous architecture output')
+    p.add_argument('--run',required=True);p.add_argument('--out',required=True);p.add_argument('--codex',default='/opt/homebrew/bin/codex')
+    p.add_argument('--budget-seconds',type=int,default=3600);p.add_argument('--idle-seconds',type=int,default=900)
+    p=sub.add_parser('code-native-prepare',help='Prepare all designed feature modules and one isolated five-layer candidate')
+    p.add_argument('--architecture',required=True);p.add_argument('--out',required=True)
+    p.add_argument('--codex',default='/opt/homebrew/bin/codex')
+    p.add_argument('--budget-seconds',type=int,default=3600);p.add_argument('--idle-seconds',type=int,default=900)
+    p.add_argument('--external-references-file',help='Explicit JSON layer-to-assembly reference map from verified installed packages')
+    p.add_argument('--retained-support-path',action='append',default=[],help='Explicit existing native layout helper and paired meta path retained from the frozen candidate')
+    for command in ('code-native-run','code-native-status'):
+        p=sub.add_parser(command,help='Run ready modules serially through candidate assembly, or read durable progress')
+        p.add_argument('--run',required=True)
+    p=sub.add_parser('code-architecture-module-prepare',help='Prepare one complete feature module from a designed architecture')
+    p.add_argument('--architecture',required=True);p.add_argument('--module',required=True);p.add_argument('--out',required=True)
+    p.add_argument('--dependency',action='append',default=[])
+    p.add_argument('--previous');p.add_argument('--expected-previous-manifest')
+    p.add_argument('--codex',default='/opt/homebrew/bin/codex')
+    p.add_argument('--budget-seconds',type=int,default=3600);p.add_argument('--idle-seconds',type=int,default=900)
+    for command in ('code-architecture-module-run','code-architecture-module-status'):
+        p=sub.add_parser(command,help='Run or inspect one isolated source-bound module task')
+        p.add_argument('--run',required=True)
+        if command.endswith('-run'):p.add_argument('--session')
     p = sub.add_parser('code-types',help='Extract only statically proven source types/dependencies and write named fillable evidence gaps')
     p.add_argument('--source',required=True);p.add_argument('--selectors',required=True);p.add_argument('--type-evidence');p.add_argument('--namespace');p.add_argument('--out',required=True)
     p = sub.add_parser('code-select',help='Select reviewed source methods, close typed dependencies and check actual lowering; no source execution')
@@ -379,7 +403,7 @@ def main(argv=None):
             from .output_limits import policy
             print(json.dumps(dict(version=__version__, profiles=[PROFILE,PROJECT_PROFILE,'cocos-2.4.11-bundle','cocos-3.8.7-bundle','cocos-3.4.1-bundle','cocos-2.1.2-resource','generic-image-resources-v1','egret-custom-resource-plist-v1'], targetProfiles=[UNITY_PROFILE,cocos.PROFILE],
                 ownership=dict(recoveryCandidates='monkey',developmentProjectOperations='beaver',workflow='GREA'),
-                codeRecovery=dict(status='partial',sourceExecution=False,lexicalGraph='complete-source-static-binding-and-utf8-spans',typedModules='explicit-source-class-method-hashes-and-call-domain',moduleProfiles=['foodstreet-demand-health-v1','foodstreet-motion-math-v1'],selection='optional-strict-typed-dependency-closure-and-lowering',methods='default-full-source-best-effort-CSharp-bodies;unknown-fragments-retained',fullDrafts=dict(commands=['code-draft','convert'],typeContractRequired=False,sourceMethods='all-indexed-plus-auxiliary-functions',fields='known-class-or-unresolved-owner-binding',diagnostics='source-linked-bounded-shards',compilation='excluded;syntax-and-API-errors-allowed'),projectPostprocess=dict(commands=['code-project-prepare','code-project-run','code-project-status','code-project-resume','code-project-pause','code-project-configure','code-project-recheck'],scope='all-manifest-owned-CSharp-files',execution='single-CLI-continuous-batches;per-batch-limits;exact-session',status='legacy-file-repair;active-run-superseded'),nativeArchitecture=dict(commands=['code-architecture-prepare','code-architecture-run','code-architecture-status'],scope='complete-frozen-source-modules-members-and-resources',layers=['Bootstrap','Domain','Gameplay','Presentation','Services'],execution='single-existing-Codex-CLI;versioned-source-and-target-ownership',status='architecture-design-stage-available;native-implementation-in-progress'),optionalPostprocess=dict(commands=['code-postprocess','code-postprocess-resume'],defaultEnabled=False,provider='existing-local-Codex-CLI',workspace='independent-selected-code-copy',sourceCandidate='immutable',budgets='total-idle-output',resume='exact-recorded-session-only'),packageComposition='exact-frozen-resource-reuse;one-manifest-with-Scene-Prefab-JSON-and-CSharp',incremental='owned-candidate-fingerprints-and-hash-verified-reuse',mono='static-decompiler-drafts;legal-fixture-target-compiled',il2cpp='v29-exact-WASM-body-evidence;8-pure-i64-operator-fragments;caller-map-assumption;stateful-bodies-not-lifted',native='separate-probe-required;not-implied-by-emission'),
+                codeRecovery=dict(status='partial',sourceExecution=False,lexicalGraph='complete-source-static-binding-and-utf8-spans',typedModules='explicit-source-class-method-hashes-and-call-domain',moduleProfiles=['foodstreet-demand-health-v1','foodstreet-motion-math-v1'],selection='optional-strict-typed-dependency-closure-and-lowering',methods='default-full-source-best-effort-CSharp-bodies;unknown-fragments-retained',fullDrafts=dict(commands=['code-draft','convert'],typeContractRequired=False,sourceMethods='all-indexed-plus-auxiliary-functions',fields='known-class-or-unresolved-owner-binding',diagnostics='source-linked-bounded-shards',compilation='excluded;syntax-and-API-errors-allowed'),projectPostprocess=dict(commands=['code-project-prepare','code-project-run','code-project-status','code-project-resume','code-project-pause','code-project-configure','code-project-recheck'],scope='all-manifest-owned-CSharp-files',execution='single-CLI-continuous-batches;per-batch-limits;exact-session',status='legacy-file-repair;active-run-superseded'),nativeArchitecture=dict(commands=['code-architecture-prepare','code-architecture-run','code-architecture-status','code-architecture-recheck','code-architecture-refine','code-native-prepare','code-native-run','code-native-status','code-architecture-module-prepare','code-architecture-module-run','code-architecture-module-status'],scope='complete-frozen-source-modules-members-and-resources',layers=['Bootstrap','Domain','Gameplay','Presentation','Services'],execution='single-existing-Codex-CLI;versioned-source-and-target-ownership',status='architecture-design-stage-available;native-implementation-in-progress'),optionalPostprocess=dict(commands=['code-postprocess','code-postprocess-resume'],defaultEnabled=False,provider='existing-local-Codex-CLI',workspace='independent-selected-code-copy',sourceCandidate='immutable',budgets='total-idle-output',resume='exact-recorded-session-only'),packageComposition='exact-frozen-resource-reuse;one-manifest-with-Scene-Prefab-JSON-and-CSharp',incremental='owned-candidate-fingerprints-and-hash-verified-reuse',mono='static-decompiler-drafts;legal-fixture-target-compiled',il2cpp='v29-exact-WASM-body-evidence;8-pure-i64-operator-fragments;caller-map-assumption;stateful-bodies-not-lifted',native='separate-probe-required;not-implied-by-emission'),
                 recoveryOperations=dict(commands=['acquire-resources','diagnose','doctor','space-preview','resource-probe'],
                     resume='same-manifest-and-input-set; completed-partial-receipt-to-fresh-layer; rehash-selected-payloads',
                     retries='1..3; transient-network-or-408-429-5xx-only; fixed-byte-time-budgets',
@@ -433,12 +457,35 @@ def main(argv=None):
             from .code_drafts import emit
             result=emit(args.source,args.out,expected_source_sha256=args.expected_source,reuse_from=args.reuse_from,expected_manifest_sha256=args.expected_manifest)
             print(json.dumps(result,ensure_ascii=False));return 1
-        if args.command in ('code-architecture-prepare','code-architecture-run','code-architecture-status'):
+        if args.command in ('code-native-prepare','code-native-run','code-native-status'):
+            from . import code_architecture_pipeline as native
+            if args.command=='code-native-prepare':
+                from .io import load,read,safe
+                references=load(read(safe(args.external_references_file),max_bytes=1024*1024))if args.external_references_file else None
+                result=native.prepare(args.architecture,args.out,codex=args.codex,timeout_seconds=args.budget_seconds,
+                    idle_seconds=args.idle_seconds,external_references=references,retained_support_paths=args.retained_support_path)
+            elif args.command=='code-native-run':result=native.run(args.run)
+            else:result=native.status(args.run)
+            print(json.dumps(result,ensure_ascii=False));return 0 if result['status']in ('prepared','candidate_assembled_unvalidated')or args.command=='code-native-status' else 1
+        if args.command in ('code-architecture-module-prepare','code-architecture-module-run','code-architecture-module-status'):
+            from . import code_architecture_modules as module
+            if args.command=='code-architecture-module-prepare':
+                if bool(args.previous)!=bool(args.expected_previous_manifest):
+                    raise ValueError('--previous and --expected-previous-manifest must be supplied together')
+                previous=dict(root=args.previous,manifestSha256=args.expected_previous_manifest)if args.previous else None
+                result=module.prepare(args.architecture,args.module,args.out,dependency_roots=args.dependency,previous_module=previous,
+                    codex=args.codex,timeout_seconds=args.budget_seconds,idle_seconds=args.idle_seconds)
+            elif args.command=='code-architecture-module-run':result=module.run(args.run,session_id=args.session)
+            else:result=module.status(args.run)
+            print(json.dumps(result,ensure_ascii=False));return 0 if result['status']in ('prepared','generated_unreviewed')or args.command=='code-architecture-module-status' else 1
+        if args.command in ('code-architecture-prepare','code-architecture-run','code-architecture-status','code-architecture-recheck','code-architecture-refine'):
             from . import code_architecture as architecture
             if args.command=='code-architecture-prepare':
                 result=architecture.prepare(args.candidate,args.expected_manifest,args.out,namespace=args.namespace,codex=args.codex,
                     timeout_seconds=args.budget_seconds,idle_seconds=args.idle_seconds)
             elif args.command=='code-architecture-run':result=architecture.run(args.run,session_id=args.session)
+            elif args.command=='code-architecture-recheck':result=architecture.recheck(args.run)
+            elif args.command=='code-architecture-refine':result=architecture.refine(args.run,args.out,codex=args.codex,timeout_seconds=args.budget_seconds,idle_seconds=args.idle_seconds)
             else:result=architecture.status(args.run)
             print(json.dumps(result,ensure_ascii=False));return 0 if result['status'] in ('prepared','architecture_designed') or args.command=='code-architecture-status' else 1
         if args.command == 'code-postprocess':

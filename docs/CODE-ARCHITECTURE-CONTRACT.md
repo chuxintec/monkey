@@ -39,8 +39,9 @@ declared base types (`base` or `baseType`, if supplied) may not use `dynamic`, U
 `Dictionary<string, object>` as a catch-all representation.
 
 Each integration chain must reference Bootstrap, Gameplay, Domain, and
-Presentation classes; provide at least one relative JSON configuration file
-path; and carry nonempty behavior text. All configuration and asset paths must
+Presentation classes and carry nonempty behavior text. The first core chain
+must provide a relative JSON configuration path; optional chains may use
+existing Prefab tuning without inventing a configuration file. All configuration and asset paths must
 be relative file paths without traversal. This checks path shape and declared
 composition only: it does not read files or prove that a path exists, that a
 configuration was loaded, or that the described behavior ran.
@@ -57,3 +58,5 @@ Run the focused tests from the repository root with:
 ```sh
 PYTHONPATH=src .venv/bin/python -m unittest tests.test_code_architecture_contract
 ```
+
+Design kinds include class, struct, interface, enum and record; optional null base types denote no declared base. A record plan is not a proof of compiler/serialization compatibility. Implementation ownership (`sourceUnitIds`) must agree reciprocally with source coverage; broad analysis inputs may be stored separately as `sourceInputUnitIds` and confer no implementation claim.

@@ -12,6 +12,7 @@ from . import code_postprocess as worker
 
 SCHEMA='monkey-native-code-architecture/1'
 PLAN_PATH='Analysis/Architecture/architecture.json'
+ARCHITECTURE_BYTES=worker.WORKSPACE_FILE_BYTES
 LAYERS={
     'Domain':[], 'Gameplay':['Domain'], 'Presentation':['Domain','Gameplay'],
     'Services':['Domain','Gameplay'], 'Bootstrap':['Domain','Gameplay','Presentation','Services'],
@@ -160,7 +161,7 @@ def build_catalog(candidate,expected_manifest):
 
 
 def _contract(namespace):
-    return dict(schemaVersion=SCHEMA,rootNamespace=namespace,layerDependencies=LAYERS,
+    return dict(schemaVersion=SCHEMA,rootNamespace=namespace,layerDependencies=LAYERS,allowedKinds=['class','struct','interface','enum','record'],
         requiredPlanKeys=['schemaVersion','sourceManifestSha256','rootNamespace','modules','classes','sourceCoverage','entryPoint','integrationChains','limitations'],
         moduleShape=dict(id='SemanticModule',responsibility='specific source feature',sourceUnitIds=[],classIds=[]),
         classShape=dict(id='stable-target-id',name='SemanticClass',layer='Domain',module='SemanticModule',kind='class',
@@ -168,9 +169,11 @@ def _contract(namespace):
             dependsOn=['Domain'],typeDependencies=[],sourceUnitIds=[],fields=[dict(name='Value',type='int',role='source-backed state')],
             methods=[dict(name='Apply',returnType='void',parameters=[],sourceMemberIds=[])]),
         coverageShape=dict(sourceUnitId='exact catalog id',disposition='planned|native-replacement|existing-implementation|evidence-only|blocked',classIds=[],reason='specific evidence and target/adaptation/unknown'),
-        entryPointShape=dict(classId='Bootstrap target class ID',initializationOrder=[]),
+        entryPointShape=dict(classId='BootstrapClassId',initializationOrder=['BootstrapClassId','DependencyClassId']),
         integrationChainShape=dict(id='core-chain',classIds=[],configPaths=[],assetPaths=[],behavior='real input through all layers',sourceUnitIds=[]),
-        constraints=['dependsOn contains layer names; typeDependencies contains exact target class IDs, including ports and shared state',
+        constraints=['Every initializationOrder item is an exact class.id, not prose; the first item equals entryPoint.classId. Human-readable steps may be retained in optional initializationSteps.',
+            'Class sourceUnitIds and sourceCoverage.classIds agree reciprocally. Broad analysis/dependency source inputs may be separate sourceInputUnitIds and confer no implementation ownership.',
+            'dependsOn contains layer names; typeDependencies contains exact target class IDs, including ports and shared state',
             'sourceMemberIds must name actual catalog member IDs from the class sourceUnitIds; no invented source identities',
             'Domain and Gameplay have no Unity dependency','Presentation calls Gameplay; Services implement Gameplay ports; Bootstrap composes',
             'Every catalog source unit appears exactly once in sourceCoverage; do not reduce scope to samples',
@@ -208,6 +211,69 @@ def prepare(candidate,expected_manifest,output,*,namespace='Game',codex=worker.D
 
 def run(output,*,session_id=None):
     root=safe(output);request=_json(root/'request.json');result=worker.run(root/'Task',session_id=session_id)
+    return _accept_stage(root,request,result)
+
+
+def refine(previous,output,*,codex=worker.DEFAULT_CODEX,timeout_seconds=3600,idle_seconds=900):
+    """Prepare a bounded consistency repair, preserving the exact previous model output."""
+    prior=safe(previous);root=safe(output);request=_json(prior/'request.json')
+    task_request=_json(prior/'Task/request.json');process=_json(prior/'Task/process.json')
+    if task_request.get('state')!='finalized' or process.get('state')!='exited':
+        fail('CODE_ARCHITECTURE_ACTIVE',str(prior),'Refinement requires a finalized model task')
+    source=safe(request['sourceRoot'])
+    if root.exists()or any(root.is_relative_to(p)or p.is_relative_to(root)for p in (prior,source)):
+        fail('CODE_ARCHITECTURE_OUTPUT',str(root),'Require a new independent directory outside previous stage and frozen source')
+    if worker._workspace_integrity(prior/'Task/workspace',task_request)or worker._source_integrity(task_request):
+        fail('CODE_ARCHITECTURE_BOUNDARY',str(prior),'Previous source or context identity changed')
+    raw=read(prior/'Task/workspace'/PLAN_PATH,max_bytes=ARCHITECTURE_BYTES);plan=load(raw,max_nodes=8_000_000)
+    result=_json(prior/'Task/manifest.json');record=next((r for r in result.get('actualChanges',[])if r.get('path')==PLAN_PATH),None)
+    if not record or sha(raw)!=record.get('afterSha256'):
+        fail('CODE_ARCHITECTURE_BOUNDARY',str(prior),'Previous architecture differs from the recorded model output')
+    catalog=_catalog_for_validation(prior,request)
+    from .code_architecture_contract import validate_architecture
+    try:validate_architecture(plan,catalog);error=None
+    except ValueError as failure:error=str(failure)
+    coverage={r['sourceUnitId']:r for r in plan.get('sourceCoverage',[])}
+    diagnostics=dict(previousPlanSha256=sha(raw),firstValidationError=error,missingReciprocalOwnership=[
+        dict(classId=c['id'],sourceUnitId=sid,disposition=coverage.get(sid,{}).get('disposition'))for c in plan.get('classes',[])
+        for sid in c.get('sourceUnitIds',[])if c['id']not in coverage.get(sid,{}).get('classIds',[])])
+    root.mkdir(parents=True);context=root/'Evidence';context.mkdir();seed=root/'Seed';seed.mkdir();names=[]
+    for path in sorted((prior/'Evidence').rglob('*')):
+        if path.is_file() and path.relative_to(prior/'Evidence').as_posix()not in ('architecture-diagnostics.json','architecture-contract.json'):
+            name=path.relative_to(prior/'Evidence').as_posix()
+            worker._atomic(inside(context,name),read(safe(path),max_bytes=worker.FILE_BYTES));names.append(name)
+    worker._atomic(context/'architecture-diagnostics.json',encoded(diagnostics));names.append('architecture-diagnostics.json')
+    worker._atomic(context/'architecture-contract.json',encoded(_contract(request['namespace'])));names.append('architecture-contract.json')
+    worker._atomic(inside(seed,PLAN_PATH),raw)
+    manifest=encoded(dict(schemaVersion=1,identity='native-architecture-refinement-seed',files=[dict(path=PLAN_PATH,owner='generated',sha256=sha(raw),bytes=len(raw))]))
+    worker._atomic(seed/'manifest.json',manifest)
+    task='''Repair the existing architecture plan from architecture-diagnostics.json and the explicit architecture-contract.json. This is a bounded consistency refinement, not another whole-source analysis or implementation pass. Preserve source-specific feature classes, typed responsibilities and exact source/member identities. Fix ALL reciprocal ownership inconsistencies: class.sourceUnitIds and sourceCoverage.classIds agree; broad analysis inputs may be sourceInputUnitIds without assigning SDK/evidence-only/blocked source to generic Interface state/rules. Every method sourceMemberId belongs to its class sourceUnitIds. Every source unit retains exactly one disposition. entryPoint.initializationOrder MUST contain existing exact class IDs beginning with entryPoint.classId; preserve any previous prose initialization sequence separately as entryPoint.initializationSteps. All other class/module/chain references are exact IDs. Preserve native five-layer edges, semantic typed targets, root namespace and actual integration chains. Optional absent base types may be omitted or null; class/struct/interface/enum/record are design kinds with Unity compatibility pending. Do not execute source, engines, compilers, network, other agents/CLIs, add dependencies, or claim bodies/compilation/runtime restored. Only rewrite selected architecture.json; report exact changes and remaining source uncertainties.'''
+    prepared=worker.prepare(seed,[PLAN_PATH],sha(manifest),root/'Task',task,context_root=context,context_files=names,
+        architecture_stage=True,codex=codex,timeout_seconds=timeout_seconds,no_progress_seconds=idle_seconds,max_resumes=2)
+    _save(root/'request.json',dict(schemaVersion=1,stage='global-architecture',sourceRoot=str(source),sourceManifestSha256=request['sourceManifestSha256'],
+        catalogSha256=request['catalogSha256'],planPath=PLAN_PATH,task=str(prepared.output),namespace=request['namespace'],createdAt=time.time(),
+        refinementOf=dict(root=str(prior),planSha256=sha(raw)),diagnosticsSha256=sha(encoded(diagnostics))))
+    _save(root/'state.json',dict(status='prepared',stage='global-architecture',sourceUnits=len(catalog['sourceUnits']),implementation='not_started',compilation='not_run',runtime='not_run'))
+    return status(root)
+
+
+def recheck(output):
+    """Accept the saved exact model patch after a validator/budget repair, without a model call."""
+    root=safe(output);request=_json(root/'request.json');task=root/'Task'
+    task_request=_json(task/'request.json');process=_json(task/'process.json')
+    if task_request.get('state')!='finalized' or process.get('state')!='exited':
+        fail('CODE_ARCHITECTURE_ACTIVE',str(root),'Only a finalized task with an exited child may be rechecked')
+    result=_json(task/'manifest.json')
+    if (worker._workspace_integrity(task/'workspace',task_request)or worker._source_integrity(task_request)
+            or not worker._check_git_boundary(task/'workspace')['valid']):
+        fail('CODE_ARCHITECTURE_BOUNDARY',str(root),'Saved workspace, source, or context identity changed')
+    current=worker._workspace_changes(task/'workspace',task_request,task_request['workspaceBudgetBytes'])
+    if current!=result.get('actualChanges'):
+        fail('CODE_ARCHITECTURE_BOUNDARY',str(root),'Saved patch differs from the recorded finalized model output')
+    return _accept_stage(root,request,result)
+
+
+def _accept_stage(root,request,result):
     if result.get('blockingCondition'):
         _save(root/'state.json',dict(status='blocked',stage=request['stage'],blocker=result['blockingCondition'],implementation='not_started',compilation='not_run',runtime='not_run'))
         return status(root)
@@ -222,7 +288,7 @@ def run(output,*,session_id=None):
     actual={r['path']:r for r in result.get('actualChanges',[])}
     if set(actual)!=set(result.get('declaredChangedPaths',[])):
         fail('CODE_ARCHITECTURE_BOUNDARY',str(root),'Declared paths differ from the actual stage patch')
-    payload=read(root/'Task/workspace'/request['planPath'],max_bytes=worker.FILE_BYTES)
+    payload=read(root/'Task/workspace'/request['planPath'],max_bytes=ARCHITECTURE_BYTES)
     if request['planPath']not in actual or sha(payload)!=actual[request['planPath']].get('afterSha256'):
         fail('CODE_ARCHITECTURE_BOUNDARY',str(root),'Architecture payload differs from its recorded stage patch')
     from .code_architecture_contract import validate_architecture
@@ -230,8 +296,8 @@ def run(output,*,session_id=None):
     try:validation=validate_architecture(plan,catalog)
     except ValueError as error:
         _save(root/'state.json',dict(status='invalid_architecture',stage=request['stage'],error=str(error),implementation='not_started',compilation='not_run',runtime='not_run'));raise
-    _save(root/'architecture.json',plan);_save(root/'validation.json',validation)
-    _save(root/'state.json',dict(status='architecture_designed',stage=request['stage'],sourceUnits=len(catalog['sourceUnits']),classes=len(plan['classes']),modules=len(plan['modules']),architectureSha256=sha(read(root/'architecture.json',max_bytes=worker.FILE_BYTES)),validationSha256=sha(read(root/'validation.json',max_bytes=worker.FILE_BYTES)),modelStatus=result['status'],unresolved=result.get('unresolved',[]),implementation='not_started',compilation='not_run',runtime='not_run'))
+    worker._atomic(root/'architecture.json',payload);_save(root/'validation.json',validation)
+    _save(root/'state.json',dict(status='architecture_designed',stage=request['stage'],sourceUnits=len(catalog['sourceUnits']),classes=len(plan['classes']),modules=len(plan['modules']),architectureSha256=sha(payload),validationSha256=sha(read(root/'validation.json',max_bytes=worker.FILE_BYTES)),modelStatus=result['status'],unresolved=result.get('unresolved',[]),implementation='not_started',compilation='not_run',runtime='not_run'))
     return status(root)
 
 

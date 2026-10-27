@@ -1,0 +1,419 @@
+import hashlib
+import json
+from pathlib import Path
+import tempfile
+import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
+
+from monkey import code_architecture, code_architecture_modules as modules
+from monkey.code_architecture_contract import validate_architecture
+from monkey.io import encoded, sha
+from monkey.sources.compiled import ParseError
+
+
+class ArchitectureModuleWorkflowTests(unittest.TestCase):
+    def make_stage(self, root):
+        stage = root / 'Global'
+        (stage / 'Evidence' / 'Sources').mkdir(parents=True)
+        (stage / 'Evidence' / 'Config').mkdir()
+        (stage / 'Task' / 'workspace' / 'Analysis' / 'Architecture').mkdir(parents=True)
+        (stage / 'Task').mkdir(exist_ok=True)
+
+        candidate = root / 'FrozenCandidate'
+        (candidate / 'Packages').mkdir(parents=True)
+        (candidate / 'ProjectSettings').mkdir()
+        package_raw = b'{"dependencies":{"com.unity.ugui":"2.6.0"}}\n'
+        version_raw = b'm_EditorVersion: 6000.6.2f1\n'
+        (candidate / 'Packages/manifest.json').write_bytes(package_raw)
+        (candidate / 'ProjectSettings/ProjectVersion.txt').write_bytes(version_raw)
+        candidate_manifest = encoded({'schemaVersion': 1, 'targetProfile': 'unity-6000.6.2f1-ugui',
+            'namespace': 'Demo', 'scopeMode': 'whole-input', 'files': [
+                {'path': 'Packages/manifest.json', 'sha256': sha(package_raw), 'bytes': len(package_raw), 'owner': 'generated'},
+                {'path': 'ProjectSettings/ProjectVersion.txt', 'sha256': sha(version_raw), 'bytes': len(version_raw), 'owner': 'generated'}]})
+        (candidate / 'manifest.json').write_bytes(candidate_manifest)
+        source_pin = sha(candidate_manifest)
+
+        source = b'function recipe(){ return 7; }'
+        source_hash = sha(source)
+        member_id = '21af08e48846:methods@0:30'
+        unit_id = 'module:21af08e48846:0:30'
+        config_raw = b'{"items":[1,2]}'
+        config_path = 'Assets/Game/Content/Config/Recipe.json'
+        class_record = {
+            'id': 'RecipeCatalog', 'name': 'RecipeCatalog', 'layer': 'Domain', 'module': 'Recipe',
+            'kind': 'class', 'responsibility': 'Own recipe lookup rules',
+            'stateOwnership': 'RecipeCatalog is the only owner of recipe lookup state',
+            'lifecycle': 'Constructed by the composition root and retained for gameplay use',
+            'dependsOn': [], 'typeDependencies': [], 'sourceUnitIds': [unit_id],
+            'fields': [{'name': 'Count', 'type': 'int', 'role': 'Source-backed recipe count'}],
+            'methods': [{'name': 'GetCount', 'returnType': 'int', 'parameters': [], 'sourceMemberIds': [member_id]}],
+        }
+        bootstrap_record = {
+            'id': 'AppStartup', 'name': 'AppStartup', 'layer': 'Bootstrap', 'module': 'App',
+            'kind': 'class', 'responsibility': 'Compose the application',
+            'stateOwnership': 'Owns application composition only', 'lifecycle': 'Created at application startup',
+            'dependsOn': ['Domain'], 'typeDependencies': ['RecipeCatalog'], 'sourceUnitIds': [],
+            'fields': [], 'methods': [],
+        }
+        gameplay_record = {
+            'id': 'RecipeRules', 'name': 'RecipeRules', 'layer': 'Gameplay', 'module': 'RecipeFlow',
+            'kind': 'class', 'responsibility': 'Coordinate recipe gameplay rules',
+            'stateOwnership': 'Owns no persistent state', 'lifecycle': 'Created by application composition',
+            'dependsOn': ['Domain'], 'typeDependencies': ['RecipeCatalog'], 'sourceUnitIds': [],
+            'fields': [], 'methods': [],
+        }
+        presentation_record = {
+            'id': 'RecipePanel', 'name': 'RecipePanel', 'layer': 'Presentation', 'module': 'RecipeUI',
+            'kind': 'class', 'responsibility': 'Present recipe information',
+            'stateOwnership': 'Owns transient presentation state', 'lifecycle': 'Created with the recipe screen',
+            'dependsOn': ['Gameplay'], 'typeDependencies': ['RecipeRules'], 'sourceUnitIds': [],
+            'fields': [], 'methods': [],
+        }
+        plan = {
+            'schemaVersion': code_architecture.SCHEMA, 'sourceManifestSha256': source_pin,
+            'rootNamespace': 'Demo', 'modules': [{'id': 'Recipe', 'responsibility': 'Recipe lookup',
+                'sourceUnitIds': [unit_id], 'classIds': ['RecipeCatalog']},
+                {'id': 'App', 'responsibility': 'Compose runtime services and gameplay entry points',
+                 'sourceUnitIds': [], 'classIds': ['AppStartup']},
+                {'id': 'RecipeFlow', 'responsibility': 'Coordinate recipe flow',
+                 'sourceUnitIds': [], 'classIds': ['RecipeRules']},
+                {'id': 'RecipeUI', 'responsibility': 'Present recipe data',
+                 'sourceUnitIds': [], 'classIds': ['RecipePanel']}],
+            'classes': [class_record, bootstrap_record, gameplay_record, presentation_record],
+            'sourceCoverage': [{'sourceUnitId': unit_id, 'disposition': 'planned',
+                'classIds': ['RecipeCatalog'], 'reason': 'Mapped to the typed recipe catalog.'}],
+            'entryPoint': {'classId': 'AppStartup', 'initializationOrder': ['AppStartup']},
+            'integrationChains': [{'id': 'recipe-config-chain', 'classIds': ['RecipeCatalog', 'RecipeRules', 'RecipePanel', 'AppStartup'],
+                'configPaths': [config_path], 'assetPaths': [], 'behavior': 'Loads recipe configuration.',
+                'sourceUnitIds': [unit_id]}],
+            'limitations': ['This synthetic plan is for isolated API tests only.'],
+        }
+        member = {'id': member_id, 'kind': 'methods', 'name': 'GetCount',
+                  'sourceBytes': {'start': 0, 'end': len(source)}, 'sourceSha256': source_hash,
+                  'parameters': [], 'sourceType': 'int', 'static': False}
+        unit = {'id': unit_id, 'kind': 'registered-source-module', 'sourceNames': ['recipe'],
+                'sourceIds': ['synthetic:recipe'], 'sourceSha256': source_hash,
+                'sourceBytes': {'start': 0, 'end': len(source)}, 'spanSha256': source_hash,
+                'memberCount': 1, 'members': [member]}
+        catalog = {'schemaVersion': 1, 'sourceManifestSha256': source_pin,
+                   'sourceRoot': str(candidate), 'sourceManifestName': 'manifest.json',
+                   'sourceUnits': [unit], 'sources': [{'sha256': source_hash, 'bytes': len(source),
+                       'sourcePath': 'SourceRecovery/Code/Source/Source.js',
+                       'contextPath': '__Context/Sources/source.js', 'snapshotPaths': ['snapshot/game.js']}],
+                   'configurations': [{'path': config_path, 'sha256': sha(config_raw), 'bytes': len(config_raw),
+                       'contextPath': '__Context/Config/0.json'}], 'assets': [], 'memberShards': [],
+                   'registeredMemberCount': 1, 'sourceExecuted': False}
+        contract = code_architecture._contract('Demo')
+        plan_raw, catalog_raw, contract_raw = encoded(plan), encoded(catalog), encoded(contract)
+        validation = validate_architecture(plan, catalog)
+        validation_raw = encoded(validation)
+
+        (stage / 'Evidence' / 'source-catalog.json').write_bytes(catalog_raw)
+        (stage / 'Evidence' / 'architecture-contract.json').write_bytes(contract_raw)
+        (stage / 'Evidence' / 'Sources' / 'source.js').write_bytes(source)
+        (stage / 'Evidence' / 'Config' / '0.json').write_bytes(config_raw)
+        (stage / 'architecture.json').write_bytes(plan_raw)
+        (stage / 'validation.json').write_bytes(validation_raw)
+        (stage / 'Task' / 'workspace' / code_architecture.PLAN_PATH).write_bytes(plan_raw)
+        (stage / 'Task' / 'manifest.json').write_bytes(encoded({'actualChanges': [
+            {'path': code_architecture.PLAN_PATH, 'afterSha256': sha(plan_raw)}]}))
+        (stage / 'Task' / 'request.json').write_bytes(encoded({'state': 'completed', 'contextFiles': {
+            '__Context/source-catalog.json': {'sha256': sha(catalog_raw), 'bytes': len(catalog_raw)},
+            '__Context/architecture-contract.json': {'sha256': sha(contract_raw), 'bytes': len(contract_raw)},
+        }}))
+        (stage / 'request.json').write_bytes(encoded({'sourceManifestSha256': source_pin,
+            'catalogSha256': sha(catalog_raw), 'sourceRoot': str(candidate)}))
+        (stage / 'state.json').write_bytes(encoded({'status': 'architecture_designed'}))
+        return stage, source, config_raw, class_record, plan
+
+    @staticmethod
+    def fake_worker_prepare(candidate, selected, expected, output, task, **kwargs):
+        candidate = Path(candidate); output = Path(output); output.mkdir(parents=True)
+        workspace = output / 'workspace'; workspace.mkdir()
+        for rel in selected:
+            target = workspace / rel; target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes((candidate / rel).read_bytes())
+        context_workspace = workspace / '__Context'
+        for rel in kwargs['context_files']:
+            target = context_workspace / rel; target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes((Path(kwargs['context_root']) / rel).read_bytes())
+        (output / 'request.json').write_bytes(encoded({'state': 'prepared'}))
+        return SimpleNamespace(output=output)
+
+    def test_prepare_pins_exact_module_source_config_and_empty_seed(self):
+        with tempfile.TemporaryDirectory(dir='/private/tmp') as directory:
+            root = Path(directory)
+            stage, source, config, record, _ = self.make_stage(root)
+            out = root / 'Module'
+            with patch.object(modules.worker, 'prepare', side_effect=self.fake_worker_prepare) as prepare:
+                result = modules.prepare(stage, 'Recipe', out)
+            self.assertEqual(result['status'], 'prepared')
+            manifest = json.loads((out / modules.MANIFEST).read_text())
+            self.assertEqual(manifest['sourceUnitIds'], record['sourceUnitIds'])
+            self.assertEqual(manifest['classes'][0]['namespace'], 'Demo.Domain.Recipe')
+            self.assertIn('methods@0:30', manifest['sourceMemberIds'][0])
+            self.assertEqual(manifest['sourceContexts'][0]['sourceSha256'], sha(source))
+            self.assertEqual(manifest['sourceContexts'][0]['spanSha256'], sha(source))
+            selected = prepare.call_args.args[1]
+            self.assertEqual(selected, ['Assets/Game/Domain/Recipe/RecipeCatalog.cs'])
+            context_files = prepare.call_args.kwargs['context_files']
+            self.assertIn('architecture.json', context_files)
+            self.assertIn('module-source-map.json', context_files)
+            self.assertIn('module-config-map.json', context_files)
+            self.assertIn('module-asset-bindings.json', context_files)
+            asset_report = json.loads((out / 'Evidence' / 'module-asset-bindings.json').read_text())
+            self.assertEqual(asset_report['status'], 'no-code-bindings-for-selected-owners')
+            self.assertIn('typed serialized native references', asset_report['runtimeUse'])
+            self.assertEqual(manifest['assetBindingContext']['path'], '__Context/module-asset-bindings.json')
+            self.assertIn('UnityEnvironment/Packages/manifest.json', context_files)
+            self.assertIn('UnityEnvironment/ProjectSettings/ProjectVersion.txt', context_files)
+            summary = json.loads((out / 'Evidence' / 'architecture.json').read_text())
+            self.assertNotIn('classes', summary)
+            reconstructed = {key: value for key, value in summary.items() if key not in ('classCount', 'classShards')}
+            classes = []
+            for shard in summary['classShards']:
+                shard_path = out / 'Evidence' / shard['path'].removeprefix('__Context/')
+                shard_raw = shard_path.read_bytes()
+                self.assertEqual(sha(shard_raw), shard['sha256'])
+                self.assertEqual(len(shard_raw), shard['bytes'])
+                classes.extend(json.loads(shard_raw)['classes'])
+            reconstructed['classes'] = classes
+            self.assertEqual(reconstructed, json.loads((stage / 'architecture.json').read_text()))
+            self.assertEqual((out / 'Evidence' / 'Sources' / f"{sha(source)[:12]}-0-{len(source)}.js").read_bytes(), source)
+            self.assertEqual((out / 'Evidence' / 'Config' / '000.json').read_bytes(), config)
+            seed = (out / 'Seed' / selected[0]).read_bytes()
+            self.assertIn(b'NOT IMPLEMENTED', seed)
+            self.assertNotIn(b'public sealed class RecipeCatalog', seed)
+            app_out = root / 'AppModule'
+            with patch.object(modules.worker, 'prepare', side_effect=self.fake_worker_prepare):
+                modules.prepare(stage, 'App', app_out)
+            app_manifest = json.loads((app_out / modules.MANIFEST).read_text())
+            self.assertEqual(app_manifest['pendingImplementations'], ['RecipeCatalog'])
+            self.assertEqual(app_manifest['dependencies'], [])
+
+    def test_run_materializes_unreviewed_module_and_refuses_context_drift(self):
+        with tempfile.TemporaryDirectory(dir='/private/tmp') as directory:
+            root = Path(directory)
+            stage, _, _, _, _ = self.make_stage(root)
+            out = root / 'Module'
+            with patch.object(modules.worker, 'prepare', side_effect=self.fake_worker_prepare):
+                modules.prepare(stage, 'Recipe', out)
+            context_path = next((out / 'Evidence').glob('Sources/*.js'))
+            original_context = context_path.read_bytes()
+
+            def fake_run(task_root, *, session_id=None):
+                task_root = Path(task_root)
+                selected = task_root / 'workspace' / 'Assets/Game/Domain/Recipe/RecipeCatalog.cs'
+                generated = b'namespace Demo.Domain.Recipe { public sealed class RecipeCatalog { public int Count; public int GetCount() => 7; } }\n'
+                selected.write_bytes(generated)
+                (task_root / 'request.json').write_bytes(encoded({'state': 'completed'}))
+                return {'status': 'complete', 'actualChanges': [{'path': 'Assets/Game/Domain/Recipe/RecipeCatalog.cs',
+                    'afterSha256': sha(generated)}], 'declaredChangedPaths': ['Assets/Game/Domain/Recipe/RecipeCatalog.cs'],
+                    'gitBoundary': {'valid': True}, 'unresolved': []}
+
+            with patch.object(modules.worker, 'run', side_effect=fake_run):
+                result = modules.run(out)
+            self.assertEqual(result['status'], 'generated_unreviewed')
+            self.assertEqual(result['compilation'], 'not_run')
+            manifest = json.loads((out / modules.MANIFEST).read_text())
+            self.assertEqual(manifest['classes'][0]['status'], 'generated_unreviewed')
+            self.assertEqual((out / manifest['files'][0]['artifactPath']).read_bytes(),
+                             b'namespace Demo.Domain.Recipe { public sealed class RecipeCatalog { public int Count; public int GetCount() => 7; } }\n')
+            app_out = root / 'AppModule'
+            with patch.object(modules.worker, 'prepare', side_effect=self.fake_worker_prepare):
+                modules.prepare(stage, 'App', app_out, dependency_roots=[out])
+            app_manifest = json.loads((app_out / modules.MANIFEST).read_text())
+            self.assertEqual(app_manifest['dependencies'][0]['reviewStatus'], 'generated_unreviewed')
+            self.assertEqual(app_manifest['pendingImplementations'], [])
+            module_manifest = json.loads((out / modules.MANIFEST).read_text())
+            module_manifest['classes'][0]['status'] = 'accepted'
+            module_manifest['acceptance'] = 'accepted'
+            tampered = encoded(module_manifest)
+            (out / modules.MANIFEST).write_bytes(tampered)
+            (out / modules.MANIFEST_SHA).write_text(sha(tampered) + '\n')
+            with patch.object(modules.worker, 'prepare', side_effect=self.fake_worker_prepare):
+                with self.assertRaises(ParseError):
+                    modules.prepare(stage, 'App', root / 'AppModule2', dependency_roots=[out])
+
+            with tempfile.TemporaryDirectory(dir='/private/tmp') as second:
+                stage2, _, _, _, _ = self.make_stage(Path(second))
+                out2 = Path(second) / 'Module'
+                with patch.object(modules.worker, 'prepare', side_effect=self.fake_worker_prepare):
+                    modules.prepare(stage2, 'Recipe', out2)
+                summary = json.loads((out2 / 'Evidence' / 'architecture.json').read_text())
+                shard_path = out2 / 'Evidence' / summary['classShards'][0]['path'].removeprefix('__Context/')
+                shard_path.write_bytes(b'{}')
+                with patch.object(modules.worker, 'run') as run:
+                    with self.assertRaises(ParseError):
+                        modules.run(out2)
+                run.assert_not_called()
+
+    def test_global_stage_must_be_accepted_and_plan_worker_payload_must_match(self):
+        with tempfile.TemporaryDirectory(dir='/private/tmp') as directory:
+            root = Path(directory); stage, _, _, _, _ = self.make_stage(root)
+            (stage / 'state.json').write_bytes(encoded({'status': 'prepared'}))
+            with self.assertRaises(ParseError):
+                modules._pin_stage(stage)
+            (stage / 'state.json').write_bytes(encoded({'status': 'architecture_designed'}))
+            (stage / 'Task' / 'workspace' / code_architecture.PLAN_PATH).write_bytes(b'{}')
+            with self.assertRaises(ParseError):
+                modules._pin_stage(stage)
+
+    def test_class_shards_roundtrip_all_classes_and_split_large_module(self):
+        class_a = {'id': 'ClassA', 'name': 'ClassA', 'module': 'Big', 'layer': 'Domain',
+                   'kind': 'class', 'sourceUnitIds': ['unit:a'], 'fields': [],
+                   'methods': [{'name': 'MethodA', 'sourceMemberIds': ['member:a']}],
+                   'responsibility': 'A' * 350}
+        class_b = {'id': 'ClassB', 'name': 'ClassB', 'module': 'Big', 'layer': 'Domain',
+                   'kind': 'class', 'sourceUnitIds': ['unit:b'], 'fields': [],
+                   'methods': [{'name': 'MethodB', 'sourceMemberIds': ['member:b']}],
+                   'responsibility': 'B' * 350}
+        plan = {'schemaVersion': code_architecture.SCHEMA, 'sourceManifestSha256': 'c' * 64,
+                'rootNamespace': 'Demo', 'modules': [{'id': 'Big', 'responsibility': 'large feature',
+                    'sourceUnitIds': ['unit:a', 'unit:b'], 'classIds': ['ClassA', 'ClassB']}],
+                'classes': [class_a, class_b], 'sourceCoverage': [{'sourceUnitId': 'unit:a'},
+                    {'sourceUnitId': 'unit:b'}], 'entryPoint': {'classId': 'App', 'initializationOrder': []},
+                'integrationChains': [{'id': 'chain', 'classIds': ['ClassA'], 'configPaths': [], 'assetPaths': []}],
+                'limitations': []}
+        stage = {'plan': plan, 'pins': {'sourceManifestSha256': 'c' * 64}}
+        captured = {}
+        def add(name, raw):
+            captured[name] = raw
+        with patch.object(modules, 'ARCHITECTURE_SHARD_BYTES', 1200):
+            index = modules._architecture_context(stage, add)
+        self.assertGreaterEqual(len(index), 2)
+        summary = json.loads(captured['architecture.json'])
+        rebuilt = {key: value for key, value in summary.items() if key not in ('classCount', 'classShards')}
+        rows = []
+        for shard in index:
+            raw = captured[shard['path'].removeprefix('__Context/')]
+            self.assertLessEqual(len(raw), 1200)
+            self.assertEqual(sha(raw), shard['sha256'])
+            rows.extend(json.loads(raw)['classes'])
+        rebuilt['classes'] = rows
+        self.assertEqual(rebuilt, plan)
+
+    def test_global_plan_larger_than_worker_single_file_limit_is_pinned(self):
+        with tempfile.TemporaryDirectory(dir='/private/tmp') as directory:
+            root = Path(directory); stage, _, _, _, plan = self.make_stage(root)
+            large_plan = {**plan, 'largeReviewedNote': 'z' * (9 * 1024 * 1024)}
+            raw = encoded(large_plan)
+            self.assertGreater(len(raw), 8 * 1024 * 1024)
+            (stage / 'architecture.json').write_bytes(raw)
+            (stage / 'Task' / 'workspace' / code_architecture.PLAN_PATH).write_bytes(raw)
+            (stage / 'Task' / 'manifest.json').write_bytes(encoded({'actualChanges': [
+                {'path': code_architecture.PLAN_PATH, 'afterSha256': sha(raw)}]}))
+            pinned = modules._pin_stage(stage)
+            self.assertEqual(pinned['pins']['architectureSha256'], sha(raw))
+            self.assertEqual(pinned['plan']['largeReviewedNote'], large_plan['largeReviewedNote'])
+
+    def test_lexical_core_gate_ignores_comments_strings_and_typed_collections(self):
+        record = {'name': 'RecipeCatalog', 'kind': 'class', 'layer': 'Domain',
+                  'namespace': 'Demo.Domain.Recipe', 'plannedMethods': [{'name': 'GetCount'}],
+                  'plannedFields': [{'name': 'Count'}]}
+        code = b'''namespace Demo.Domain.Recipe {
+public sealed class RecipeCatalog {
+    public int Count;
+    public int GetCount() => Count;
+    public System.Numerics.Vector2 Position;
+    public Dictionary<string, Recipe> Recipes;
+    public string Notes => "dynamic UnityEngine UnityEditor MonoBehaviour ScriptableObject Dictionary<string, object>";
+    // dynamic UnityEngine UnityEditor MonoBehaviour ScriptableObject Dictionary<string, object>
+}
+}'''
+        self.assertEqual(modules._implementation_markers(code, record), [])
+
+    def test_lexical_core_gate_flags_engine_dynamic_untyped_and_namespace_gaps(self):
+        record = {'name': 'RecipeCatalog', 'kind': 'class', 'layer': 'Gameplay',
+                  'namespace': 'Demo.Gameplay.Recipe', 'plannedMethods': [{'name': 'GetCount'}],
+                  'plannedFields': [{'name': 'Count'}]}
+        code = b'''namespace Demo.Gameplay.Recipe {
+public sealed class RecipeCatalog : UnityEngine.MonoBehaviour {
+    public dynamic Value;
+    public Dictionary<string, object> Data;
+    // GetCount() and Count in comments do not satisfy the contract.
+}
+}'''
+        markers = modules._implementation_markers(code, record)
+        self.assertIn('core-engine-reference:UnityEngine', markers)
+        self.assertIn('core-engine-reference:MonoBehaviour', markers)
+        self.assertIn('core-dynamic-keyword', markers)
+        self.assertIn('core-untyped-string-object-dictionary', markers)
+        self.assertIn('planned-method-declaration-missing:GetCount', markers)
+        self.assertIn('planned-field-declaration-missing:Count', markers)
+        file_scoped = code.replace(b'namespace Demo.Gameplay.Recipe {', b'namespace Demo.Gameplay.Recipe;')
+        self.assertIn('file-scoped-namespace-not-allowed', modules._implementation_markers(file_scoped, record))
+        wrong_namespace = code.replace(b'Demo.Gameplay.Recipe', b'Demo.Domain.Recipe')
+        self.assertIn('planned-type-or-namespace-declaration-missing', modules._implementation_markers(wrong_namespace, record))
+        call_sites_only = b'''namespace Demo.Gameplay.Recipe {
+public sealed class RecipeCatalog {
+    public int Invoke() { return GetCount(); }
+    public string Show() => Count.ToString();
+}
+}'''
+        call_markers = modules._implementation_markers(call_sites_only, record)
+        self.assertIn('planned-method-declaration-missing:GetCount', call_markers)
+        self.assertIn('planned-field-declaration-missing:Count', call_markers)
+
+    def test_run_marks_forbidden_core_constructs_incomplete(self):
+        with tempfile.TemporaryDirectory(dir='/private/tmp') as directory:
+            root = Path(directory); stage, _, _, _, _ = self.make_stage(root); out = root / 'Module'
+            with patch.object(modules.worker, 'prepare', side_effect=self.fake_worker_prepare):
+                modules.prepare(stage, 'Recipe', out)
+            def fake_run(task_root, *, session_id=None):
+                task_root = Path(task_root)
+                path = task_root / 'workspace' / 'Assets/Game/Domain/Recipe/RecipeCatalog.cs'
+                body = b'namespace Demo.Domain.Recipe { public sealed class RecipeCatalog { public int Count; public dynamic GetCount() => 7; } }\n'
+                path.write_bytes(body)
+                (task_root / 'request.json').write_bytes(encoded({'state': 'completed'}))
+                return {'status': 'complete', 'actualChanges': [{'path': 'Assets/Game/Domain/Recipe/RecipeCatalog.cs',
+                    'afterSha256': sha(body)}], 'declaredChangedPaths': ['Assets/Game/Domain/Recipe/RecipeCatalog.cs'],
+                    'gitBoundary': {'valid': True}, 'unresolved': []}
+            with patch.object(modules.worker, 'run', side_effect=fake_run):
+                result = modules.run(out)
+            manifest = json.loads((out / modules.MANIFEST).read_text())
+            self.assertEqual(result['status'], 'partial_unimplemented_seed')
+            self.assertEqual(manifest['classes'][0]['status'], 'incomplete_contract')
+            self.assertIn('core-dynamic-keyword', manifest['classes'][0]['completenessDiagnostics'])
+    def test_unimplemented_marker_survives_as_partial_not_accepted(self):
+        with tempfile.TemporaryDirectory(dir='/private/tmp') as directory:
+            root = Path(directory); stage, _, _, _, _ = self.make_stage(root); out = root / 'Module'
+            with patch.object(modules.worker, 'prepare', side_effect=self.fake_worker_prepare):
+                modules.prepare(stage, 'Recipe', out)
+            def fake_run(task_root, *, session_id=None):
+                task_root = Path(task_root)
+                path = task_root / 'workspace' / 'Assets/Game/Domain/Recipe/RecipeCatalog.cs'
+                pending = b'// NOT IMPLEMENTED\n'
+                path.write_bytes(pending)
+                (task_root / 'request.json').write_bytes(encoded({'state': 'completed'}))
+                return {'status': 'complete', 'actualChanges': [{'path': 'Assets/Game/Domain/Recipe/RecipeCatalog.cs',
+                    'afterSha256': sha(pending)}], 'declaredChangedPaths': ['Assets/Game/Domain/Recipe/RecipeCatalog.cs'],
+                    'gitBoundary': {'valid': True}, 'unresolved': []}
+            with patch.object(modules.worker, 'run', side_effect=fake_run):
+                result = modules.run(out)
+            self.assertEqual(result['status'], 'partial_unimplemented_seed')
+
+    def test_worker_cannot_claim_changes_outside_module_paths(self):
+        with tempfile.TemporaryDirectory(dir='/private/tmp') as directory:
+            root = Path(directory); stage, _, _, _, _ = self.make_stage(root); out = root / 'Module'
+            with patch.object(modules.worker, 'prepare', side_effect=self.fake_worker_prepare):
+                modules.prepare(stage, 'Recipe', out)
+            def fake_run(task_root, *, session_id=None):
+                task_root = Path(task_root)
+                selected = task_root / 'workspace' / 'Assets/Game/Domain/Recipe/RecipeCatalog.cs'
+                generated = b'namespace Demo.Domain.Recipe { public sealed class RecipeCatalog { public int Count; public int GetCount() => 7; } }\n'
+                selected.write_bytes(generated)
+                (task_root / 'request.json').write_bytes(encoded({'state': 'completed'}))
+                return {'status': 'complete', 'actualChanges': [
+                    {'path': 'Assets/Game/Domain/Recipe/RecipeCatalog.cs', 'afterSha256': sha(generated)},
+                    {'path': 'Assets/Game/Domain/Recipe/Unexpected.cs', 'afterSha256': sha(b'')},
+                ], 'declaredChangedPaths': ['Assets/Game/Domain/Recipe/RecipeCatalog.cs', 'Assets/Game/Domain/Recipe/Unexpected.cs'],
+                    'gitBoundary': {'valid': True}, 'unresolved': []}
+            with patch.object(modules.worker, 'run', side_effect=fake_run):
+                with self.assertRaises(ParseError):
+                    modules.run(out)
+
+
+if __name__ == '__main__':
+    unittest.main()

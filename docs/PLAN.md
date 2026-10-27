@@ -3,13 +3,23 @@
 
 用户新要求已本聊天原生核验：总监turn `01a17b0d-59e9-7d63-81fa-329046f0007c` / human `01a17b0d-5a06-7f73-8d96-4057429299ba`；事件`monkey-v06-architecture-first-stop-old-20261027-01`。**旧逐文件修补方向被替代，不再以6445旧文件逐个审过为出口。** 目标为Bootstrap/Domain/Gameplay/Presentation/Services五层架构，先确定全项目模块、核心类及功能类，再把来源代码段和字段依赖归入语义化类，编译及代表业务链拉通。不能只改名/搬目录，不能复刻JS/Cocos运行时或用空壳补业务。新独立候选按版本化架构/符号/所有权计划生成，旧“本批不可增删文件/不可改类名”限制不再用于新架构；正式游戏与原始证据不变。
 
-旧队列已在第46批合作式自然收尾，3476/6445已处理，2969未处理原样保留，子进程已退出，第47批未启动。旧结果是可复用原材料，不是有效原生架构交付；不补跑剩余40批、不默认深修全部partial。未启用的5C效率WIP九文件与tracked patch已逐字节副本封存`.private/v060-architecture-first-20261027/StoppedEfficiencyWip01/receipt.json`，产品代码恢复4ed6f6c基线，不再推进该优化。项目继续开发；当前盘点既有源码图/类字段方法归属、依赖、资源映射及可复用修订，随后按总监新详细架构计划实施。无新的模型/上下文/CLI并发、依赖、发布/推送/安装或正式工程写入。
+旧队列已在第46批合作式自然收尾，3476/6445已处理，2969未处理原样保留，子进程已退出，第47批未启动。旧结果是可复用原材料，不是有效原生架构交付；不补跑剩余40批、不默认深修全部partial。未启用的5C效率WIP九文件与tracked patch已逐字节副本封存`.private/v060-architecture-first-20261027/StoppedEfficiencyWip01/receipt.json`，产品代码恢复4ed6f6c基线，不再推进该优化。项目继续开发；已完成全局架构验收，正按完整功能模块生成与原生资源接线实施。无新的模型/上下文/CLI并发、依赖、发布/推送/安装或正式工程写入。
 
 ### 当前执行记录（2026-10-27 架构阶段）
 
-已实现 whole-source 架构准备/执行/状态三命令及结构合同，源目录不重导；1831个完整注册区间和补充区间、21999个成员、548份实际JSON、1698个Prefab/Scene身份作为规划输入。成员索引按SHA分片，不因单文件8MiB边界删减。GlobalArchitecture02因CLI自身状态库/app-server沙箱权限在模型启动前失败，原回执保留；新独立GlobalArchitecture03沿现有Codex配置经正常权限启动，当前实际运行。此阶段只形成架构合同，不能称原生实现/编译/运行已完成。
+已实现 whole-source 架构准备/执行/状态三命令及结构合同，源目录不重导；1831个完整注册区间和补充区间、21999个成员、548份实际JSON、1698个Prefab/Scene身份作为规划输入。成员索引按SHA分片，不因单文件8MiB边界删减。GlobalArchitecture02因CLI自身状态库/app-server沙箱权限在模型启动前失败，原回执保留；新独立GlobalArchitecture03沿现有Codex配置经正常权限启动，其原始分析已结束，后续修订验收见下。此阶段只形成架构合同，不能称原生实现/编译/运行已完成。
 
 主开发持有唯一真实CLI和共享架构/CLI/集成写权；复用code_regeneration实现按完整功能模块prepare/run/status（精确来源、预规划目标、全局合同及依赖实现、模块回执），复用codex_postprocess实现冻结资源+五层实现的独立候选组装（清除生产路径旧草稿、所有权与source→target映射、手改保护）。仅模块接口和私有隔离测试，不执行源代码/不写正式游戏；shader_profile空闲。下一步架构验收后顺序生成实际模块，组装新候选并做整工程及跨层业务验证，不恢复旧3476队列。
+
+2026-10-27 接续实际结果：GlobalArchitecture03 单次全局分析已输出47模块/1484目标类型/27链，原始9,261,012B模型payload保留。16MiB原有worker输出边界接收、recheck和模块架构分片已实现；首次验收严格发现3489项来源归属反向缺失，未把静态设计认作通过或业务恢复。GlobalArchitecture04已沿原payload及精确诊断修正3489项归属，GlobalArchitecture05又保留原初始化说明并补正实际类ID；不重做整套旧草稿分析。record属于可接受设计类型、null base表示无基类；实际Unity兼容仍待整工程编译。
+
+完整模块API、串行pipeline与候选assembler已接CLI；当前48项新增/定向用例通过（含大plan/分片/精确续跑/权限阻塞/篡改/来源和meta绑定）。候选保留4个冻结原生Layout助手及meta以保护既有Prefab GUID引用；本机Unity6000.6.2f1内置uGUI2.6.0的UnityEngine.UI/TMP程序集名和SHA已实际只读核验，无安装。仍未产生新的完整模块实现或新Unity候选，编译/运行not_run；下一步是修订架构验收后连续实现全部模块，而非以工具小包停工。
+
+2026-10-27 当前架构出口：GlobalArchitecture05 `architecture_designed`，47模块/1484类型/1831来源单元/27链；architecture SHA `89343c3edb3ccb39cd0fe5495096b38972288e6a8c2609b0733ba91e4f6fe25e`，validation SHA `179e7e41ce44f437f90e030080aa3bccebc271c2e36c1abee987fd05e6b721c7`。117个JSON路径及230个Prefab/Scene路径均属冻结清单，routing-check.json保留原生未运行边界。第一条链严格要求JSON，独立接触/Prefab调参链不强造不存在的JSON；实际运行仍执行正式JSON约定。
+
+NativeProject01已通过真实CLI准备47模块串行计划（当前0实现），最大模块230类，小于256选择边界。开始完整模块实现前补齐原脚本注册→组件→原生资源/只读Editor读回的精确上下文；已有120MB editor-readback是原生身份子集，不能把源mapping缺localID外推为全部缺失，也不能冒称已给新类完成序列化。之后持续单CLI全模块生成、候选组装、必要整工程和跨层业务验证；架构完成不代表实现/编译/运行完成。
+
+2026-10-27 实际实现已启动：NativeProject01的单CLI串行supervisor正在Session模块（21目标类）；完整47模块自动接续，pending不等于完成。模块输入约17.8MB/220份只读context，含完整架构分片、所需源码/JSON、真实资源身份及冻结Unity包版本；不发源UUID runtime lookup，不装额外包。原生身份helper在真实Orders只读检查中核实95/95目标Prefab路径/GUID，但没有精确component localID，明确待Editor接线。新candidate manifest已与现有candidate_snapshot.snapshot/verify标准接通；48项当前定向测试通过，非整工程编译/运行证明。
 
 ## 历史：2026-10-26 全量逐文件Codex后处理（已被上方替代）
 

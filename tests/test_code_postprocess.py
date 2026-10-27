@@ -89,6 +89,18 @@ if '--version' in sys.argv:
                        context_root=self.candidate, codex=self.codex,
                        architecture_stage=True, **kwargs)
 
+    def test_large_architecture_seed_uses_existing_output_bound_without_loosening_legacy_input(self):
+        relative='Analysis/Architecture/architecture.json';raw=b'{}'+b' '*(9*1024*1024)
+        self.architecture_inputs({relative:(raw,'generated')})
+        prepared=self.prepare_architecture([relative])
+        request=json.loads((prepared.output/'request.json').read_bytes())
+        self.assertEqual(request['selectedFileMaxBytes'],postprocess.WORKSPACE_FILE_BYTES)
+        self.assertEqual(postprocess._source_integrity(request),[])
+        self.assertEqual((prepared.workspace/relative).read_bytes(),raw)
+        self.architecture_inputs({'Assets/Large.cs':(raw,'generated')})
+        with self.assertRaises(ParseError):
+            prepare(self.candidate,['Assets/Large.cs'],self.manifest_hash,self.root/'legacy','Review code.',codex=self.codex)
+
     def test_prepare_copies_only_selected_generated_cs_and_keeps_source_immutable(self):
         evidence = self.candidate / 'map.json'
         evidence.write_text('{"note":"context"}', encoding='utf-8')

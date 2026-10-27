@@ -12,7 +12,7 @@ from monkey.sources import compiled
 
 SCHEMA_VERSION = 'monkey-native-code-architecture/1'
 LAYERS = ('Domain', 'Gameplay', 'Presentation', 'Services', 'Bootstrap')
-KINDS = ('class', 'struct', 'interface', 'enum')
+KINDS = ('class', 'struct', 'interface', 'enum', 'record')
 DISPOSITIONS = ('planned', 'native-replacement', 'existing-implementation', 'evidence-only', 'blocked')
 ALLOWED_LAYER_DEPENDENCIES = {
     'Domain': ['Domain'],
@@ -225,7 +225,7 @@ def validate_architecture(plan: dict, catalog: dict) -> dict:
         if 'baseType' in record and 'base' in record:
             _fail(loc, 'Specify at most one of base or baseType')
         for base_key in ('baseType', 'base'):
-            if base_key in record:
+            if base_key in record and record[base_key] is not None:
                 base_type = _text(record[base_key], loc + '.' + base_key)
                 if layer in ('Domain', 'Gameplay'):
                     _check_core_type(base_type, loc + '.' + base_key)
@@ -243,6 +243,9 @@ def validate_architecture(plan: dict, catalog: dict) -> dict:
                 _fail(f'{loc}.sourceUnitIds[{j}]', f'Unknown source unit {source_id!r}')
         if not set(srcs).issubset(module_table[module_id]['sourceUnitIds']):
             _fail(loc + '.sourceUnitIds', 'Class source units must be present in its module inputs')
+        for source_id in _unique_strings(record.get('sourceInputUnitIds',[]),loc+'.sourceInputUnitIds'):
+            if source_id not in source_ids:_fail(loc+'.sourceInputUnitIds','Unknown analysis/dependency source unit')
+        allowed_members=set().union(*(source_members[sid]for sid in srcs)) if srcs else set()
         fields = _array(record.get('fields'), loc + '.fields')
         field_names = set()
         for j, field in enumerate(fields):
@@ -254,6 +257,9 @@ def validate_architecture(plan: dict, catalog: dict) -> dict:
             field_names.add(fname)
             ftype = _text(field.get('type'), floc + '.type')
             _text(field.get('role'), floc + '.role')
+            field_members=_unique_strings(field.get('sourceMemberIds',[]),floc+'.sourceMemberIds')
+            if not set(field_members).issubset(allowed_members):
+                _fail(floc+'.sourceMemberIds','Field source IDs must exist in this class source units')
             if layer in ('Domain', 'Gameplay'):
                 _check_core_type(ftype, floc + '.type')
         methods = _array(record.get('methods'), loc + '.methods')
@@ -280,7 +286,6 @@ def validate_architecture(plan: dict, catalog: dict) -> dict:
                 if layer in ('Domain', 'Gameplay'):
                     _check_core_type(ptype, ploc + '.type')
             member_ids = _unique_strings(method.get('sourceMemberIds'), mloc + '.sourceMemberIds')
-            allowed_members=set().union(*(source_members[sid]for sid in srcs)) if srcs else set()
             if not set(member_ids).issubset(allowed_members):
                 _fail(mloc + '.sourceMemberIds', 'Method source IDs must exist in this class source units')
             signature = (mname, tuple(param_types))
@@ -381,13 +386,13 @@ def validate_architecture(plan: dict, catalog: dict) -> dict:
         if not needed.issubset(chain_layers):
             _fail(loc + '.classIds', f'Integration chain must include classIds from layers {sorted(needed)!r}')
         configs = _array(chain.get('configPaths'), loc + '.configPaths')
-        if not configs:
-            _fail(loc + '.configPaths', 'Integration chain must name a configuration file path')
+        if i == 0 and not configs:
+            _fail(loc + '.configPaths', 'The first core integration chain must name a configuration file path')
         has_config_file = False
         for j, path in enumerate(configs):
             path = _safe_relative_file(path, f'{loc}.configPaths[{j}]')
             has_config_file |= PurePosixPath(path).suffix.lower() == '.json'
-        if not has_config_file:
+        if configs and not has_config_file:
             _fail(loc + '.configPaths', 'At least one configuration path must identify a JSON file')
         assets = _array(chain.get('assetPaths'), loc + '.assetPaths')
         for j, path in enumerate(assets):

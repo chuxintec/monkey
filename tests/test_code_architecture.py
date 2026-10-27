@@ -69,6 +69,31 @@ class ArchitectureStageTests(unittest.TestCase):
         (output/'state.json').write_bytes(encoded(dict(status='blocked')))
         self.assertEqual(architecture.status(output)['status'],'blocked')
 
+    def test_recheck_preserves_large_recorded_payload_without_launching_model(self):
+        output=Path(self.tmp.name)/'Finalized';task=output/'Task';workspace=task/'workspace'
+        path=workspace/architecture.PLAN_PATH;path.parent.mkdir(parents=True)
+        raw=encoded(dict(classes=[],modules=[],padding='x'*(9*1024*1024)))
+        path.write_bytes(raw)
+        actual=[dict(path=architecture.PLAN_PATH,kind='modified',afterSha256=sha(raw))]
+        (output/'request.json').write_bytes(encoded(dict(stage='global-architecture',planPath=architecture.PLAN_PATH)))
+        (task/'request.json').write_bytes(encoded(dict(state='finalized',workspaceBudgetBytes=32*1024*1024)))
+        (task/'process.json').write_bytes(encoded(dict(state='exited')))
+        (task/'manifest.json').write_bytes(encoded(dict(status='partial',actualChanges=actual,declaredChangedPaths=[architecture.PLAN_PATH],gitBoundary=dict(valid=True))))
+        with patch.object(architecture.worker,'_workspace_integrity',return_value=[]), \
+             patch.object(architecture.worker,'_source_integrity',return_value=[]), \
+             patch.object(architecture.worker,'_check_git_boundary',return_value=dict(valid=True)), \
+             patch.object(architecture.worker,'_workspace_changes',return_value=actual), \
+             patch.object(architecture,'_catalog_for_validation',return_value=dict(sourceUnits=[])), \
+             patch('monkey.code_architecture_contract.validate_architecture',return_value=dict(valid=True)), \
+             patch.object(architecture.worker,'run')as running:
+            result=architecture.recheck(output)
+            self.assertEqual(result['status'],'architecture_designed')
+            self.assertEqual((output/'architecture.json').read_bytes(),raw)
+            self.assertEqual(result['architectureSha256'],sha(raw));running.assert_not_called()
+            path.write_bytes(raw+b' ')
+            with self.assertRaises(ParseError)as error:architecture.recheck(output)
+            self.assertEqual(error.exception.code,'CODE_ARCHITECTURE_BOUNDARY')
+
     def test_member_shards_retain_ids_and_reject_changed_immutable_evidence(self):
         output=Path(self.tmp.name)/'Architecture01'
         with patch.object(architecture.worker,'prepare',side_effect=lambda s,p,h,o,t,**k:type('Prepared',(),dict(output=o))()):

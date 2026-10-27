@@ -1,5 +1,9 @@
 # v0.6 模块执行登记
 
+当前执行：父持有NativeProject01串行supervisor，Session 21类实际模型工作进行中；code_regeneration的module/asset-context模块与codex_postprocess的兼容candidate组装器均已交付并停止写入，父集成48项检查通过。后续全部模块、原生Editor接线/整工程编译/跨层业务仍待完成，不因工具模块交付结束版本。
+
+2026-10-27 最新：GlobalArchitecture05已完成结构验收，父单写公共合同/CLI/pipeline与真实模型/原生集成，NativeProject01已准备47模块；code_regeneration在其module三文件之外新增asset_context助手/专测/文档，把原脚本→资产GUID与既有Editor读回身份纳入上下文，仅只读原件、不操作Editor。codex_postprocess候选组装器已交付并停止写入；shader_profile空闲。原生业务实现/编译/运行尚未开始，不重启旧6445队列。
+
 2026-10-27 architecture-first当前派工：父持有单一实际Codex任务GlobalArchitecture03、共享架构合同/CLI/PLAN/整合；code_regeneration仅写code_architecture_modules.py及其专测/文档，负责完整模块任务与回执；codex_postprocess仅写code_architecture_candidate.py及其专测/文档，负责资源保留、五层程序集和实现所有权组装。两者不启动真实CLI/Editor、不跨写主文件，shader_profile空闲。架构分析运行中，原生模块实现/编译/运行尚未开始。
 
 2026-10-27 当前整体架构恢复：新直接人类要求覆盖旧逐文件流水线，父已自然停第46批3476/6445，子进程退出，不开第47批。父单写架构设计/共享符号计划/PLAN/TEAM及候选集成；当前先盘点可复用源码图/依赖/资源。§5C worker和项目提效WIP已封存StoppedEfficiencyWip01，未启用真实批，产品代码回到4ed6f6c；codex_postprocess/shader_profile均停止写入。后续按新详细架构计划安排完整功能模块，禁止重启旧队列、源引擎解释器和空壳补通；正式游戏/原件不变。

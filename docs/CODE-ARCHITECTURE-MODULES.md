@@ -1,0 +1,33 @@
+# Architecture module implementation workflow
+
+`monkey.code_architecture_modules` implements one complete module from a finished global architecture stage. It consumes the accepted global stage in `.private/v060-architecture-first-20261027/GlobalArchitectureNN/`; it does not use Candidate07 draft filenames as implementation units and does not resume the earlier ProjectRun queue.
+
+The public interface is:
+
+```python
+from monkey.code_architecture_modules import prepare, run, status
+
+prepared = prepare(
+    architecture_stage=".private/v060-architecture-first-20261027/GlobalArchitecture03",
+    module_id="Recipe",
+    output=".private/v060-architecture-first-20261027/RecipeModule01",
+    dependency_roots=[".private/v060-architecture-first-20261027/AcceptedDomainModule"],
+    previous_module=None,
+)
+result = run(".private/v060-architecture-first-20261027/RecipeModule01")
+current = status(".private/v060-architecture-first-20261027/RecipeModule01")
+```
+
+`architecture_stage` must have `state.status == "architecture_designed"`, pinned `Evidence/source-catalog.json`, `architecture.json`, `validation.json`, `Evidence/architecture-contract.json`, and the worker-recorded `Task/workspace/Analysis/Architecture/architecture.json` payload whose SHA matches the Task revision record. The workflow revalidates class ownership and class paths against the source catalog. Optional state-level architecture/validation hashes are checked when available; this also supports the first completed stage created before those fields were added.
+
+`prepare` selects exactly one existing module ID from the global `architecture.json`. It uses validated `validation.json.classPaths`, seeds every class path, and carries all declared source units and method/field source-member identities. To keep a large plan readable without dropping records, the module context `architecture.json` retains every global field except the full `classes` array; it contains `classCount` and a hash/size/count index of all class shards under `ArchitectureModules/`. Each shard contains full class records, with a hard 8 MiB shard limit and 64 MiB aggregate architecture-context limit. A class that cannot fit intact causes a named failure. Replacing the shard set with its indexed records reconstructs the original global class array exactly. Seed files contain comments only and are explicitly marked `NOT IMPLEMENTED`; they have no declarations or behavior and must never be treated as working code. The worker receives all class shards plus the focused module class seeds, the global contract and validation, exact complete source-unit fragments, source member indexes, configs named by relevant integration chains, and the candidate-owned `Packages/manifest.json` and `ProjectSettings/ProjectVersion.txt`. These project files are checked against the frozen candidate manifest. Use block namespaces and ordinary C# syntax compatible with the pinned Unity version. Do not add dependencies or assume `Newtonsoft.Json` or `System.Text.Json`; avoid `JsonUtility` when it would lose dictionary or numeric-key structure, and report a parser gap if the pinned project has no evidenced compatible reader.
+
+Dependency roots contain `architecture-module-manifest.json` plus its `.sha256` sidecar. A referenced class with `status="generated_unreviewed"` may be supplied only as explicitly unreviewed implementation context so module order and cycles do not deadlock. This module workflow has no review-acceptance API and rejects a hand-edited `accepted` status. Referenced classes without a generated implementation remain in `pendingImplementations`; the workflow passes their global type contract without fabricating a stub. A previous module revision must be pinned as `{"root": path, "manifestSha256": "..."}`. Its class files are rehashed before reuse.
+
+`run` accepts a session ID only through the underlying worker's exact checkpoint rules. It checks global architecture/source pins, context bytes, worker workspace boundaries, exact changed paths, and every output byte before materializing it at its validated target path. A lexical C# pass strips comments and string/character literals before checking the planned block namespace, namespace-level type declaration, methods and fields. For Domain/Gameplay it also rejects UnityEngine/UnityEditor/MonoBehaviour/ScriptableObject references, `dynamic`, and only the untyped `Dictionary<string, object>` core shape; typed collections and tokens that occur only in comments or literals do not trigger these checks. Seed residue or any missing/forbidden declaration produces `partial_unimplemented_seed`; otherwise output remains `generated_unreviewed`. These are bounded source checks, not a C# parser or semantic validation. Model completion is not review acceptance, compilation, Unity binding, or runtime success; those stay `not_reviewed`/`not_run` in the versioned module manifest.
+
+The module prompt pins the existing resource-loading boundary: frozen assets live under `Assets/Game/Content/<Type>/<Module>/`, not `Resources`. Runtime code cannot use full project paths with `Resources.Load` or `AssetDatabase`; this workflow does not add Addressables or AB. Use typed serialized `Sprite`, `Prefab`, and `TextAsset` references injected through the planned catalog/Bootstrap/Services. JSON values remain in TextAssets and are parsed by the Player; do not duplicate editable numeric tables into ScriptableObjects. `ContentService.RootPath` is only a design hint, not evidence of a runtime loader. The asset context documents source prefab identities and any preview-only localIDs; unresolved source references remain partial until a typed native reference is actually connected and checked.
+
+The manifest is named `architecture-module-manifest.json` to avoid colliding with a candidate assembler's root `manifest.json`. Each class row pins its class ID, target path, source-unit IDs, source-member IDs, type dependencies, and status. Each file row carries `path` (artifact-relative), `targetPath` (candidate-relative), `artifactPath`, SHA-256, byte count, class ID, source-unit IDs, source-member IDs, and status. The parent assembler can aggregate these rows into the owning candidate manifest after review.
+
+Context, input, and output files are never silently truncated. A module with more than `worker.MAX_FILES` classes or an individual evidence file above worker limits fails with a named budget diagnostic and retains the complete global source evidence. This first implementation requires an explicit module split in the architecture plan rather than silently dropping classes.

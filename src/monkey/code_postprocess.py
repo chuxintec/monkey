@@ -364,7 +364,7 @@ def prepare(candidate_root: str | Path, selected_files: Iterable[str],
                 fail('POSTPROCESS_SELECTION', relative, 'Architecture targets must be manifest-owned generated seed files')
         elif not row or row.get('owner') != 'generated' or not relative.lower().endswith('.cs'):
             fail('POSTPROCESS_SELECTION', relative, 'Only manifest-owned generated C# files may be selected')
-        path, raw = _file(source, relative, FILE_BYTES)
+        path, raw = _file(source, relative, WORKSPACE_FILE_BYTES if architecture_stage else FILE_BYTES)
         if len(raw) != row.get('bytes') or sha(raw) != row.get('sha256'):
             fail('POSTPROCESS_SOURCE_CHANGED', relative, 'Selected source differs from its owning manifest')
         total += len(raw)
@@ -475,6 +475,7 @@ def prepare(candidate_root: str | Path, selected_files: Iterable[str],
             (workspace / '__Reviews').mkdir(mode=0o700)
         info = {
             'schemaVersion': 1,
+            'selectedFileMaxBytes': WORKSPACE_FILE_BYTES if architecture_stage else FILE_BYTES,
             'runId': str(uuid.uuid4()),
             'producer': {'version': __version__, 'moduleSha256': sha(read(Path(__file__), max_bytes=FILE_BYTES))},
             'base': {'candidateRoot': str(source), 'manifestPath': 'manifest.json',
@@ -1225,7 +1226,7 @@ def _source_integrity(request: dict) -> list[str]:
         if sha(read(manifest, max_bytes=MANIFEST_BYTES)) != request['base']['manifestSha256']:
             errors.append('candidate manifest changed during post-processing')
         for row in request['selected']:
-            path, raw = _file(base, row['path'], FILE_BYTES)
+            path, raw = _file(base, row['path'], request.get('selectedFileMaxBytes', FILE_BYTES))
             if len(raw) != row['bytes'] or sha(raw) != row['sha256']:
                 errors.append(f"{row['path']}: candidate source changed during post-processing")
     except Exception as error:

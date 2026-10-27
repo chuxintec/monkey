@@ -51,6 +51,30 @@ def fixture():
 
 
 class CodeArchitectureContractTests(unittest.TestCase):
+    def test_first_chain_keeps_real_json_requirement_while_optional_chain_can_use_prefab_tuning(self):
+        from copy import deepcopy
+        plan,catalog=fixture();extra=deepcopy(plan['integrationChains'][0]);extra.update(id='prefab-contact',configPaths=[])
+        plan['integrationChains'].append(extra)
+        self.assertTrue(validate_architecture(plan,catalog)['valid'])
+        plan['integrationChains'][0]['configPaths']=[]
+        with self.assertRaisesRegex(ParseError,'first core integration chain'):validate_architecture(plan,catalog)
+
+    def test_field_member_identity_and_analysis_inputs_cannot_be_invented(self):
+        plan,catalog=fixture();field=plan['classes'][0]['fields'][0];field['sourceMemberIds']=['member-a']
+        self.assertTrue(validate_architecture(plan,catalog)['valid'])
+        field['sourceMemberIds']=['fabricated-member']
+        with self.assertRaisesRegex(ParseError,'Field source IDs'):validate_architecture(plan,catalog)
+        field['sourceMemberIds']=[];plan['classes'][0]['sourceInputUnitIds']=['fabricated-unit']
+        with self.assertRaisesRegex(ParseError,'Unknown analysis'):validate_architecture(plan,catalog)
+
+    def test_typed_record_plan_remains_subject_to_core_dependency_rules(self):
+        plan,catalog=fixture();plan['classes'][0]['kind']='record'
+        self.assertTrue(validate_architecture(plan,catalog)['valid'])
+        plan['classes'][0]['baseType']=None
+        self.assertTrue(validate_architecture(plan,catalog)['valid'])
+        plan['classes'][0]['fields'][0]['type']='UnityEngine.Vector2'
+        with self.assertRaisesRegex(ParseError,'Core Domain/Gameplay'):validate_architecture(plan,catalog)
+
     def test_actual_type_dependencies_and_source_members_cannot_be_invented(self):
         plan,catalog=fixture();plan['classes'][1]['typeDependencies']=['domain-entity']
         self.assertTrue(validate_architecture(plan,catalog)['valid'])
