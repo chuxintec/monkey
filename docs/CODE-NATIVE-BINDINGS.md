@@ -18,6 +18,12 @@ The target class declaration is checked after the repository's C# lexer blanks c
 
 The returned `sourceClassIdentityProof` records the class, module receipt, source-unit and source-file pins, exact code region, literal Cocos script registration, source component identity, uniqueness result, and a proof SHA-256. When the proof is unresolved, the plan remains `partial-unresolved-evidence`, `component.attachStatus` states the reason, and `operations` is empty. A pinned Script `.meta` GUID remains only authoring input; whole-project compile and Editor serialization are separate validation steps.
 
+## Assembled Script identity
+
+Fresh architecture assembly now writes manifest-owned `.cs.meta` and `.asmdef.meta` files. Script GUIDs derive from the project namespace, architecture root namespace and class ID, and stay stable when output location or method bodies change. Collisions with retained resources abort assembly. The `scriptIdentities` index binds each class path and C# hash to its metadata hash and GUID; revisions preserve existing GUID bytes and refresh the changed C# hashes.
+
+Module model receipts remain immutable and usually contain only C# files. For their unchanged C# implementations, callers may supply `native_candidate_manifest_bytes`, `native_candidate_manifest_sha256`, and `script_meta_bytes` to obtain the Script identity from a later assembly. The planner verifies the full manifest pin, source/architecture relationship, exact class ownership and bytes, metadata ownership, deterministic GUID and identity index. It records `assembledScriptIdentity`; it does not retrofit metadata into the old module receipt. Conflicts or revised C# without a matching new receipt are rejected. This supplies an authoring identity, not evidence that Unity compiled or attached the class.
+
 ## Verification evidence
 
 The focused tests are in `tests/test_code_architecture_bindings.py`. They cover a valid exact identity, source-unit sharing without class identity, duplicate target classes, wrong source ID/offset, mismatched literal Cocos script identity, legacy evidence absence, fake class declarations in comments and string forms, and malformed UUID-like script IDs.

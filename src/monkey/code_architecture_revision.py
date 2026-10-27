@@ -515,6 +515,23 @@ def revise_native_candidate(candidate_root, expected_manifest_sha256,
             updated_manifest['implementedClassPaths'] = sorted(set(updated_manifest['implementedClassPaths']) | revised_class_paths)
         if isinstance(updated_manifest.get('missingClassPaths'), list):
             updated_manifest['missingClassPaths'] = sorted(set(updated_manifest['missingClassPaths']) - revised_class_paths)
+        if isinstance(base_manifest.get('scriptIdentities'), dict):
+            identities = {key: dict(value) for key, value in base_manifest['scriptIdentities'].items()}
+            for path, _artifact, change, _artifact_path, _type_name in prepared:
+                meta_path = path + '.meta'
+                meta_row = output_rows.get(meta_path)
+                if meta_row is None:
+                    identities.pop(change['classId'], None)
+                    continue
+                meta_raw = read(inside(output, meta_path), FILE_BYTES)
+                guid = _guid(meta_raw, meta_path)
+                identities[change['classId']] = dict(path=path, sha256=change['newSha256'],
+                    metaPath=meta_path, metaSha256=sha(meta_raw), guid=guid, unityTypeStatus='not_compiled')
+                if meta_row.get('sourceKind') == 'architecture-script-meta':
+                    output_rows[meta_path] = {**meta_row, 'provenance': {
+                        **meta_row.get('provenance', {}), 'scriptSha256': change['newSha256']}}
+            updated_manifest['scriptIdentities'] = identities
+            updated_manifest['files'] = [output_rows[path] for path in sorted(output_rows)]
         updated_manifest['status'] = 'partial'
         updated_manifest['implementationStatus'] = 'partial_unreviewed'
         updated_manifest['compiled'] = False

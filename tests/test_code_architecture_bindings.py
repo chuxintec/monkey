@@ -205,6 +205,64 @@ RectTransform:
 
 
 class CodeArchitectureBindingsTests(unittest.TestCase):
+    def assembled_fixture(self):
+        from monkey.code_architecture_candidate import script_guid
+        kwargs=fixture();kwargs['architecture']['rootNamespace']='Game'
+        module=kwargs['module_manifest'];module['files']=module['files'][:1]
+        row=module['files'][0];path=row['path'];class_id=kwargs['class_id']
+        guid=script_guid('Fixture.Native','Game',class_id)
+        meta=('fileFormatVersion: 2\nguid: '+guid+'\n').encode()
+        kwargs['script_meta_bytes']=meta
+        candidate={'schemaVersion':1,'namespace':'Fixture.Native','targetProfile':'unity-6000.6.2f1-ugui',
+            'architectureSchemaVersion':'monkey-native-architecture-candidate/1',
+            'scriptIdentitySchema':'monkey-native-script-identities/1',
+            'provenance':{'kind':'native-architecture-assembly','architecturePlanSha256':kwargs['architecture_sha256'],
+                'sourceCandidateManifestSha256':kwargs['architecture']['sourceManifestSha256']},
+            'classPaths':{class_id:path},'files':[
+                dict(row,owner='generated',sourceKind='architecture-module',provenance={'classId':class_id}),
+                dict(path=path+'.meta',sha256=sha(meta),bytes=len(meta),owner='generated',sourceKind='architecture-script-meta',
+                    provenance={'classId':class_id,'scriptPath':path,'scriptSha256':row['sha256'],'guid':guid})],
+            'scriptIdentities':{class_id:dict(path=path,sha256=row['sha256'],metaPath=path+'.meta',metaSha256=sha(meta),guid=guid)}}
+        self.pin_assembled(kwargs,candidate)
+        return kwargs,candidate
+
+    @staticmethod
+    def pin_assembled(kwargs,candidate):
+        raw=json.dumps(candidate,sort_keys=True).encode()
+        kwargs['native_candidate_manifest_bytes']=raw
+        kwargs['native_candidate_manifest_sha256']=sha(raw)
+
+    def test_assembled_owned_meta_can_supply_identity_without_rewriting_module_receipt(self):
+        kwargs,candidate=self.assembled_fixture();before=json.dumps(kwargs['module_manifest'],sort_keys=True)
+        plan=build_prefab_authoring_plan(**kwargs)
+        self.assertEqual(plan['assembledScriptIdentity']['manifestSha256'],kwargs['native_candidate_manifest_sha256'])
+        self.assertEqual(plan['assembledScriptIdentity']['unityTypeStatus'],'pending-whole-project-compile')
+        self.assertEqual(plan['operations'][0]['kind'],'attach-component-to-root')
+        self.assertEqual(json.dumps(kwargs['module_manifest'],sort_keys=True),before)
+
+    def test_assembled_meta_requires_exact_source_architecture_class_and_index(self):
+        mutations=[lambda c:c['provenance'].update(architecturePlanSha256='0'*64),
+            lambda c:c['provenance'].update(sourceCandidateManifestSha256='0'*64),
+            lambda c:c['classPaths'].update({'Demo.View':'Assets/Game/Presentation/Other/View.cs'}),
+            lambda c:c['files'][0].update(sha256='0'*64),
+            lambda c:c['files'][0].update(sourceKind='architecture-revision'),
+            lambda c:c['files'][1]['provenance'].update(classId='another-class'),
+            lambda c:c['files'][1]['provenance'].update(scriptSha256='0'*64),
+            lambda c:c['scriptIdentities']['Demo.View'].update(guid='0'*32),
+            lambda c:c['files'].append(dict(c['files'][1]))]
+        for mutation in mutations:
+            with self.subTest(mutation=mutations.index(mutation)):
+                kwargs,candidate=self.assembled_fixture();mutation(candidate);self.pin_assembled(kwargs,candidate)
+                with self.assertRaises(ParseError):build_prefab_authoring_plan(**kwargs)
+
+    def test_assembled_meta_rejects_changed_manifest_or_unowned_script_bytes(self):
+        kwargs,_=self.assembled_fixture();kwargs['native_candidate_manifest_bytes']+=b' '
+        with self.assertRaises(ParseError):build_prefab_authoring_plan(**kwargs)
+        kwargs,_=self.assembled_fixture();kwargs['script_meta_bytes']+=b'changed'
+        with self.assertRaises(ParseError):build_prefab_authoring_plan(**kwargs)
+        kwargs,_=self.assembled_fixture();kwargs.pop('native_candidate_manifest_sha256')
+        with self.assertRaises(ParseError):build_prefab_authoring_plan(**kwargs)
+
     def test_class_identity_ignores_comments_and_all_supported_string_literal_forms(self):
         fake_declarations = [
             b'// public class View : MonoBehaviour {}\n',

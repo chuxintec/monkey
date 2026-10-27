@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import re
 import shutil
+import uuid
 from pathlib import Path
 
 from .io import encoded, inside, load, read, safe, sha, write_json
@@ -28,6 +29,19 @@ NATIVE_LAYOUT_SUPPORT = frozenset({
     'IntrinsicGridLayoutGroup', 'NativeLinearLayoutGroup',
     'NativeRectConstraints', 'NativeTextLineBox', 'NativeHorizontalProgressFill',
 })
+
+
+def script_guid(namespace, root_namespace, class_id):
+    """Stable type identity, independent of output location or implementation bytes."""
+    return uuid.uuid5(uuid.NAMESPACE_URL,
+        f'monkey-native-architecture-script:{namespace}:{root_namespace}:{class_id}').hex
+
+
+def _generated_meta(namespace, root_namespace, identity, script=False):
+    guid = (script_guid(namespace, root_namespace, identity) if script else
+        uuid.uuid5(uuid.NAMESPACE_URL,
+            f'monkey-native-architecture-assembly:{namespace}:{root_namespace}:{identity}').hex)
+    return f'fileFormatVersion: 2\nguid: {guid}\n'.encode('utf-8'), guid
 
 
 def _fail(code, location, message):
@@ -366,6 +380,7 @@ def assemble_native_candidate(candidate_root, candidate_manifest_sha256,
     output.mkdir(mode=0o700)
 
     inventory = []
+    script_identities = {}
     total_bytes = 0
     try:
         for path, row in candidate_rows.items():
@@ -414,6 +429,20 @@ def assemble_native_candidate(candidate_root, candidate_manifest_sha256,
                                                   unresolvedSourceUnitIds=row.get('unresolvedSourceUnitIds', []),
                                                   unresolvedSourceMemberIds=row.get('unresolvedSourceMemberIds', []),
                                                   unresolved=row.get('unresolved', []))))
+            meta_path = path + '.meta'
+            meta_raw, guid = _generated_meta(candidate_manifest['namespace'], plan.get('rootNamespace'), row['classId'], script=True)
+            if guid in guid_paths:
+                _fail('DUPLICATE_GUID', meta_path, f'Generated Script GUID duplicates {guid_paths[guid]!r}')
+            guid_paths[guid] = meta_path
+            total_bytes += len(meta_raw)
+            if total_bytes > WHOLE_BYTES:
+                _fail('OUTPUT_BUDGET', meta_path, 'Assembled project exceeds byte budget')
+            inside(output, meta_path).write_bytes(meta_raw)
+            inventory.append(dict(path=meta_path, sha256=sha(meta_raw), bytes=len(meta_raw), owner='generated',
+                sourceKind='architecture-script-meta', provenance=dict(classId=row['classId'],
+                    scriptPath=path, scriptSha256=row['sha256'], guid=guid)))
+            script_identities[row['classId']] = dict(path=path, sha256=row['sha256'],
+                metaPath=meta_path, metaSha256=sha(meta_raw), guid=guid, unityTypeStatus='not_compiled')
         for layer in LAYERS:
             path = f'Assets/Game/{layer}/{layer}.asmdef'
             raw = _asmdef(layer, normalized_refs)
@@ -422,6 +451,20 @@ def assemble_native_candidate(candidate_root, candidate_manifest_sha256,
             target.write_bytes(raw)
             inventory.append(dict(path=path, sha256=sha(raw), bytes=len(raw), owner='generated',
                                   sourceKind='architecture-assembly', provenance=dict(layer=layer)))
+            meta_path = path + '.meta'
+            meta_raw, guid = _generated_meta(candidate_manifest['namespace'], plan.get('rootNamespace'), layer)
+            if guid in guid_paths:
+                _fail('DUPLICATE_GUID', meta_path, f'Generated assembly GUID duplicates {guid_paths[guid]!r}')
+            guid_paths[guid] = meta_path
+            total_bytes += len(raw) + len(meta_raw)
+            if total_bytes > WHOLE_BYTES:
+                _fail('OUTPUT_BUDGET', meta_path, 'Assembled project exceeds byte budget')
+            inside(output, meta_path).write_bytes(meta_raw)
+            inventory.append(dict(path=meta_path, sha256=sha(meta_raw), bytes=len(meta_raw), owner='generated',
+                sourceKind='architecture-assembly-meta', provenance=dict(layer=layer, guid=guid)))
+
+        if len(inventory)>MAX_FILES or len({row['path'].casefold() for row in inventory})!=len(inventory):
+            _fail('OUTPUT_INVENTORY', output, 'Output file count or unique path ownership is invalid')
 
         # Recheck every source identity after copying, before publishing the manifest.
         if sha(read(candidate / 'manifest.json', MAX_MANIFEST)) != candidate_manifest_sha256:
@@ -458,6 +501,8 @@ def assemble_native_candidate(candidate_root, candidate_manifest_sha256,
             'compiled': False,
             'compileStatus': 'not_run',
             'classPaths': expected_class_paths,
+            'scriptIdentitySchema': 'monkey-native-script-identities/1',
+            'scriptIdentities': script_identities,
             'implementedClassPaths': sorted(implementations),
             'retainedSupportPaths': sorted(path for path, *_ in support_files),
             'missingClassPaths': missing,

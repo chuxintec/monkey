@@ -110,6 +110,28 @@ class ArchitectureRevisionTests(unittest.TestCase):
         meta = (self.output / 'Assets/Game/Domain/Core/PlayerRules.cs.meta').read_bytes()
         self.assertRegex(meta.decode(), r'guid: [0-9a-f]{32}')
         self.assertEqual(files['Assets/Game/Domain/Core/PlayerRules.cs.meta']['owner'], 'generated')
+
+    def test_revision_refreshes_script_identity_hash_without_changing_existing_guid(self):
+        path='Assets/Game/Domain/Core/PlayerState.cs'
+        meta=b'fileFormatVersion: 2\nguid: eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\n'
+        self._write_source(path+'.meta',meta,owner='generated',sourceKind='architecture-script-meta',
+            provenance={'classId':'player','scriptPath':path,'scriptSha256':sha(self.original_code),'guid':'e'*32})
+        manifest=load(self.manifest_raw)
+        manifest.update(files=self.rows,scriptIdentitySchema='monkey-native-script-identities/1',
+            scriptIdentities={'player':dict(path=path,sha256=sha(self.original_code),metaPath=path+'.meta',
+                metaSha256=sha(meta),guid='e'*32,unityTypeStatus='not_compiled')})
+        self.manifest_raw=encoded(manifest);(self.candidate/'manifest.json').write_bytes(self.manifest_raw)
+        self.base_sha=sha(self.manifest_raw)
+        plan=load((self.revision/'revision-plan.json').read_bytes());self._plan(plan['files'])
+        report=self.revise()
+        self.assertEqual(report['scriptIdentities']['player']['sha256'],sha(self.replacement))
+        self.assertEqual(report['scriptIdentities']['player']['guid'],'e'*32)
+        self.assertEqual((self.output/(path+'.meta')).read_bytes(),meta)
+        helper=report['scriptIdentities']['player-rules']
+        self.assertEqual(helper['sha256'],sha(self.helper))
+        self.assertEqual(helper['unityTypeStatus'],'not_compiled')
+        row=next(row for row in report['files'] if row['path']==path+'.meta')
+        self.assertEqual(row['provenance']['scriptSha256'],sha(self.replacement))
         self.assertEqual((self.candidate / 'Assets/Game/Domain/Core/PlayerState.cs').read_bytes(), self.original_code)
 
     def test_manual_changed_base_bytes_are_rejected_without_output(self):

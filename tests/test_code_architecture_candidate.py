@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from monkey.code_architecture_candidate import assemble_native_candidate
+from monkey.code_architecture_candidate import assemble_native_candidate, script_guid
 from monkey.candidate_snapshot import snapshot, verify
 from monkey.io import encoded, sha
 from monkey.sources.compiled import ParseError
@@ -144,6 +144,43 @@ class ArchitectureCandidateTests(unittest.TestCase):
         self.assertEqual(report['status'], 'partial')
         self.assertEqual(report['partialClassPaths'], ['Assets/Game/Domain/Core/PlayerState.cs'])
         self.assertEqual(report['compileStatus'], 'not_run')
+
+    def test_generated_script_meta_is_stable_across_output_and_code_revision(self):
+        first=self.assemble()
+        script='Assets/Game/Domain/Core/PlayerState.cs'
+        meta=(self.output/(script+'.meta')).read_bytes()
+        self.assertFalse((self.modules/(script+'.meta')).exists())
+        identity=first['scriptIdentities']['state']
+        self.assertEqual(identity['sha256'],sha(self.class_source))
+        self.assertEqual(identity['metaSha256'],sha(meta))
+        self.assertEqual(identity['unityTypeStatus'],'not_compiled')
+        guids=[row['provenance']['guid'] for row in first['files']
+               if row['sourceKind'] in ('architecture-script-meta','architecture-assembly-meta')]
+        self.assertEqual(len(guids),6)
+        self.assertEqual(len(set(guids)),6)
+        self.output=self.output.with_name('second-output')
+        changed=self.class_source.replace(b'int Coins;',b'long Coins;')
+        self._write_module_manifest(changed)
+        second=self.assemble()
+        self.assertEqual((self.output/(script+'.meta')).read_bytes(),meta)
+        self.assertNotEqual(second['scriptIdentities']['state']['sha256'],identity['sha256'])
+        self.assertEqual(second['scriptIdentities']['state']['guid'],identity['guid'])
+
+    def test_generated_script_guid_collision_with_resource_is_rejected(self):
+        path='Assets/Game/Content/Config/Base/values.json.meta'
+        raw=('fileFormatVersion: 2\nguid: '+script_guid('Fixture.Native','Game','state')+'\n').encode()
+        (self.candidate/path).write_bytes(raw)
+        for row in self.candidate_rows:
+            if row['path']==path:row.update(sha256=sha(raw),bytes=len(raw))
+        candidate=json.loads((self.candidate/'manifest.json').read_bytes());candidate['files']=self.candidate_rows
+        (self.candidate/'manifest.json').write_bytes(encoded(candidate))
+        self.candidate_pin=sha((self.candidate/'manifest.json').read_bytes())
+        self.plan['sourceManifestSha256']=self.candidate_pin
+        self.plan_raw=encoded(self.plan);self.plan_path.write_bytes(self.plan_raw);self.plan_pin=sha(self.plan_raw)
+        self._write_module_manifest(self.class_source)
+        with self.assertRaises(ParseError) as caught:self.assemble()
+        self.assertEqual(caught.exception.code,'ARCH_CANDIDATE_DUPLICATE_GUID')
+        self.assertFalse(self.output.exists())
 
     def test_empty_placeholder_type_is_rejected(self):
         self._write_module_manifest(b'// planned implementation goes here\n')

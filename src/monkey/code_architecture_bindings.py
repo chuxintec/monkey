@@ -617,6 +617,63 @@ def _source_class_identity_proof(architecture, plan_class, receipt_class, module
     return proof
 
 
+def _assembled_script_meta(raw, expected_sha, architecture, architecture_sha, class_id,
+                           class_path, class_sha, class_size, meta_bytes):
+    """Accept new Script metadata only from an exact, unchanged assembled class."""
+    from .io import load
+    from .code_architecture_candidate import script_guid
+    expected_sha = _hash(expected_sha, 'nativeCandidateManifestSha256')
+    if not isinstance(raw, bytes) or len(raw)>128*1024*1024 or _sha(raw)!=expected_sha:
+        _reject('nativeCandidateManifestBytes', 'Candidate manifest bytes/hash differ or exceed budget')
+    candidate = _mapping(load(raw,max_nodes=8_000_000), 'nativeCandidateManifest')
+    provenance = _mapping(candidate.get('provenance'), 'nativeCandidateManifest.provenance')
+    if (candidate.get('schemaVersion')!=1 or
+        candidate.get('targetProfile')!='unity-6000.6.2f1-ugui' or
+        candidate.get('architectureSchemaVersion')!='monkey-native-architecture-candidate/1' or
+        candidate.get('scriptIdentitySchema')!='monkey-native-script-identities/1' or
+        provenance.get('kind')!='native-architecture-assembly' or
+        provenance.get('architecturePlanSha256')!=architecture_sha or
+        provenance.get('sourceCandidateManifestSha256')!=architecture.get('sourceManifestSha256')):
+        _reject('nativeCandidateManifest', 'Candidate is not the exact architecture/source assembly')
+    if _mapping(candidate.get('classPaths'),'nativeCandidateManifest.classPaths').get(class_id)!=class_path:
+        _reject('nativeCandidateManifest.classPaths', 'Candidate class owner path differs')
+    rows = _list(candidate.get('files'), 'nativeCandidateManifest.files')
+    owned = {}
+    folded = set()
+    for row in rows:
+        row = _mapping(row,'nativeCandidateManifest.files[]')
+        path = _relative_path(row.get('path'),'nativeCandidateManifest.files.path')
+        if path.casefold() in folded:
+            _reject('nativeCandidateManifest.files', 'Candidate contains duplicate or case-colliding paths')
+        folded.add(path.casefold());owned[path]=row
+    code = _mapping(owned.get(class_path),'nativeCandidateManifest.classSource')
+    owner = _mapping(code.get('provenance'),'nativeCandidateManifest.classSource.provenance')
+    if (code.get('owner')!='generated' or code.get('sourceKind')!='architecture-module' or
+        code.get('sha256')!=class_sha or code.get('bytes')!=class_size or owner.get('classId')!=class_id):
+        _reject('nativeCandidateManifest.classSource', 'Candidate class differs from exact module bytes/owner; revised code requires its own new receipt')
+    meta = _mapping(owned.get(class_path+'.meta'),'nativeCandidateManifest.scriptMeta')
+    meta_owner = _mapping(meta.get('provenance'),'nativeCandidateManifest.scriptMeta.provenance')
+    if (meta.get('owner')!='generated' or meta.get('sourceKind')!='architecture-script-meta' or
+        meta_owner.get('classId')!=class_id or meta_owner.get('scriptPath')!=class_path or
+        meta_owner.get('scriptSha256')!=class_sha):
+        _reject('nativeCandidateManifest.scriptMeta', 'Script metadata belongs to another type or implementation')
+    if not isinstance(meta_bytes, bytes) or _sha(meta_bytes)!=meta.get('sha256') or len(meta_bytes)!=meta.get('bytes'):
+        _reject('scriptMetaBytes', 'Script metadata bytes differ from the assembled candidate')
+    match = _META_GUID.search(meta_bytes)
+    expected_guid = script_guid(_string(candidate.get('namespace'),'nativeCandidateManifest.namespace'),
+        architecture.get('rootNamespace'),class_id)
+    if match is None or match.group(1).decode('ascii')!=expected_guid or meta_owner.get('guid')!=expected_guid:
+        _reject('nativeCandidateManifest.scriptMeta', 'Script GUID differs from deterministic architecture type identity')
+    identity = _mapping(_mapping(candidate.get('scriptIdentities'), 'nativeCandidateManifest.scriptIdentities').get(class_id),
+        'nativeCandidateManifest.scriptIdentity')
+    if any(identity.get(key)!=value for key,value in dict(path=class_path,sha256=class_sha,
+        metaPath=class_path+'.meta',metaSha256=meta['sha256'],guid=expected_guid).items()):
+        _reject('nativeCandidateManifest.scriptIdentity', 'Script identity index differs from owned class/meta bytes')
+    return {'manifestSha256':expected_sha,'scriptPath':class_path,'scriptSha256':class_sha,
+            'metaPath':class_path+'.meta','metaSha256':meta['sha256'],'guid':expected_guid,
+            'unityTypeStatus':'pending-whole-project-compile'}, meta
+
+
 def build_prefab_authoring_plan(
     architecture: dict,
     module_manifest: dict,
@@ -641,6 +698,8 @@ def build_prefab_authoring_plan(
     source_project_config_sha256: str | None = None,
     native_readback_bytes: bytes | None = None,
     native_readback_sha256: str | None = None,
+    native_candidate_manifest_bytes: bytes | None = None,
+    native_candidate_manifest_sha256: str | None = None,
 ) -> dict:
     """Build a fail-closed authoring plan from pinned module and asset evidence.
 
@@ -1021,6 +1080,16 @@ def build_prefab_authoring_plan(
     meta_row = next((row for row in module_manifest.get('files', [])
                      if isinstance(row, dict) and (row.get('targetPath') == meta_path or row.get('path') == meta_path)), None)
     script_guid = None
+    assembled_script_identity = None
+    if native_candidate_manifest_bytes is not None or native_candidate_manifest_sha256 is not None:
+        if native_candidate_manifest_bytes is None or native_candidate_manifest_sha256 is None or script_meta_bytes is None:
+            _reject('nativeCandidateManifest', 'Candidate manifest bytes/hash and Script meta bytes are required together')
+        assembled_script_identity, assembled_meta_row = _assembled_script_meta(
+            native_candidate_manifest_bytes,native_candidate_manifest_sha256,architecture,architecture_sha256,
+            class_id,class_path,class_sha,len(class_source_bytes),script_meta_bytes)
+        if meta_row is not None and (meta_row.get('sha256')!=assembled_meta_row['sha256'] or meta_row.get('bytes')!=assembled_meta_row['bytes']):
+            _reject('scriptMetaBytes', 'Module and assembled candidate disagree about Script meta identity')
+        meta_row = assembled_meta_row
     if script_meta_bytes is not None:
         if meta_row is None:
             _reject('scriptMetaBytes', 'Script .meta bytes are not owned by the module receipt')
@@ -1077,6 +1146,7 @@ def build_prefab_authoring_plan(
         'class': {'classId': class_id, 'path': class_path, 'sha256': class_sha,
                   'bytes': len(class_source_bytes), 'unityTypeStatus': 'pending-whole-project-compile'},
         'sourceClassIdentityProof': source_class_identity,
+        'assembledScriptIdentity': assembled_script_identity,
         'sourceUnit': {'sourceUnitId': source_unit_id, 'sourcePath': source_context.get('sourcePath'),
                        'sourceSha256': source_file_sha, 'sourceBytes': {'start': start, 'end': end},
                        'spanSha256': source_context.get('spanSha256')},

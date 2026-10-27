@@ -7,6 +7,12 @@
 
 ### 当前执行记录（2026-10-27 架构阶段）
 
+新组装器补齐manifest-owned `.cs.meta`/`.asmdef.meta`：Script GUID按project namespace/root namespace/classId派生，不因方法正文或输出目录变动；冲突中止，全部路径与输出预算核对。`scriptIdentities`记录实际C#/meta SHA，后续revision保留旧GUID并刷新新C#哈希。绑定planner可验证完整新candidate manifest pin、原架构/来源、未变的模块class字节、owned meta与GUID/index关系，取得后生成authoring意图，不改旧module receipt；修改过C#仍须新receipt。62项相关定向检查通过。当前在途supervisor使用旧导入代码，47模块终态后以新reassemble组装才会采用，不热改已完成产物；整工程/Editor脚本挂接仍待验。
+
+音频实际漏导已定位并补通用normalizer：633条扩展名文件记录=356 Content路径+277 SourceRecovery原件，276原件与Content同字节，另1份fireworks.m4a（46,239B）此前`UNSUPPORTED_NATIVE`而未生成Content。新增可选本地ffmpeg有界解码，固定provider版本/二进制SHA、输入/输出SHA及PCM形状；8MiB输入/16MiB输出、超时/child回收/截断或无效WAV均明确失败，不造音频，原件保留。实际公共normalize→Unity plan→export得到483,590B、44.1kHz立体声WAV，SHA `6e088bebda4142fb535d12244e36dd2ef89c609b0f38d3c8149d3e0c56f8dbe8`，目标`Assets/Game/Content/Audio/Sfx/MiniGames/Garden/Common/fireworks.wav`；原件哈希不变，10项decoder/6项progress/4项原target回归通过。NativeAudioNativeProbe01正在接收该派生资源，356+1导入与67 cue/31 sources原生保存重开尚未运行；不是冻结07已被修改。
+
+当前队列检查点28/47、Platform运行中，原顺序和请求未动；Street/Orders/Tutorial在实际前置到齐后用新prepare补齐输入，仍0额外模型调用，GooseSimulation待Street真实实现。NativeCompileSurvey03/Revision02固定24终态模块825 C#（排除prepared seeds），复用显式ShopColumn补丁后84项错误全部是未来模块namespace；新增11模块442文件无直接诊断，闭合Domain303文件编译通过，完整工程不称通过。NativeSnapshotRevision04保留string AccountId与long RoleId独立，自有文件存储/20状态codec组件78断言通过，GameSnapshot aggregate仍pending。NativeServicesContent05读10份实际JSON、Inventory的60/32/8行与Launcher单对象已核，聚合schema仍需修正，不能冒造singleton字典键。Audio本地偏好controller正在新02移除C#默认音量并改为显式JSON初值注入；独立音频开关的停播/恢复及PlayCue仍pending，使用legacy依赖测试替身的组件检查不当整工程验收。
+
 原生进度条已从私有验证提炼到公共`normalize/plan/export/native-import`流程：精确横向正向Tiled子集以非交互Slider+序列化宽度driver保留原节点和360完整长度，不拿380父宽替代。真实CardSeasonMainWindow独立42节点候选完成保存前/重开后8次值变更/几何检查、0 Missing Script、引用及源58文件哈希不变；另生产CLI两节点合成来源全链实际导入Unity6000.6.2f1，编译/保存重开/引用及静态验证0诊断，own child退出。竖向/反向/竞争控制者或无方向几何证明仍handoff。公开inspect入口的局部import遮蔽故障已由实际CLI复现并修复。组件与流程验证不代表完整游戏/物理输入/视觉验收。记录`NativeProgressBinding01/`、`NativeProgressProduct01/`；23项相关定向检查通过。
 
 公共Prefab authoring planner进一步要求精确class↔script证明：固定的架构bindingEvidence、源码RF字面量注册/字节offset/UUID、模块所有权、唯一目标MonoBehaviour类及source component type同时一致；共享sourceUnit不能代替身份。缺旧证据保留unresolved/0操作，矛盾或歧义拒绝；C#注释/各种字符串假声明不能通过。父复跑19项通过；实际CardSeasonMainWindow新Revision03身份成立，但Script meta与其他字段仍未齐，计划0操作，不把原生进度条组件验证当成整窗挂接。NativeBindingInventory02在21终态模块快照中固定302 View、193精确身份/638未证、102计划0操作。
