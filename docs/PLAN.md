@@ -13,6 +13,13 @@
 
 ### 当前执行记录（2026-10-27 架构阶段）
 
+**最新可核查候选**：`NativeCoreIntegration03/UnityProject`已通过公共`code-native-add-json`附加显式candidate-local-test policy/1，manifest `428bbbff87daa0dc9716bfeb25d0473c8fbe1456961d92f5ad66e0a4b1de9dba`，50,516 files/1,274 C#，1269 implementedClassPaths/247 missing。C#全清单与下述Integration02逐path/SHA完全一致（inventory digest `bdceeae63b09bb288cea1ef57a4a2e50191037731e909a6548e5c5fbaedbbb58`），因此仍保留254静态诊断，不宣称已编译/运行全工程。JSON首次自拟声明不等于严格合同固定文字，在输出前拒绝；失败spec/receipt保留，新的JsonPlan02按明确“Self-authored test data; not recovered from the original game.”声明成功，未放宽validator或改旧输入。完整操作回执在`CoreIntegrationExecution01/result.json`。下一主链为Production→真实唯一Session原子store接线、Orders/Street来源规则；三独立模块实施中，父仍单写公共契约/候选与唯一实际模型队列。
+
+**公开整合更新**：公共`code-native-revise`已实际将核心69-row计划与strict record39-row计划合并（ShopColumn只保留有双来源pin的record+关键词修复版本），一次应用107项修改；`NativeCoreIntegration02/UnityProject` manifest `2c5d2e358c4f88614a47fb0ccccfc161a942480a165f3d064e7a0f0dac2ce33a`，50,514 files，1,274 C#。完整未排除静态编译`NativeCompileSurvey06`为254诊断（CS0234=103/CS0246=151），相同基线Survey05为615，预留缺失类型247；仍未编译通过，不隐藏Cookfish事务所有者/缺失FoodDelivery等类型以凑成功。record39项经实际Unity Roslyn C#9/netstandard2.1闭包编译通过，另7项明确保留拒绝。公共revision单次root namespace扫描实际2.778s，已按单次调用复用验证结果以避免71 helper重复扫描，所有文件hash仍在copy前检查，17 revision+10 JSON unittest通过，源码d6ac314。
+
+Production01已交付真实11表/Board6的201801→201401候选规则与typed port harness，远端仍Pending，尚未接真实CoreSession原子store。core_session继续独立Session04补唯一写者、完整runtime与versioned codec/真实重开，不写02/03；worker_recovery继续独立Orders01来源规则。其余模块NativeRemainder04继续同一真实CLI串行，版本未完；不追加组件旁路验证。
+
+
 **最新已实测核心链（本段覆盖下方在途历史）**：`NativeCoreRuntimeProbe03` 使用 Unity6000.6.2f1，真实11份JSON/TextAsset→Board2的28格/15占格/10种原生Sprite→源MergeScreen/Cell Prefab→EventSystem点击与16→17带Web合并→原子本地JSON→退出Play后第二次新coordinator从盘恢复，报告passed；revision0→2，BoardCommitted与ViewRender各2，source清空/target升级9001102并清Web，身份/状态文件哈希保持，Prefab保存重开引用和无MissingScript检查通过。own native child exit0/reaped，458 owned文件未变，仅2个声明可变源Prefab在独立工程挂接后变化，核心C#没有手改。`Evidence/core-runtime-probe-report.json` SHA `3f075848a8fe16f6d59597389b12406b47be1fc3a9bab2309b1a90e3f2a5ca7a`。这是实际核心闭包而非全47工程；physicalInput/visualComparison not_run、remoteAuthority not_connected/RemoteReconciliationPending=true、whole47 not_verified。Editor日志含2次Unity QuickSearch启动索引异常（栈无游戏代码），保留原文，不能称零诊断。
 
 原生前两次记录保留于Probe02：01在Play前因私有authoring plan误用Single Sprite的旧切片internalID拒绝，冻结native readback实际fileID21300000用于校正，未证明公共exporter缺陷；02原生挂接完成但CLI自动`-quit`提前退出，报告停留running不算运行成功。Probe03在同一既定窗口使用同一已安装Editor原生batchmode入口，无`-quit/-nographics`，由终态hook退出，不改引擎/许可证/全局安装。

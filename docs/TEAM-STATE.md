@@ -1,3 +1,7 @@
+2026-10-27 最新：父已由公开CLI产NativeCoreIntegration03（50,516 files/1,274 C#、247缺失，静态254诊断仍失败；JSON为显式self-authored local test）。父单写公共契约/CLI/候选/PLAN/TEAM，未新开Editor。core_session→独立Session04（Production真实唯一写者/atomic store）；worker_recovery→Orders01来源规则；core_content在封存39-record plan后→Street01来源规则。三模块不互写，不启动Codex/Editor；真实47模块队列仍父唯一串行。
+
+2026-10-27 公共整合107-row已产NativeCoreIntegration02，1,274 C#全量静态编译615→254诊断仍失败，247预留类型缺失。39 record有界编译通过且plan封存，core_content空闲；worker_recovery已转独立NativeCoreOrdersRevision01来源规则；core_session已交付Production01（仅typed提案/port，不是真实Session持久化），现单写新NativeCoreSessionRevision04接真实原子store与codec，不写封存02/03/Production01。父单写公共入口/候选/Editor/PLAN/TEAM，唯一真实Codex队列NativeRemainder04继续。
+
 2026-10-27 最新核心原生链已验：父独占Editor的NativeCoreRuntimeProbe03通过真实28格/15Sprite、选择+Web合并、原子快照及第二PlayMode恢复，child exit0/reaped；仅核心闭包，物理输入/视觉/全47未验，Editor QuickSearch两次异常保留。NativeRemainder04继续余10模块，唯一真实模型串行。父单写公开CLI/合同/PLAN/TEAM、资源/原生集成；worker_recovery复用，仅写NativeCoreIntegrationRevisionPlan01准备公开hash-pinned核心修订计划；core_session复用，仅写NativeCoreProductionRevision01真实生产规则与harness；Content08/Session02/03/Presentation01/02封存，其他实例空闲，不递归/不启动额外模型/Editor。
 
 # v0.6 模块执行登记
