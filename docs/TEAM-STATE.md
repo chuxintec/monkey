@@ -4,7 +4,7 @@
 
 - code_regeneration：仅私有Content/Audio候选；真实三表Audio aggregate、6路径Services04、AudioRules loaded兼容及C#9/.NETStandard2.1已交付停止写入；等待真实Content接口，不接假backend。
 - codex_postprocess：Snapshot03交付18/44精确codec、75文件C#9 NETStandard2.1编译、66断言，完整aggregate仍pending；继续仅新私有Snapshot04解决string AccountId与02 long account存储接口不兼容，RoleId独立，不改旧证据。
-- shader_profile：NativeBindingInventory02交付21终态模块/302 View、193精确身份与638未证，102计划0操作；持有code_architecture_bindings.py/专测/CODE-NATIVE-BINDINGS.md补精确class↔script身份与注释/字面量反例，父集成前不写其他模块、不操作Editor。
+- shader_profile：精确class↔script身份产品已交付停止写入；父19项复跑通过，实际MainWindow Revision03仍0操作。NativeBindingInventory02交付21终态模块/302 View、193精确身份与638未证，102计划0操作，不操作Editor。
 - 父：8个无较早待实现类型依赖的新模块已准备完整class+chain JSON与有界绑定context，旧supervisor按原序消费；4个有待实现依赖模块不提前准备。新helpers/原组件修订通过统一hash-pinned revision再整合，未重写已有模块/状态/排序，0额外模型调用。
 - 父原生窗口：真实42节点进度条与生产CLI两节点独立导入均完成、own child退出，原件不变；通用ProgressBar子集已接公共导出器，完整游戏/输入/视觉未验。正式工程/GREA/beaver只读，无发布/安装。
 

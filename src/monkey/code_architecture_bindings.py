@@ -501,6 +501,122 @@ def _annotate_native_node_types(path_steps: list[dict], readback_by_source: dict
     return result
 
 
+def _script_identity(value):
+    if not isinstance(value, str):
+        return None
+    try:
+        return uuid_full(value, 'scriptIdentity').lower()
+    except (ValueError, TypeError):
+        return None
+
+
+def _has_monobehaviour_declaration(class_source_bytes, class_name):
+    """Recognize the class declaration only in C# code, never in trivia/literals."""
+    from .code_architecture_modules import _strip_csharp_comments_and_literals
+
+    cleaned = _strip_csharp_comments_and_literals(class_source_bytes)
+    if cleaned is None:
+        return False
+    declaration = re.compile(rb'\bclass\s+' + re.escape(class_name.encode('utf-8')) +
+        rb'\b[^{};]*:\s*(?:(?:global::)?(?:UnityEngine\.)?MonoBehaviour)\b')
+    return declaration.search(cleaned.encode('utf-8')) is not None
+
+
+def _source_class_identity_proof(architecture, plan_class, receipt_class, module_manifest,
+                                source_context, source_unit_id, code_region, binding,
+                                source_component_type, class_path, class_sha,
+                                class_source_bytes, source_file_bytes, source_start):
+    """Verify the exact source class binding; source-unit sharing is insufficient."""
+    binding_evidence = plan_class.get('bindingEvidence')
+    proof = {
+        'schemaVersion': 'monkey-source-class-identity-proof/1',
+        'status': 'unresolved',
+        'targetClass': {'classId': plan_class.get('id'), 'className': plan_class.get('name'),
+            'moduleId': plan_class.get('module'), 'classPath': class_path,
+            'classSha256': class_sha, 'classBytes': len(class_source_bytes),
+            'moduleReceiptSourceUnitIds': receipt_class.get('sourceUnitIds', [])},
+        'sourceUnit': {'sourceUnitId': source_unit_id, 'sourcePath': source_context.get('sourcePath'),
+            'sourceSha256': source_context.get('sourceSha256'), 'sourceBytes': source_context.get('sourceBytes'),
+            'spanSha256': source_context.get('spanSha256')},
+        'sourceCodeRegion': code_region,
+        'sourceBinding': {'evidence': binding.get('evidence'), 'sourceAsset': binding.get('sourceAsset'),
+            'sourceComponent': binding.get('sourceComponent'), 'sourceNode': binding.get('sourceNode')},
+        'architectureSha256': module_manifest.get('architectureSha256'),
+        'moduleReceiptSha256': module_manifest.get('receiptSha256'),
+        'sourceManifestSha256': module_manifest.get('sourceManifestSha256'),
+    }
+    if not isinstance(binding_evidence, dict) or not binding_evidence.get('sourceIds'):
+        proof['reason'] = 'Legacy architecture class lacks exact bindingEvidence.sourceIds; shared source-unit ownership cannot establish a script-to-View identity.'
+        return proof
+    if type(binding_evidence.get('literalBindingCount')) is not int:
+        proof['reason'] = 'Legacy architecture class lacks a pinned literalBindingCount for its source identity.'
+        return proof
+    source_ids = binding_evidence.get('sourceIds')
+    if not isinstance(source_ids, list) or any(not isinstance(value, str) for value in source_ids):
+        _reject('architecture.classes.bindingEvidence.sourceIds', 'Expected source identity strings')
+    if binding_evidence.get('literalBindingCount') != 1:
+        _reject('architecture.classes.bindingEvidence.literalBindingCount', 'Expected exactly one literal source binding for the target MonoBehaviour')
+    if code_region not in source_ids:
+        _reject('architecture.classes.bindingEvidence.sourceIds', 'Target View does not declare the exact selected codeRegion')
+    if source_ids.count(code_region) != 1:
+        _reject('architecture.classes.bindingEvidence.sourceIds', 'Exact codeRegion must occur once in target class identity evidence')
+    if binding.get('evidence') != 'exact_literal_script_identity':
+        _reject('assetContext.binding.evidence', 'Source script component must have exact literal identity evidence')
+    match = re.search(r'#([^#@]+)@([0-9]+)$', code_region)
+    if not match:
+        _reject('codeRegion', 'Expected exact source class identity with a class name and byte offset')
+    source_class_name, offset = match.group(1), int(match.group(2))
+    if source_start != offset:
+        _reject('moduleManifest.sourceContexts.sourceBytes.start', 'Source unit start does not equal the exact codeRegion byte offset')
+    code_path = code_region.rsplit('#', 1)[0].split(':', 1)[-1]
+    source_path = source_context.get('sourcePath')
+    if not isinstance(source_path, str) or not source_path.replace('\\', '/').endswith(code_path):
+        _reject('moduleManifest.sourceContexts.sourcePath', 'Pinned source file does not match the exact codeRegion locator')
+    if source_unit_id not in receipt_class.get('sourceUnitIds', []):
+        _reject('moduleManifest.classes.sourceUnitIds', 'Module receipt class does not own the exact selected source unit')
+    if plan_class.get('layer') != 'Presentation' or plan_class.get('kind') != 'class' or plan_class.get('baseType') != 'UnityEngine.MonoBehaviour':
+        _reject('architecture.classes.' + str(plan_class.get('id')), 'Exact source script identity must map to a Presentation MonoBehaviour class')
+
+    source_prefix = source_file_bytes[source_start:source_start + 2048]
+    rf_match = re.match(rb'''cc\._RF\.push\(\s*\{\s*exports\s*:\s*\{\s*\}\s*\}\s*,\s*(["'])([^"']+)\1\s*,\s*(["'])([^"']+)\3\s*\)''', source_prefix)
+    if not rf_match:
+        _reject('sourceFileBytes', 'Exact source unit does not start with a literal Cocos cc._RF.push script identity')
+    registered_script_id = rf_match.group(2).decode('utf-8', 'strict')
+    registered_class_name = rf_match.group(4).decode('utf-8', 'strict')
+    if registered_class_name != source_class_name:
+        _reject('sourceFileBytes', 'Literal Cocos script class name differs from codeRegion identity')
+    if _script_identity(registered_script_id) != _script_identity(source_component_type):
+        _reject('assetContext.binding.sourceMapComponents.type', 'Literal Cocos script identity differs from the exact source component type')
+
+    matching_classes = []
+    for index, row in enumerate(_list(architecture.get('classes'), 'architecture.classes')):
+        row = _mapping(row, f'architecture.classes[{index}]')
+        evidence = row.get('bindingEvidence')
+        if isinstance(evidence, dict) and isinstance(evidence.get('sourceIds'), list) and code_region in evidence['sourceIds']:
+            matching_classes.append(row)
+    match_ids = sorted(row.get('id') for row in matching_classes if isinstance(row.get('id'), str))
+    if len(matching_classes) != 1 or matching_classes[0].get('id') != plan_class.get('id'):
+        _reject('architecture.classes.bindingEvidence.sourceIds',
+                'Exact source class identity must map to exactly one planned architecture class; source-unit sharing is not a substitute')
+
+    class_name = plan_class.get('name')
+    if not isinstance(class_name, str) or not class_name:
+        _reject('architecture.classes.name', 'Exact target class identity lacks a class name')
+    if not _has_monobehaviour_declaration(class_source_bytes, class_name):
+        _reject('classSourceBytes', 'Pinned C# file does not declare the planned MonoBehaviour class')
+
+    proof.update(status='verified-exact-source-script-to-monoBehaviour', sourceClassName=source_class_name,
+        sourceByteOffset=offset, sourceIdentityEvidence={'literalBindingCount': 1,
+            'sourceIds': list(source_ids)}, literalScriptRegistration={'scriptId': registered_script_id,
+            'normalizedScriptId': _script_identity(registered_script_id), 'className': registered_class_name,
+            'sourcePrefixSha256': _sha(source_prefix[:rf_match.end()])},
+        sourceComponentType=source_component_type, architectureClassMatches=match_ids,
+        targetUnityBaseType='UnityEngine.MonoBehaviour')
+    proof['proofSha256'] = _sha(json.dumps(proof, ensure_ascii=False, sort_keys=True,
+        separators=(',', ':'), allow_nan=False).encode('utf-8'))
+    return proof
+
+
 def build_prefab_authoring_plan(
     architecture: dict,
     module_manifest: dict,
@@ -605,6 +721,10 @@ def build_prefab_authoring_plan(
                                 'assetContext.binding.sourceMapComponents', 'source component mapping')
     if source_component_row.get('node') != source_node:
         _reject('assetContext.binding.sourceMapComponents', 'Source component is attached to a different source node')
+    source_class_identity = _source_class_identity_proof(
+        architecture, plan_class, receipt_class, module_manifest, source_context,
+        source_unit_id, code_region, binding, source_component_row.get('type'),
+        class_path, class_sha, class_source_bytes, source_file_bytes, start)
     identities = _mapping(binding.get('assetIdentity'), 'assetContext.binding.assetIdentity')
     native_targets = _list(identities.get('nativeTargets'), 'assetContext.binding.assetIdentity.nativeTargets')
     target = _one(native_targets, lambda row: row.get('type') == 'prefab' and isinstance(row.get('guid'), str),
@@ -744,6 +864,9 @@ def build_prefab_authoring_plan(
 
     fields = []
     unresolved = []
+    if source_class_identity.get('status') != 'verified-exact-source-script-to-monoBehaviour':
+        unresolved.append({'class': class_id, 'reason': source_class_identity.get('reason',
+            'Exact source class identity is unresolved; shared source-unit ownership cannot authorize attachment.')})
     operations = []
     for source_name, target_name in explicit_maps.items():
         source_field = source_by_name.get(source_name)
@@ -924,11 +1047,15 @@ def build_prefab_authoring_plan(
                    'rootReadbackComponentTypes': root_component_types},
         'attachStatus': 'candidate-component-identity-pinned; MonoScript GUID/type unresolved',
     }
-    can_attach = binding.get('nativeComponentStatus') == 'not_implemented'
+    can_attach = (binding.get('nativeComponentStatus') == 'not_implemented' and
+        source_class_identity.get('status') == 'verified-exact-source-script-to-monoBehaviour')
+    if source_class_identity.get('status') != 'verified-exact-source-script-to-monoBehaviour':
+        component_plan['attachStatus'] = 'source-class-identity-unresolved'
     if not can_attach:
-        unresolved.append({'component': source_component,
-                           'reason': 'Native component status is not explicitly not_implemented; duplicate attachment is blocked.'})
-        component_plan['attachStatus'] = 'unresolved-native-component-status'
+        if binding.get('nativeComponentStatus') != 'not_implemented':
+            unresolved.append({'component': source_component,
+                               'reason': 'Native component status is not explicitly not_implemented; duplicate attachment is blocked.'})
+            component_plan['attachStatus'] = 'unresolved-native-component-status'
     if script_guid:
         component_plan['target']['scriptGuid'] = script_guid
         if can_attach:
@@ -938,7 +1065,8 @@ def build_prefab_authoring_plan(
                                   'nodePath': component_plan['target']['nodePath']})
             operations.extend(field_operations)
 
-    ready = bool(script_guid) and not unresolved
+    ready = (bool(script_guid) and not unresolved and
+             source_class_identity.get('status') == 'verified-exact-source-script-to-monoBehaviour')
     return {
         'schemaVersion': SCHEMA,
         'status': 'ready-for-editor-authoring-after-whole-project-compile' if ready else 'partial-unresolved-evidence',
@@ -948,6 +1076,7 @@ def build_prefab_authoring_plan(
         'moduleReceiptSha256': module_manifest.get('receiptSha256'),
         'class': {'classId': class_id, 'path': class_path, 'sha256': class_sha,
                   'bytes': len(class_source_bytes), 'unityTypeStatus': 'pending-whole-project-compile'},
+        'sourceClassIdentityProof': source_class_identity,
         'sourceUnit': {'sourceUnitId': source_unit_id, 'sourcePath': source_context.get('sourcePath'),
                        'sourceSha256': source_file_sha, 'sourceBytes': {'start': start, 'end': end},
                        'spanSha256': source_context.get('spanSha256')},

@@ -1,9 +1,12 @@
 import hashlib
 import json
 import unittest
+from copy import deepcopy
 
 from monkey.code_architecture_bindings import (
+    _has_monobehaviour_declaration,
     _native_field_type_match,
+    _script_identity,
     build_prefab_authoring_plan,
     extract_serialized_csharp_fields,
     extract_source_component_fields,
@@ -31,7 +34,9 @@ def fixture(*, node_types=('UnityEngine.RectTransform',), preview_reference=None
     source_component = source_asset + '#1/components/1'
     code_region = 'bundle:game.js#DemoView@0'
     unit_id = 'module:abc:0:100'
-    source_file = b'n([property(cc.Node)],i.prototype,"nodeRef",void 0);'
+    source_component_type = '1111111111111111111111'
+    source_file = (b'cc._RF.push({exports:{}},"' + source_component_type.encode() +
+                   b'","DemoView");n([property(cc.Node)],i.prototype,"nodeRef",void 0);')
     class_path = 'Assets/Game/Presentation/Demo/View.cs'
     class_source = b'''using UnityEngine;
 public sealed class View : MonoBehaviour
@@ -60,6 +65,9 @@ RectTransform:
     source_manifest_sha = 'b' * 64
     class_record = {
         'id': 'Demo.View', 'name': 'View', 'kind': 'class', 'layer': 'Presentation', 'module': 'Demo',
+        'baseType': 'UnityEngine.MonoBehaviour',
+        'bindingEvidence': {'sourceIds': [code_region], 'literalBindingCount': 1,
+                            'nativeAttachment': 'planned, not attached or runtime-verified'},
         'path': class_path, 'sourceUnitIds': [unit_id], 'fields': [
             {'name': 'nodeRef', 'type': 'UnityEngine.RectTransform', 'role': 'serialized view binding'}],
     }
@@ -68,7 +76,8 @@ RectTransform:
     module_manifest = {
         'schemaVersion': 'monkey-native-architecture-module/1', 'moduleId': 'Demo',
         'sourceManifestSha256': source_manifest_sha, 'architectureSha256': architecture_sha,
-        'classes': [{'classId': 'Demo.View', 'module': 'Demo', 'path': class_path, 'bytes': len(class_source)}],
+        'classes': [{'classId': 'Demo.View', 'module': 'Demo', 'path': class_path, 'bytes': len(class_source),
+                     'sourceUnitIds': [unit_id]}],
         'files': [
             {'path': class_path, 'targetPath': class_path, 'sha256': sha(class_source), 'bytes': len(class_source)},
             {'path': class_path + '.meta', 'targetPath': class_path + '.meta', 'sha256': sha(script_meta), 'bytes': len(script_meta)},
@@ -86,7 +95,7 @@ RectTransform:
             'sourceAsset': source_asset, 'sourceComponent': source_component, 'sourceNode': source_root,
             'nativeComponentStatus': 'not_implemented',
             'sourceMapNodes': [{'sourceId': source_root, 'name': 'Root', 'target': 'Assets/Game/Prefabs/Demo.prefab'}],
-            'sourceMapComponents': [{'sourceId': source_component, 'node': source_root, 'type': 'demo-script'}],
+            'sourceMapComponents': [{'sourceId': source_component, 'node': source_root, 'type': source_component_type}],
             'sourcePrefabReadback': [{'sourceId': source_asset, 'path': 'Assets/Game/Prefabs/Demo.prefab',
                                       'guid': '1' * 32, 'identityMatch': True}],
             'sourcePrefabNodeReadback': [source_node_readback],
@@ -130,7 +139,8 @@ def packed_source_fixture():
     child_id = source_asset + '#4'
     binding = kwargs['asset_context']['bindings'][0]
     binding.update(sourceAsset=source_asset, sourceComponent=source_component, sourceNode=source_root)
-    binding['sourceMapComponents'][0].update(sourceId=source_component, node=source_root, type='demo-script')
+    binding['sourceMapComponents'][0].update(sourceId=source_component, node=source_root,
+                                            type='1111111111111111111111')
     binding['sourceMapNodes'][0].update(sourceId=source_root, name='Root')
     binding['sourcePrefabReadback'][0].update(sourceId=source_asset, path='Assets/Game/Prefabs/Demo.prefab')
     binding['sourcePrefabNodeReadback'][0].update(sourceId=source_root, sourceAsset=source_asset, hierarchy='Root')
@@ -141,7 +151,7 @@ def packed_source_fixture():
         {'__type__': 'cc.Node', '_name': 'Root', '_components': [{'__id__': 2}, {'__id__': 3}],
          '_children': [{'__id__': 4}]},
         {'__type__': 'cc.Widget', 'node': {'__id__': 1}},
-        {'__type__': 'demo-script', 'node': {'__id__': 1}, 'nodeRef': {'__id__': 4}},
+        {'__type__': '1111111111111111111111', 'node': {'__id__': 1}, 'nodeRef': {'__id__': 4}},
         {'__type__': 'cc.Node', '_name': 'Label', '_components': [], '_children': []},
     ]
     encoded = plain_compiled_document(objects)
@@ -195,9 +205,33 @@ RectTransform:
 
 
 class CodeArchitectureBindingsTests(unittest.TestCase):
+    def test_class_identity_ignores_comments_and_all_supported_string_literal_forms(self):
+        fake_declarations = [
+            b'// public class View : MonoBehaviour {}\n',
+            b'class Holder { string text = "public class View : MonoBehaviour {}"; }\n',
+            b'class Holder { string text = @"public class View : MonoBehaviour {}"; }\n',
+            b'class Holder { string text = """public class View : MonoBehaviour {}"""; }\n',
+        ]
+        for source in fake_declarations:
+            with self.subTest(source=source):
+                self.assertFalse(_has_monobehaviour_declaration(source, 'View'))
+        self.assertTrue(_has_monobehaviour_declaration(
+            b'public sealed class View : UnityEngine.MonoBehaviour {}', 'View'))
+
+    def test_script_identity_requires_canonical_or_supported_compact_uuid(self):
+        self.assertEqual(_script_identity('11111111-1111-1111-1111-111111111111'),
+                         '11111111-1111-1111-1111-111111111111')
+        self.assertIsNone(_script_identity('11111111--1111-1111-1111-111111111111'))
+        self.assertIsNone(_script_identity('not-a-script-id'))
+
     def test_exact_component_property_and_node_path_produce_editor_intent(self):
         plan = build_prefab_authoring_plan(**fixture())
         self.assertEqual(plan['status'], 'ready-for-editor-authoring-after-whole-project-compile')
+        self.assertEqual(plan['sourceClassIdentityProof']['status'], 'verified-exact-source-script-to-monoBehaviour')
+        self.assertEqual(plan['sourceClassIdentityProof']['sourceClassName'], 'DemoView')
+        self.assertEqual(plan['sourceClassIdentityProof']['sourceByteOffset'], 0)
+        self.assertEqual(plan['sourceClassIdentityProof']['literalScriptRegistration']['className'], 'DemoView')
+        self.assertEqual(plan['sourceClassIdentityProof']['sourceComponentType'], '1111111111111111111111')
         self.assertEqual(plan['component']['target']['nodePath'], [{'root': True, 'expectedName': 'Root'}])
         field = plan['fieldMappings'][0]
         self.assertEqual(field['referenceStatus'], 'verified-node-reference')
@@ -303,6 +337,88 @@ class CodeArchitectureBindingsTests(unittest.TestCase):
         kwargs['source_project_config_bytes'] = json.dumps(config, separators=(',', ':')).encode()
         kwargs['source_project_config_sha256'] = sha(kwargs['source_project_config_bytes'])
         with self.assertRaisesRegex(ParseError, 'Source UUID must occur exactly once'):
+            build_prefab_authoring_plan(**kwargs)
+
+    def test_rejects_shared_source_unit_class_without_exact_class_source_identity(self):
+        kwargs = fixture()
+        architecture = kwargs['architecture']
+        plan_class = architecture['classes'][0]
+        other_class = deepcopy(plan_class)
+        other_class.update(id='Demo.Other', name='Other', path='Assets/Game/Presentation/Demo/Other.cs')
+        other_class.pop('bindingEvidence')
+        architecture['classes'].append(other_class)
+        kwargs['class_id'] = 'Demo.Other'
+        kwargs['class_source_bytes'] = b'''using UnityEngine;
+public sealed class Other : MonoBehaviour
+{
+    [SerializeField] private UnityEngine.RectTransform nodeRef;
+}
+'''
+        kwargs['module_manifest']['classes'].append({'classId': 'Demo.Other', 'module': 'Demo',
+            'path': other_class['path'], 'bytes': len(kwargs['class_source_bytes']),
+            'sourceUnitIds': [kwargs['source_unit_id']]})
+        kwargs['module_manifest']['files'].append({'path': other_class['path'],
+            'targetPath': other_class['path'], 'sha256': sha(kwargs['class_source_bytes']),
+            'bytes': len(kwargs['class_source_bytes'])})
+        kwargs['asset_context']['bindings'][0]['sourceOwnership']['classesWithThisSourceUnit'].append('Demo.Other')
+        kwargs['script_meta_bytes'] = None
+        plan = build_prefab_authoring_plan(**kwargs)
+        self.assertEqual(plan['status'], 'partial-unresolved-evidence')
+        self.assertEqual(plan['sourceClassIdentityProof']['status'], 'unresolved')
+        self.assertEqual(plan['component']['attachStatus'], 'source-class-identity-unresolved')
+        self.assertEqual(plan['operations'], [])
+
+    def test_rejects_multiple_architecture_classes_for_one_exact_source_identity(self):
+        kwargs = fixture()
+        other = deepcopy(kwargs['architecture']['classes'][0])
+        other.update(id='Demo.Other', name='Other', path='Assets/Game/Presentation/Demo/Other.cs')
+        kwargs['architecture']['classes'].append(other)
+        with self.assertRaisesRegex(ParseError, 'exactly one planned architecture class'):
+            build_prefab_authoring_plan(**kwargs)
+
+    def test_rejects_source_identity_id_or_byte_offset_that_disagrees_with_pinned_unit(self):
+        kwargs = fixture()
+        kwargs['architecture']['classes'][0]['bindingEvidence']['sourceIds'] = ['bundle:game.js#DifferentView@0']
+        with self.assertRaisesRegex(ParseError, 'does not declare the exact selected codeRegion'):
+            build_prefab_authoring_plan(**kwargs)
+        kwargs = fixture()
+        wrong_region = 'bundle:game.js#DemoView@1'
+        kwargs['architecture']['classes'][0]['bindingEvidence']['sourceIds'] = [wrong_region]
+        kwargs['asset_context']['bindings'][0]['codeRegion'] = wrong_region
+        kwargs['code_region'] = wrong_region
+        with self.assertRaisesRegex(ParseError, 'Source unit start does not equal'):
+            build_prefab_authoring_plan(**kwargs)
+
+    def test_legacy_class_without_binding_evidence_returns_unresolved_and_zero_operations(self):
+        kwargs = fixture()
+        kwargs['architecture']['classes'][0].pop('bindingEvidence')
+        plan = build_prefab_authoring_plan(**kwargs)
+        self.assertEqual(plan['status'], 'partial-unresolved-evidence')
+        self.assertEqual(plan['sourceClassIdentityProof']['status'], 'unresolved')
+        self.assertEqual(plan['operations'], [])
+        self.assertTrue(any('shared source-unit ownership cannot establish' in row['reason']
+                            for row in plan['unresolved']))
+
+    def test_source_rf_registration_must_match_literal_class_name_and_component_script_type(self):
+        kwargs = fixture()
+        wrong_name = kwargs['source_file_bytes'].replace(b'"DemoView"', b'"DifferentView"', 1)
+        kwargs['source_file_bytes'] = wrong_name
+        context = kwargs['module_manifest']['sourceContexts'][0]
+        context['sourceSha256'] = sha(wrong_name)
+        context['spanSha256'] = sha(wrong_name)
+        context['sourceBytes']['end'] = len(wrong_name)
+        with self.assertRaisesRegex(ParseError, 'Literal Cocos script class name differs'):
+            build_prefab_authoring_plan(**kwargs)
+
+        kwargs = fixture()
+        wrong_type = kwargs['source_file_bytes'].replace(b'"1111111111111111111111"',
+                                                         b'"2222222222222222222222"', 1)
+        kwargs['source_file_bytes'] = wrong_type
+        context = kwargs['module_manifest']['sourceContexts'][0]
+        context['sourceSha256'] = sha(wrong_type)
+        context['spanSha256'] = sha(wrong_type)
+        context['sourceBytes']['end'] = len(wrong_type)
+        with self.assertRaisesRegex(ParseError, 'Literal Cocos script identity differs'):
             build_prefab_authoring_plan(**kwargs)
 
 
