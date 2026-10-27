@@ -336,6 +336,7 @@ def revise_native_candidate(candidate_root, expected_manifest_sha256,
     new_class_ids = set()
     prepared = []
     revision_bytes = 0
+    verified_root_namespace = None
     for index, change in enumerate(changes):
         required = {'path', 'artifactPath', 'oldSha256', 'newSha256', 'bytes', 'classId',
                     'module', 'layer', 'role', 'provenance'}
@@ -389,7 +390,11 @@ def revise_native_candidate(candidate_root, expected_manifest_sha256,
             if reserved_path is not None and reserved_path != path:
                 _fail('CLASS_PATHS', path, 'A reserved missing class may only be completed at its original classPaths path')
             new_class_ids.add(change['classId'])
-            expected_namespace = _namespace_for_owner_module(base_root, owned, layer, module)
+            # Every helper shares this immutable, manifest-pinned base. Establish
+            # its root once; all source hashes are still checked before copying.
+            if verified_root_namespace is None:
+                verified_root_namespace = _architecture_root_namespace(base_root, owned)
+            expected_namespace = f'{verified_root_namespace}.{layer}.{module}'
             expected_kind = None
         artifact_path = inside(revision_dir, artifact)
         raw = read(artifact_path, FILE_BYTES)

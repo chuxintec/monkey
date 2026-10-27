@@ -7,6 +7,11 @@ It accepts only an unadopted candidate whose manifest identifies
 `native-architecture-assembly`; an ordinary candidate or adopted project is
 rejected. It never edits the base candidate or a formal project.
 
+For revisions containing multiple helpers, the complete pinned base's root
+namespace is verified once per invocation and reused for their owner checks.
+The cache is local to that invocation; every base file hash is still verified
+before any candidate is copied.
+
 The versioned `revision-plan.json` schema is
 `monkey-native-architecture-revision/1` with `baseManifestSha256`,
 `architecturePlanSha256`, `revisionId`, `files`, and optional
