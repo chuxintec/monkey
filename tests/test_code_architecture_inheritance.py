@@ -25,6 +25,13 @@ def _resolve(records, mappings, requirements, **kwargs):
 
 
 class CodeArchitectureInheritanceTests(unittest.TestCase):
+    def test_member_evidence_uses_absolute_source_line_numbers(self):
+        text='// heading\n\nnamespace Demo {\npublic class Base {\n\n    public int State;\n\n    public void Bind() {}\n}\n}\n'
+        base, source = _row('base','Base','Demo','Base.cs',text)
+        result = _resolve([base], {'Base.cs':source}, {'base':['Bind','State']})[0]
+        self.assertEqual(result['requiredMembers']['State']['line'], 6)
+        self.assertEqual(result['requiredMembers']['Bind']['line'], 8)
+
     @unittest.skipUnless((ROOT / '.private/v060-architecture-first-20261027/NativeCorePriority03/Modules/0036/architecture-module-manifest.json').is_file(), 'Optional private source audit is unavailable')
     def test_real_tutorial_module_resolves_only_hash_pinned_guideutil_members(self):
         module = ROOT / ".private/v060-architecture-first-20261027/NativeCorePriority03/Modules/0036"

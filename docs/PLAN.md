@@ -2,6 +2,10 @@
 
 ## 最新集成状态（2026-10-27，覆盖下方早期在途计数）
 
+**最终集中编译已通过**：公开CLI再合并6个API/坐标/Bootstrap修订，附加3份明确自编local-test JSON，稳定候选 `outputs/v060-foodstreet-architecture-01/UnityProject`，manifest `f843c056e8670fc35d756eca896d194a8013cbb5b614e9c0d25685420409c982`，51,082文件/1,555 C#。NativeCompileFullLayers01按实际Game.* asmdef名称分别编译全部Domain563/Gameplay70/Presentation882/Services38/Bootstrap2，**0 error / 3,249 warning**，Domain/Gameplay零Unity引用，无源码排除或假API。JSON前manifest `9d093b83f2a1ade2b2e90969b699df6e1f32e07d08d9af087cc7070293f1bf6d`与最终候选的全部C# path/hash相等。不是整版业务/原生Editor验收。最新入口与限制见 `docs/V0.6-FINAL-INTEGRATION.md`。
+
+原生最终影响验证已准备完整副本NativeFinalRuntime01，51,082份来源文件及新增Editor脚本有ownership核验；全部1,555份代码保持启用。按既有人类授权及总监资源交接事件`monkey-final-native-resource-20261027-01`执行，启动前实际ps无其他Unity Editor/自有项目无锁；不依赖不完整的unity status证明空闲。核心检查仅限Board6源坐标/24 Sprite/生产触控→存储→Play退出重开/m4拒绝；结果待本轮实际回执。不追加全玩法/音频/进度条验证。
+
 公开 `code-native-revise` 已将54项修订合入 `NativeFullCoreIntegration03`（根即工程，manifest `06abc50b9eec1793864b1fdfb792606ddb42314e8ea8745e656203ab03d74c31`）：51,076文件、1,555 C#。四组配置解析移入Services并保留Domain强类型，19个Tutorial/Narrative文件由实际来源及基类哈希证明继承API，不造方法。对应公开分类器修订只去除已证实的planned-member-missing，保留其他架构guard，条件编译/源漂移/私有成员/不明继承不放行。已通过9 inheritance、27 module、11 reassembly、10 pipeline、17 revision定向测试。
 
 `NativeCompileSurvey08` 已实际编译全部1,555源、305真实引用，**23 error / 3,243 warning**：22处为SessionController的缺少enum alias/对immutable GameSnapshot使用with赋值，1处为GuideController调用已退休FromJson；相关模块正在有界修复。不是旧Survey07的326缺类型诊断，也不能把警告计入错误宣称回退。原始模型代码仍unreviewed；五层独立全编译和最终原生接线仍待完成。

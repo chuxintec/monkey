@@ -390,7 +390,9 @@ def _direct_members(text: str, declaration: Mapping[str, Any]) -> tuple[dict[str
             if depth == 1:
                 header = mask[segment_start:i]
                 # Properties and methods open blocks; nested types are intentionally ignored.
-                member = _member_from_header(header, line=text.count("\n", segment_start, i) + 1, terminator="{")
+                first = re.search(r'\S', header)
+                line = text.count("\n", 0, segment_start + (first.start() if first else 0)) + 1
+                member = _member_from_header(header, line=line, terminator="{")
                 if member:
                     members.setdefault(member.name, []).append(member)
                 elif header.strip() and not re.search(r"\b(class|struct|interface|enum|delegate)\b", header):
@@ -422,7 +424,8 @@ def _direct_members(text: str, declaration: Mapping[str, Any]) -> tuple[dict[str
             depth -= 1
         elif char == ";" and depth == 1:
             header = mask[segment_start:i]
-            line = text.count("\n", segment_start, i) + 1
+            first = re.search(r'\S', header)
+            line = text.count("\n", 0, segment_start + (first.start() if first else 0)) + 1
             member = _member_from_header(header, line=line, terminator=";")
             if member and member.kind in ("field", "event"):
                 declarations = _field_members_from_header(header, line=line)
