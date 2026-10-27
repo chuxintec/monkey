@@ -65,6 +65,32 @@ Candidate07 manifest and recorded with `owner: retained`,
 Other legacy scripts and editor conversion tools remain excluded. Duplicate
 Unity meta GUIDs across retained assets and support helpers are rejected.
 
+## C# 9 compiler compatibility
+
+The pinned `unity-6000.6.2f1-ugui` compiler profile is recorded from the existing
+read-only response file
+`.private/v060-architecture-first-20261027/NativeAudioNativeProbe01/Evidence/editor-compile.rsp`
+(SHA-256 `b9389a49a3c1afa8334ae777369c85bfe3b646f69dc201dc759b7e80b860932b`).
+It uses C# 9 and references both the Unity 6000.6.2f1 managed assemblies and
+netstandard2.1 reference assemblies; it has no `/define` switch. An offline
+compile with those same references reports CS0518 for a minimal `record` plus
+`init` probe when `IsExternalInit` is absent, and compiles successfully with the
+shim. This check used the saved response file and local Roslyn compiler without
+starting Unity.
+
+Assembly scans planned C# source after removing comments and literals. If no
+`record` declaration or `init` accessor is used, it adds no shim. When either is
+used, the verified profile causes one manifest-owned public type to be generated
+at `Assets/Game/Domain/CompilerSupport/IsExternalInit.cs`, with a deterministic
+`.meta` and GUID. Other layers reference `Game.Domain` through the fixed
+assembly graph, so the same public type is shared across the candidate. The file
+is recorded as `owner: generated`,
+`sourceKind: compiler-compatibility-support`, without a `classId`; its path is
+kept outside `classPaths` and `implementedClassPaths`. The assembly manifest's
+`compilerSupport` entry records the profile evidence, feature trigger, type path,
+hash and GUID. Reserved-path or GUID collisions fail assembly. Compilation
+remains `not_run` until a later validation stage.
+
 Run the focused tests from the repository root:
 
 ```sh

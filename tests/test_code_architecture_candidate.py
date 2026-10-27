@@ -1,8 +1,12 @@
 import json
+import re
+import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 
+from monkey import code_architecture_candidate as candidate_builder
 from monkey.code_architecture_candidate import assemble_native_candidate, script_guid
 from monkey.candidate_snapshot import snapshot, verify
 from monkey.io import encoded, sha
@@ -181,6 +185,140 @@ class ArchitectureCandidateTests(unittest.TestCase):
         with self.assertRaises(ParseError) as caught:self.assemble()
         self.assertEqual(caught.exception.code,'ARCH_CANDIDATE_DUPLICATE_GUID')
         self.assertFalse(self.output.exists())
+
+    def _pin_candidate_update(self, module_source=None):
+        raw = encoded(dict(schemaVersion=1, targetProfile='unity-6000.6.2f1-ugui',
+                           namespace='Fixture.Native', scopeMode='whole-input', files=self.candidate_rows))
+        (self.candidate / 'manifest.json').write_bytes(raw)
+        self.candidate_pin = sha(raw)
+        self.plan['sourceManifestSha256'] = self.candidate_pin
+        self.plan_raw = encoded(self.plan); self.plan_path.write_bytes(self.plan_raw); self.plan_pin = sha(self.plan_raw)
+        self._write_module_manifest(self.class_source if module_source is None else module_source)
+
+    def test_csharp9_record_and_init_generate_one_domain_compiler_support_file(self):
+        source = b'''namespace Game.Domain.Core {
+public record PlayerState(int Coins) { public int Level { get; init; } }
+}'''
+        self._write_module_manifest(source)
+        report = self.assemble()
+        path = candidate_builder.EXTERNAL_INIT_PATH
+        meta_path = path + '.meta'
+        self.assertTrue((self.output / path).is_file())
+        self.assertEqual((self.output / path).read_bytes(), candidate_builder.EXTERNAL_INIT_SOURCE)
+        self.assertEqual(report['compilerSupport']['status'] if 'status' in report['compilerSupport'] else 'generated', 'generated')
+        self.assertEqual(report['compilerSupport']['path'], path)
+        self.assertEqual(report['compilerSupport']['guid'], script_guid(
+            'Fixture.Native', 'Game', candidate_builder.EXTERNAL_INIT_ID))
+        self.assertNotIn(path, report['classPaths'].values())
+        row = next(row for row in report['files'] if row['path'] == path)
+        self.assertEqual(row['owner'], 'generated')
+        self.assertEqual(row['sourceKind'], 'compiler-compatibility-support')
+        self.assertNotIn('classId', row)
+        meta_row = next(row for row in report['files'] if row['path'] == meta_path)
+        self.assertEqual(meta_row['sourceKind'], 'compiler-compatibility-support-meta')
+        self.assertEqual(meta_row['provenance']['guid'], report['compilerSupport']['guid'])
+        self.assertEqual(sum(row['sourceKind'] == 'compiler-compatibility-support' for row in report['files']), 1)
+        root, _manifest, files, _digest = snapshot(self.output); verify(root, files)
+        meta = (self.output / meta_path).read_bytes()
+        self.output = self.output.with_name('AssembledAgain')
+        second = self.assemble()
+        self.assertEqual((self.output / meta_path).read_bytes(), meta)
+        self.assertEqual(second['compilerSupport']['guid'], report['compilerSupport']['guid'])
+
+    def test_record_or_init_words_inside_comments_and_strings_do_not_add_shim(self):
+        source = b'''namespace Game.Domain.Core {
+public sealed class PlayerState { public string Note => "record Fake { get; init; }"; /* record Fake */ }
+}'''
+        self._write_module_manifest(source)
+        report = self.assemble()
+        self.assertFalse((self.output / candidate_builder.EXTERNAL_INIT_PATH).exists())
+        self.assertEqual(report['compilerSupport']['status'], 'not_required')
+        self.assertNotIn(candidate_builder.EXTERNAL_INIT_PATH,
+                         {row['path'] for row in report['files']})
+
+    def test_module_output_cannot_sneak_in_a_second_external_init_type(self):
+        source = b'''namespace System.Runtime.CompilerServices {
+public static class IsExternalInit { }
+}
+namespace Game.Domain.Core { public record PlayerState(int Coins); }'''
+        self._write_module_manifest(source)
+        with self.assertRaises(ParseError) as caught:
+            self.assemble()
+        self.assertEqual(caught.exception.code, 'ARCH_CANDIDATE_COMPILER_SUPPORT_DUPLICATE')
+        self.assertFalse(self.output.exists())
+
+    def test_reserved_candidate_manifest_path_cannot_shadow_generated_shim(self):
+        source = b'namespace Game.Domain.Core { public record PlayerState(int Coins); }'
+        self._write_module_manifest(source)
+        target = self.candidate / candidate_builder.EXTERNAL_INIT_PATH
+        target.parent.mkdir(parents=True, exist_ok=True); target.write_bytes(b'public class IsExternalInit {}')
+        self.candidate_rows.append(dict(path=candidate_builder.EXTERNAL_INIT_PATH,
+            sha256=sha(target.read_bytes()), bytes=target.stat().st_size, owner='generated'))
+        self._pin_candidate_update(source)
+        with self.assertRaises(ParseError) as caught:
+            self.assemble()
+        self.assertEqual(caught.exception.code, 'ARCH_CANDIDATE_COMPILER_SUPPORT_PATH')
+        self.assertFalse(self.output.exists())
+
+    def test_generated_support_meta_guid_collision_with_candidate_resource_is_rejected(self):
+        source = b'namespace Game.Domain.Core { public record PlayerState(int Coins); }'
+        self._write_module_manifest(source)
+        guid = script_guid('Fixture.Native', 'Game', candidate_builder.EXTERNAL_INIT_ID)
+        path = 'Assets/Game/Content/Config/Base/values.json.meta'
+        raw = f'fileFormatVersion: 2\nguid: {guid}\n'.encode()
+        (self.candidate / path).write_bytes(raw)
+        for row in self.candidate_rows:
+            if row['path'] == path:
+                row.update(sha256=sha(raw), bytes=len(raw))
+        self._pin_candidate_update(source)
+        with self.assertRaises(ParseError) as caught:
+            self.assemble()
+        self.assertEqual(caught.exception.code, 'ARCH_CANDIDATE_DUPLICATE_GUID')
+        self.assertFalse(self.output.exists())
+
+    def test_pinned_unity_csharp9_references_fail_record_without_shim_and_pass_with_it(self):
+        repo = Path(__file__).resolve().parents[1]
+        response_path = repo / '.private/v060-architecture-first-20261027/NativeAudioNativeProbe01/Evidence/editor-compile.rsp'
+        dotnet = shutil.which('dotnet')
+        if not response_path.is_file() or not dotnet:
+            self.skipTest('Pinned Unity C# compiler response or dotnet SDK is unavailable')
+        sdks = subprocess.run([dotnet, '--list-sdks'], capture_output=True, text=True, check=False)
+        sdk_entries = []
+        for line in sdks.stdout.splitlines():
+            match = re.fullmatch(r'([^ ]+) \[(.+)/sdk\]', line.strip())
+            if match:
+                sdk_entries.append(Path(match.group(2)) / 'sdk' / match.group(1) / 'Roslyn/bincore/csc.dll')
+        csc_files = sorted(path for path in sdk_entries if path.is_file())
+        if not csc_files:
+            self.skipTest('Roslyn csc.dll is unavailable')
+        lines = response_path.read_text(encoding='utf-8').splitlines()
+        switches = [line.strip('"') for line in lines if line.startswith((
+            '"/reference:', '"-reference:', '"/langversion:', '"-langversion:',
+            '"/nostdlib', '"-nostdlib', '"/define:', '"-define:', '"/unsafe', '"-unsafe'))]
+        refs = [line.split(':', 1)[1] for line in switches if line.startswith(('/reference:', '-reference:'))]
+        if not any('/Applications/Unity/Hub/Editor/6000.6.2f1/' in ref for ref in refs):
+            self.skipTest('Response does not pin Unity 6000.6.2f1 managed references')
+        if not any('/ref/netstandard2.1/' in ref for ref in refs):
+            self.skipTest('Response does not pin netstandard2.1 reference assemblies')
+        if any(not Path(ref).is_file() for ref in refs):
+            self.skipTest('One or more pinned managed references are unavailable')
+        self.assertTrue(any('/langversion:9' in line for line in switches))
+        self.assertFalse(any(line.startswith(('/define:', '-define:')) for line in switches))
+        source = 'namespace Probe { public record Row(int Value) { public int Next { get; init; } } }\n'
+        with tempfile.TemporaryDirectory(dir='/private/tmp') as directory:
+            root = Path(directory); probe = root / 'Probe.cs'; probe.write_text(source, encoding='utf-8')
+            response = root / 'probe.rsp'
+            base = switches + ['/nologo', '/target:library', f'/out:{root}/Probe.dll', str(probe)]
+            response.write_text('\n'.join(base) + '\n', encoding='utf-8')
+            missing = subprocess.run([dotnet, str(csc_files[-1]), '@' + str(response)],
+                                     capture_output=True, text=True, check=False)
+            self.assertNotEqual(missing.returncode, 0)
+            self.assertIn('CS0518', missing.stdout + missing.stderr)
+            shim = root / 'IsExternalInit.cs'; shim.write_bytes(candidate_builder.EXTERNAL_INIT_SOURCE)
+            response.write_text('\n'.join(base + [str(shim)]) + '\n', encoding='utf-8')
+            supplied = subprocess.run([dotnet, str(csc_files[-1]), '@' + str(response)],
+                                      capture_output=True, text=True, check=False)
+            self.assertEqual(supplied.returncode, 0, supplied.stdout + supplied.stderr)
 
     def test_empty_placeholder_type_is_rejected(self):
         self._write_module_manifest(b'// planned implementation goes here\n')

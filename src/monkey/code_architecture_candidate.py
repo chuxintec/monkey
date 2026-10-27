@@ -29,6 +29,24 @@ NATIVE_LAYOUT_SUPPORT = frozenset({
     'IntrinsicGridLayoutGroup', 'NativeLinearLayoutGroup',
     'NativeRectConstraints', 'NativeTextLineBox', 'NativeHorizontalProgressFill',
 })
+EXTERNAL_INIT_PROFILE_EVIDENCE = {
+    'schemaVersion': 1,
+    'targetProfile': 'unity-6000.6.2f1-ugui',
+    'languageVersion': 9,
+    'apiCompatibility': 'netstandard2.1',
+    'defines': [],
+    'isExternalInit': 'missing',
+    'evidenceId': 'NativeAudioNativeProbe01/Evidence/editor-compile.rsp',
+    'evidenceSha256': 'b9389a49a3c1afa8334ae777369c85bfe3b646f69dc201dc759b7e80b860932b',
+}
+EXTERNAL_INIT_PATH = 'Assets/Game/Domain/CompilerSupport/IsExternalInit.cs'
+EXTERNAL_INIT_ID = 'compiler-compatibility:System.Runtime.CompilerServices.IsExternalInit'
+EXTERNAL_INIT_SOURCE = (b'namespace System.Runtime.CompilerServices\n'
+    b'{\n'
+    b'    public static class IsExternalInit\n'
+    b'    {\n'
+    b'    }\n'
+    b'}\n')
 
 
 def script_guid(namespace, root_namespace, class_id):
@@ -197,6 +215,29 @@ def _asmdef(layer, external_refs):
     return encoded(doc)
 
 
+def _requires_external_init(raw, path):
+    from .code_architecture_modules import _strip_csharp_comments_and_literals
+    code = _strip_csharp_comments_and_literals(raw)
+    if code is None:
+        _fail('UTF8', path, 'Architecture source must be UTF-8')
+    record = re.search(r'\brecord\s+(?:(?:class|struct)\s+)?[A-Za-z_][A-Za-z0-9_]*\b', code)
+    init_accessor = re.search(r'\binit\s*(?:;|\{)', code)
+    return bool(record or init_accessor)
+
+
+def _declares_external_init(raw, path):
+    from .code_architecture_modules import _strip_csharp_comments_and_literals, _namespace_blocks, _joined_namespace
+    code = _strip_csharp_comments_and_literals(raw)
+    if code is None:
+        _fail('UTF8', path, 'Architecture source must be UTF-8')
+    for namespace in _namespace_blocks(code):
+        if _joined_namespace([namespace]) != 'System.Runtime.CompilerServices':
+            continue
+        if re.search(r'\b(?:class|struct)\s+IsExternalInit\b', code[namespace['open']:namespace['close']]):
+            return True
+    return False
+
+
 def assemble_native_candidate(candidate_root, candidate_manifest_sha256,
                               plan_path, plan_sha256,
                               validation_path, validation_sha256,
@@ -332,6 +373,28 @@ def assemble_native_candidate(candidate_root, candidate_manifest_sha256,
     if missing and not allow_partial:
         _fail('MISSING_IMPLEMENTATION', output, f'Module outputs omit planned class files: {missing[:12]!r}')
 
+    needs_external_init = any(_requires_external_init(raw, path)
+                              for path, (_source, _row, raw) in implementations.items())
+    duplicate_external_init = any(_declares_external_init(raw, path)
+                                  for path, (_source, _row, raw) in implementations.items())
+    if duplicate_external_init:
+        _fail('COMPILER_SUPPORT_DUPLICATE', output,
+              'Compiler compatibility types must not be declared inside planned or retained implementation files')
+    if needs_external_init and EXTERNAL_INIT_PROFILE_EVIDENCE['isExternalInit'] != 'missing':
+        _fail('COMPILER_SUPPORT_PROFILE', output, 'Pinned compiler profile does not authorize the IsExternalInit shim')
+    compiler_support = None
+    if needs_external_init:
+        support_meta_path = EXTERNAL_INIT_PATH + '.meta'
+        if (EXTERNAL_INIT_PATH in candidate_rows or support_meta_path in candidate_rows
+                or EXTERNAL_INIT_PATH in module_rows or support_meta_path in module_rows
+                or EXTERNAL_INIT_PATH in expected_class_paths.values()):
+            _fail('COMPILER_SUPPORT_PATH', EXTERNAL_INIT_PATH,
+                  'Compiler support path is reserved and cannot be a candidate resource or planned class')
+        compiler_support = {'kind': 'compiler-compatibility-support',
+                            'status': 'generated',
+                            'profileEvidence': dict(EXTERNAL_INIT_PROFILE_EVIDENCE),
+                            'featureUse': 'record-or-init', 'path': EXTERNAL_INIT_PATH}
+
     if (not isinstance(retained_support_paths, (list, tuple))
             or any(not isinstance(value, str) for value in retained_support_paths)
             or len(set(retained_support_paths)) != len(retained_support_paths)):
@@ -357,6 +420,9 @@ def assemble_native_candidate(candidate_root, candidate_manifest_sha256,
             if suffix == '.cs' and (not raw.strip() or not re.search(rb'\b(?:class|struct)\b', raw)):
                 _fail('SUPPORT_PATHS', path, 'Native support source must contain a native helper type')
             support_files.append((path, source_path, row, raw))
+    if any(_declares_external_init(raw, path) for path, _source, _row, raw in support_files if path.endswith('.cs')):
+        _fail('COMPILER_SUPPORT_DUPLICATE', output,
+              'Compiler compatibility types must not be declared inside planned or retained implementation files')
     collisions = set(expected_class_paths.values()) & {path for path, *_ in support_files}
     if collisions:
         _fail('SUPPORT_PATHS', output, f'Native support files collide with planned class outputs: {sorted(collisions)!r}')
@@ -443,6 +509,38 @@ def assemble_native_candidate(candidate_root, candidate_manifest_sha256,
                     scriptPath=path, scriptSha256=row['sha256'], guid=guid)))
             script_identities[row['classId']] = dict(path=path, sha256=row['sha256'],
                 metaPath=meta_path, metaSha256=sha(meta_raw), guid=guid, unityTypeStatus='not_compiled')
+        if compiler_support is not None:
+            path = EXTERNAL_INIT_PATH
+            meta_path = path + '.meta'
+            support_guid = script_guid(candidate_manifest['namespace'], plan.get('rootNamespace'), EXTERNAL_INIT_ID)
+            if support_guid in guid_paths:
+                _fail('DUPLICATE_GUID', meta_path,
+                      f'Compiler support GUID duplicates {guid_paths[support_guid]!r}')
+            source_raw = EXTERNAL_INIT_SOURCE
+            source_path = inside(output, path); source_path.parent.mkdir(parents=True, exist_ok=True)
+            source_path.write_bytes(source_raw)
+            inventory.append(dict(path=path, sha256=sha(source_raw), bytes=len(source_raw), owner='generated',
+                sourceKind='compiler-compatibility-support',
+                provenance=dict(kind='compiler-compatibility-support', type='System.Runtime.CompilerServices.IsExternalInit',
+                                profile=EXTERNAL_INIT_PROFILE_EVIDENCE['targetProfile'],
+                                policy='emit-domain-shim-when-record-or-init-is-used')))
+            meta_raw, meta_guid = _generated_meta(candidate_manifest['namespace'], plan.get('rootNamespace'),
+                                                  EXTERNAL_INIT_ID, script=True)
+            if meta_guid != support_guid:
+                _fail('COMPILER_SUPPORT_GUID', meta_path, 'Compiler support GUID is not stable for its type identity')
+            if meta_guid in guid_paths:
+                _fail('DUPLICATE_GUID', meta_path, f'Compiler support GUID duplicates {guid_paths[meta_guid]!r}')
+            guid_paths[meta_guid] = meta_path
+            inside(output, meta_path).write_bytes(meta_raw)
+            inventory.append(dict(path=meta_path, sha256=sha(meta_raw), bytes=len(meta_raw), owner='generated',
+                sourceKind='compiler-compatibility-support-meta',
+                provenance=dict(kind='compiler-compatibility-support-meta', scriptPath=path,
+                                scriptSha256=sha(source_raw), guid=meta_guid)))
+            compiler_support.update({'metaPath': meta_path, 'sha256': sha(source_raw),
+                                     'metaSha256': sha(meta_raw), 'guid': meta_guid})
+            total_bytes += len(source_raw) + len(meta_raw)
+            if total_bytes > WHOLE_BYTES:
+                _fail('OUTPUT_BUDGET', meta_path, 'Assembled project exceeds byte budget')
         for layer in LAYERS:
             path = f'Assets/Game/{layer}/{layer}.asmdef'
             raw = _asmdef(layer, normalized_refs)
@@ -503,6 +601,10 @@ def assemble_native_candidate(candidate_root, candidate_manifest_sha256,
             'classPaths': expected_class_paths,
             'scriptIdentitySchema': 'monkey-native-script-identities/1',
             'scriptIdentities': script_identities,
+            'compilerSupport': (compiler_support or {
+                'kind': 'compiler-compatibility-support', 'status': 'not_required',
+                'profileEvidence': dict(EXTERNAL_INIT_PROFILE_EVIDENCE),
+                'featureUse': 'no-record-or-init-in-planned-source'}),
             'implementedClassPaths': sorted(implementations),
             'retainedSupportPaths': sorted(path for path, *_ in support_files),
             'missingClassPaths': missing,
