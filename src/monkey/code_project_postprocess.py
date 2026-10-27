@@ -90,6 +90,9 @@ def _open(root):
     if sha(plan_raw) != request['planSha256']:
         fail('PROJECT_POSTPROCESS_PLAN_CHANGED', str(root), 'Prepared queue plan was modified')
     plan = load(plan_raw, max_nodes=8_000_000); state = _json(root/'state.json')
+    if state.get('strategySupersededBy'):
+        fail('PROJECT_POSTPROCESS_SUPERSEDED', str(root),
+             'This per-file strategy was replaced by architecture-first recovery; preserve its results and do not resume it')
     if sha(read(Path(request['sourceRoot'])/request['originalManifestName'], max_bytes=PLAN_BYTES)) != request['sourceManifestSha256']:
         fail('PROJECT_POSTPROCESS_SOURCE_CHANGED', request['sourceRoot'], 'Original owning manifest changed')
     return root, request, plan, state
@@ -114,6 +117,7 @@ def status(root):
                 actuallyProcessed=sum(row.get('processed', False) for row in state['files'].values()),
                 fileStates=dict(counts), totalBatches=len(state['batches']), batchStates=dict(batch_counts),
                 currentBatch=state.get('currentBatch'), blockingCondition=state.get('blockingCondition'),
+                strategySupersededBy=state.get('strategySupersededBy'),
                 currentManifestSha256=state['lastManifestSha256'], updatedAt=state['updatedAt'],
                 originalSourceExecuted=False, editorPlayerRun=False)
 

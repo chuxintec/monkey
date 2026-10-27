@@ -1,5 +1,7 @@
 # v0.6 模块执行登记
 
+2026-10-27 当前整体架构恢复：新直接人类要求覆盖旧逐文件流水线，父已自然停第46批3476/6445，子进程退出，不开第47批。父单写架构设计/共享符号计划/PLAN/TEAM及候选集成；当前先盘点可复用源码图/依赖/资源。§5C worker和项目提效WIP已封存StoppedEfficiencyWip01，未启用真实批，产品代码回到4ed6f6c；codex_postprocess/shader_profile均停止写入。后续按新详细架构计划安排完整功能模块，禁止重启旧队列、源引擎解释器和空壳补通；正式游戏/原件不变。
+
 2026-10-27 已观测根因修复模块：复用 `/root/shader_profile`（既有目标gpt-6-luna/high；实际模型未另行回读），基线a3a80bb，仅单写code_draft_render.py/test_code_draft_render.py/CODE-DRAFT-RENDER.md，修复精确空源函数误抛异常与生成丢弃赋值覆盖真实`_`变量；已交付/父集成：renderer 22项及独立.NET8两方法编译/行为通过（真实下划线保持6、精确空函数null），不外推整版。合成定向反例，不读写.private/冻结07/实际队列、不调用Codex/Editor、不重导。父继续唯一实际串行CLI、PLAN/共享接口和集成，renderer只影响未来确定性输出；此项覆盖下方该实例空闲登记，不扩版本/权限。
 
 2026-10-27 同一renderer模块控制流补修已交付并停止写入：生成discard声明增加独立block，新增无花括号if/else、while、for反例；父复跑23项通过，独立.NET8 baseline CS1023 / 修复编译与`embedded=7,7`行为通过。父已接管集成，仍只有一条真实全量CLI，冻结候选不重导。

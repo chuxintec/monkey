@@ -37,6 +37,15 @@ class ProjectPostprocessTests(unittest.TestCase):
   self.assertEqual(run.call_count,2);self.assertEqual(result['actuallyProcessed'],2);self.assertEqual(result['status'],'complete_with_partial')
   for p in self.paths:
    self.assertIn('return 1',(self.source/p).read_text());self.assertIn('return 2',(self.output/'UnityProject'/p).read_text())
+ def test_superseded_strategy_remains_readable_but_cannot_resume_or_modify_reviews(self):
+  state_path=self.output/'state.json';state=json.loads(state_path.read_bytes())
+  state.update(status='paused',strategySupersededBy='architecture-first-v1');state_path.write_bytes(encoded(state));before=state_path.read_bytes()
+  self.assertEqual(project.status(self.output)['strategySupersededBy'],'architecture-first-v1')
+  with patch.object(project.worker,'prepare')as prepare,patch.object(project.worker,'run')as run:
+   for operation in (project.run,project.resume,project.recheck):
+    with self.assertRaises(ParseError)as error:operation(self.output)
+    self.assertEqual(error.exception.code,'PROJECT_POSTPROCESS_SUPERSEDED')
+  prepare.assert_not_called();run.assert_not_called();self.assertEqual(state_path.read_bytes(),before)
  def test_real_quota_condition_preserves_pending_scope_and_resume_continues(self):
   blocked=dict(status='failed',fileResults=[],blockingCondition='quota',unexpectedPaths=[],workspaceIntegrityErrors=[],gitBoundary={'valid':True})
   with patch.object(project.worker,'prepare',side_effect=self.fake_prepare),patch.object(project.worker,'run',return_value=blocked):
