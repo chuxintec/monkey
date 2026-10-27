@@ -124,3 +124,7 @@ Python 最低 3.11，本次实际验证为 macOS arm64 / Python 3.14.7。Pillow 
 ## 许可
 
 monkey 自有代码采用 [MIT License](LICENSE)，适用于本仓库及已发布版本中的自有代码。第三方代码保留各自版权和许可，见 [THIRD-PARTY-NOTICES](THIRD-PARTY-NOTICES.md)。游戏原包、素材、引擎和第三方工具不属于本项目的开源授权内容，也不随发行包提供。v0.4.0 已发布包保持原哈希，MIT LICENSE 作为该 Release 的独立附件提供；后续构建自动携带根许可证及 MIT 包元数据。
+
+## 来源侧工具集
+
+`monkey tool <id> [args...]`提供7个接收的GREA来源侧工具，保持既有ID、参数、结构化报告与退出码；GREA可以通过同一provider合同调用。完整工具列表以`monkey tool --help`为准。
