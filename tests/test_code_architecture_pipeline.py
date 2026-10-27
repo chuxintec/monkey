@@ -42,6 +42,16 @@ class NativePipelineTests(unittest.TestCase):
         self.assertEqual(report['modules'][1]['status'],'pending');self.assertEqual(preparing.call_count,1)
         collecting.assert_not_called();self.assertEqual(report['runtime'],'not_run')
 
+    def test_preparation_failure_is_durable_and_does_not_launch_any_model(self):
+        self.prepare()
+        with patch.object(pipeline.modules,'_pin_stage',return_value=self.stage), \
+             patch.object(pipeline.modules,'prepare',side_effect=OSError('Pinned context is unavailable')), \
+             patch.object(pipeline.modules,'run')as running:
+            with self.assertRaises(OSError):pipeline.run(self.output)
+        report=pipeline.status(self.output)
+        self.assertEqual(report['status'],'blocked');self.assertEqual(report['modules'][0]['status'],'blocked')
+        self.assertEqual(report['modules'][1]['status'],'pending');running.assert_not_called()
+
     def test_checkpoint_resumes_exact_session_and_finished_queue_is_not_rerun(self):
         self.prepare();calls=[]
         def prepare(*args,**kwargs):Path(args[2]).mkdir(parents=True)

@@ -110,18 +110,19 @@ def run(output):
             task=inside(root,item['task'])
             if not module_table[item['id']]['classIds']:
                 item.update(status='evidence_only');modules._save(root/'state.json',state);continue
-            if not task.exists():
-                dependencies=[str(inside(root,prior['task']))for prior in state['modules']if prior['status']in ('generated_unreviewed','partial_unimplemented_seed')]
-                modules.prepare(stage['root'],item['id'],task,dependency_roots=dependencies,codex=request['codex'],
-                    timeout_seconds=request['timeoutSeconds'],idle_seconds=request['idleSeconds'])
-            current=modules.status(task)
-            item.update(status=current['status']);state['activeModule']=item['id'];modules._save(root/'state.json',state)
             try:
+                if not task.exists():
+                    dependencies=[str(inside(root,prior['task']))for prior in state['modules']if prior['status']in ('generated_unreviewed','partial_unimplemented_seed')]
+                    modules.prepare(stage['root'],item['id'],task,dependency_roots=dependencies,codex=request['codex'],
+                        timeout_seconds=request['timeoutSeconds'],idle_seconds=request['idleSeconds'])
+                current=modules.status(task)
+                item.update(status=current['status']);state['activeModule']=item['id'];modules._save(root/'state.json',state)
                 while current['status']in ('prepared','checkpoint'):
                     current=modules.run(task,session_id=current.get('sessionId')if current['status']=='checkpoint' else None)
                     item.update(status=current['status']);modules._save(root/'state.json',state)
-            except ValueError as error:
+            except (ValueError,OSError) as error:
                 state.update(status='blocked',blocker=getattr(error,'code','module-execution-error'))
+                item.update(status='blocked');state['activeModule']=item['id']
                 modules._save(root/'state.json',state);raise
             if current['status']not in ('generated_unreviewed','partial_unimplemented_seed'):
                 state.update(status='blocked',blocker=current.get('blocker')or current.get('reason')or current['status'])
@@ -140,6 +141,13 @@ def run(output):
 
 def status(output):
     root=safe(output);state=modules._json(root/'state.json')
+    if state['status']=='running' and state.get('activeModule'):
+        active=next((row for row in state['modules']if row['id']==state['activeModule']),None)
+        process=inside(root,active['task'])/'Task/process.json' if active else None
+        if process and process.is_file():
+            child=modules._json(process)
+            state.update(childState=child.get('state'),childPid=child.get('pid'))
+            if child.get('state')in ('starting','running'):active['status']='running'
     counts={}
     for row in state['modules']:counts[row['status']]=counts.get(row['status'],0)+1
     return {**state,'moduleCounts':counts,'report':str(root/'state.json')}
