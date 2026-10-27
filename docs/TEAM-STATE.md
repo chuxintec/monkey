@@ -1,3 +1,5 @@
+2026-10-27 最新核心原生链已验：父独占Editor的NativeCoreRuntimeProbe03通过真实28格/15Sprite、选择+Web合并、原子快照及第二PlayMode恢复，child exit0/reaped；仅核心闭包，物理输入/视觉/全47未验，Editor QuickSearch两次异常保留。NativeRemainder04继续余10模块，唯一真实模型串行。父单写公开CLI/合同/PLAN/TEAM、资源/原生集成；worker_recovery复用，仅写NativeCoreIntegrationRevisionPlan01准备公开hash-pinned核心修订计划；core_session复用，仅写NativeCoreProductionRevision01真实生产规则与harness；Content08/Session02/03/Presentation01/02封存，其他实例空闲，不递归/不启动额外模型/Editor。
+
 # v0.6 模块执行登记
 
 2026-10-27 中断后当前实例覆盖：旧实例不存在，父恢复唯一实际CLI与共享集成；worker_recovery（Luna/high）单写postprocess恢复及module桥接/专测，保留父既有layer guard；core_content（Luna/high）Content08已交付，接最小JSON资产producer，排除音频；core_session（Luna/high）仅NativeCoreSessionRevision01 typed核心会话/源状态与明确Pending merge；core_presentation（Luna/high）仅NativeCoreBoardPresentation01 View/input/旧API兼容。父单写CLI/PLAN/TEAM、CoreBoardBootstrap与真实candidate/Editor；无并发模型批/Editor，无递归、发布或正式游戏写入。

@@ -13,6 +13,13 @@
 
 ### 当前执行记录（2026-10-27 架构阶段）
 
+**最新已实测核心链（本段覆盖下方在途历史）**：`NativeCoreRuntimeProbe03` 使用 Unity6000.6.2f1，真实11份JSON/TextAsset→Board2的28格/15占格/10种原生Sprite→源MergeScreen/Cell Prefab→EventSystem点击与16→17带Web合并→原子本地JSON→退出Play后第二次新coordinator从盘恢复，报告passed；revision0→2，BoardCommitted与ViewRender各2，source清空/target升级9001102并清Web，身份/状态文件哈希保持，Prefab保存重开引用和无MissingScript检查通过。own native child exit0/reaped，458 owned文件未变，仅2个声明可变源Prefab在独立工程挂接后变化，核心C#没有手改。`Evidence/core-runtime-probe-report.json` SHA `3f075848a8fe16f6d59597389b12406b47be1fc3a9bab2309b1a90e3f2a5ca7a`。这是实际核心闭包而非全47工程；physicalInput/visualComparison not_run、remoteAuthority not_connected/RemoteReconciliationPending=true、whole47 not_verified。Editor日志含2次Unity QuickSearch启动索引异常（栈无游戏代码），保留原文，不能称零诊断。
+
+原生前两次记录保留于Probe02：01在Play前因私有authoring plan误用Single Sprite的旧切片internalID拒绝，冻结native readback实际fileID21300000用于校正，未证明公共exporter缺陷；02原生挂接完成但CLI自动`-quit`提前退出，报告停留running不算运行成功。Probe03在同一既定窗口使用同一已安装Editor原生batchmode入口，无`-quit/-nographics`，由终态hook退出，不改引擎/许可证/全局安装。
+
+`NativeCorePriority03`自然完成37份终态并返回integration_checkpoint；公开`code-native-continue`启动`NativeRemainder04`原位复用37份，余10模块继续，实际只一条模型执行。首完整资源整合候选已公开reassemble：实际路径`NativeCoreIntegration01/UnityProject/UnityProject`（重复一级是输出契约结果），manifest `3cc924310c1b5839dd669c3cc8f56ba3914b5a96388597f295bc63e12f73c68c`，50,372 files/1198 implemented class paths/286 missing，尚未纳入人工核心修订，不可称全工程编译通过。父接续公开hash-pinned revision/JSON和主工程集成；worker_recovery仅准备闭合核心revision-plan，core_session独立落实真实Production功能，Session03移动/交换规则离线通过而原生尚未运行。版本继续，不增加音频/进度条/公式旁路工作。
+
+
 当前主链运行以`NativeCorePriority03`为准：02在模型初始化前受沙箱app-server/readonly database限制，0模型session/0代码变更，失败完整保留；新03固定02/01 lineage和31模块原始pins，正常用户运行时权限已获执行层批准。Content四类已实际生成，Production运行中；下方02描述保留交接历史，不代表当前活动目录。补充native implementation context已可通过公开module prepare的hash-pinned `--supplemental-csharp-spec`传递给后续Bootstrap：只读C#实际API、非原来源归属，缺pin/篡改/重复输入拒绝。19项module检查与9项pipeline检查通过；不重跑旧组件/原生验收。
 
 **当前主链（§7纠偏）**：已核验总监人类turn `01a17c1d-92eb-7df2-9a66-3b03bf87c8ce` / human `01a17c1d-9448-7822-903e-d4fe113396ab`及Manager计划§7。NativeProject01在31份终态结果后安全收尾：当前模型自然退出，父取得既有worker互斥锁阻止下一模型启动，supervisor因`POSTPROCESS_BUSY`退出；Production仅prepared，无进程被杀、旧request/终态模块未改。新公开`code-native-continue`生成`.private/v060-architecture-first-20261027/NativeCorePriority02`，以旧request/state与31模块manifest pins原位复用，不复制私有context、不重跑31模型；优先Content→Production→Orders→Street→Tutorial→Bootstrap，在Bootstrap自然结束后返回integration_checkpoint供集成。剩余ProgressBoard/Settings/SmileBuff/Social/SurpriseBox/UpgradeRace/WeekTask/WeightRace/WoodGame/GooseSimulation全部保留，下一次run继续，不缩范围。当前Content模型实际运行；旧47终态后才集成的安排被覆盖。
