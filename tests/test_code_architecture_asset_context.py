@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from monkey import code_architecture_asset_context as assets
 from monkey.io import encoded, sha
@@ -122,6 +123,74 @@ class ArchitectureAssetContextTests(unittest.TestCase):
             target.write_bytes(target.read_bytes() + b' ')
             with self.assertRaises(ParseError):
                 assets.build_asset_context(stage, classes)
+
+    def test_large_context_is_sharded_and_reconstructed_byte_exactly(self):
+        with tempfile.TemporaryDirectory(dir='/private/tmp') as directory:
+            root = Path(directory)
+            context = {'schemaVersion': assets.SCHEMA, 'status': 'mapped-with-unresolved-object-references',
+                'sourceManifestSha256': 'a' * 64, 'architectureSha256': 'b' * 64,
+                'sourceOwners': [{'sourceUnitId': f'unit-{i}', 'sourceSha256': 'c' * 64,
+                                  'sourceBytes': {'start': i, 'end': i + 1}, 'sourceIds': [f'id-{i}']}
+                                 for i in range(3)],
+                'bindings': [{'codeRegion': f'region-{i}', 'payload': 'x' * 1_000_000,
+                              'sourceOwnership': {'sourceUnitIds': [f'unit-{i}']}}
+                             for i in range(10)],
+                'unresolved': [{'codeRegion': f'region-{i}', 'reasons': ['missing localID']}
+                               for i in range(10)],
+                'runtimeUse': 'serialized native references only'}
+            output = root / 'Evidence'
+            output.mkdir()
+            files = {}
+            with patch.object(assets, 'build_asset_context', return_value={'context': context, 'cache': {'status': 'test'}}):
+                result = assets.write_module_context({}, [], output, files)
+            self.assertEqual(result['format'], assets.INDEX_SCHEMA)
+            self.assertEqual(result['contextSha256'], sha(encoded(context)))
+            self.assertEqual(result['contextBytes'], len(encoded(context)))
+            shards = [row for row in files if row.startswith('module-asset-bindings.shards/')]
+            self.assertGreater(len(shards), 1)
+            self.assertTrue(all(files[path]['bytes'] <= assets.ASSET_CONTEXT_SHARD_BYTES for path in shards))
+            self.assertEqual(assets.load_module_context(output / 'module-asset-bindings.json'), context)
+
+            shard_path = output / shards[0]
+            raw = shard_path.read_bytes()
+            shard_path.write_bytes(raw[:-1] + (b' ' if raw[-1:] != b' ' else b'\n'))
+            with self.assertRaises(ParseError):
+                assets.load_module_context(output / 'module-asset-bindings.json')
+
+    def test_single_oversized_binding_row_is_rejected_without_truncation(self):
+        context = {'schemaVersion': assets.SCHEMA, 'status': 'large', 'sourceManifestSha256': 'a' * 64,
+            'sourceOwners': [], 'bindings': [{'payload': 'z' * assets.ASSET_CONTEXT_SHARD_BYTES}],
+            'unresolved': []}
+        with self.assertRaises(ParseError):
+            assets._shard_context(context, encoded(context))
+
+    def test_aggregate_worker_context_budget_is_checked_before_any_write(self):
+        with tempfile.TemporaryDirectory(dir='/private/tmp') as directory:
+            root = Path(directory)
+            output = root / 'Evidence'
+            output.mkdir()
+            context = {'schemaVersion': assets.SCHEMA, 'status': 'small', 'bindings': [],
+                       'sourceOwners': [], 'unresolved': []}
+            files = {'existing-context.json': {'bytes': assets.ASSET_CONTEXT_GROUP_BYTES}}
+            with patch.object(assets, 'build_asset_context', return_value={'context': context, 'cache': {}}):
+                with self.assertRaises(ParseError):
+                    assets.write_module_context({}, [], output, files)
+            self.assertFalse((output / 'module-asset-bindings.json').exists())
+
+    def test_small_context_keeps_legacy_single_file_format(self):
+        with tempfile.TemporaryDirectory(dir='/private/tmp') as directory:
+            root = Path(directory)
+            output = root / 'Evidence'
+            output.mkdir()
+            context = {'schemaVersion': assets.SCHEMA, 'status': 'small', 'bindings': [],
+                       'sourceOwners': [], 'unresolved': []}
+            files = {}
+            with patch.object(assets, 'build_asset_context', return_value={'context': context, 'cache': {}}):
+                summary = assets.write_module_context({}, [], output, files)
+            self.assertEqual(summary['format'], 'single-json')
+            self.assertEqual(set(files), {'module-asset-bindings.json'})
+            self.assertEqual((output / 'module-asset-bindings.json').read_bytes(), encoded(context))
+            self.assertEqual(assets.load_module_context(output / 'module-asset-bindings.json'), context)
 
 
 if __name__ == '__main__':

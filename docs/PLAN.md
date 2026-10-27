@@ -7,6 +7,12 @@
 
 ### 当前执行记录（2026-10-27 架构阶段）
 
+2026-10-27 Interface准备预算已实修：完整10,397,795B绑定上下文（1,997 bindings、1,997 unresolved、284 sourceOwners）按无截断index+5片输出，最大片<8MiB，重建SHA `0eadd326c47b39553c13067fcc21df57c4199644516583ea0b49154484c59a23`与完整原文一致；含其他worker context共23,674,228B/64MiB。小context格式兼容，新增loader在只读recheck中重建后继续核查原件/目标资产pin，prompt要求读取每片；7项asset-context和17项module定向检查通过。只为尚未开始、且所有较早声明类型依赖均已终结的8模块（Interface/Inventory/MergeBoard/Narrative/Platform/PlayerProfile/Social/WoodGame）调用prepare，保留原排序、run request、已终结module manifest，0额外模型调用；Interface实际230类/48配置输入及所有context pin已复核，旧supervisor可按原序消费新prepared任务。Orders/Street/Tutorial/GooseSimulation等待更早实际依赖实现到齐后再准备，不提前省略依赖。
+
+Audio/配置组件进一步交付：独立NativeAudioRevision01有67条实际clip路径/meta/GUID证据（全候选633份音频中的相关子集），UnityAudioService/V2接口编译通过，尚无Editor绑线/播放；NativeAudioRevision02更正“无配置”为“原表均存在但未接reader/aggregate/clip”。NativeAudioFixes01对原AudioDefinitions无参空表壳作显式old/new SHA修订；新三表constructor实际校验27行/74字段，TryGetPropSound(17)、click cue→Common/sfx_ButtonClick通过。NativeServicesContent03四helper精确五层namespace与架构校验、.NET8编译及6个真实TextAsset读取通过，整体Loaded仍false、尚未接真实Content接口；AudioRules对已加载Definitions的空UnavailableReason兼容修订继续。
+
+NativeSnapshotRevision02为自有候选本地存储，11份C#通过实际path/type/namespace校验、C#9/.NET Standard2.1编译与51断言文件重开验证（两种真实State、旧revision拒写、同revision冲突/幂等、损坏不覆盖、取消与分区）；不处理原厂存档/远端成功，单进程writer条件明确。ownership SHA `71621ed3350b02ca6e3c1e013a7c46ffda53bb5f6fccb4b31189a7bdbda7f1c5`，01字节保留。GameSnapshot实际44种唯一状态仍有缺源及身份/接口接线缺口，不填空默认冒充完整存档；上述均为待整合组件，不是整工程或玩法验收。
+
 2026-10-27 新prepare边界实测：主队列已保存16/47首轮模块，Flower运行中。在不改变既有输入/状态/排序前提下，尝试为尚未启动且无缺失前置实现的Interface预置class+chain配置context；模型调用前发现完整module-asset-bindings.json超过8MiB，尚未成为prepared任务。完整失败Evidence已移入NativeFutureContextPreparation01/InterfaceFailedPreparation01，0022槽恢复不存在，未调用额外模型。正在按每片/整组双预算实现无截断绑定上下文分片，完成后才准备新任务供既有supervisor按原序消费。
 
 同一真实失败暴露prepare异常会遗留无request/state的输出目录、阻碍后续续跑。现仅对本次调用成功独占新建的目录，失败时整目录移至同级.prepare-failed-唯一ID并写明确未调用模型/不可续跑回执；原已存在目录绝不移动。17项模块检查通过，含完整Evidence保留、槽位恢复、拒绝接管既有目录；不删除失败证据，不改既有运行模块。

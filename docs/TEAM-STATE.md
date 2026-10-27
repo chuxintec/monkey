@@ -1,11 +1,12 @@
 # v0.6 模块执行登记
 
-当前执行：父持有NativeProject01唯一实际CLI串行supervisor；检查点13/47模块首轮输出已保存，FireRank运行中，实时状态以run为准。父单写CLI/PLAN/统一候选与Editor。整版、整工程编译和跨层业务尚未验收，持续推进。
+当前执行：父持有NativeProject01唯一实际CLI串行supervisor；检查点17/47首轮输出保存，FoodDelivery运行中，实时以run为准。父单写CLI/PLAN/统一候选与Editor。整版/整工程编译/跨层业务尚未验收，持续推进。
 
-- code_regeneration：仅私有NativeContentRevision01；55schema/56JSON、1,584行与13,334字段回投通过，39端口方法pending。继续显式pin消费独立关键词修订及新增实际DTO，保留旧矩阵回执，不动队列。
-- codex_postprocess：revision三文件已交付，父16项/CLI合成烟测通过；转入仅私有NativeAudioRevision01的真实音频实现/typed clip catalog/源语义与独立编译。接口或绑定不足显式列缺口，不启动Editor/额外Codex。
-- shader_profile：仅bindings三文件及私有NativeBindingPlan01；继续原始packed Prefab、config UUID与实际目标42节点树同构核验，建立具体绑定/组件类型差异；不写Prefab YAML或占Editor。
-- 父：NativeRandomRevision01两算法.NET组件4,292向量与1,000续跑步骤通过；NativeCompileSurvey01/02只读13模块383CS，独立NativeCompileFixes01修订event标识符，剩未生成模块的128项CS0234。后续统一hash-pinned修订/完整编译/运行接线，不把组件验证当整版交付。
+- code_regeneration：仅私有Content/Audio候选；真实三表Audio aggregate、6路径Services03及61schema矩阵已交付，补loaded后AudioRules空UnavailableReason兼容及.NETStandard2.1检查，不接假backend。之后等待真实Content接口。
+- codex_postprocess：revision产品模块已父集成；私有Audio67clip/V2与Snapshot02已交付停止写入。后者51断言文件持久化/C#9 NETStandard2.1通过，完整44状态aggregate仍pending。
+- shader_profile：asset-context index/shards产品已交付停止写入，父7+17项与实际230类Interface完整prepare输入pin通过；继续仅私有NativeBindingInventory01盘点所有已终结View，不猜shared-unit的class→component身份，不操作Editor。
+- 父：8个无较早待实现类型依赖的新模块已准备完整class+chain JSON与有界绑定context，旧supervisor按原序消费；4个有待实现依赖模块不提前准备。新helpers/原组件修订通过统一hash-pinned revision再整合，未重写已有模块/状态/排序，0额外模型调用。
+
 
 2026-10-27 最新：GlobalArchitecture05已完成结构验收，父单写公共合同/CLI/pipeline与真实模型/原生集成，NativeProject01已准备47模块；code_regeneration在其module三文件之外新增asset_context助手/专测/文档，把原脚本→资产GUID与既有Editor读回身份纳入上下文，仅只读原件、不操作Editor。codex_postprocess候选组装器已交付并停止写入；shader_profile空闲。原生业务实现/编译/运行尚未开始，不重启旧6445队列。
 

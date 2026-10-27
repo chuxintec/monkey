@@ -14,6 +14,11 @@ from .io import encoded, inside, load, read, safe, sha
 from .sources.compiled import fail
 
 SCHEMA = 'monkey-code-architecture-asset-context/1'
+INDEX_SCHEMA = 'monkey-code-architecture-asset-context-index/1'
+SHARD_SCHEMA = 'monkey-code-architecture-asset-context-shard/1'
+ASSET_CONTEXT_SHARD_BYTES = 8 * 1024 * 1024
+ASSET_CONTEXT_GROUP_BYTES = 64 * 1024 * 1024
+ASSET_CONTEXT_MAX_SHARDS = 1024
 MAPPING_PATHS = {
     'sourceMap': 'Analysis/Mappings/source-map.json',
     'cocosAssets': 'Analysis/Mappings/cocos-assets.json',
@@ -369,15 +374,218 @@ def build_asset_context(stage, module_classes, *, cache_root=None):
 
 
 def write_module_context(stage, module_classes, context_root, files, *, cache_root=None):
-    """Write the verified compact context beside other module Evidence files."""
+    """Write the verified context, sharding oversized collections without truncation.
+
+    Contexts up to 8 MiB retain the original single-file format. Larger contexts
+    use an index at the same path and bounded JSON row shards listed by that index.
+    """
+    context_root = safe(context_root)
     result = build_asset_context(stage, module_classes, cache_root=cache_root)
-    raw = encoded(result['context'])
-    if len(raw) > 8 * 1024 * 1024:
-        fail('CODE_ARCH_ASSET_BUDGET', 'module-asset-bindings.json', 'Selected native binding context exceeds 8 MiB')
-    path = inside(context_root, 'module-asset-bindings.json')
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(raw)
-    files['module-asset-bindings.json'] = {'sha256': sha(raw), 'bytes': len(raw)}
-    return {'path': '__Context/module-asset-bindings.json', 'sha256': sha(raw), 'bytes': len(raw),
-            'status': result['context']['status'], 'unresolvedCount': len(result['context']['unresolved']),
-            'bindingCount': len(result['context']['bindings']), 'cache': result['cache']}
+    context = result['context']
+    raw = encoded(context)
+    existing = sum(row.get('bytes', 0) for row in files.values() if isinstance(row, dict))
+    if existing + len(raw) > ASSET_CONTEXT_GROUP_BYTES:
+        fail('CODE_ARCH_ASSET_BUDGET', 'module-asset-bindings.json',
+             f'Complete module context group is at least {existing + len(raw)} bytes; limit is {ASSET_CONTEXT_GROUP_BYTES}')
+    if len(raw) <= ASSET_CONTEXT_SHARD_BYTES:
+        outputs = {'module-asset-bindings.json': raw}
+        summary = {'format': 'single-json', 'sha256': sha(raw), 'bytes': len(raw)}
+    else:
+        outputs, summary = _shard_context(context, raw)
+
+    # Account for all context already staged for this worker. Sharding must not
+    # bypass its fixed 64 MiB aggregate input budget.
+    total = existing + sum(len(data) for data in outputs.values())
+    if total > ASSET_CONTEXT_GROUP_BYTES:
+        fail('CODE_ARCH_ASSET_BUDGET', 'module-asset-bindings.json',
+             f'Complete module context group is {total} bytes; limit is {ASSET_CONTEXT_GROUP_BYTES}')
+
+    targets = [(relative, inside(context_root, relative), data) for relative, data in outputs.items()]
+    for relative, path, _ in targets:
+        if path.exists() or inside(path.parent, path.name + '.tmp').exists():
+            fail('CODE_ARCH_ASSET_OUTPUT', relative, 'Refusing to overwrite an existing module context file')
+    written = []
+    for relative, path, data in targets:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temp = inside(path.parent, path.name + '.tmp')
+        temp.write_bytes(data)
+        temp.replace(path)
+        files[relative] = {'sha256': sha(data), 'bytes': len(data)}
+        written.append(relative)
+    return {'path': '__Context/module-asset-bindings.json', 'sha256': summary['sha256'],
+            'bytes': summary['bytes'], 'format': summary['format'],
+            'indexPath': summary.get('indexPath'), 'contextSha256': summary.get('contextSha256'),
+            'contextBytes': summary.get('contextBytes'), 'shards': summary.get('shards', []),
+            'shardBytes': summary.get('shardBytes', 0), 'groupBytes': sum(len(x) for x in outputs.values()),
+            'workerContextBytes': total, 'workerContextBudgetBytes': ASSET_CONTEXT_GROUP_BYTES,
+            'status': context['status'], 'unresolvedCount': len(context['unresolved']),
+            'bindingCount': len(context['bindings']), 'sourceOwnerCount': len(context['sourceOwners']),
+            'cache': result['cache']}
+
+
+def _shard_context(context, context_raw):
+    collections = {}
+    metadata = {}
+    for key, value in context.items():
+        if isinstance(value, list):
+            collections[key] = value
+        else:
+            metadata[key] = value
+
+    outputs = {}
+    shard_rows = []
+    for kind in sorted(collections):
+        rows = collections[kind]
+        chunks = []
+        chunk = []
+        estimated = 1024
+        for row in rows:
+            row_raw = encoded(row)
+            row_cost = len(row_raw) + row_raw.count(b'\n') * 2 + 8
+            if row_cost + 1024 > ASSET_CONTEXT_SHARD_BYTES:
+                fail('CODE_ARCH_ASSET_BUDGET', kind, 'One asset-context row exceeds the 8 MiB shard limit')
+            if chunk and estimated + row_cost > ASSET_CONTEXT_SHARD_BYTES - 64 * 1024:
+                chunks.append(chunk)
+                chunk = []
+                estimated = 1024
+            chunk.append(row)
+            estimated += row_cost
+        if chunk:
+            chunks.append(chunk)
+        collections[kind] = chunks
+
+    # Pretty-printed JSON adds indentation at each nesting level. The size
+    # estimate above is intentionally conservative, but split again using the
+    # exact serializer before assigning stable shard ordinals.
+    for kind in sorted(collections):
+        normalized = []
+        for initial in collections[kind]:
+            pending = [initial]
+            while pending:
+                rows = pending.pop()
+                probe = encoded({'schemaVersion': SHARD_SCHEMA,
+                    'sourceManifestSha256': context.get('sourceManifestSha256'),
+                    'kind': kind, 'ordinal': 0, 'count': 1, 'rows': rows})
+                if len(probe) <= ASSET_CONTEXT_SHARD_BYTES:
+                    normalized.append(rows)
+                elif len(rows) == 1:
+                    fail('CODE_ARCH_ASSET_BUDGET', kind, 'One asset-context row exceeds the 8 MiB shard limit')
+                else:
+                    middle = len(rows) // 2
+                    pending.append(rows[middle:])
+                    pending.append(rows[:middle])
+        collections[kind] = normalized
+
+    shard_count = sum(len(chunks) for chunks in collections.values())
+    if shard_count > ASSET_CONTEXT_MAX_SHARDS:
+        fail('CODE_ARCH_ASSET_BUDGET', 'module-asset-bindings.json',
+             f'Asset-context shard count {shard_count} exceeds limit {ASSET_CONTEXT_MAX_SHARDS}')
+    for kind in sorted(collections):
+        chunks = collections[kind]
+        for ordinal, rows in enumerate(chunks):
+            document = {'schemaVersion': SHARD_SCHEMA, 'sourceManifestSha256': context.get('sourceManifestSha256'),
+                        'kind': kind, 'ordinal': ordinal, 'count': len(chunks), 'rows': rows}
+            shard_raw = encoded(document)
+            if len(shard_raw) > ASSET_CONTEXT_SHARD_BYTES:
+                fail('CODE_ARCH_ASSET_BUDGET', kind, 'Serialized asset-context shard exceeds 8 MiB')
+            relative = f'module-asset-bindings.shards/{kind}-{ordinal:04d}-{sha(shard_raw)[:12]}.json'
+            outputs[relative] = shard_raw
+            shard_rows.append({'path': relative, 'sha256': sha(shard_raw), 'bytes': len(shard_raw),
+                               'kind': kind, 'ordinal': ordinal, 'count': len(chunks), 'rowCount': len(rows)})
+
+    index = {'schemaVersion': INDEX_SCHEMA,
+        'sourceManifestSha256': context.get('sourceManifestSha256'),
+        'architectureSha256': context.get('architectureSha256'),
+        'contextSchemaVersion': context.get('schemaVersion'), 'contextStatus': context.get('status'),
+        'contextSha256': sha(context_raw), 'contextBytes': len(context_raw),
+        'groupBudgetBytes': ASSET_CONTEXT_GROUP_BYTES, 'maxShardBytes': ASSET_CONTEXT_SHARD_BYTES,
+        'shardCount': len(shard_rows), 'shardBytes': sum(row['bytes'] for row in shard_rows),
+        'metadata': metadata,
+        'collections': {kind: {'rowCount': len(rows), 'shards': [row['path'] for row in shard_rows if row['kind'] == kind]}
+                        for kind, rows in ((kind, [row for chunk in chunks for row in chunk])
+                                           for kind, chunks in collections.items())},
+        'shards': shard_rows}
+    index_raw = encoded(index)
+    if len(index_raw) > ASSET_CONTEXT_SHARD_BYTES:
+        fail('CODE_ARCH_ASSET_BUDGET', 'module-asset-bindings.json', 'Shard index exceeds 8 MiB')
+    outputs['module-asset-bindings.json'] = index_raw
+    group_bytes = sum(len(data) for data in outputs.values())
+    if group_bytes > ASSET_CONTEXT_GROUP_BYTES:
+        fail('CODE_ARCH_ASSET_BUDGET', 'module-asset-bindings.json',
+             f'Indexed context group is {group_bytes} bytes; limit is {ASSET_CONTEXT_GROUP_BYTES}')
+    return outputs, {'format': INDEX_SCHEMA, 'sha256': sha(index_raw), 'bytes': len(index_raw),
+                     'contextSha256': sha(context_raw), 'contextBytes': len(context_raw),
+                     'indexPath': 'module-asset-bindings.json', 'shards': shard_rows,
+                     'shardBytes': index['shardBytes']}
+
+
+def load_module_context(path):
+    """Load a legacy single-file report or verify and reconstruct a sharded index."""
+    index_path = safe(path)
+    raw = read(index_path, max_bytes=ASSET_CONTEXT_SHARD_BYTES)
+    document = load(raw, max_nodes=4_000_000, max_depth=128)
+    if document.get('schemaVersion') != INDEX_SCHEMA:
+        if not isinstance(document, dict) or document.get('schemaVersion') != SCHEMA:
+            fail('CODE_ARCH_ASSET_INDEX', str(index_path), 'Unknown module asset-context schema')
+        return document
+    shard_rows = document.get('shards')
+    collections = document.get('collections')
+    metadata = document.get('metadata')
+    if (not isinstance(shard_rows, list) or len(shard_rows) != document.get('shardCount') or
+            len(shard_rows) > ASSET_CONTEXT_MAX_SHARDS or not isinstance(collections, dict) or
+            not isinstance(metadata, dict) or document.get('groupBudgetBytes') != ASSET_CONTEXT_GROUP_BYTES or
+            document.get('maxShardBytes') != ASSET_CONTEXT_SHARD_BYTES):
+        fail('CODE_ARCH_ASSET_INDEX', str(index_path), 'Malformed shard index or unsupported group budget')
+    index_root = index_path.parent
+    assembled = dict(metadata)
+    expected_manifest = document.get('sourceManifestSha256')
+    listed_paths = set()
+    grouped = {kind: [] for kind in collections}
+    total_bytes = len(raw)
+    for item in shard_rows:
+        if not isinstance(item, dict):
+            fail('CODE_ARCH_ASSET_INDEX', str(index_path), 'Malformed shard descriptor')
+        relative = item.get('path')
+        if not isinstance(relative, str) or relative in listed_paths:
+            fail('CODE_ARCH_ASSET_INDEX', str(index_path), 'Duplicate or invalid shard path')
+        listed_paths.add(relative)
+        shard_path = inside(index_root, relative)
+        shard_raw = read(shard_path, max_bytes=ASSET_CONTEXT_SHARD_BYTES)
+        if len(shard_raw) != item.get('bytes') or sha(shard_raw) != item.get('sha256'):
+            fail('CODE_ARCH_ASSET_INDEX', relative, 'Shard bytes differ from index SHA/size')
+        total_bytes += len(shard_raw)
+        shard = load(shard_raw, max_nodes=8_000_000, max_depth=128)
+        if (len(shard_raw) > ASSET_CONTEXT_SHARD_BYTES or shard.get('schemaVersion') != SHARD_SCHEMA or
+                shard.get('sourceManifestSha256') != expected_manifest or shard.get('kind') != item.get('kind') or
+                shard.get('ordinal') != item.get('ordinal') or shard.get('count') != item.get('count') or
+                not isinstance(shard.get('rows'), list) or len(shard['rows']) != item.get('rowCount')):
+            fail('CODE_ARCH_ASSET_INDEX', relative, 'Shard identity or row count differs from index')
+        if shard.get('kind') not in grouped:
+            fail('CODE_ARCH_ASSET_INDEX', relative, 'Shard kind is absent from collection index')
+        grouped[shard['kind']].append((shard['ordinal'], shard['rows']))
+    if total_bytes > ASSET_CONTEXT_GROUP_BYTES:
+        fail('CODE_ARCH_ASSET_BUDGET', str(index_path), 'Indexed asset-context group exceeds 64 MiB')
+    for kind, descriptor in collections.items():
+        if not isinstance(descriptor, dict) or type(descriptor.get('rowCount')) is not int:
+            fail('CODE_ARCH_ASSET_INDEX', kind, 'Malformed collection descriptor')
+        paths = descriptor.get('shards')
+        if not isinstance(paths, list) or any(path not in listed_paths for path in paths):
+            fail('CODE_ARCH_ASSET_INDEX', kind, 'Collection references an unlisted shard')
+        parts = sorted(grouped[kind])
+        if [next(row['path'] for row in shard_rows if row['kind'] == kind and row['ordinal'] == ordinal)
+                for ordinal, _ in parts] != paths:
+            fail('CODE_ARCH_ASSET_INDEX', kind, 'Collection shard order differs from index')
+        if parts and ([ordinal for ordinal, _ in parts] != list(range(len(parts))) or
+                      any(next(row['count'] for row in shard_rows if row['kind'] == kind and row['ordinal'] == ordinal) != len(parts)
+                          for ordinal, _ in parts)):
+            fail('CODE_ARCH_ASSET_INDEX', kind, 'Collection shard ordinals/counts are incomplete')
+        rows = [row for _, part in parts for row in part]
+        if len(rows) != descriptor['rowCount']:
+            fail('CODE_ARCH_ASSET_INDEX', kind, 'Reconstructed collection count differs from index')
+        assembled[kind] = rows
+    if len(listed_paths) != len(shard_rows) or sum(row['bytes'] for row in shard_rows) != document.get('shardBytes'):
+        fail('CODE_ARCH_ASSET_INDEX', str(index_path), 'Shard byte total differs from index')
+    reconstructed = encoded(assembled)
+    if len(reconstructed) != document.get('contextBytes') or sha(reconstructed) != document.get('contextSha256'):
+        fail('CODE_ARCH_ASSET_INDEX', str(index_path), 'Reconstructed context differs from the complete context SHA/size')
+    return assembled
