@@ -7,6 +7,10 @@
 
 ### 当前执行记录（2026-10-27 架构阶段）
 
+2026-10-27 原生引用接线前置核验：bindings模块已从原始Cocos2.4 pack/config准确恢复CardSeasonMainWindow 16个序列化属性，UUID index3137、pack0621940b9 section2640；42源节点与冻结Prefab child-index路径/名称逐项同构，既有保存重开readback确认42身份。12个显式字段映射均有真实源引用及目标路径，其中10个类型兼容；progressBar目标只有Image而C#要求Slider，label_title缺TMP文本，另4源属性缺新C#字段。NativeBindingPlan04 SHA `05e94087f9a55a02f58b8b7d887979562407a5073063ddf9b5d56f4e2be721bb`保留具体缺口；新Script GUID/MonoScript未固定，0个Prefab写入操作，不宣称已挂接。12项定向测试及py_compile通过，后续批量所有已终结View的真实盘点继续。
+
+NativeDomainCompile01完成13模块中146份无外部待生成类型依赖Domain源码的实际C#9/.NET Standard2.1编译，0诊断、无Unity引用；仅使用上述ShopColumn显式语法修订。GameSnapshot/RemoteReply依赖未生成功能状态，明确排除并保留分母；没有假类型或空壳补依赖，不代表Gameplay/Presentation/整工程编译、原生运行或业务等价已过。
+
 2026-10-27 最新接续检查点（非整版交付）：NativeProject01已保存前13/47模块首轮输出，FireRank实际运行中；实时状态以原run为准，不改其旧清单/输出或重启旧6445队列。新增`code-native-revise`按base manifest、修订计划、旧/新C#哈希和类/layer/module归属生成新候选，完整保留资源/JSON/包/设置及已有meta；新助手生成独立meta。16项定向检查、实际CLI合成候选烟测和源哈希不变通过。类归属与implemented/missing必须一致，普通/已采用工程拒绝；compile/runtime仍not_run，不把构造候选当验收。
 
 NativeContentRevision01在55个direct schema、56个实际JSON路径执行1,584行解码及13,334字段回投，失败路径0，8项组件测试通过；45个Content port方法仍39 pending，未与完整真实接口编译。NativeRandomRevision01已实现两种独立原生随机流和显式单位区间/范围接口：.NET8组件编译0警告/错误，4,292源公式向量及1,000状态续跑步骤通过；没有执行原JS，尚未接真实Merge/Foodom调用或Unity。ownership和原source/hash各自固定于私有工作区，后续统一revision-plan后整合。
