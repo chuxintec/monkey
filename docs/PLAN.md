@@ -7,6 +7,12 @@
 
 ### 当前执行记录（2026-10-27 架构阶段）
 
+2026-10-27 接续：NativeProject01已保存Session、Runtime、Audio三个完整模块的首轮实现，BigDay正在实际运行，其余43个模块待处理。旧进程仍沿已固定合同串行执行，不修改其清单或源文件。Session的4个有效声明因用户提示字符串中的`not implemented`被误判为种子残留；已修复词法检测并新增只读`code-architecture-module-recheck`。实际复核Session为21/21 generated_unreviewed，Audio为15 generated_unreviewed / 1 incomplete_contract，旧request/state/manifest哈希均未改变。回执保存在`ModuleRecheck01/`；分类通过仍不代表语义/编译/运行验收。模块定向13项通过（新增3项，其他既有检查不重跑）。
+
+Audio的UnityAudioService确实缺少设计的AudioSource字段和播放实现，不能通过放宽检测消除。本机6000.6.2f1已有com.unity.modules.audio 1.0.0，但冻结候选未声明；已只读固定其package.json身份，没有安装或修改包。另从原始main/game.js发现两种不同种子随机算法：合并棋盘eh（9301/49297/233280及22643→22646特例）、Cookfish WX（1664525/1013904223/uint32）。原始正文、字节区间、SHA及所属sourceUnit保存在`IntegrationFindings01/`，WX窄范围见`rng-narrowing.json`；尚未集成，不能继续把“算法未知”当作永久适配理由，也不能将两算法全局互换。后续按来源调用点补齐真实核心实现和候选包/序列化引用，再做整工程编译及业务链。
+
+当前父单写CLI与集成；code_regeneration已交付检测/recheck并停止写入；codex_postprocess正在实现只读重分类后的新版本汇总。新汇总必须保留旧模块manifest SHA和逐文件新诊断，只接受精确已保存输出，不重跑AI、不覆盖正在运行的队列或旧候选。整版与原生验收仍未完成。
+
 已实现 whole-source 架构准备/执行/状态三命令及结构合同，源目录不重导；1831个完整注册区间和补充区间、21999个成员、548份实际JSON、1698个Prefab/Scene身份作为规划输入。成员索引按SHA分片，不因单文件8MiB边界删减。GlobalArchitecture02因CLI自身状态库/app-server沙箱权限在模型启动前失败，原回执保留；新独立GlobalArchitecture03沿现有Codex配置经正常权限启动，其原始分析已结束，后续修订验收见下。此阶段只形成架构合同，不能称原生实现/编译/运行已完成。
 
 主开发持有唯一真实CLI和共享架构/CLI/集成写权；复用code_regeneration实现按完整功能模块prepare/run/status（精确来源、预规划目标、全局合同及依赖实现、模块回执），复用codex_postprocess实现冻结资源+五层实现的独立候选组装（清除生产路径旧草稿、所有权与source→target映射、手改保护）。仅模块接口和私有隔离测试，不执行源代码/不写正式游戏；shader_profile空闲。下一步架构验收后顺序生成实际模块，组装新候选并做整工程及跨层业务验证，不恢复旧3476队列。

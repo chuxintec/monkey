@@ -25,21 +25,30 @@ class ArchitectureModuleWorkflowTests(unittest.TestCase):
         (candidate / 'ProjectSettings').mkdir()
         package_raw = b'{"dependencies":{"com.unity.ugui":"2.6.0"}}\n'
         version_raw = b'm_EditorVersion: 6000.6.2f1\n'
+        source = b'function recipe(){ return 7; }'
+        source_path = 'SourceRecovery/Code/Source/Source.js'
+        config_raw = b'{"items":[1,2]}'
+        config_path = 'Assets/Game/Content/Config/Recipe.json'
         (candidate / 'Packages/manifest.json').write_bytes(package_raw)
         (candidate / 'ProjectSettings/ProjectVersion.txt').write_bytes(version_raw)
+        source_file = candidate / source_path
+        source_file.parent.mkdir(parents=True, exist_ok=True)
+        source_file.write_bytes(source)
+        config_file = candidate / config_path
+        config_file.parent.mkdir(parents=True, exist_ok=True)
+        config_file.write_bytes(config_raw)
         candidate_manifest = encoded({'schemaVersion': 1, 'targetProfile': 'unity-6000.6.2f1-ugui',
             'namespace': 'Demo', 'scopeMode': 'whole-input', 'files': [
                 {'path': 'Packages/manifest.json', 'sha256': sha(package_raw), 'bytes': len(package_raw), 'owner': 'generated'},
-                {'path': 'ProjectSettings/ProjectVersion.txt', 'sha256': sha(version_raw), 'bytes': len(version_raw), 'owner': 'generated'}]})
+                {'path': 'ProjectSettings/ProjectVersion.txt', 'sha256': sha(version_raw), 'bytes': len(version_raw), 'owner': 'generated'},
+                {'path': source_path, 'sha256': sha(source), 'bytes': len(source), 'owner': 'retained'},
+                {'path': config_path, 'sha256': sha(config_raw), 'bytes': len(config_raw), 'owner': 'generated'}]})
         (candidate / 'manifest.json').write_bytes(candidate_manifest)
         source_pin = sha(candidate_manifest)
 
-        source = b'function recipe(){ return 7; }'
         source_hash = sha(source)
         member_id = '21af08e48846:methods@0:30'
         unit_id = 'module:21af08e48846:0:30'
-        config_raw = b'{"items":[1,2]}'
-        config_path = 'Assets/Game/Content/Config/Recipe.json'
         class_record = {
             'id': 'RecipeCatalog', 'name': 'RecipeCatalog', 'layer': 'Domain', 'module': 'Recipe',
             'kind': 'class', 'responsibility': 'Own recipe lookup rules',
@@ -323,6 +332,89 @@ public sealed class RecipeCatalog {
 }
 }'''
         self.assertEqual(modules._implementation_markers(code, record), [])
+
+    def test_unavailable_user_messages_are_not_seed_markers_but_real_todo_is(self):
+        record = {'name': 'UnavailableGameBackend', 'kind': 'class', 'layer': 'Services',
+                  'namespace': 'Demo.Services.Session', 'plannedMethods': [{'name': 'SubmitAsync'}],
+                  'plannedFields': []}
+        unavailable = b'''namespace Demo.Services.Session {
+public sealed class UnavailableGameBackend {
+    public string SubmitAsync() => "Remote service is not implemented; backend unavailable.";
+    public string Explain() => "not implemented by this client; return an unavailable result";
+}
+}'''
+        self.assertEqual(modules._implementation_markers(unavailable, record), [])
+        actual_todo = unavailable.replace(b'    public string Explain()', b'    // TODO: preserve the documented unavailable result.\n    public string Explain()')
+        self.assertIn('implementation-placeholder-remains', modules._implementation_markers(actual_todo, record))
+        throwing_stub = unavailable.replace(b'"Remote service is not implemented; backend unavailable."',
+            b'"not implemented"; throw new System.NotImplementedException();')
+        self.assertIn('implementation-placeholder-remains', modules._implementation_markers(throwing_stub, record))
+        seed = b'// ARCHITECTURE SEED ONLY. NOT IMPLEMENTED; NEVER ACCEPT AS WORKING CODE.\n'
+        self.assertIn('seed-marker-remains', modules._implementation_markers(seed, record))
+
+    def test_read_only_recheck_refreshes_classification_without_rewriting_artifacts(self):
+        with tempfile.TemporaryDirectory(dir='/private/tmp') as directory:
+            root = Path(directory); stage, _, _, _, _ = self.make_stage(root); out = root / 'Module'
+            with patch.object(modules.worker, 'prepare', side_effect=self.fake_worker_prepare):
+                modules.prepare(stage, 'Recipe', out)
+
+            def fake_run(task_root, *, session_id=None):
+                task_root = Path(task_root)
+                rel = 'Assets/Game/Domain/Recipe/RecipeCatalog.cs'
+                path = task_root / 'workspace' / rel
+                body = b'''namespace Demo.Domain.Recipe {
+public sealed class RecipeCatalog {
+    public int Count;
+    public int GetCount() => Count;
+    public string Availability => "not implemented for this local adapter; unavailable";
+}
+}'''
+                path.write_bytes(body)
+                (task_root / 'request.json').write_bytes(encoded({'state': 'completed'}))
+                return {'status': 'complete', 'actualChanges': [{'path': rel, 'afterSha256': sha(body)}],
+                    'declaredChangedPaths': [rel], 'gitBoundary': {'valid': True}, 'unresolved': []}
+
+            with patch.object(modules.worker, 'run', side_effect=fake_run):
+                modules.run(out)
+            task_root = out / 'Task'
+            task_request = json.loads((task_root / 'request.json').read_text())
+            module_request = json.loads((out / 'request.json').read_text())
+            task_context = {'__Context/' + name: {'sourcePath': name, 'sha256': pin['sha256'], 'bytes': pin['bytes']}
+                            for name, pin in module_request['contextFiles'].items()}
+            task_request.update(state='finalized', exitCode=0, contextFiles=task_context)
+            (task_root / 'request.json').write_bytes(encoded(task_request))
+            (task_root / 'process.json').write_bytes(encoded({'state': 'exited', 'returnCode': 0}))
+            rel = 'Assets/Game/Domain/Recipe/RecipeCatalog.cs'
+            body = (task_root / 'workspace' / rel).read_bytes()
+            revision = {'status': 'complete', 'exitCode': 0, 'stopReason': None,
+                'unexpectedPaths': [], 'workspaceIntegrityErrors': [], 'sourceVerificationErrors': [],
+                'gitBoundary': {'valid': True}, 'contextFiles': task_context,
+                'actualChanges': [{'path': rel, 'afterSha256': sha(body), 'afterBytes': len(body)}],
+                'declaredChangedPaths': [rel]}
+            (task_root / 'manifest.json').write_bytes(encoded(revision))
+
+            protected = [out / modules.MANIFEST, out / modules.MANIFEST_SHA, out / 'state.json',
+                         out / rel, task_root / 'request.json', task_root / 'manifest.json']
+            before = [sha(path.read_bytes()) for path in protected]
+            result = modules.recheck(out)
+            after = [sha(path.read_bytes()) for path in protected]
+            self.assertEqual(before, after)
+            self.assertEqual(result['status'], 'rechecked')
+            self.assertEqual(result['classification'], 'generated_unreviewed')
+            self.assertEqual(result['files'][0]['classification'], 'generated_unreviewed')
+            self.assertEqual(result['files'][0]['completenessDiagnostics'], [])
+            self.assertEqual(result['semanticValidation'], 'not_performed')
+            self.assertFalse(result['manifestRewritten'])
+
+    def test_read_only_recheck_refuses_nonfinalized_task(self):
+        with tempfile.TemporaryDirectory(dir='/private/tmp') as directory:
+            root = Path(directory); stage, _, _, _, _ = self.make_stage(root); out = root / 'Module'
+            with patch.object(modules.worker, 'prepare', side_effect=self.fake_worker_prepare):
+                modules.prepare(stage, 'Recipe', out)
+            manifest_before = sha((out / modules.MANIFEST).read_bytes())
+            with self.assertRaises(ParseError):
+                modules.recheck(out)
+            self.assertEqual(sha((out / modules.MANIFEST).read_bytes()), manifest_before)
 
     def test_lexical_core_gate_flags_engine_dynamic_untyped_and_namespace_gaps(self):
         record = {'name': 'RecipeCatalog', 'kind': 'class', 'layer': 'Gameplay',

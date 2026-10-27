@@ -12,6 +12,7 @@ from pathlib import Path
 
 from .io import encoded, inside, load, read, safe, sha
 from .output_limits import MANIFEST_BYTES, MANIFEST_NODES
+from .candidate_snapshot import snapshot
 from .sources.compiled import fail
 from . import code_architecture as architecture
 from . import code_architecture_asset_context as asset_contexts
@@ -453,6 +454,73 @@ def _strip_csharp_comments_and_literals(raw):
     return ''.join(chars)
 
 
+def _strip_csharp_literals_keep_comments(raw):
+    """Blank C# literals while keeping comments for narrowly scoped marker checks."""
+    try:
+        text = raw.decode('utf-8', 'strict')
+    except UnicodeDecodeError:
+        return None
+    chars = list(text)
+
+    def blank(start, end):
+        for position in range(start, end):
+            if chars[position] not in '\r\n':
+                chars[position] = ' '
+
+    i = 0
+    size = len(text)
+    while i < size:
+        if text.startswith('//', i):
+            end = i + 2
+            while end < size and text[end] not in '\r\n':
+                end += 1
+            i = end
+            continue
+        if text.startswith('/*', i):
+            end = text.find('*/', i + 2)
+            i = size if end < 0 else end + 2
+            continue
+
+        raw_start = i
+        prefix_end = i
+        while prefix_end < size and text[prefix_end] == '$':
+            prefix_end += 1
+        if prefix_end < size and text[prefix_end] == '"':
+            quote_end = prefix_end
+            while quote_end < size and text[quote_end] == '"':
+                quote_end += 1
+            quote_count = quote_end - prefix_end
+            if quote_count >= 3:
+                delimiter = '"' * quote_count
+                close = text.find(delimiter, quote_end)
+                end = size if close < 0 else close + quote_count
+                blank(raw_start, end); i = end; continue
+
+        verbatim = False
+        if text.startswith('$@"', i) or text.startswith('@$"', i):
+            quote_at = i + 2; verbatim = True
+        elif text.startswith('@"', i):
+            quote_at = i + 1; verbatim = True
+        elif text.startswith('$"', i):
+            quote_at = i + 1
+        elif text[i] == '"' or text[i] == "'":
+            quote_at = i
+        else:
+            i += 1; continue
+        quote = text[quote_at]
+        end = quote_at + 1
+        while end < size:
+            if verbatim and quote == '"' and text.startswith('""', end):
+                end += 2; continue
+            if not verbatim and text[end] == '\\':
+                end += 2; continue
+            if text[end] == quote:
+                end += 1; break
+            end += 1
+        blank(raw_start, min(end, size)); i = min(end, size)
+    return ''.join(chars)
+
+
 def _matching_brace(code, open_at):
     depth = 0
     for i in range(open_at, len(code)):
@@ -488,13 +556,26 @@ def _joined_namespace(blocks):
 
 def _implementation_markers(raw, class_record):
     markers = []
-    if re.search(rb'NOT IMPLEMENTED|NOTIMPLEMENTED|ARCHITECTURE SEED ONLY', raw, re.I):
-        markers.append('seed-marker-remains')
     code = _strip_csharp_comments_and_literals(raw)
     if code is None:
-        return markers + ['invalid-utf8-csharp']
+        return ['invalid-utf8-csharp']
     if re.search(r'NotImplementedException|\bTODO\b', code, re.I):
         markers.append('implementation-placeholder-remains')
+    comments = _strip_csharp_literals_keep_comments(raw)
+    if comments is None:
+        return markers + ['invalid-utf8-csharp']
+    special_seed_header = re.compile(
+        r'(?im)^\s*//\s*ARCHITECTURE SEED ONLY\.\s+NOT IMPLEMENTED;\s*NEVER ACCEPT AS WORKING CODE\.\s*$')
+    exact_seed_comment = re.compile(
+        r'(?im)^\s*//\s*(?:NOT IMPLEMENTED|NOTIMPLEMENTED|ARCHITECTURE SEED ONLY)[.!;]?\s*$')
+    exact_seed_block = re.compile(
+        r'(?is)/\*\s*(?:NOT IMPLEMENTED|NOTIMPLEMENTED|ARCHITECTURE SEED ONLY)[.!;]?\s*\*/')
+    if special_seed_header.search(comments) or exact_seed_comment.search(comments) or exact_seed_block.search(comments):
+        markers.append('seed-marker-remains')
+    if re.search(r'(?im)//[^\r\n]*\b(?:TODO|FIXME)\b|/\*.*?\b(?:TODO|FIXME)\b.*?\*/', comments, re.S):
+        markers.append('implementation-placeholder-remains')
+    if not code.strip() and 'seed-marker-remains' not in markers:
+        markers.append('seed-marker-remains')
 
     expected_namespace = class_record.get('namespace')
     type_name = class_record['name']
@@ -882,3 +963,191 @@ def status(output):
                                       for status in sorted({row.get('status') for row in manifest.get('classes', [])})},
             'compilation': manifest.get('compilation'), 'runtime': manifest.get('runtime'),
             'acceptance': manifest.get('acceptance')}
+
+
+def recheck(output):
+    """Read-only refresh of saved classifications after a finalized, exited task.
+
+    This verifies the existing source/context/output pins and returns new lexical
+    completeness metadata without changing the prior manifest, state, or files.
+    """
+    root = safe(output)
+    current = status(root)
+    request = _json(inside(root, 'request.json'))
+    stage = _verify_pins(root, request)
+    manifest_raw = read(inside(root, MANIFEST), max_bytes=worker.FILE_BYTES)
+    manifest = load(manifest_raw, max_nodes=2_000_000)
+    task_root = inside(root, 'Task')
+    task_request = _json(inside(task_root, 'request.json'), maximum=2 * 1024 * 1024)
+    if task_request.get('state') != 'finalized':
+        fail('CODE_ARCH_MODULE_RECHECK_STATE', str(root), 'Read-only recheck requires a finalized task request')
+    if not inside(task_root, 'process.json').is_file() or not inside(task_root, 'manifest.json').is_file():
+        fail('CODE_ARCH_MODULE_RECHECK_STATE', str(task_root), 'Finalized task process and revision records are required')
+    process = _json(inside(task_root, 'process.json'), maximum=1024 * 1024)
+    task_manifest_raw = read(inside(task_root, 'manifest.json'), max_bytes=worker.FILE_BYTES)
+    task_manifest = load(task_manifest_raw, max_nodes=2_000_000)
+    if task_request.get('state') != 'finalized' or process.get('state') != 'exited':
+        fail('CODE_ARCH_MODULE_RECHECK_STATE', str(root), 'Read-only recheck requires a finalized task and an exited child')
+    if process.get('returnCode') != 0 or task_request.get('exitCode') != 0 or task_manifest.get('exitCode') != 0:
+        fail('CODE_ARCH_MODULE_RECHECK_STATE', str(task_root), 'Task did not exit successfully; saved implementation cannot be reclassified as a completed output')
+    if task_manifest.get('status') not in ('complete', 'partial') or task_manifest.get('stopReason'):
+        fail('CODE_ARCH_MODULE_RECHECK_STATE', str(task_root), 'Task result is not a finalized complete/partial worker record')
+    if task_manifest.get('unexpectedPaths') or task_manifest.get('workspaceIntegrityErrors') or task_manifest.get('sourceVerificationErrors'):
+        fail('CODE_ARCH_MODULE_RECHECK_BOUNDARY', str(task_root), 'Worker task recorded boundary or source verification errors')
+    if not task_manifest.get('gitBoundary', {}).get('valid'):
+        fail('CODE_ARCH_MODULE_RECHECK_BOUNDARY', str(task_root), 'Worker task did not record a valid workspace boundary')
+    expected_task_context = {}
+    for name, pin in request.get('contextFiles', {}).items():
+        entry = {'sourcePath': name, 'sha256': pin['sha256'], 'bytes': pin['bytes']}
+        expected_task_context['__Context/' + name] = entry
+    if task_request.get('contextFiles') != expected_task_context or task_manifest.get('contextFiles') != expected_task_context:
+        fail('CODE_ARCH_MODULE_RECHECK_CONTEXT', str(task_root), 'Finalized task context pins differ from the module request')
+
+    # Verify the immutable context copies supplied to the completed task.
+    context_hashes = []
+    workspace_root = inside(task_root, 'workspace')
+    for name, pin in sorted(request.get('contextFiles', {}).items()):
+        raw = read(inside(root / 'Evidence', name), max_bytes=worker.FILE_BYTES)
+        if len(raw) != pin.get('bytes') or sha(raw) != pin.get('sha256'):
+            fail('CODE_ARCH_MODULE_RECHECK_CONTEXT', name, 'Saved module context differs from its original pin')
+        copied = read(inside(workspace_root / '__Context', name), max_bytes=worker.FILE_BYTES)
+        if len(copied) != pin.get('bytes') or sha(copied) != pin.get('sha256'):
+            fail('CODE_ARCH_MODULE_RECHECK_CONTEXT', name, 'Finalized task context copy differs from the original pin')
+        context_hashes.append({'path': name, 'sha256': pin['sha256'], 'bytes': pin['bytes']})
+
+    # Recheck source originals and relevant mapped input bytes without traversing
+    # or hashing the full candidate inventory.
+    candidate, _, owned, candidate_pin = snapshot(stage['request']['sourceRoot'])
+    if candidate_pin != request.get('sourceManifestSha256'):
+        fail('CODE_ARCH_MODULE_RECHECK_SOURCE', str(candidate), 'Candidate manifest changed after module preparation')
+    source_hashes = {}
+    for row in manifest.get('sourceContexts', []):
+        path = row.get('sourcePath')
+        digest = row.get('sourceSha256')
+        if not isinstance(path, str) or not isinstance(digest, str):
+            fail('CODE_ARCH_MODULE_RECHECK_SOURCE', str(path), 'Source context lacks its exact original path/hash')
+        if path in source_hashes and source_hashes[path]['sha256'] != digest:
+            fail('CODE_ARCH_MODULE_RECHECK_SOURCE', path, 'Module source contexts assign conflicting hashes to one original path')
+        if path not in source_hashes:
+            source_raw = read(inside(candidate, path), max_bytes=256 * 1024 * 1024)
+            inventory_row = owned.get(path)
+            if not inventory_row or len(source_raw) != inventory_row.get('bytes') or sha(source_raw) != inventory_row.get('sha256'):
+                fail('CODE_ARCH_MODULE_RECHECK_SOURCE', path, 'Original source file differs from its frozen candidate inventory')
+            if sha(source_raw) != digest:
+                fail('CODE_ARCH_MODULE_RECHECK_SOURCE', path, 'Original source file differs from the module source pin')
+            source_hashes[path] = {'path': path, 'sha256': digest, 'bytes': len(source_raw)}
+
+    # Verify JSON config inputs and every mapping identity named by the saved
+    # asset-context report against the current candidate bytes.
+    for context_name in ('module-config-map.json', 'module-asset-bindings.json'):
+        pin = request.get('contextFiles', {}).get(context_name)
+        if not pin:
+            continue
+        context = load(read(inside(root / 'Evidence', context_name), max_bytes=worker.FILE_BYTES), max_nodes=2_000_000)
+        candidates = []
+        if context_name == 'module-config-map.json':
+            candidates.extend(context.get('configs', []))
+        else:
+            mapping_pins = context.get('mappingPins', {})
+            for path, value in mapping_pins.items():
+                if path == 'componentBindings':
+                    continue
+                candidates.append({'path': path, **value})
+            binding_pin = context.get('componentBindingsSha256')
+            if binding_pin:
+                candidates.append({'path': 'Analysis/Code/component-code-bindings.json', 'sha256': binding_pin})
+        for evidence in candidates:
+            path = evidence.get('path')
+            expected_sha = evidence.get('sha256')
+            if not isinstance(path, str) or not isinstance(expected_sha, str):
+                fail('CODE_ARCH_MODULE_RECHECK_SOURCE', str(path), 'Mapped input context lacks an exact candidate path/hash')
+            inventory_row = owned.get(path)
+            if not inventory_row:
+                fail('CODE_ARCH_MODULE_RECHECK_SOURCE', path, 'Mapped input is outside the pinned candidate inventory')
+            raw = read(inside(candidate, path), max_bytes=256 * 1024 * 1024)
+            if len(raw) != inventory_row.get('bytes') or sha(raw) != expected_sha or sha(raw) != inventory_row.get('sha256'):
+                fail('CODE_ARCH_MODULE_RECHECK_SOURCE', path, 'Mapped input bytes differ from the saved source pin')
+        if context_name == 'module-asset-bindings.json':
+            verified_asset_bytes = {}
+            asset_rows = []
+            for binding in context.get('bindings', []):
+                identity = binding.get('assetIdentity') or {}
+                asset_rows.extend(identity.get('nativeTargets', []))
+                preview = binding.get('previewReadbackReference') or {}
+                if preview.get('status') == 'verified-preview-object-reference-only':
+                    asset_rows.append(preview)
+            for row in asset_rows:
+                path = row.get('path')
+                expected_sha = row.get('sha256') or row.get('prefabSha256')
+                expected_size = row.get('bytes')
+                meta_sha = row.get('metaSha256')
+                if not path or not expected_sha:
+                    continue
+                if path not in verified_asset_bytes:
+                    inventory_row = owned.get(path)
+                    if not inventory_row:
+                        fail('CODE_ARCH_MODULE_RECHECK_SOURCE', path, 'Mapped native asset is outside the pinned candidate inventory')
+                    raw = read(inside(candidate, path), max_bytes=256 * 1024 * 1024)
+                    if len(raw) != inventory_row.get('bytes') or sha(raw) != expected_sha or sha(raw) != inventory_row.get('sha256'):
+                        fail('CODE_ARCH_MODULE_RECHECK_SOURCE', path, 'Mapped native asset bytes differ from the saved asset identity pin')
+                    verified_asset_bytes[path] = {'bytes': len(raw), 'sha256': sha(raw)}
+                if verified_asset_bytes[path]['sha256'] != expected_sha:
+                    fail('CODE_ARCH_MODULE_RECHECK_SOURCE', path, 'Mapped native asset rows disagree on their pinned SHA')
+                if expected_size is not None and verified_asset_bytes[path]['bytes'] != expected_size:
+                    fail('CODE_ARCH_MODULE_RECHECK_SOURCE', path, 'Mapped native asset size differs from its saved identity pin')
+                if meta_sha:
+                    meta_path = path + '.meta'
+                    meta_row = owned.get(meta_path)
+                    if not meta_row:
+                        fail('CODE_ARCH_MODULE_RECHECK_SOURCE', meta_path, 'Mapped native asset meta is outside the pinned candidate inventory')
+                    meta_raw = read(inside(candidate, meta_path), max_bytes=64 * 1024)
+                    if sha(meta_raw) != meta_sha or sha(meta_raw) != meta_row.get('sha256'):
+                        fail('CODE_ARCH_MODULE_RECHECK_SOURCE', meta_path, 'Mapped native asset GUID metadata changed after preparation')
+
+    actual = {row['path']: row for row in task_manifest.get('actualChanges', [])}
+    declared = set(task_manifest.get('declaredChangedPaths', []))
+    allowed = set(request.get('classPaths', {}).values())
+    if set(actual) != declared or not declared.issubset(allowed):
+        fail('CODE_ARCH_MODULE_RECHECK_BOUNDARY', str(task_root), 'Finalized task changes differ from the pinned module path boundary')
+
+    artifact_by_path = {row.get('targetPath'): row for row in manifest.get('files', [])}
+    class_rows = []
+    for class_record in manifest.get('classes', []):
+        path = class_record.get('path')
+        if path not in allowed:
+            fail('CODE_ARCH_MODULE_RECHECK_BOUNDARY', str(path), 'Manifest class path is outside the pinned module boundary')
+        output_raw = read(inside(root, path), max_bytes=worker.FILE_BYTES)
+        workspace_raw = read(inside(workspace_root, path), max_bytes=worker.FILE_BYTES)
+        digest = sha(output_raw)
+        artifact = artifact_by_path.get(path)
+        if (len(output_raw) != len(workspace_raw) or output_raw != workspace_raw or
+                digest != class_record.get('sha256') or not artifact or digest != artifact.get('sha256') or
+                len(output_raw) != artifact.get('bytes')):
+            fail('CODE_ARCH_MODULE_RECHECK_OUTPUT', path, 'Saved implementation bytes differ from the old manifest or finalized workspace')
+        change = actual.get(path)
+        if change and change.get('afterSha256') != digest:
+            fail('CODE_ARCH_MODULE_RECHECK_OUTPUT', path, 'Task actualChanges SHA differs from the saved implementation')
+        diagnostics = _implementation_markers(output_raw, class_record)
+        if digest == class_record.get('seedSha256'):
+            classification = 'unimplemented_seed'
+        elif 'seed-marker-remains' in diagnostics:
+            classification = 'unimplemented_seed_residue'
+        elif diagnostics:
+            classification = 'incomplete_contract'
+        else:
+            classification = 'generated_unreviewed'
+        class_rows.append({'classId': class_record.get('classId'), 'path': path,
+            'sourceUnitIds': class_record.get('sourceUnitIds', []), 'sourceMemberIds': class_record.get('sourceMemberIds', []),
+            'sha256': digest, 'bytes': len(output_raw), 'priorStatus': class_record.get('status'),
+            'classification': classification, 'completenessDiagnostics': diagnostics})
+    counts = {name: sum(1 for row in class_rows if row['classification'] == name)
+              for name in sorted({row['classification'] for row in class_rows})}
+    aggregate = 'generated_unreviewed' if counts and set(counts) == {'generated_unreviewed'} else 'partial_unimplemented_seed'
+    return {'status': 'rechecked', 'moduleId': manifest.get('moduleId'),
+        'oldManifestSha256': current['manifestSha256'], 'taskManifestSha256': sha(task_manifest_raw),
+        'taskState': task_request.get('state'), 'childState': process.get('state'),
+        'classification': aggregate, 'classificationCounts': counts, 'files': class_rows,
+        'sourceFiles': list(source_hashes.values()), 'contextFiles': context_hashes,
+        'compilation': manifest.get('compilation'), 'runtime': manifest.get('runtime'),
+        'semanticValidation': 'not_performed', 'manifestRewritten': False,
+        'stateRewritten': False, 'reviewScope': 'read-only lexical classification refresh; no semantic, compile, Editor, or runtime acceptance'}
