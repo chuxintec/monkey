@@ -7,6 +7,8 @@
 
 主体为真实全量处理；复用61检查/资源证据，不重跑旧原生套件。所有就绪批连续执行，不能以调度器或新小样完成而停工；版本或严重问题反馈，不等逐批ACK。
 
+2026-10-27 全量检查点2960（非整版完成）：前40批2960/6445实际审阅集成，2899 partial /49 processed /12 unchanged，2323文件实际改动，17754项必需源函数映射逐文件覆盖；3份额外未知ID的元数据问题仍保留且不计覆盖。第41批68文件继续执行。增量内容复核06仅新增429文件，源/当前hash全匹配，无55%以下收缩或新增映射空方法；额外未映射空方法检查04同429文件亦无新信号。2份异常计数告警逐一回读精确原文，对应NarrativeItem的onRender/onSkip/onAnimate与ActivityEntranceBase.onEnter共4个原本显式抛错钩子，当前保留原消息，generic Exception改为NotImplementedException；未用异常替换既有业务正文，CLR异常类型语义仍未验证，文件保持partial。回执`ContentAudit06/accepted-code-audit.json`、`manual-signal-review.json`、`checkpoint-metrics.json`与`UnmappedEmptyAudit04/signals.json`；原告警不抹除。2960份摘要无空摘要、5组精确重复文本最多7份，文本信号不能证明语义等价或替代源码核验。仅静态内容/身份/覆盖检查，非整版编译、Player或运行证明；全部就绪批继续，不停在本检查点。
+
 
 2026-10-27 生成器控制流补修：新鲜discard局部声明自带block，避免无花括号if/else、while、for中CS1023；保留真实`_`赋值及Sequence求值顺序。renderer模块23项通过，独立.NET8反例先用022fc8c复现3处CS1023，再以修复版编译零警告/错误并得到`embedded=7,7`；回执`.private/v060-full-postprocess-20261026/RendererEmbeddedBehavior02/receipt.json`。仅合成代码执行，不是游戏全量编译。修复影响未来生成，冻结07与实际串行队列不改；检查点1294/6445，第20批实际审阅中，全量未完成。
 
