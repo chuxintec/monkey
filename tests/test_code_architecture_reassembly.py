@@ -135,6 +135,25 @@ class ArchitectureReassemblyTests(unittest.TestCase):
              patch.object(modules, 'recheck', return_value=report):
             return reassemble(self.pipeline, self.output)
 
+    def test_pipeline_collection_with_full_source_coverage_stays_explicitly_unreviewed(self):
+        from monkey import code_architecture_pipeline as pipeline
+        from monkey.code_architecture_candidate import assemble_native_candidate
+        with patch.object(modules, 'status', return_value={
+                'manifestSha256': self.module_pin, 'status': 'generated_unreviewed'}):
+            aggregate, pin = pipeline._collect(self.pipeline, self.stage, self.state)
+        collected = load((aggregate / 'manifest.json').read_bytes())
+        self.assertEqual(collected['files'][0]['sourceUnitIds'], ['unit-a'])
+        self.assertEqual(collected['files'][0]['status'], 'partial')
+        self.assertEqual(collected['files'][0].get('unresolved'),
+                         ['Generated output remains semantically unreviewed.'])
+        report = assemble_native_candidate(
+            self.source, self.source_pin,
+            self.architecture / 'architecture.json', self.plan_pin,
+            self.architecture / 'validation.json', self.validation_pin,
+            aggregate, pin, self.output, allow_partial=True)
+        self.assertEqual(report['status'], 'partial')
+        self.assertEqual((self.output / self.target_path).read_bytes(), self.code)
+
     def test_reassembles_only_reclassified_outputs_and_preserves_old_inputs(self):
         prior_state = (self.pipeline / 'state.json').read_bytes()
         prior_manifest = (self.task / modules.MANIFEST).read_bytes()

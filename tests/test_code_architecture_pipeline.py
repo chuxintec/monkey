@@ -74,6 +74,26 @@ class NativePipelineTests(unittest.TestCase):
         self.assertEqual(running.call_count,count);self.assertEqual(report['status'],'candidate_assembled_unvalidated')
         self.assertEqual(repeated['runtime'],'not_run');self.assertEqual(repeated['compilation'],'not_run')
 
+    def test_assembly_failure_preserves_terminal_modules_and_records_stopped_state(self):
+        self.prepare()
+        from monkey.io import load
+        state=load((self.output/'state.json').read_bytes())
+        for row in state['modules']:
+            row.update(status='generated_unreviewed',manifestSha256='d'*64)
+        state['activeModule']='UI'
+        pipeline.modules._save(self.output/'state.json',state)
+        with patch.object(pipeline.modules,'_pin_stage',return_value=self.stage), \
+             patch.object(pipeline.modules,'run') as running, \
+             patch.object(pipeline,'_collect',return_value=(self.output/'Implementation','d'*64)), \
+             patch('monkey.code_architecture_candidate.assemble_native_candidate',side_effect=OSError('assembly failed')):
+            with self.assertRaises(OSError):pipeline.run(self.output)
+        report=pipeline.status(self.output)
+        self.assertEqual(report['status'],'blocked')
+        self.assertEqual(report['blocker'],'assembly-execution-error')
+        self.assertNotIn('activeModule',report)
+        self.assertTrue(all(row['status']=='generated_unreviewed' for row in report['modules']))
+        running.assert_not_called()
+
     def test_changed_global_plan_is_rejected_before_model_invocation(self):
         self.prepare();self.stage['pins']['architectureSha256']='e'*64
         with patch.object(pipeline.modules,'_pin_stage',return_value=self.stage),patch.object(pipeline.modules,'run')as running:

@@ -18,6 +18,8 @@ Next stages generate native assemblies and module tasks, implement the source-ba
 
 After a designed architecture is accepted, `code-native-prepare --architecture STAGE --out NEW_PIPELINE` prepares every module. `code-native-run --run NEW_PIPELINE` executes them serially, resumes precise saved checkpoints, pins their outputs, and assembles an isolated Unity candidate. `code-native-status --run NEW_PIPELINE` reads progress. Existing native layout helpers and package assembly references require explicit retained paths/reference input; old anonymous drafts do not enter the production code directories. Module output remains unreviewed, incomplete classes remain explicit, and the assembled candidate is unvalidated until whole-project compilation and real cross-layer integration run.
 
+The pipeline aggregate records `partial` and an explicit semantic-review limitation even when every planned source ID is mapped. Source coverage alone does not prove implementation. If collection or assembly fails, the supervisor preserves terminal module receipts, records `blocked` with the actual error code, and clears `activeModule`; it does not report a running model. Keep the failed aggregate as evidence and use `code-native-reassemble` with a fresh output to recheck the terminal results without another model call.
+
 Core configuration, transactions, input and Bootstrap should be integrated before peripheral feature generation finishes. If an existing schedule puts these last, let its active worker finish and stop the supervisor at a safe boundary, then prepare a new schedule:
 
 ```sh

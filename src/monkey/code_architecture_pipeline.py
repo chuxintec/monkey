@@ -169,7 +169,8 @@ def _collect(root,stage,state):
             members=sorted({sid for kind in ('fields','methods')for member in planned.get(kind,[])for sid in member.get('sourceMemberIds',[])})
             copy_verified(inside(task,row['artifactPath']),inside(aggregate,path),row['sha256'],row['bytes'],atomic=False)
             files.append(dict(path=path,sha256=row['sha256'],bytes=row['bytes'],owner='generated',classId=record['classId'],
-                              sourceUnitIds=sorted(planned['sourceUnitIds']),sourceMemberIds=members,status='partial'))
+                              sourceUnitIds=sorted(planned['sourceUnitIds']),sourceMemberIds=members,status='partial',
+                              unresolved=['Generated output remains semantically unreviewed.']))
     raw=encoded(dict(schemaVersion=1,sourceManifestSha256=stage['pins']['sourceManifestSha256'],architectureSha256=stage['pins']['architectureSha256'],
         files=files,modules=module_rows,compilation='not_run',runtime='not_run',acceptance='model_outputs_unreviewed'))
     worker._atomic(aggregate/'manifest.json',raw)
@@ -212,11 +213,18 @@ def run(output):
                 state.update(status='integration_checkpoint',implementation='model_outputs_unreviewed')
                 state.pop('activeModule',None);modules._save(root/'state.json',state)
                 return status(root)
-        aggregate,pin=_collect(root,stage,state)
-        from .code_architecture_candidate import assemble_native_candidate
-        assembled=assemble_native_candidate(stage['request']['sourceRoot'],request['sourceManifestSha256'],stage['root']/'architecture.json',
-            request['architectureSha256'],stage['root']/'validation.json',request['validationSha256'],aggregate,pin,root/'UnityProject',
-            external_references=request['externalReferences'],retained_support_paths=request.get('retainedSupportPaths',()),allow_partial=True)
+        try:
+            aggregate,pin=_collect(root,stage,state)
+            from .code_architecture_candidate import assemble_native_candidate
+            assembled=assemble_native_candidate(stage['request']['sourceRoot'],request['sourceManifestSha256'],stage['root']/'architecture.json',
+                request['architectureSha256'],stage['root']/'validation.json',request['validationSha256'],aggregate,pin,root/'UnityProject',
+                external_references=request['externalReferences'],retained_support_paths=request.get('retainedSupportPaths',()),allow_partial=True)
+        except (ValueError,OSError) as error:
+            state.update(status='blocked',implementation='model_outputs_unreviewed',
+                         blocker=getattr(error,'code','assembly-execution-error'))
+            state.pop('activeModule',None)
+            modules._save(root/'state.json',state)
+            raise
         state.update(status='candidate_assembled_unvalidated',implementation='model_outputs_unreviewed',candidate=str(root/'UnityProject'),
             candidateManifestSha256=sha(read(root/'UnityProject/manifest.json',max_bytes=128*1024*1024)),assemblyStatus=assembled['status'])
         state.pop('activeModule',None);modules._save(root/'state.json',state)
