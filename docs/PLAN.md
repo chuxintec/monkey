@@ -7,6 +7,12 @@
 
 ### 当前执行记录（2026-10-27 架构阶段）
 
+2026-10-27 最新接续检查点（非整版交付）：NativeProject01已保存前13/47模块首轮输出，FireRank实际运行中；实时状态以原run为准，不改其旧清单/输出或重启旧6445队列。新增`code-native-revise`按base manifest、修订计划、旧/新C#哈希和类/layer/module归属生成新候选，完整保留资源/JSON/包/设置及已有meta；新助手生成独立meta。16项定向检查、实际CLI合成候选烟测和源哈希不变通过。类归属与implemented/missing必须一致，普通/已采用工程拒绝；compile/runtime仍not_run，不把构造候选当验收。
+
+NativeContentRevision01在55个direct schema、56个实际JSON路径执行1,584行解码及13,334字段回投，失败路径0，8项组件测试通过；45个Content port方法仍39 pending，未与完整真实接口编译。NativeRandomRevision01已实现两种独立原生随机流和显式单位区间/范围接口：.NET8组件编译0警告/错误，4,292源公式向量及1,000状态续跑步骤通过；没有执行原JS，尚未接真实Merge/Foodom调用或Unity。ownership和原source/hash各自固定于私有工作区，后续统一revision-plan后整合。
+
+NativeCompileSurvey01只读固定13模块/383份实际C#，用已装Roslyn C#9、.NET Standard2.1及Unity6000.6.2f1引用检查；首轮确认Commerce.ShopColumnDefinition构造参数`event`的语法错误。NativeCompileFixes01仅在独立修订artifact改为`@event`并保留旧/新SHA及模块pin；Survey02该语法错误消除，仍128项CS0234对应尚未生成的模块。未添加假类型、未改运行队列，非Unity/整工程编译通过。后续完整47模块、核心业务补全、真实Editor序列化接线与主业务跨层链继续；音频实际实现与原包Prefab引用→原生组件计划并行实施，不能以工具/组件交付结束版本。
+
 2026-10-27 后续检查点：前6模块首轮已保存，CardSeason实际运行中，后续40模块待处理。重组回执及新候选manifest现已保留各模块准确Task status/outcome/responseSummary/unresolved及Task SHA，结束前复核漂移；8项重组检查通过，包括具体缺口保留、Task回执篡改和大于8MiB标准manifest。冻结来源47,954条资源/设置清单序列化已达9,450,616B，不能套用单源码8MiB边界；新候选清单沿既有128MiB候选边界读取。
 
 RuntimeSourceReview01完成两随机流的只读调用核查，9份切片与冻结源逐字节匹配，review SHA `8494b0a30bb026853a4db0acd5df4aacfa14ba83bae45c515000a038b11066a6`。eh合并路径每次抽样写回remoteData/board seed；WX按channel缓存或临时洗牌，不能共用一个全局随机源。当前IRandomSequence不含单位区间/范围语义且Merge/Foodom尚无显式消费者，需要后续有据版本化接线。报告另发现FoodomRules.StartLevel的两个member ID来自Screen/Preview入口；这些只能作为责任来源，不能当Domain方法已恢复的证明，修订前须核正方法归属。来源residual没有精确member索引时继续明确unit级边界，不编造method身份。

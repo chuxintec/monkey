@@ -1,6 +1,11 @@
 # v0.6 模块执行登记
 
-当前执行：父持有NativeProject01唯一实际CLI串行supervisor，检查点为前6模块首轮已保存；实时状态以该run的state.json为准。code_regeneration已交付种子误判修复和只读recheck（13项模块定向检查通过）；codex_postprocess已交付不改旧清单的重分类汇总及准确Task缺口交接（父补大manifest检查，8项通过）；shader_profile已交付RuntimeSourceReview01的随机源/调用映射只读核查。三者均停止写入，父单写CLI、PLAN和实际候选/Editor。后续完整模块、实际核心接线、整工程编译和跨层业务尚未验收，不因工具模块交付结束版本。
+当前执行：父持有NativeProject01唯一实际CLI串行supervisor；检查点13/47模块首轮输出已保存，FireRank运行中，实时状态以run为准。父单写CLI/PLAN/统一候选与Editor。整版、整工程编译和跨层业务尚未验收，持续推进。
+
+- code_regeneration：仅私有NativeContentRevision01；55schema/56JSON、1,584行与13,334字段回投通过，39端口方法pending。继续显式pin消费独立关键词修订及新增实际DTO，保留旧矩阵回执，不动队列。
+- codex_postprocess：revision三文件已交付，父16项/CLI合成烟测通过；转入仅私有NativeAudioRevision01的真实音频实现/typed clip catalog/源语义与独立编译。接口或绑定不足显式列缺口，不启动Editor/额外Codex。
+- shader_profile：仅bindings三文件及私有NativeBindingPlan01；继续原始packed Prefab、config UUID与实际目标42节点树同构核验，建立具体绑定/组件类型差异；不写Prefab YAML或占Editor。
+- 父：NativeRandomRevision01两算法.NET组件4,292向量与1,000续跑步骤通过；NativeCompileSurvey01/02只读13模块383CS，独立NativeCompileFixes01修订event标识符，剩未生成模块的128项CS0234。后续统一hash-pinned修订/完整编译/运行接线，不把组件验证当整版交付。
 
 2026-10-27 最新：GlobalArchitecture05已完成结构验收，父单写公共合同/CLI/pipeline与真实模型/原生集成，NativeProject01已准备47模块；code_regeneration在其module三文件之外新增asset_context助手/专测/文档，把原脚本→资产GUID与既有Editor读回身份纳入上下文，仅只读原件、不操作Editor。codex_postprocess候选组装器已交付并停止写入；shader_profile空闲。原生业务实现/编译/运行尚未开始，不重启旧6445队列。
 
