@@ -231,9 +231,14 @@ def run(output,*,session_id=None):
     except ValueError as error:
         _save(root/'state.json',dict(status='invalid_architecture',stage=request['stage'],error=str(error),implementation='not_started',compilation='not_run',runtime='not_run'));raise
     _save(root/'architecture.json',plan);_save(root/'validation.json',validation)
-    _save(root/'state.json',dict(status='architecture_designed',stage=request['stage'],sourceUnits=len(catalog['sourceUnits']),classes=len(plan['classes']),modules=len(plan['modules']),modelStatus=result['status'],unresolved=result.get('unresolved',[]),implementation='not_started',compilation='not_run',runtime='not_run'))
+    _save(root/'state.json',dict(status='architecture_designed',stage=request['stage'],sourceUnits=len(catalog['sourceUnits']),classes=len(plan['classes']),modules=len(plan['modules']),architectureSha256=sha(read(root/'architecture.json',max_bytes=worker.FILE_BYTES)),validationSha256=sha(read(root/'validation.json',max_bytes=worker.FILE_BYTES)),modelStatus=result['status'],unresolved=result.get('unresolved',[]),implementation='not_started',compilation='not_run',runtime='not_run'))
     return status(root)
 
 
 def status(output):
-    root=safe(output);state=_json(root/'state.json');return {**state,'report':str(root/'state.json'),'workspace':str(root/'Task/workspace')}
+    root=safe(output);state=_json(root/'state.json');process=root/'Task/process.json'
+    if process.is_file():
+        child=_json(process);state={**state,'childState':child.get('state'),'childPid':child.get('pid')}
+        if child.get('state')in ('starting','running') and state['status'] in ('prepared','checkpoint'):
+            state['status']='running'
+    return {**state,'report':str(root/'state.json'),'workspace':str(root/'Task/workspace')}

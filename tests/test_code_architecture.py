@@ -57,6 +57,18 @@ class ArchitectureStageTests(unittest.TestCase):
         with self.assertRaises(ParseError)as error:architecture.build_catalog(self.root,self.pin)
         self.assertEqual(error.exception.code,'CODE_ARCHITECTURE_SOURCE')
 
+    def test_status_exposes_child_activity_without_advancing_implementation(self):
+        output=Path(self.tmp.name)/'Status';(output/'Task').mkdir(parents=True)
+        original=encoded(dict(status='prepared',implementation='not_started',compilation='not_run',runtime='not_run'))
+        (output/'state.json').write_bytes(original)
+        (output/'Task/process.json').write_bytes(encoded(dict(state='running',pid=1234)))
+        report=architecture.status(output)
+        self.assertEqual(report['status'],'running');self.assertEqual(report['childPid'],1234)
+        self.assertEqual(report['implementation'],'not_started');self.assertEqual(report['runtime'],'not_run')
+        self.assertEqual((output/'state.json').read_bytes(),original)
+        (output/'state.json').write_bytes(encoded(dict(status='blocked')))
+        self.assertEqual(architecture.status(output)['status'],'blocked')
+
     def test_member_shards_retain_ids_and_reject_changed_immutable_evidence(self):
         output=Path(self.tmp.name)/'Architecture01'
         with patch.object(architecture.worker,'prepare',side_effect=lambda s,p,h,o,t,**k:type('Prepared',(),dict(output=o))()):

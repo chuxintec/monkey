@@ -1,5 +1,7 @@
 # v0.6 模块执行登记
 
+2026-10-27 architecture-first当前派工：父持有单一实际Codex任务GlobalArchitecture03、共享架构合同/CLI/PLAN/整合；code_regeneration仅写code_architecture_modules.py及其专测/文档，负责完整模块任务与回执；codex_postprocess仅写code_architecture_candidate.py及其专测/文档，负责资源保留、五层程序集和实现所有权组装。两者不启动真实CLI/Editor、不跨写主文件，shader_profile空闲。架构分析运行中，原生模块实现/编译/运行尚未开始。
+
 2026-10-27 当前整体架构恢复：新直接人类要求覆盖旧逐文件流水线，父已自然停第46批3476/6445，子进程退出，不开第47批。父单写架构设计/共享符号计划/PLAN/TEAM及候选集成；当前先盘点可复用源码图/依赖/资源。§5C worker和项目提效WIP已封存StoppedEfficiencyWip01，未启用真实批，产品代码回到4ed6f6c；codex_postprocess/shader_profile均停止写入。后续按新详细架构计划安排完整功能模块，禁止重启旧队列、源引擎解释器和空壳补通；正式游戏/原件不变。
 
 2026-10-27 已观测根因修复模块：复用 `/root/shader_profile`（既有目标gpt-6-luna/high；实际模型未另行回读），基线a3a80bb，仅单写code_draft_render.py/test_code_draft_render.py/CODE-DRAFT-RENDER.md，修复精确空源函数误抛异常与生成丢弃赋值覆盖真实`_`变量；已交付/父集成：renderer 22项及独立.NET8两方法编译/行为通过（真实下划线保持6、精确空函数null），不外推整版。合成定向反例，不读写.private/冻结07/实际队列、不调用Codex/Editor、不重导。父继续唯一实际串行CLI、PLAN/共享接口和集成，renderer只影响未来确定性输出；此项覆盖下方该实例空闲登记，不扩版本/权限。
