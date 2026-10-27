@@ -4,8 +4,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 from monkey import code_architecture_modules as modules
+import monkey.code_architecture_reassembly as reassembly
 from monkey.code_architecture_reassembly import reassemble
-from monkey.io import encoded, sha
+from monkey.io import encoded, load, sha
 from monkey.sources.compiled import ParseError
 
 
@@ -67,6 +68,15 @@ class ArchitectureReassemblyTests(unittest.TestCase):
         self.code = b'namespace Game.Domain.Core { public sealed class PlayerState { public int Coins; } }\n'
         self.target_path = 'Assets/Game/Domain/Core/PlayerState.cs'
         self._make_task_manifest()
+        task_receipt = self.task / 'Task/manifest.json'
+        task_receipt.parent.mkdir(parents=True, exist_ok=True)
+        task_receipt.write_bytes(encoded({
+            'schemaVersion': 1, 'status': 'partial', 'outcome': 'future_worker_outcome_v9',
+            'responseSummary': 'Implementation stops at a documented integration boundary.',
+            'unresolved': ['No runtime JSON reader is wired.', 'Round-rank receipt state is not implemented.', 'UI integration remains pending.'],
+            'exitCode': 0, 'stopReason': None,
+        }))
+        self.task_receipt_pin = sha(task_receipt.read_bytes())
         self.request = {
             'schemaVersion': 1, 'architectureStage': str(self.architecture),
             **self.pins, 'moduleOrder': ['Core'], 'externalReferences': {}, 'retainedSupportPaths': [],
@@ -113,6 +123,7 @@ class ArchitectureReassemblyTests(unittest.TestCase):
                'bytes': len(self.code), 'priorStatus': 'generated_unreviewed',
                'classification': classification, 'completenessDiagnostics': []}
         return {'status': 'rechecked', 'moduleId': 'Core', 'oldManifestSha256': self.module_pin,
+                'taskManifestSha256': self.task_receipt_pin,
                 'classification': classification, 'classificationCounts': {classification: 1},
                 'files': [row], 'compilation': 'not_run', 'runtime': 'not_run',
                 'semanticValidation': 'not_performed'}
@@ -136,8 +147,17 @@ class ArchitectureReassemblyTests(unittest.TestCase):
         self.assertEqual(report['generatedFilePins'][0]['sha256'], sha(self.code))
         self.assertEqual(report['generatedFilePins'][0]['priorStatus'], 'generated_unreviewed')
         self.assertEqual(report['generatedFilePins'][0]['completenessDiagnostics'], [])
+        self.assertEqual(report['modules'][0]['taskManifestSha256'], self.task_receipt_pin)
+        self.assertEqual(report['modules'][0]['taskReceipt']['outcome'], 'future_worker_outcome_v9')
+        self.assertEqual(report['modules'][0]['taskReceipt']['unresolved'], [
+            'No runtime JSON reader is wired.', 'Round-rank receipt state is not implemented.', 'UI integration remains pending.'])
         assembled = self.output / 'UnityProject/Assets/Game/Domain/Core/PlayerState.cs'
         self.assertEqual(assembled.read_bytes(), self.code)
+        implementation_manifest = load((self.output / 'Implementation/manifest.json').read_bytes())
+        self.assertEqual(implementation_manifest['modules'][0]['responseSummary'],
+                         'Implementation stops at a documented integration boundary.')
+        unity_manifest = load((self.output / 'UnityProject/manifest.json').read_bytes())
+        self.assertEqual(unity_manifest['moduleReceipts'][0]['unresolved'], report['modules'][0]['taskReceipt']['unresolved'])
         self.assertEqual((self.pipeline / 'state.json').read_bytes(), prior_state)
         self.assertEqual((self.task / modules.MANIFEST).read_bytes(), prior_manifest)
 
@@ -177,6 +197,49 @@ class ArchitectureReassemblyTests(unittest.TestCase):
                 reassemble(self.pipeline, self.output)
         self.assertEqual(caught.exception.code, 'CODE_ARCH_REASSEMBLY_ARTIFACT_PIN')
         self.assertFalse(self.output.exists())
+
+    def test_task_receipt_drift_during_assembly_rejects_and_cleans_output(self):
+        receipt = self._recheck_receipt()
+        original_assembler = reassembly.assemble_native_candidate
+
+        def assemble_then_tamper(*args, **kwargs):
+            result = original_assembler(*args, **kwargs)
+            (self.task / 'Task/manifest.json').write_bytes(encoded({
+                'schemaVersion': 1, 'status': 'partial', 'outcome': 'tampered',
+                'responseSummary': 'changed', 'unresolved': ['changed'],
+            }))
+            return result
+
+        with patch.object(modules, '_pin_stage', return_value=self.stage), \
+             patch.object(modules, 'status', return_value={'manifestSha256': self.module_pin, 'status': 'generated_unreviewed'}), \
+             patch.object(modules, 'recheck', return_value=receipt), \
+             patch.object(reassembly, 'assemble_native_candidate', side_effect=assemble_then_tamper):
+            with self.assertRaises(ParseError) as caught:
+                reassemble(self.pipeline, self.output)
+        self.assertEqual(caught.exception.code, 'CODE_ARCH_REASSEMBLY_TASK_RECEIPT_RACE')
+        self.assertFalse(self.output.exists())
+
+    def test_large_standard_manifest_survives_receipt_handoff(self):
+        original_assembler = reassembly.assemble_native_candidate
+        extra = 'resource provenance ' * 500000
+
+        def assemble_large_manifest(*args, **kwargs):
+            result = original_assembler(*args, **kwargs)
+            path = Path(args[8]) / 'manifest.json'
+            manifest = load(path.read_bytes())
+            manifest['retainedResourceProvenance'] = extra
+            path.write_bytes(encoded(manifest))
+            return result
+
+        with patch.object(reassembly, 'assemble_native_candidate', side_effect=assemble_large_manifest):
+            report = self._run_reassembly()
+        path = self.output / 'UnityProject/manifest.json'
+        manifest = load(path.read_bytes())
+        self.assertGreater(path.stat().st_size, 8 * 1024 * 1024)
+        self.assertEqual(manifest['retainedResourceProvenance'], extra)
+        self.assertEqual(manifest['moduleReceipts'][0]['unresolved'],
+                         load((self.task / 'Task/manifest.json').read_bytes())['unresolved'])
+        self.assertEqual(report['unityProjectManifestSha256'], sha(path.read_bytes()))
 
     def test_rejects_class_claimed_by_wrong_module(self):
         self.plan['classes'][0]['module'] = 'Other'

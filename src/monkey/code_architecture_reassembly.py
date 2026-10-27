@@ -102,6 +102,21 @@ def _recheck_module(root, row, stage):
         _fail('RECHECK_PIN', module_id, 'Read-only recheck classified a different old module manifest')
     if receipt.get('moduleId') != module_id or receipt.get('status') != 'rechecked':
         _fail('RECHECK', module_id, 'Read-only recheck did not return the expected finalized module receipt')
+    task_manifest_path = inside(task_root, 'Task/manifest.json')
+    task_manifest_raw = read(task_manifest_path, FILE_BYTES)
+    task_manifest_sha = sha(task_manifest_raw)
+    if receipt.get('taskManifestSha256') != task_manifest_sha:
+        _fail('TASK_RECEIPT_PIN', module_id, 'Read-only recheck taskManifestSha256 differs from Task/manifest.json')
+    task_receipt = load(task_manifest_raw, max_nodes=2_000_000)
+    required_receipt_fields = ('status', 'outcome', 'responseSummary', 'unresolved')
+    if any(key not in task_receipt for key in required_receipt_fields):
+        _fail('TASK_RECEIPT_SCHEMA', module_id, 'Task manifest omits an actual worker status/outcome/summary/unresolved field')
+    if (not isinstance(task_receipt['status'], str) or not isinstance(task_receipt['outcome'], str)
+            or (task_receipt['responseSummary'] is not None and not isinstance(task_receipt['responseSummary'], str))
+            or not isinstance(task_receipt['unresolved'], list)
+            or any(not isinstance(value, str) for value in task_receipt['unresolved'])):
+        _fail('TASK_RECEIPT_SCHEMA', module_id, 'Task receipt fields have invalid serialized types')
+    task_receipt_fields = {key: task_receipt[key] for key in required_receipt_fields}
 
     class_rows = manifest.get('classes')
     artifact_rows = manifest.get('files')
@@ -177,6 +192,7 @@ def _recheck_module(root, row, stage):
         else:
             missing_class_ids.append(class_id)
     summary = {'moduleId': module_id, 'priorState': row['status'], 'oldManifestSha256': manifest_sha,
+               'taskManifestSha256': task_manifest_sha, 'taskReceipt': task_receipt_fields,
                'classification': receipt.get('classification'),
                'classificationCounts': receipt.get('classificationCounts', {}),
                'files': file_pins, 'missingClassIds': missing_class_ids,
@@ -256,7 +272,13 @@ def reassemble(pipeline_root, output_root):
             'architectureSha256': pins['architectureSha256'],
             'files': aggregate_files,
             'modules': [{'id': item['moduleId'],
-                         'status': 'evidence_only' if item['priorState'] == 'evidence_only' else 'partial'}
+                         'status': 'evidence_only' if item['priorState'] == 'evidence_only' else 'partial',
+                         **({'taskManifestSha256': item['taskManifestSha256'],
+                             'workerStatus': item['taskReceipt']['status'],
+                             'outcome': item['taskReceipt']['outcome'],
+                             'responseSummary': item['taskReceipt']['responseSummary'],
+                             'unresolved': item['taskReceipt']['unresolved']}
+                            if item.get('taskReceipt') else {})}
                         for item in module_reports],
             'compilation': 'not_run', 'runtime': 'not_run',
             'acceptance': 'generated_unreviewed_reclassified',
@@ -271,6 +293,17 @@ def reassemble(pipeline_root, output_root):
             aggregate, aggregate_sha, output / 'UnityProject',
             external_references=request.get('externalReferences', {}),
             retained_support_paths=request.get('retainedSupportPaths', ()), allow_partial=True)
+
+        # Carry the exact worker receipt limitations into the standard Unity
+        # candidate manifest so downstream handoff does not lose per-module gaps.
+        unity_manifest_path = output / 'UnityProject/manifest.json'
+        unity_manifest = _json(unity_manifest_path, maximum=MAX_PIPELINE_JSON)
+        unity_manifest['moduleReceipts'] = [
+            {'moduleId': item['moduleId'], 'taskManifestSha256': item['taskManifestSha256'],
+             **item['taskReceipt']}
+            for item in module_reports if item.get('taskReceipt')
+        ]
+        write_json(unity_manifest_path, unity_manifest)
 
         # Revalidate the immutable global and per-module state after assembly.
         if read(inside(pipeline, 'request.json'), MAX_PIPELINE_JSON) != request_raw:
@@ -287,6 +320,10 @@ def reassemble(pipeline_root, output_root):
             raw = read(inside(task, modules.MANIFEST), FILE_BYTES)
             if sha(raw) != row['manifestSha256']:
                 _fail('SOURCE_RACE', row['id'], 'Old module manifest changed during reassembly')
+            module_summary = next(item for item in module_reports if item['moduleId'] == row['id'])
+            task_raw = read(inside(task, 'Task/manifest.json'), FILE_BYTES)
+            if sha(task_raw) != module_summary['taskManifestSha256']:
+                _fail('TASK_RECEIPT_RACE', row['id'], 'Task manifest changed after read-only reclassification')
         for source_path, pin in selected_rows:
             source_raw = read(source_path, FILE_BYTES)
             copied_raw = read(inside(output / 'Implementation', pin['path']), FILE_BYTES)

@@ -38,7 +38,12 @@ pipeline-compatible status is `candidate_assembled_unvalidated`;
 runtime statuses remain `not_run`. Lexical completeness is not semantic review
 or proof of behavior. Each file row preserves the prior class status and the
 recheck `completenessDiagnostics` so a genuine missing-contract result remains
-distinguishable from a prior classifier error.
+distinguishable from a prior classifier error. Each implementation module also
+retains the exact `Task/manifest.json` hash and its actual worker `status`,
+`outcome`, `responseSummary`, and `unresolved` fields in both the new
+Implementation manifest and the Unity candidate manifest. The task receipt is
+re-hashed before report publication; missing receipt fields or drift rejects
+the new output rather than inventing a fallback summary.
 
 Output must be a fresh directory outside the pipeline, source candidate, and
 global architecture stage. Hashes are checked immediately before/after copying

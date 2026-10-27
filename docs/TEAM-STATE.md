@@ -1,6 +1,6 @@
 # v0.6 模块执行登记
 
-当前执行：父持有NativeProject01唯一实际CLI串行supervisor，Session/Runtime/Audio首轮已保存，BigDay运行中。code_regeneration已交付种子误判修复和只读recheck（13项模块定向检查通过）并停止写入；codex_postprocess仅新增code_architecture_reassembly.py及其测试/文档，负责不改旧清单的新版本重分类汇总。shader_profile空闲。父单写CLI、PLAN和实际候选/Editor；整工程编译和跨层业务尚未验收，不因工具模块交付结束版本。
+当前执行：父持有NativeProject01唯一实际CLI串行supervisor，检查点为前6模块首轮已保存；实时状态以该run的state.json为准。code_regeneration已交付种子误判修复和只读recheck（13项模块定向检查通过）；codex_postprocess已交付不改旧清单的重分类汇总及准确Task缺口交接（父补大manifest检查，8项通过）；shader_profile已交付RuntimeSourceReview01的随机源/调用映射只读核查。三者均停止写入，父单写CLI、PLAN和实际候选/Editor。后续完整模块、实际核心接线、整工程编译和跨层业务尚未验收，不因工具模块交付结束版本。
 
 2026-10-27 最新：GlobalArchitecture05已完成结构验收，父单写公共合同/CLI/pipeline与真实模型/原生集成，NativeProject01已准备47模块；code_regeneration在其module三文件之外新增asset_context助手/专测/文档，把原脚本→资产GUID与既有Editor读回身份纳入上下文，仅只读原件、不操作Editor。codex_postprocess候选组装器已交付并停止写入；shader_profile空闲。原生业务实现/编译/运行尚未开始，不重启旧6445队列。
 

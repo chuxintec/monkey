@@ -7,6 +7,10 @@
 
 ### 当前执行记录（2026-10-27 架构阶段）
 
+2026-10-27 后续检查点：前6模块首轮已保存，CardSeason实际运行中，后续40模块待处理。重组回执及新候选manifest现已保留各模块准确Task status/outcome/responseSummary/unresolved及Task SHA，结束前复核漂移；8项重组检查通过，包括具体缺口保留、Task回执篡改和大于8MiB标准manifest。冻结来源47,954条资源/设置清单序列化已达9,450,616B，不能套用单源码8MiB边界；新候选清单沿既有128MiB候选边界读取。
+
+RuntimeSourceReview01完成两随机流的只读调用核查，9份切片与冻结源逐字节匹配，review SHA `8494b0a30bb026853a4db0acd5df4aacfa14ba83bae45c515000a038b11066a6`。eh合并路径每次抽样写回remoteData/board seed；WX按channel缓存或临时洗牌，不能共用一个全局随机源。当前IRandomSequence不含单位区间/范围语义且Merge/Foodom尚无显式消费者，需要后续有据版本化接线。报告另发现FoodomRules.StartLevel的两个member ID来自Screen/Preview入口；这些只能作为责任来源，不能当Domain方法已恢复的证明，修订前须核正方法归属。来源residual没有精确member索引时继续明确unit级边界，不编造method身份。
+
 2026-10-27 接续：NativeProject01已保存Session、Runtime、Audio三个完整模块的首轮实现，BigDay正在实际运行，其余43个模块待处理。旧进程仍沿已固定合同串行执行，不修改其清单或源文件。Session的4个有效声明因用户提示字符串中的`not implemented`被误判为种子残留；已修复词法检测并新增只读`code-architecture-module-recheck`。实际复核Session为21/21 generated_unreviewed，Audio为15 generated_unreviewed / 1 incomplete_contract，旧request/state/manifest哈希均未改变。回执保存在`ModuleRecheck01/`；分类通过仍不代表语义/编译/运行验收。模块定向13项通过（新增3项，其他既有检查不重跑）。
 
 Audio的UnityAudioService确实缺少设计的AudioSource字段和播放实现，不能通过放宽检测消除。本机6000.6.2f1已有com.unity.modules.audio 1.0.0，但冻结候选未声明；已只读固定其package.json身份，没有安装或修改包。另从原始main/game.js发现两种不同种子随机算法：合并棋盘eh（9301/49297/233280及22643→22646特例）、Cookfish WX（1664525/1013904223/uint32）。原始正文、字节区间、SHA及所属sourceUnit保存在`IntegrationFindings01/`，WX窄范围见`rng-narrowing.json`；尚未集成，不能继续把“算法未知”当作永久适配理由，也不能将两算法全局互换。后续按来源调用点补齐真实核心实现和候选包/序列化引用，再做整工程编译及业务链。
