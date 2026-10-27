@@ -51,9 +51,7 @@ def create_candidate(root, modules, generator=GENERATOR, bodies=None):
 
 class CodeRegenerationTests(unittest.TestCase):
     def setUp(self):
-        private_root = Path(__file__).resolve().parents[1] / '.private/v060-csharp-20261026/code-regeneration'
-        private_root.mkdir(parents=True, exist_ok=True)
-        self.tmp = tempfile.TemporaryDirectory(dir=private_root)
+        self.tmp = tempfile.TemporaryDirectory(dir=Path.cwd())
         self.root = Path(self.tmp.name) / 'candidate'
         self.root.mkdir()
         self.modules = [module('callee', 'callee-v1', [], ['Assets/Game/Logic/Rules.cs']),

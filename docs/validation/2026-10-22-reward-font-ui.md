@@ -29,12 +29,12 @@
 - `.runtime/wheels-continue01-final`、`.runtime/wheel-continue01-extracted`：本地 wheel 和移位导入检查。
 - `.private/continue01-receipt-10.json`：成组机器回执。
 
-候选 manifest SHA-256：`c7813565c64c218353a655eb17bd87f806d536c71fd724552fbf2cdb0044a490`。
+候选 manifest SHA-256：`[private fingerprint omitted]`。
 
-wheel SHA-256：`c42751fa40c4d51751aaa672165224fb62733e0f1c7d7d37fbfe1ec79b812b78`。
+wheel SHA-256：`[private fingerprint omitted]`。
 
 ## 剩余门槛
 
 得到明确的最多 12 分钟独立窗口后，导入候选并保存/重开，回读字体 GUID、字形四角、Image 边距、节点矩形及 View 数组 fileID，检查可编辑克隆并捕获真实 Unity PNG。相关检查代码已备，尚未执行。BitmapFont 当前仅支持单行；缩放后非零字距、非均匀 Grid、动态滚动及其他未支持条件显式留缺口。真实 TTF 描边尺寸和源页面画面对照仍待核验。
 
-用户已直接授权本聊天向总监发送进展与窗口申请；已送达且总监核对候选 hash。该授权不等于 Editor 窗口授权，也不代替向肥鹅协调的授权。
+用户已直接授权本聊天向总监发送进展与窗口申请；已送达且总监核对候选 hash。该授权不等于 Editor 窗口授权，也不代替向样例项目协调的授权。

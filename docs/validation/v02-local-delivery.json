@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "version": "0.2.0.dev1",
-  "sourceCommit": "6deb03e486e2077ad63ff74484a8bcf17839ea30",
+  "sourceCommit": "[private fingerprint omitted]",
   "localOnly": true,
   "remotePush": false,
   "release": false,
@@ -9,14 +9,14 @@
     {
       "name": "monkey_native-0.2.0.dev1.tar.gz",
       "bytes": 598875,
-      "sha256": "995f4703146e04edbbe18b9bd33b63e2f32726d7dab7a846d8d8fd959e22d376",
+      "sha256": "[private fingerprint omitted]",
       "entries": 226,
       "forbiddenEntries": []
     },
     {
       "name": "monkey_native-0.2.0.dev1-py3-none-any.whl",
       "bytes": 393326,
-      "sha256": "819ab94fdcf09b6a2512d41a11f0f32a6498fbad8e15a401ce367dc02a11110e",
+      "sha256": "[private fingerprint omitted]",
       "entries": 109,
       "forbiddenEntries": []
     }
@@ -47,19 +47,19 @@
   "evidence": [
     {
       "path": ".private/v02-delivery-01/artifact-audit.json",
-      "sha256": "050d49e70ba4c6e252c85f56560b14edfa58421a4911845268e125b265464230"
+      "sha256": "[private fingerprint omitted]"
     },
     {
       "path": ".private/v02-delivery-01/installed-cli-receipt.json",
-      "sha256": "8b91be7ee1ecb219f8261cb1502bc55f83add9a066004e164ccdbcb628e61f04"
+      "sha256": "[private fingerprint omitted]"
     },
     {
       "path": ".private/v02-delivery-01/install-import.json",
-      "sha256": "3e8a48170edc012ffe56560963287f017f8723da7f6925b33d10051645a27b2e"
+      "sha256": "[private fingerprint omitted]"
     },
     {
       "path": ".private/v02-delivery-01/source-manifest.json",
-      "sha256": "fb9a5ffc22f30a3f6b4913305f76b341fe6a77bf3145077787ff5e78c543d2a8"
+      "sha256": "[private fingerprint omitted]"
     }
   ]
 }

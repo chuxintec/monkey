@@ -1,4 +1,4 @@
-"""Final conversion receipt. The former --format grea stage is retired: new outputs are already monkey-project/1."""
+"""Final conversion receipt. The former --format grea stage is retired: new outputs are already monkey-project/2.0.0."""
 from pathlib import Path
 from .io import read,write_json,stage_manifest,sha,diagnostic
 from .layout.standard import VERSION

@@ -10,7 +10,7 @@
 
 ## 1. 对比范围与文件完整性
 
-当前输入合同：肥鹅 1.9.1 / Cocos 2.4.15，`Analysis/v11-monkey-integration-20261024/inputs.json` 指定三个目录。独立遍历物理文件，再逐项核对源 SHA256、两个候选保留文件和 Unity 原生副本保留文件，不只读取旧台账数字。
+当前输入合同：样例项目 1.9.1 / Cocos 2.4.15，`Analysis/v11-monkey-integration-20261024/inputs.json` 指定三个目录。独立遍历物理文件，再逐项核对源 SHA256、两个候选保留文件和 Unity 原生副本保留文件，不只读取旧台账数字。
 
 | 输入根 | 当前物理文件数 |
 |---|---:|
@@ -80,10 +80,10 @@ Unity 原生统计排除 Library、Temp、Logs、UserSettings、obj、.git 缓�
 - 仅 4 个 UUID 在全部已提供 bundle 中未定位；均在 main，缺类型和 logicalPath，当前资产 references 表未发现引用。它们是未闭合身份，不足以证明丢了 4 个真实文件。
 
 ```
-2fe916b2-a259-47da-98a6-4377b9feb162
-3057bf89-567c-48bc-8463-91d22afdf6a6
-3cd60781-3b8d-4c98-b86f-1c1b16e8909c
-957bd1fa-ddd8-40e7-b414-9fda8572f4d1
+[private identifier]
+[private identifier]
+[private identifier]
+[private identifier]
 ```
 
 旧 missingReferences=1521 应拆为重定向已解析与身份未定位计数，见 `src/monkey/package.py:233`、`:389`；本报告纠正其解读，不改写冻结输出。

@@ -1,6 +1,6 @@
 """Explicit WeChat cache/temp manifests, independently implemented in Python.
 
-Behavior reference: user's private AssetDeoce ae49cdaa (no Go source copied).
+Behavior reference is limited to pinned external binary fixture outputs; no original implementation is included.
 Only declared wxfile paths are read; remote URLs are identifiers, never requests.
 """
 import re

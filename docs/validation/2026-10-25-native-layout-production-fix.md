@@ -31,17 +31,17 @@
 
 所有真实段均为新独立窗口，首新失败退出后离线处理；未在同窗重启、改许可、全量重导、构建Player或写游戏工程。
 
-冻结源manifest：`b8dde1e12d87a0ff059f46a230bfbec039bb4afefa026e7d3dd35b3d31f5e387`。
-最终候选manifest：`824f9dd8bdc9efe850333d00696034ec898b18967ebec8690b1ca2eb5eb32c16`。
-最终helper：`4fb3cae6aa92c4bf3696e3519f3d76a7d11d7898fd3c41fd88fbc83e69703b05`。
+冻结源manifest：`[private fingerprint omitted]`。
+最终候选manifest：`[private fingerprint omitted]`。
+最终helper：`[private fingerprint omitted]`。
 
 候选：`outputs/native-layout-fix-03/UnityProject`；原生记录：`outputs/native-layout-execution-03`；全工程73项差异及身份合同：`outputs/native-layout-delta-01`。原失败层01/02及精确续接历史保留。
 
 ## 局部采用包
 
-`outputs/native-layout-adoption-01/monkey-native-layout-delta.zip`，8824625字节，SHA256 `32badbf655308a236dd4deefa6a79c319c877cd7d73525591f98121ff8a26829`。
+`outputs/native-layout-adoption-01/monkey-native-layout-delta.zip`，8824625字节，SHA256 `[private fingerprint omitted]`。
 
-`adoption-manifest.json` SHA256 `fb9201bb2ade10356a4a69bc4915195385ad4f919e6c8507674d8f5fd71e9d50`。
+`adoption-manifest.json` SHA256 `[private fingerprint omitted]`。
 
 53项操作为50Prefab、1运行时适配更新、2旧脚本／meta删除指令；111载荷包括不变meta、来源署名及身份／限制证据。ZIP不含Library、完整资源池或全量项目。实际游戏须按GUID与旧SHA核对人工变更、全部旧脚本引用和C#类型使用后合并，再由游戏主开发做必要原生读回。monkey没有将包应用到游戏。
 

@@ -16,7 +16,7 @@ The spec schema is `monkey-native-json-assets/1`:
     {
       "path": "Assets/Game/Content/Config/Bootstrap/LocalTestSeed.json",
       "artifactPath": "seed/LocalTestSeed.json",
-      "sha256": "8042675706e3b4b306e78d6fb1500503ab515334fc408d7e94fea9b59ce2260d",
+      "sha256": "[private fingerprint omitted]",
       "bytes": 107,
       "role": "derived-local-test",
       "provenance": {

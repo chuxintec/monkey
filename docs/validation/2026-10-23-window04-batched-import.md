@@ -1,8 +1,8 @@
 # 窗口04与批量导入修复
 
-窗口04获明确grant后，北京时间12:42:12实际接管，截止12:54:12；独立副本`outputs/acceptance/v04-structured-01/UnityProject`固定原04 manifest `5c343c68af1b358b3b012fde20fcb611b5a658f769f8915f081b9109daa3dc89`。本次`unity run`通过正常exec审批获本地缓存/IPC访问，实际PID8690，Unity6000.6.2f1进入COMMAND LINE、引擎初始化和资产导入；没有重现readonly database警告。这证明本次正常权限路径越过启动阻塞，不把之前推断升级为对所有机器的根因结论。
+窗口04获明确grant后，北京时间12:42:12实际接管，截止12:54:12；独立副本`outputs/acceptance/v04-structured-01/UnityProject`固定原04 manifest `[private fingerprint omitted]`。本次`unity run`通过正常exec审批获本地缓存/IPC访问，实际PID8690，Unity6000.6.2f1进入COMMAND LINE、引擎初始化和资产导入；没有重现readonly database警告。这证明本次正常权限路径越过启动阻塞，不把之前推断升级为对所有机器的根因结论。
 
-到期未完成。12:54:08前核对PID完整工程身份后普通SIGTERM；12:54:24 ps确认该PID不存在（确认发生在截止后12秒）。期间仅等待并核对退出，没有继续试验、SIGKILL或操作肥鹅进程。CLI exit6因SIGTERM。window.json记录partial、import partial、sourcePrefab0、scene/save/reopen/readback not_run；无致命异常、原04冻结SHA回读不变。原始日志仅本地忽略区且权限600，报告使用脱敏`import.redacted.log`；不把CLI自动注入认证字段复制进产品或报告。
+到期未完成。12:54:08前核对PID完整工程身份后普通SIGTERM；12:54:24 ps确认该PID不存在（确认发生在截止后12秒）。期间仅等待并核对退出，没有继续试验、SIGKILL或操作样例项目进程。CLI exit6因SIGTERM。window.json记录partial、import partial、sourcePrefab0、scene/save/reopen/readback not_run；无致命异常、原04冻结SHA回读不变。原始日志仅本地忽略区且权限600，报告使用脱敏`import.redacted.log`；不把CLI自动注入认证字段复制进产品或报告。
 
 ## 实际瓶颈
 
@@ -22,7 +22,7 @@ Unity薄层改为128项一批：先同步确保已存在Importer；批内WriteIm
 
 ## 修复候选05
 
-全新`outputs/structured-foodstreet-05`双端整包生成completed=true/needs_action，5097文件/243799340字节逐项留存相等；含1630独立Prefab计划和双端30 Spine闭包/1缺bin。实际Unity脚本包含128项批处理、finally恢复导入、阶段进度与显式预算检查；当前emit源码身份与报告相同。Unity manifest `292255cee09a6940b222ff592afe560a83d08eb108764de0f6be433f253e6d5d`，Creator `d27456d15bca617757abbc22283ce2c417fb5f6bbed66ab6d4df0bd2dfd9ae01`。原04冻结manifest再次核对不变。
+全新`outputs/structured-sample-game-05`双端整包生成completed=true/needs_action，5097文件/243799340字节逐项留存相等；含1630独立Prefab计划和双端30 Spine闭包/1缺bin。实际Unity脚本包含128项批处理、finally恢复导入、阶段进度与显式预算检查；当前emit源码身份与报告相同。Unity manifest `[private fingerprint omitted]`，Creator `[private fingerprint omitted]`。原04冻结manifest再次核对不变。
 
 05仍没有启动Editor；修复原生性能/保存/重开均未验，不用04的部分资产导入替代05通过。
-05两端静态verify均零诊断，证据`outputs/structured-foodstreet-05-unity-check`及`outputs/structured-foodstreet-05-cocos-check`。该检查不启动Editor，不构成批处理实际加速或页面通过。
+05两端静态verify均零诊断，证据`outputs/structured-sample-game-05-unity-check`及`outputs/structured-sample-game-05-cocos-check`。该检查不启动Editor，不构成批处理实际加速或页面通过。

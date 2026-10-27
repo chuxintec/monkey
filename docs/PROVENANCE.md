@@ -1,8 +1,8 @@
 # 来源与依赖
 
 - 编译格式解析核心改编自 GREA `src/grea/tools/cocos_assets.py`，本次只读快照 SHA-256 `ca0a2858d964f43f2423b309b3a89f14ef5bd84ad80afc2d68424e50f061c9d1`。当时 HEAD `48debf7cece25803a06cc3002ae73970a7773ddc`；这不证明工作树无增量。许可为 MIT，全文随源码和 wheel 保存在 [GREA-MIT.txt](../src/monkey/licenses/GREA-MIT.txt)。monkey 不在运行时 import GREA。
-- SpriteFrame rotated rect、capInsets 顺序参考肥鹅保留的 2.4.15 `CCSpriteFrame.js`；旋转方向与冻结提取器交叉核对，使用不对称合成彩色块和中心偏移反例验证。未复制肥鹅专用 Tools 或私有图像进公开源码。
-- 发布图标和奖励窗口样本只读取肥鹅已冻结 package/CDN 文件；每次 inspect 保留来源路径、版本选择、字节数、SHA-256，normalize 再核验。真实清单位于本项目 `.private/`，原件未写。
+- SpriteFrame rotated rect、capInsets 顺序参考样例项目保留的 2.4.15 `CCSpriteFrame.js`；旋转方向与冻结提取器交叉核对，使用不对称合成彩色块和中心偏移反例验证。未复制样例项目专用 Tools 或私有图像进公开源码。
+- 发布图标和奖励窗口样本只读取样例项目已冻结 package/CDN 文件；每次 inspect 保留来源路径、版本选择、字节数、SHA-256，normalize 再核验。真实清单位于本项目 `.private/`，原件未写。
 - [Pillow](https://pypi.org/project/pillow/12.2.0/) 固定 12.2.0。[texture2ddecoder](https://pypi.org/project/texture2ddecoder/1.0.6/) 固定 1.0.6 可选，仅使用 ASTC decode；BGRA→RGBA 按[作者文档](https://github.com/K0lb3/texture2ddecoder)处理。来源为 PyPI 官方索引，依赖安装只在本项目 `.venv`。未启用 PVRTC 等其他 codec。
 - Unity profile 来自只读核对现有 6000.6.2f1 与 uGUI 2.0.0 清单。编译校验使用现有 Unity 引擎/Editor DLL 和现有 uGUI/TMP DLL，不复制这些 DLL 到产品，不运行原游戏或 Editor。此证据仅证明 adapter API/类型可编译。
 - 早期开发阶段无远端发布；2026-10-24用户另行授权创建私有仓库和Release v0.1。实际发布身份见对应发布回执。无全局安装、引擎安装或付费生成。Python最低3.11跨版本实测仍未执行；当前宿主为3.14.7。
@@ -11,7 +11,7 @@ CONTINUE-01新增依据：冻结主包game.js的zh字体选择经人工只读核
 
 字段/default与字形坐标语义核对了Cocos官方明确tag的 [Widget](https://github.com/cocos/cocos-engine/blob/v2.4.15/cocos2d/core/components/CCWidget.js)、[Bitmap label](https://github.com/cocos/cocos-engine/blob/v2.4.15/cocos2d/core/renderer/utils/label/bmfont.js)；仅作格式/可观察语义参考，未复制源引擎实现到产品。TMP接口/序列化字段与RGBA bitmap材质行为只读核对现有uGUI包源码，并通过当前Unity程序集窄编译。
 
-Creator 3.8.8新增目标按本机已安装3.8.8的`cc.d.ts`、引擎公开组件属性、app.asar内Editor/asset-db声明及肥鹅Cocos已有meta做只读格式核对；没有复制其游戏脚本或导入器实现。参考的image 1.0.27、ttf-font 1.0.1、bitmap-font 1.0.6仅用于对应profile的根meta，subMeta由原生importer创建并回读。Scene脚本入口遵循[官方扩展文档](https://docs.cocos.com/creator/3.8/manual/en/editor/extension/scene-script)，序列化调用核对本机EditorExtends声明；未启动Editor。
+Creator 3.8.8新增目标按本机已安装3.8.8的`cc.d.ts`、引擎公开组件属性、app.asar内Editor/asset-db声明及样例项目Cocos已有meta做只读格式核对；没有复制其游戏脚本或导入器实现。参考的image 1.0.27、ttf-font 1.0.1、bitmap-font 1.0.6仅用于对应profile的根meta，subMeta由原生importer创建并回读。Scene脚本入口遵循[官方扩展文档](https://docs.cocos.com/creator/3.8/manual/en/editor/extension/scene-script)，序列化调用核对本机EditorExtends声明；未启动Editor。
 
 开发wheel构建使用固定`setuptools==84.2.1`（与上一候选构建器一致）在临时隔离构建环境执行，不修改全局Python。运行时仍为既有固定Pillow及可选ASTC provider。
 
@@ -24,22 +24,17 @@ AST模块框架改编自GREA `tools/cocos/index-modules.cjs`，来源SHA256 `462
 
 ## 2026-10-23 用户自有旧工具行为迁移
 
-经授权只读核对AssetDeoce `ae49cdaa372f27a79776bace9c07a25478a4c489`中的
-`pkg/bundle/file.go`、`pkg/decoder/config.go`、`pkg/asset/cc_asset.go`、`pkg/asset/cc_spine.go`。
-本次Python独立实现本地cache/temp列表映射、精确版本与显式跨bundle依赖解析、JsonAsset真实payload保留。
-未复制整个私有仓库或对其宣称MIT许可；未引入Go依赖、CDN请求、猜测音频/Spine扩展名或吞掉失败。
-Spine原生闭包适配尚未实现。原始PSD等文件留存上限128MiB，不代表结构解析或图像像素预算放宽。
-生成的受控阶段文档读取上限128MiB/800万值，原始普通JSON保持独立预算。
+经授权只读参考用户自有的二进制解码器（名称与私人指纹省略），核对 bundle 读取、路径映射和资源类型处理行为。Monkey 独立实现本地 cache/temp 列表映射、精确版本与显式跨 bundle 依赖解析，并保留 JsonAsset 原始 payload。未复制私有仓库，也未对其宣称 MIT 许可；未引入 Go 依赖、CDN 请求、猜测音频/Spine 扩展名或吞掉失败。Spine 原生闭包适配尚未实现。原始 PSD 等文件留存上限 128 MiB；受控阶段文档读取上限 128 MiB/800 万值，普通 JSON 保持独立预算。
 
 ## 原始命名恢复（2026-10-23）
 
-只读参考用户自有AssetDeoce/pkg/decoder/decoder.go的Config.Paths[index][0]→assetPath/末段name逻辑（Manager/.runtime/vendor-reviews/AssetDeoce）；未运行Go或复制私有实现。monkey自己的bundle reader已读取logicalPath，本次独立Python共享Names分配器将它贯穿IR、target plans和native保存路径。中文保留，路径穿越拒绝用于输出并给明确unknown回退，真实大小写/Unicode/同类型冲突按语义类型再短ID消歧；原始JSON数值和源字节不改。GUID/UUID计算不依赖显示路径。
+早期实现只读参考用户自有解码器的 source-path 到 assetPath/name 映射规则。Monkey reader 读取 logicalPath，由独立 Python Names 分配器贯穿 IR、target plans 与原生保存路径。中文保留；输出拒绝路径穿越并提供 unknown 回退，大小写、Unicode 与同类型冲突按语义类型及短 ID 消歧。原始 JSON 数值和源字节不改，GUID/UUID 计算不依赖显示路径。
 
 ## 2026-10-25 拼音命名及 BON 配置
 
 用户明确要求中文文件名转拼音，覆盖上述旧“中文保留”路径规则。采用固定外部依赖 pypinyin 0.55.0（MIT，PyPI 官方分发），无声调、ü 为 v，使用词组读音；共享路径分配器继续按源身份消歧并保留原名映射，不改 JSON 字段、显示文本或资源内部标识。
 
-BON tagged little-endian v1 的标签、字符串表及容器结构只读核对肥鹅原包静态 decoder 和既有 `Tools/static-bon-reader.py`；monkey 独立实现，无运行时 import 项目工具或硬编码私有路径。仅处理 `cc.BufferAsset` 的明确 Config 路径且本次输入含已识别 decoder 语义证据的来源。原 JS 不执行。解码拒绝截断、尾随字节、重复键、无效字符串引用、非字符串对象键、非有限数值和超预算；Binary/Date 明确 needs_adapter，避免丢失类型。每个顶层表单独输出 UTF-8 JSON，索引保留原始顶层键、源 SHA、完整字节消费、目标 SHA；空地区覆盖也明确记为零表。主配置、地区覆盖、语言表不擅自混合，保留原始二进制。
+BON tagged little-endian v1 的标签、字符串表及容器结构只读核对来源包静态 decoder 与既有本地辅助工具；monkey 独立实现，无运行时 import 项目工具或硬编码私有路径。仅处理 `cc.BufferAsset` 的明确 Config 路径且本次输入含已识别 decoder 语义证据的来源。原 JS 不执行。解码拒绝截断、尾随字节、重复键、无效字符串引用、非字符串对象键、非有限数值和超预算；Binary/Date 明确 needs_adapter，避免丢失类型。每个顶层表单独输出 UTF-8 JSON，索引保留原始顶层键、源 SHA、完整字节消费、目标 SHA；空地区覆盖也明确记为零表。主配置、地区覆盖、语言表不擅自混合，保留原始二进制。
 
 
 ## 2026-10-26 同事研发交接中的通用证据机制

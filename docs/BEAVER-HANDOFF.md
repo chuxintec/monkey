@@ -1,6 +1,6 @@
 # beaver 工程采用实现交接
 
-状态：**本地冻结交接已接收；beaver 0.1.0 本地验收已复核，旧消费者切换仍待核验**。来源是 monkey `0.5.0.dev1`；稳定安装仍为 `0.4.0`。用户批准来源与职责见 PLAN、PROJECT-SPEC 和 Manager 三产品合同。本材料不授权启动暂停游戏或修改正式开发工程。
+状态：**本地冻结交接已接收；beaver 0.1.0 本地验收已复核，旧消费者切换仍待核验**。来源是 monkey `0.5.0.dev1`；稳定安装仍为 `0.4.0`。用户批准来源与职责见 PLAN、PROJECT-SPEC 和 internal planning reference 三产品合同。本材料不授权启动暂停游戏或修改正式开发工程。
 
 ## 不可变来源
 
@@ -25,18 +25,18 @@
 
 - Python >=3.11；事务核心用标准库，当前从 `io`、`sources.compiled.fail/ParseError` 借用通用 I/O/错误合同。beaver 应抽取通用错误适配，不能为 `fail` 复制 compiled 源解析器。完整 monkey 环境固定 Pillow 12.2.0、pypinyin 0.55.0，ASTC 可选 texture2ddecoder 1.0.6；这些不是采用事务本身新增的依赖。
 - Unity 执行仅固定现存 **6000.6.2f1**，UnityEditor/UnityEngine API，自有 Editor 辅助代码，不安装包、不改引擎/许可、不用 Pipeline。Creator 3.8.8 只有预览，执行明确 `ADOPT_NATIVE_UNSUPPORTED`。
-- 当前直接调用方：monkey CLI 的 adopt/adopt-recover、内部 Python 测试与 monkey 自有私有验证启动脚本。CLI 旧 register/apply 调用 incremental。未将新 adopt 部署到游戏；肥鹅已有项目专用采用脚本不是新 adopt 消费者，不能擅自替换。
-- GREA 的 monkey 路由/旧工具 ID 和两个游戏专用脚本仅是 Manager SOURCE-INVENTORY 的后续调查种子，尚未证明消费本版本 adopt；原所有者核实、接手验证后才薄兼容/退休。不在本批修改 GREA 或游戏文件。
+- 当前直接调用方：monkey CLI 的 adopt/adopt-recover、内部 Python 测试与 monkey 自有私有验证启动脚本。CLI 旧 register/apply 调用 incremental。未将新 adopt 部署到游戏；样例项目已有项目专用采用脚本不是新 adopt 消费者，不能擅自替换。
+- GREA 的 monkey 路由/旧工具 ID 和两个游戏专用脚本仅是 internal planning reference SOURCE-INVENTORY 的后续调查种子，尚未证明消费本版本 adopt；原所有者核实、接手验证后才薄兼容/退休。不在本批修改 GREA 或游戏文件。
 
 ## 实际验证层
 
-- 全量候选清单/字节核验：肥鹅 Unity 75,710 文件/2,834,639,181 字节，Creator 74,694/2,789,086,480；僵尸 164,599/3,267,184,074。详情与清单 SHA 在 validation 摘要及私有 JSON。
-- 三方全量预览：最新肥鹅 `PreviewNextFinal` 2 个操作/0 冲突/17,642 保留；僵尸 `PreviewFinal` 1/0/37,648，显式 lineage `zombie-v050-validation`。这些是自有副本中的受控改名/新增反例，不是重新全量导出业务代码。
-- 肥鹅 `Transaction03`：前一 WIP 算法 `63eddb9bbf7b82d746954a32e497791889295326a05ca57e6b4eb182bd8897db`，1 个 BGM 路径移动实际 adopted，GUID/localID 与最多128份未改 Prefab/Scene 直接依赖读回、独立重开与原有 Assets 保护通过。
+- 全量候选清单/字节核验：样例项目 Unity 75,710 文件/2,834,639,181 字节，Creator 74,694/2,789,086,480；样例项目 164,599/3,267,184,074。详情与清单 SHA 在 validation 摘要及私有 JSON。
+- 三方全量预览：最新样例项目 `PreviewNextFinal` 2 个操作/0 冲突/17,642 保留；样例项目 `PreviewFinal` 1/0/37,648，显式 lineage `sample-project-v050-validation`。这些是自有副本中的受控改名/新增反例，不是重新全量导出业务代码。
+- 样例项目 `Transaction03`：前一 WIP 算法 `[private fingerprint omitted]`，1 个 BGM 路径移动实际 adopted，GUID/localID 与最多128份未改 Prefab/Scene 直接依赖读回、独立重开与原有 Assets 保护通过。
 - 保留失败：最早辅助脚本未处于真实 Editor 目录导致编译失败，确认0资产写入后恢复；随后原生移动成功但 manual 文件 meta 被 Editor 规范化，提交保护准确拒绝，实际原生回滚1资产成功。修复和失败回执均保留。
-- 最终冻结算法 `9c892ad4507a9be82cab57462251a1b21d5ec8f6061186d9657a210e18075e54`：三方/预算/路径测试通过，C# SDK离线编译通过；**新增目录/资产与目录回滚修改尚未原生实跑**。不能把 Transaction03 前版结果标成最终代码全通过。
-- 最新肥鹅预览 SHA `f83fe5bad7cd3b87a329a953523215f1bdbb967a0637b9c25e4684202f49ee3c`；僵尸 `5f9e7c5f456c4361e3b1f443b721ac37f8f4443a77f22e6bd094ef20efce5425`。代码或目标/依赖/状态变化后须重新预览，旧计划不能直接重放。
-- 向僵尸本轮没有启动 Editor。Creator 执行、Player/业务/视觉、动态字符串加载键适配均未验证。
+- 最终冻结算法 `[private fingerprint omitted]`：三方/预算/路径测试通过，C# SDK离线编译通过；**新增目录/资产与目录回滚修改尚未原生实跑**。不能把 Transaction03 前版结果标成最终代码全通过。
+- 最新样例项目预览 SHA `[private fingerprint omitted]`；样例项目 `[private fingerprint omitted]`。代码或目标/依赖/状态变化后须重新预览，旧计划不能直接重放。
+- 向样例项目本轮没有启动 Editor。Creator 执行、Player/业务/视觉、动态字符串加载键适配均未验证。
 
 ## beaver 接收结果（2026-10-26）
 
@@ -44,6 +44,6 @@ beaver 已接收冻结快照并完成其本地 0.1.0 验证；本轮只读复核
 
 ## 历史交接时的必要闭合
 
-先验证固定快照与被提取 API/许可；在 **beaver 自有合成工程或允许的肥鹅副本** 复验新增目录/新增资产、修改/移动、保存重开、失败中断、回滚、后续人工改动保护。记录新合同/producer身份/验证层，不扩称全部 Unity 版本或 Creator 执行支持。不得因有僵尸预览就启动其暂停工程。
+先验证固定快照与被提取 API/许可；在 **beaver 自有合成工程或允许的样例项目副本** 复验新增目录/新增资产、修改/移动、保存重开、失败中断、回滚、后续人工改动保护。记录新合同/producer身份/验证层，不扩称全部 Unity 版本或 Creator 执行支持。不得因有样例项目预览就启动其暂停工程。
 
 旧入口仍运行真实实现并显式弃用，没有虚构 beaver 转发。beaver 能力/固定版本/消费者核验前不删除旧实现；之后由 monkey 原所有者做兼容迁路由。人工资产、依赖版本/项目设置不自动覆盖/安装；unknown/manual/retained 不抢归属；源删除保留建议；数据/存档/服务不属于文件回滚。

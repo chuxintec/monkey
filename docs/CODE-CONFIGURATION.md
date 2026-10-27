@@ -1,6 +1,6 @@
-# C6 FoodStreet recipe configuration mapping
+# C6 sample-game recipe configuration mapping
 
-`monkey.code_configuration.map_element_multi_order_pool(table_path, source_path, root_dish_id=2015015)` is a read-only, source-bound validator for the `ElementMultiOrderPool` recipe subset. It accepts only the frozen table SHA-256 `ac76070e3347e32bb7149c049ab2477b1c46a8bb2768d21195100afd6d85e89d` and the frozen main script SHA-256 `21af08e48846f6ad1a2e0673b0c945358136723b1664f0cd1f6ec9b3df6c5cb5`. Source contracts are stored as byte offsets, lengths, and SHA-256 values; no original minified source text is embedded in the product. It statically checks the `Kp`, `_dishMap`, `flattenIngredientsOf`, config Map-converter, and `ElementMultiOrderPool.decode` spans. It does not execute the source.
+`monkey.code_configuration.map_element_multi_order_pool(table_path, source_path, root_dish_id=2015015)` is a read-only, source-bound validator for the `ElementMultiOrderPool` recipe subset. It accepts only the frozen table SHA-256 `[private fingerprint omitted]` and the frozen main script SHA-256 `[private fingerprint omitted]`. Source contracts are stored as byte offsets, lengths, and SHA-256 values; no original minified source text is embedded in the product. It statically checks the `Kp`, `_dishMap`, `flattenIngredientsOf`, config Map-converter, and `ElementMultiOrderPool.decode` spans. It does not execute the source.
 
 The result preserves each source row ID and returns the proven recipe projection: `id`, `dish`, and ordered ingredient ID/quantity pairs. `dish` uses the last `elementIdWeight` key after the source config converter has built its Map; `ingredients` converts original string IDs with JavaScript `Number` semantics and retains numeric quantities. `cookType` records the known source rule `cookType > 0 ? cookType : 1`; other raw row data stays in the original JSON and is not invented or silently filled. The report lists fields intentionally outside this selected `getRecipeOf`/`isDish`/`flattenIngredientsOf` projection.
 
@@ -14,8 +14,8 @@ The candidate C# file contains no original configuration numbers. An independent
 
 The checked local frozen inputs are:
 
-- `outputs/foodstreet-unified-textures/UnityProject/Assets/Game/Content/Config/Base/ElementMultiOrderPool.json` — 212,601 bytes, 732 rows, SHA-256 above.
-- `outputs/foodstreet-unified-textures/UnityProject/SourceRecovery/Code/Source/snapshot/_subpackages_main_/subpackages/main/game.js` — 7,147,892 bytes, SHA-256 above.
+- `outputs/sample-game-unified-textures/UnityProject/Assets/Game/Content/Config/Base/ElementMultiOrderPool.json` — 212,601 bytes, 732 rows, SHA-256 above.
+- `outputs/sample-game-unified-textures/UnityProject/SourceRecovery/Code/Source/snapshot/_subpackages_main_/subpackages/main/game.js` — 7,147,892 bytes, SHA-256 above.
 
 For root dish `2015015`, the source maps to row `293`; recursive recipe dishes are `2015015 → 2005016`, then sibling recipes `2015002` and `2015005` as visited. Source row IDs are `293`, `323`, `275`, and `279`. Independent depth-first traversal in source Map order yields leaf occurrences and flattened leaves:
 

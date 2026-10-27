@@ -1,4 +1,4 @@
-"""Unity-source relocation into monkey-project/1 (PROJECT-SPEC 4.2, 4.6, 10). Files move with their .meta, so GUIDs never change.
+"""Unity-source relocation into monkey-project/2.0.0 (PROJECT-SPEC 4.2, 4.6, 10). Files move with their .meta, so GUIDs never change.
 
 The provider export arrives as AssetRipper type roots plus source container folders. Each file is classified by its real
 Unity type, then placed through the LayoutPlanner. Exceptions that keep runtime identity: Resources keys keep their exact

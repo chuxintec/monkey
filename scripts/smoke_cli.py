@@ -26,8 +26,13 @@ def main():
         identity=json.loads(run(['-c','import json,monkey,sys;print(json.dumps(dict(version=monkey.__version__,module=monkey.__file__,python=sys.version.split()[0])))']))
         if 'site-packages'not in identity['module']:raise RuntimeError('Smoke requires an installed wheel outside the source checkout')
         run(['-m','monkey.cli','--version']);cap=json.loads(run(['-m','monkey.cli','capabilities','--json']))
-        for command in ('acquire-resources','diagnose','doctor','space-preview','resource-probe','adopt','code-model','code-emit','code-select','wasm-code-source','wasm-code-candidate','unity-code-source','unity-code-candidate','code-native-probe'):
+        for command in ('acquire-resources','diagnose','doctor','space-preview','resource-probe','adopt','code-model','code-emit','code-select','wasm-code-source','wasm-code-candidate','unity-code-source','unity-code-candidate','code-native-probe',
+                        'code-native-prepare','code-native-run','code-native-status','code-native-continue','code-native-reassemble','code-native-revise','code-native-add-json',
+                        'code-architecture-module-prepare','code-architecture-module-run','code-architecture-module-status','code-architecture-module-recheck','code-architecture-module-recover'):
             run(['-m','monkey.cli',command,'--help'])
+        run(['-m','monkey.cli','tool','--help'])
+        for tool in ('laya_contract_audit','read_elf_values','unpack_xapk','shader_probe','decrypt_v1mmwx_wxapkg','unpack_wxapkg','export_config_tables'):
+            run(['-m','monkey.cli','tool',tool,'--help'])
         run(['-c','from importlib.resources import files; p=files("monkey.targets"); assert all(p.joinpath(x).is_file() for x in ("CreatorResources.js","RecoveredSprite.shader","UnityShaderProbe.cs","CodeCollections.cs","RecipeJsonConfiguration.cs")); assert files("monkey").joinpath("code-graph.cjs").is_file(); assert all(files("monkey").joinpath("code_profiles",x+".json").is_file() for x in ("foodstreet-demand-health-v1","foodstreet-motion-math-v1"))'])
         code_status='not_run_node_unavailable'
         if shutil.which('node'):

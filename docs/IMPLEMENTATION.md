@@ -71,11 +71,11 @@ monkey apply --candidate CANDIDATE --target REGISTERED_OUTPUT --expected-manifes
 - 每个大版本是工具的成组能力，不为单个检查点新版本。开发者在PLAN更新结果/阻塞/下一步，提交本项目的明确源码成果，原始私有输入永不进Git。
 - 本地包、源码、schema、支持矩阵、样本复算方式、已知缺口和必要引擎版本一并给出。CLI/MCP可连接、脚本测试、引擎导入和真实对照分别说明。
 - 真正阻塞反馈总监：缺失条件、受影响范围、已做证据、最小解除方式和独立可继续项。主线程只在成组交付/重大问题时通信，不礼节ACK、不固定巡检。
-- 不自动创建远端或推送/发布，不全局安装插件；不把新工具研发变成修改肥鹅、恢复其他项目或再次全量验收的理由。
+- 不自动创建远端或推送/发布，不全局安装插件；不把新工具研发变成修改样例项目、恢复其他项目或再次全量验收的理由。
 
 ## 参考依据（仅接口与迁移设计参考）
 
 - Cocos官方2.x→3.x迁移说明：https://docs.cocos.com/creator/2.3/manual/en/release-notes/upgrade-guide-v3.0.html
 - 官方2.x迁移插件：https://github.com/cocos/cocos-plugin-import-2.x （使用前检查版本、许可及适用输入）
 - Unity PrefabUtility：https://docs.unity.com/en-us/engine/6000.5/script-reference/unityeditor/prefabutility （执行时使用实际目标版本文档）
-- GREA当前本地解析与有限转换实现；肥鹅现有提取器和原版证据仅按需只读参考，路径/私有材料不复制进公开产品。
+- GREA当前本地解析与有限转换实现；样例项目现有提取器和原版证据仅按需只读参考，路径/私有材料不复制进公开产品。

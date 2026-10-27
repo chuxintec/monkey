@@ -2,9 +2,9 @@
 
 当前在途，不是全版本/全游戏转换完成。实现提交4ecbf6f。
 
-- frozen candidate: outputs/full-foodstreet-13；获取回执: outputs/full-foodstreet-13-acquired/acquisition.json；实际新副本及顺序回执: outputs/full-foodstreet-13-native/native-orchestration.json。
-- 原input-set SHA 1fef746ef5f4483aa9605da81aef4a8ed6cea736834b2024169a00c6aa60fff2，每端17201项/884709704B，1776Spine闭包。获取声明16627/799052150B全缓存SHA，无新GET、无重复materialization；之前实际GET探针独立保留，不将0 missing推成未知地址都存在。
-- Unity manifest80484c192bee73c172673fc3d0dfa87906d242149d061afaad3ed2dd6a8e02bb；Creator a840b6d50dc08ec198bf24dd05e7efbabcd4fe6d9f652eb165e77ce11acec58c，均含acquisition证据。
+- frozen candidate: outputs/full-sample-game-13；获取回执: outputs/full-sample-game-13-acquired/acquisition.json；实际新副本及顺序回执: outputs/full-sample-game-13-native/native-orchestration.json。
+- 原input-set SHA [private fingerprint omitted]，每端17201项/884709704B，1776Spine闭包。获取声明16627/799052150B全缓存SHA，无新GET、无重复materialization；之前实际GET探针独立保留，不将0 missing推成未知地址都存在。
+- Unity manifest80484c192bee73c172673fc3d0dfa87906d242149d061afaad3ed2dd6a8e02bb；Creator [private fingerprint omitted]，均含acquisition证据。
 - name/routing审计零问题，两端身份、保留字节及非名称IR保持；static和原生结果待本页后续实际记录。
 - Unity固定段15:40:33.784088Z→16:08:33.784088Z内部/16:10:33.784088Z外部，方法1200秒；新own35982启动，自有副本。启动前两次ps无其他主Editor，禁止延钟/并发下一端/操作其他进程。
 - 首新错误保留；nonzero诊断/child未退出停止下端。nativeStages completed也不等于原版画面/输入/业务或Spine播放通过。

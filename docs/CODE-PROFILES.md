@@ -10,7 +10,7 @@ This command emits a fresh owned candidate, including the exact resolved contrac
 
 The profile captures source method/class identities, typed records, module fields, method IDs/hashes/signatures/locals, namespace, and the bounded call domain. It contains no original code spans, absolute paths, media, or configuration values. The output is a contract input to Monkey's typed AST emitter; the profile does not contain C# method bodies and does not imply broad support for Cocos or all methods in the source.
 
-The bundled `foodstreet-demand-health-v1` is pinned to source SHA-256 `21af08e48846f6ad1a2e0673b0c945358136723b1664f0cd1f6ec9b3df6c5cb5` and 7,147,892 bytes. It selects 12 methods across three classes. The AST-based emitter must still independently verify every class/method identity, source hash, and typed call-domain before producing candidate code.
+The bundled `foodstreet-demand-health-v1` is pinned to source SHA-256 `[private fingerprint omitted]` and 7,147,892 bytes. It selects 12 methods across three classes. The AST-based emitter must still independently verify every class/method identity, source hash, and typed call-domain before producing candidate code.
 
 The resource lives under `monkey/code_profiles/foodstreet-demand-health-v1.json`; distribution metadata must include that package data file. The loader resolves it from the installed package, never from the current repository or adjacent `.private` artifacts.
 

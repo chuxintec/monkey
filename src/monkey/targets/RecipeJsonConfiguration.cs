@@ -1,4 +1,4 @@
-// Finite FoodStreet configuration adapter; not a source runtime or full Kp recovery.
+// Finite pinned configuration adapter; not a source runtime or complete Kp recovery.
 using System;
 using System.Collections.Generic;
 using System.Globalization;

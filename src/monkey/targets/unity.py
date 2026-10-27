@@ -399,7 +399,7 @@ def export(plan_path, output):
             metadata+='TextureImporter:\n  serializedVersion: 13\n  externalObjects: {}\n  textureType: 0\n  textureShape: 1\n  alphaSource: 0\n  alphaIsTransparency: 1\n'
         Path(str(target)+'.meta').write_text(metadata,encoding='utf-8')
         ownership.append(dict(path=c['target'],sourceId=c['sourceId'],guid=c['guid']))
-    # Shipped sources keep their GUID keys across layouts; only their location follows monkey-project/1.
+    # Shipped sources keep their GUID keys across layouts; only their location follows monkey-project/2.0.0.
     for template,relative,key in [('ContentPreviewView.cs',standard.unity('previewView'),'native-view-script'),
             ('IntrinsicGridLayoutGroup.cs',standard.UNITY_LAYOUT_DIR+'/IntrinsicGridLayoutGroup.cs','intrinsic-grid-script'),
             ('UnityNumericCode.cs',standard.unity('numericCode'),'numeric-code-editor'),

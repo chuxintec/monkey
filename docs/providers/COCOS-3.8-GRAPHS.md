@@ -14,4 +14,4 @@
 
 08 Creator own2304于23:53:25.726798Z→23:54:10.873039Z正常TERM/reaped，strict0/editorpass，方法21.22秒；同810节点/81Prefab/95Label和资源保存重开通过。后补Python layer强核的editor级只读复验亦pass/0诊断，无新Editor；静态级验证不接受importer改写过的meta，不可拿static与editor层级混用。最新源策略对冻结08候选810节点/908组件逐项完全一致，证据在 outputs/cocos38-xiafangle-graphs-08-current-policy-audit/audit.json。
 
-Unity07 manifest `ba63a4652259a04bfcb368e3e694f8c1a898df0c3053dbf360099ada41bb6153`；Creator08 manifest `7983feacd55006b06aa94f7aca2aa2cbc5dca635e187346e1963a6a00ae7a10c`。原资源06与失败07保持只读。34项定向检查通过，固定本项目可选ASTC运行时另核亦通过；未跑无关全库/全平台。
+Unity07 manifest `[private fingerprint omitted]`；Creator08 manifest `[private fingerprint omitted]`。原资源06与失败07保持只读。34项定向检查通过，固定本项目可选ASTC运行时另核亦通过；未跑无关全库/全平台。

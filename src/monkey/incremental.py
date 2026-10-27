@@ -11,7 +11,7 @@ from .layout import standard
 from .layout.standard import find_analysis
 
 PROFILES={'unity-6000.6.2f1-ugui','cocos-3.8.8'}
-# monkey-project/1 has no manual folder: ownership is the manifest owner field (PROJECT-SPEC 4.1).
+# monkey-project/2.0.0 has no manual folder: ownership is the manifest owner field (PROJECT-SPEC 4.1).
 CURRENT_ROOTS={'unity':('Assets/Game/','Assets/TextMesh Pro/','Packages/','ProjectSettings/','Analysis/','Docs/','SourceRecovery/'),
                'creator':('assets/','extensions/monkey-import/','settings/','Analysis/','Docs/','SourceRecovery/')}
 CURRENT_SCAN={'unity':(standard.ROOTS['unity']['content'],standard.ROOTS['unity']['scenes'],standard.ROOTS['unity']['conversion'],'Packages','ProjectSettings','Analysis'),

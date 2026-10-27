@@ -1,4 +1,4 @@
-"""Mappings, indexes and docs for monkey-project/1 outputs (PROJECT-SPEC 6, 7, 10)."""
+"""Mappings, indexes and docs for monkey-project/2.0.0 outputs (PROJECT-SPEC 6, 7, 10)."""
 import re
 from collections import Counter,defaultdict
 from pathlib import Path

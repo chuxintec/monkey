@@ -1,4 +1,4 @@
-"""Source-bound mapping of FoodStreet's ElementMultiOrderPool recipe subset.
+"""Source-bound mapping of a pinned ordered recipe-table subset.
 
 This is a finite static-data adapter. It does not execute the original JavaScript
 or mutate/copy the source JSON into an output project.
@@ -40,7 +40,7 @@ SOURCE_SPANS = {
 
 def _strict_source_evidence(source: bytes, expected_sha256: str) -> dict:
     if sha(source) != expected_sha256 or expected_sha256 != SOURCE_SHA256:
-        fail('CODE_CONFIG_SOURCE_IDENTITY', 'game.js', 'Source must be the pinned FoodStreet main script')
+        fail('CODE_CONFIG_SOURCE_IDENTITY', 'source.js', 'Source bytes do not match the pinned input identity')
     evidence = {}
     for name, contract in SOURCE_SPANS.items():
         offset, length = contract['byteOffset'], contract['byteLength']
@@ -236,7 +236,7 @@ def map_payload(table_bytes: bytes, source_bytes: bytes, *, expected_table_sha25
     """Validate bytes against caller-supplied source identities and map the finite recipe subset.
 
     Production callers should use :func:`map_element_multi_order_pool`, which
-    pins both SHA-256 values to the frozen FoodStreet inputs.
+    pins both SHA-256 values to the frozen source inputs.
     """
     actual_table_sha = sha(table_bytes)
     actual_source_sha = sha(source_bytes)

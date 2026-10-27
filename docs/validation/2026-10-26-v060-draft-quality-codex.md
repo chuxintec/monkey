@@ -20,7 +20,7 @@
 | 字段记录 / 独立声明 | 3,706 / 3,528 | 3,706 / 3,528 |
 | 初始化记录 / 运行时写入 | 1,440 / 2,266 | 1,440 / 2,266 |
 
-完整候选 `FullDraftCandidate07/UnityProject` 的 owning manifest SHA-256 为 `7febffc663f08e035befaf98b6307308d66d6e79a5823e4789a4a631945d6c7e`。94,127 文件 / 3,624,135,738 字节，仍含 2 Scene / 1,696 Prefab。沿用 FrozenResources02 原生资源、JSON及身份，除接续说明外资源 hash 不变。beaver 自有 snapshot/verify 独立只读逐文件通过，未改其代码或执行 adopt。
+完整候选 `FullDraftCandidate07/UnityProject` 的 owning manifest SHA-256 为 `[private fingerprint omitted]`。94,127 文件 / 3,624,135,738 字节，仍含 2 Scene / 1,696 Prefab。沿用 FrozenResources02 原生资源、JSON及身份，除接续说明外资源 hash 不变。beaver 自有 snapshot/verify 独立只读逐文件通过，未改其代码或执行 adopt。
 
 完整源及每条方法/字段的源范围、SHA、详情位置、目标成员或内嵌标记均验证。0 整函数 AST/renderer 失败回退。885,473 条诊断含新增 523,966 条未知成员映射记录；诊断分类变了，不能与旧总数直接比较质量。773 个物理函数记录包含局部未支持/无可转写等标记，内嵌回调诊断在拥有它的输出体中，不冒充所有函数可运行。动态真假值、集合 API、异步状态与未知 getter 仍需后续修复。
 
@@ -32,9 +32,9 @@
 
 首次普通外层沙箱启动在模型 session 建立前失败（CLI 自身只读会话数据库/app-server），无源码差异。已获准的本机运行权限下启动成功；内层仍为 workspace-write，既有配置与登录不改，没有绕过内层保护。只完成一次真实模型调用，无 resume、子 Agent 或模型对比。
 
-- Codex CLI 0.162.1，session `01a178a2-d901-7481-839f-785f93ccd646`，child 61.405 秒，exit 0。
+- Codex CLI 0.162.1，session `[private identifier]`，child 61.405 秒，exit 0。
 - 配方查询模块仅选中一个类文件，实际修改两个指定方法，其余字节逐字节不变；闭包标记保留。原 owning manifest 与选中源码 hash 不变，工作区无新增/删除、软硬链接、远端或提交。
-- 替换这两个方法内的 filter 和缓存 Map 调用，产生独立 patch SHA `8f5e140f548b12ba669f912a73cd652d5c2e4bfac3aa7fd7b7ba9b882b68a010`；原文件 SHA `b652f0881851499160084392c03086e5699356259ea032778f5e09f4065c7295`，修订文件 SHA `21a88c3af433b1ca68005d5844b08c9d45cc6573641db99fcef2eb3312da34e3`。
+- 替换这两个方法内的 filter 和缓存 Map 调用，产生独立 patch SHA `[private fingerprint omitted]`；原文件 SHA `[private fingerprint omitted]`，修订文件 SHA `[private fingerprint omitted]`。
 - **结果 partial**：allRecipes getter 未声明，动态字段/相等语义、Map 与 Dictionary 的 key/null/缺失键差异、Array.filter 的稀疏/长度快照/迭代修改差异共 4 项保留。退出码不当作等价或编译通过。
 - 实际两个修订方法体在独立 .NET 8 夹具中编译，顺序/匹配/懒缓存/重复读取/空结果检查通过。夹具只供应稳定非稀疏 List、整数键和 cookware，无迭代修改；不证明完整类、getter、原游戏或任意 JS 域。
 - JSONL usage 为 input 99,394、cached input 64,640、output 928；按最后报告 turn 记录，未推断价格。运行事件未回报 model/effort，诚实记 unknown；只读现有配置观测为 gpt-6.1-sol / medium，明确不是实际模型证明。
@@ -47,8 +47,8 @@
 
 ## 冻结源码与新增分发检查
 
-源码 `3a0391abce7922cfe1355fde53f75ea4f41b0768` / tree `186398b15881d2c582d67b79bd31d502d7a6d29e`；184 产品文件在冻结 git archive、wheel、sdist 和隔离安装中逐字节相同。实际模型调用时的 wrapper SHA 与该提交字节相同。wheel 738,905 字节，SHA `bc89d6468fb9434c9eba1c96ba9cb624bf61433462b500212f81d642365c4cfd`；sdist 1,090,428 字节，SHA `01db4e0240275be446090ca366a1bc63857f88c38ac8ab572063985cfd5d7cec`。
+源码 `[private fingerprint omitted]` / tree `[private fingerprint omitted]`；184 产品文件在冻结 git archive、wheel、sdist 和隔离安装中逐字节相同。实际模型调用时的 wrapper SHA 与该提交字节相同。wheel 738,905 字节，SHA `[private fingerprint omitted]`；sdist 1,090,428 字节，SHA `[private fingerprint omitted]`。
 
 隔离安装仅执行新能力 capabilities、code-postprocess prepare-only（无模型）、拒绝非checkpoint精确session恢复三条CLI检查；没有重跑旧安装/类型/引擎套件，没有额外模型调用。安装产物仅位于本项目私有分发目录，不替换全局0.4。
 
-本轮中间04/05/06输出的清单和日志已留档后清理，移除清单逻辑体积10,423,337,634字节（不推断APFS物理回收量）；最终07、AI修订、旧03及冻结资源基线保留。总回执 `.private/v060-draft-quality-20261026/delivery.json` SHA `394d28bbb8637346836fd210d99b63aee8ea278fc409bc5b28be40205246af1b`。
+本轮中间04/05/06输出的清单和日志已留档后清理，移除清单逻辑体积10,423,337,634字节（不推断APFS物理回收量）；最终07、AI修订、旧03及冻结资源基线保留。总回执 `.private/v060-draft-quality-20261026/delivery.json` SHA `[private fingerprint omitted]`。

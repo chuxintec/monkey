@@ -1,14 +1,14 @@
 # GREA 七项恢复侧工具归属评审
 
-2026-10-26；事件 `monkey-grea-recovery-handoff-scope-20261026-01`。按已核人类三产品整改授权 `human01a1764c-0246-7541-88e4-9a84d3556574`，只评审固定清单中 `proposed_owner=monkey` 的 **7 项**。这七项均留恢复侧，不交 beaver。本轮没有新增 CLI、引擎 profile、依赖安装或源实现搬运；结论是现有实现复用、兼容缺口和有身份的参考保留。
+2026-10-26；事件 `monkey-grea-recovery-handoff-scope-20261026-01`。按已核人类三产品整改授权 `[private conversation reference]`，只评审固定清单中 `proposed_owner=monkey` 的 **7 项**。这七项均留恢复侧，不交 beaver。本轮没有新增 CLI、引擎 profile、依赖安装或源实现搬运；结论是现有实现复用、兼容缺口和有身份的参考保留。
 
 ## 固定来源与接手身份
 
-- GREA 来源 HEAD：`e093c4ee15318b412e7ca2dd107791017ff30eb7`。快照可能包含在途源码，以 manifest/逐文件字节身份为准，不能仅用 HEAD 重建。
-- GREA 清单 `validation/development/grea-beaver-handoff-20261026.json` SHA256：`9729c6c61a09f914ce7ddc2578807bab7b8e9bcba1f6de3c7e27937c1d762ba8`。
-- GREA 固定源码 `.private/triad-20261026/source-freeze/source/`；外层 `manifest.json` SHA256：`327164597eee56a6cef06f09a047270a2c0f5320fd6e779e8e3bb1637c940761`。
-- 本地仅冻结七项入口及传递依赖/许可/依赖声明/AST companion，共 **23 文件**，没有整体复制903文件。私有档案 `.private/grea-recovery-handoff-20261026/audit-02/grea-seven-recovery-source.tar.gz`，SHA256 `a5237fa6cebefaba01d86d123750ba1e7e5e8a367b79758263f8a0b35183d443`，128,071字节。只用于来源审查，不进入公开包。
-- 对照 monkey 本地代码基线 `db253cb0b0dac4ff426298f005cf6ce5bc0cac31` / 0.5.0.dev1；日常安装仍为0.4.0。[机器记录](validation/2026-10-26-grea-recovery-handoff.json) 逐项保留入口SHA、闭包、monkey实现路径、兼容缺口与调用者候选。
+- GREA 来源 HEAD：`[private fingerprint omitted]`。快照可能包含在途源码，以 manifest/逐文件字节身份为准，不能仅用 HEAD 重建。
+- GREA 清单 `validation/development/grea-beaver-handoff-20261026.json` SHA256：`[private fingerprint omitted]`。
+- GREA 固定源码 `.private/triad-20261026/source-freeze/source/`；外层 `manifest.json` SHA256：`[private fingerprint omitted]`。
+- 本地仅冻结七项入口及传递依赖/许可/依赖声明/AST companion，共 **23 文件**，没有整体复制903文件。私有档案 `.private/grea-recovery-handoff-20261026/audit-02/grea-seven-recovery-source.tar.gz`，SHA256 `[private fingerprint omitted]`，128,071字节。只用于来源审查，不进入公开包。
+- 对照 monkey 本地代码基线 `[private fingerprint omitted]` / 0.5.0.dev1；日常安装仍为0.4.0。[机器记录](validation/2026-10-26-grea-recovery-handoff.json) 逐项保留入口SHA、闭包、monkey实现路径、兼容缺口与调用者候选。
 
 ## 七项实际结论
 

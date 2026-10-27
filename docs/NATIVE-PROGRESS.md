@@ -8,4 +8,4 @@
 
 源 Prefab 原生保存重开后，Importer 检查 Slider、driver、fill 的实际引用、进度及完整长度。helper 仅在明确选择其 `.cs` 与相邻 `.cs.meta` 时可作为原生 Presentation 辅助保留到架构候选，不自动包含未知脚本。
 
-2026-10-27 本地证据：真实肥鹅独立 42 节点子集完成 8 次保存前/重开后几何与回调检查；生产 CLI 另从两节点合成来源完整 inspect/normalize/plan/export/native-import，Unity 6000.6.2f1 编译、保存重开、引用检查及静态核验零诊断。两组输入互相独立，原件哈希未变。记录位于项目私有 `NativeProgressBinding01/` 与 `NativeProgressProduct01/`。这些是原生组件与导出流程验证；物理输入、完整游戏和视觉一致性未验收。
+2026-10-27 本地证据：真实样例项目独立 42 节点子集完成 8 次保存前/重开后几何与回调检查；生产 CLI 另从两节点合成来源完整 inspect/normalize/plan/export/native-import，Unity 6000.6.2f1 编译、保存重开、引用检查及静态核验零诊断。两组输入互相独立，原件哈希未变。记录位于项目私有 `NativeProgressBinding01/` 与 `NativeProgressProduct01/`。这些是原生组件与导出流程验证；物理输入、完整游戏和视觉一致性未验收。

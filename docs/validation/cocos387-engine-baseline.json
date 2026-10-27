@@ -6,55 +6,55 @@
       "path": "scene-graph/node.ts",
       "url": "https://raw.githubusercontent.com/cocos/cocos-engine/v3.8.7/cocos/scene-graph/node.ts",
       "bytes": 108828,
-      "sha256": "ce9d9662b77114e40f6e47e4d14126dcfb6c765573dc5e7b6a35e0bdb7053593"
+      "sha256": "[private fingerprint omitted]"
     },
     {
       "path": "scene-graph/component.ts",
       "url": "https://raw.githubusercontent.com/cocos/cocos-engine/v3.8.7/cocos/scene-graph/component.ts",
       "bytes": 32477,
-      "sha256": "2c8e1c493c1f724277998102a376ba793f18666472ad830ebc53f82dae127b7d"
+      "sha256": "[private fingerprint omitted]"
     },
     {
       "path": "scene-graph/scene.ts",
       "url": "https://raw.githubusercontent.com/cocos/cocos-engine/v3.8.7/cocos/scene-graph/scene.ts",
       "bytes": 7299,
-      "sha256": "9b942703b9879c838d9e8cb0d4805a8b0f260f4461e93427eca7d0272bf149c8"
+      "sha256": "[private fingerprint omitted]"
     },
     {
       "path": "scene-graph/layers.ts",
       "url": "https://raw.githubusercontent.com/cocos/cocos-engine/v3.8.7/cocos/scene-graph/layers.ts",
       "bytes": 6731,
-      "sha256": "de271865c0f52d7ad7b9ed6b1290632bd7cb0130784c074ee199ff39b39e8777"
+      "sha256": "[private fingerprint omitted]"
     },
     {
       "path": "2d/framework/ui-transform.ts",
       "url": "https://raw.githubusercontent.com/cocos/cocos-engine/v3.8.7/cocos/2d/framework/ui-transform.ts",
       "bytes": 28662,
-      "sha256": "6e0f4823865c07c9802622afe2881031398c318cab5cba16a86f4d91e1d45e0b"
+      "sha256": "[private fingerprint omitted]"
     },
     {
       "path": "2d/framework/ui-renderer.ts",
       "url": "https://raw.githubusercontent.com/cocos/cocos-engine/v3.8.7/cocos/2d/framework/ui-renderer.ts",
       "bytes": 23422,
-      "sha256": "fe2802dc2a114d3e1d5cde6d41b84dd052877a95837b0eb337cae0b3c7e55e8d"
+      "sha256": "[private fingerprint omitted]"
     },
     {
       "path": "2d/components/ui-opacity.ts",
       "url": "https://raw.githubusercontent.com/cocos/cocos-engine/v3.8.7/cocos/2d/components/ui-opacity.ts",
       "bytes": 3011,
-      "sha256": "3cb21ef00d5d73b3c442d3c34ccc890bed9b903b261a3579b9a4a12e167ce73d"
+      "sha256": "[private fingerprint omitted]"
     },
     {
       "path": "2d/components/sprite.ts",
       "url": "https://raw.githubusercontent.com/cocos/cocos-engine/v3.8.7/cocos/2d/components/sprite.ts",
       "bytes": 19910,
-      "sha256": "71592e8c03f4d16e4d7edd966c1e3aa1d66fad2d2d5f678992d001612551bd4f"
+      "sha256": "[private fingerprint omitted]"
     },
     {
       "path": "2d/components/label.ts",
       "url": "https://raw.githubusercontent.com/cocos/cocos-engine/v3.8.7/cocos/2d/components/label.ts",
       "bytes": 31674,
-      "sha256": "62d5f595ccfb4605d290b41ab31f8e360e038045a3e20e145f4fa6ba46d78570"
+      "sha256": "[private fingerprint omitted]"
     }
   ],
   "facts": {

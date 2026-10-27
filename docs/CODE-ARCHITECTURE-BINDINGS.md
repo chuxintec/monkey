@@ -51,19 +51,19 @@ The latest static plan and receipt are in
 `.private/v060-architecture-first-20261027/NativeBindingPlan04/`; earlier
 `NativeBindingPlan01` through `NativeBindingPlan03` receipts remain unchanged. The
 plan pins the `CardSeasonMainWindow` module C# SHA-256
-`b983191d67b60b75aac2db055d8b60a71425196d0cfcf6a49f33bfb0074f363a`, the
+`[private fingerprint omitted]`, the
 source-unit span SHA-256
-`9af9a44d6812929ba576edf9b9fc9d5fd8ccafc32167fd24cda25a5d58e35985`, and
+`[private fingerprint omitted]`, and
 native Prefab path/GUID/SHA-256
 `Assets/Game/Content/Prefabs/UI/CardSeason/Window/CardSeasonMainWindow.prefab`,
 `d6ef85274b0c4469da5fc5509119877b`,
-`54568104fd2469a1b510c51585ef8310c1143155ce4b3d456a69af16a7972e3f`.
+`[private fingerprint omitted]`.
 
 The original asset UUID maps through the project config to UUID index `3137`
 and packed section `2640` in pack `0621940b9`. The section decodes to the
 source `cc.Prefab` with 62 serialized objects, including 42 reachable
 `cc.Node`s and component
-`gameAsset:b4b4aa5a-e124-481c-a949-ac6e7b6ca943#1/components/1`. Its 16
+`gameAsset:[private identifier]#1/components/1`. Its 16
 decorated properties have actual serialized `__id__` references. The full
 42-node source hierarchy matches candidate Prefab YAML child-index paths and
 names, and prior saved/reloaded Editor readback confirms the same 42 node

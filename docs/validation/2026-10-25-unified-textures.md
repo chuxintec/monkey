@@ -4,8 +4,8 @@
 
 ## 最终核验
 
-- 最新 Unity：outputs/foodstreet-unified-textures-unity-native/UnityProject。6000.6.2f1，原生验证器 0 诊断；Editor partial 保留源业务/组件缺口。1,694 源 Prefab、24,784 节点、8,952 Sprite、416 源动画、8 组动态探针，保存重开通过。后续只修改 Creator 助手，Unity 当前候选全部文件及 manifest 与已验版本完全一致。
-- 最新 Creator：outputs/foodstreet-unified-textures-creator-native-05/CocosProject。3.8.8，editor pass、验证器 0 诊断，方法 422.378 秒，PID 64933 已退出。1,694 源 Prefab、24,784 节点、8,472 Sprite/页图、416 动画、356 音频及 8 组动态探针完成回读；音频时长均为正值。
+- 最新 Unity：outputs/sample-game-unified-textures-unity-native/UnityProject。6000.6.2f1，原生验证器 0 诊断；Editor partial 保留源业务/组件缺口。1,694 源 Prefab、24,784 节点、8,952 Sprite、416 源动画、8 组动态探针，保存重开通过。后续只修改 Creator 助手，Unity 当前候选全部文件及 manifest 与已验版本完全一致。
+- 最新 Creator：outputs/sample-game-unified-textures-creator-native-05/CocosProject。3.8.8，editor pass、验证器 0 诊断，方法 422.378 秒，PID 64933 已退出。1,694 源 Prefab、24,784 节点、8,472 Sprite/页图、416 动画、356 音频及 8 组动态探针完成回读；音频时长均为正值。
 - 两端 528 配置 JSON 均逐表核对源 SHA 和实际导入类型；每端 7,587 纹理映射、214 Shader 来源字节核验无错误。Creator 1,768 原生 SkeletonData 已核 library；Unity 1,776 Spine 闭包以 TextAsset 保留。
 - OrderList 的零尺寸 [0,0]、Ingredients 的位置 [-240,0,0] 已保存并读回；Sprite 原生尺寸模式保留。未放宽坐标/尺寸验证规则。
 - **显示验收仍未通过**：Creator 日志有 19 次 Tiled Sprite StaticVBAccessor 缓冲区分配错误；这与本轮结构/引用零诊断分开记录。另有 2 个 Unity 派生按钮状态动画名超过 64 字节，仍待修复。Shader 编译、Unity Spine 播放、微信分包、Player/业务/视觉均不由本次导入结果代替。
@@ -29,9 +29,9 @@ Creator 首轮导入已生成 1,694 Prefab、1 Scene、416 Animation、356 MP3�
 
 已将动态探针改为复制对应完整源树与同尺寸/变换上下文，保留 Layout 同级节点；跨树 Widget/ScrollView 引用明确拒绝，避免错误引用原场景。各探针之间让出事件循环并检查期限，继续全部原状态变化与回读要求。本次八组源树分别为 24、203、59、46、144、71、46、46 节点，无跨树引用。307 项测试通过，含隔离与引用反例；第二轮已完成原生执行与八组动态探针，但最终验证失败：356 项音频时长字段缺失、两个节点的 Scene/Prefab 几何差异及汇总项，共 363 诊断。旧输出清理前置门明确拒绝执行，未删除。
 
-复验候选 manifest 差异：Unity 75,710 文件及 manifest SHA 与已验原生源完全一致；Creator 74,694 文件中仅 dynamic-ui.js 与 scene.js 改变，静态 pass/0 诊断。复验路径为 outputs/foodstreet-unified-textures-creator-native-02。
+复验候选 manifest 差异：Unity 75,710 文件及 manifest SHA 与已验原生源完全一致；Creator 74,694 文件中仅 dynamic-ui.js 与 scene.js 改变，静态 pass/0 诊断。复验路径为 outputs/sample-game-unified-textures-creator-native-02。
 
-第二轮失败分析与修复：AudioClip API 应调用 [getDuration()](https://docs.cocos.com/creator/3.8/api/zh/class/AudioClip)，不存在 duration 属性；已改为原生方法并拒绝非有限/负时长。Creator Layout.onEnable 将零尺寸替换为 300×200 默认值，另有禁用 Widget 配置时的编辑器几何副作用。已在自有场景首次激活后恢复源尺寸/位置，再运行启用的原生布局；后续动态探针不会重置修改后的状态。新增两类语义反例，307 测试通过。第三轮因恢复全部尺寸使一个 Sprite 的 RAW/TRIMMED 尺寸模式被 Editor 切换为 CUSTOM 而终止，PID 57513 已退出，保留 NATIVE_IMPORT_FAILED。随后将恢复严格限制在 uiDrivenFields 未声明的坐标/尺寸轴；值相同不触发编辑器 setter，Prefab 独立激活采用自身预激活快照，同样只恢复未驱动轴。307 项全套及随后 7 项初始化/API 定向测试通过；第四轮 356 音频全部有正时长（0.130417–90.462938 秒）、八组探针完成、零尺寸 Layout 与 Sprite 模式通过；仍有一个禁用 Widget 的 Scene/Prefab 横坐标差异，连同汇总为 4 诊断，未通过。已核对本机 Creator 3.8.8 widget-manager.ts：手动 updateAlignment 递归祖先时未检查 enabled，而正常帧 visitNode 会检查。monkey 在同步对齐期间仅对自有节点临时过滤禁用 Widget 查找，finally 恢复原方法；不改 Node 原型、引擎文件或 Player 组件。包含异常时恢复的语义测试通过，第五轮最终通过，见上方最终核验。不通过扩大容差或放开未驱动坐标轴消除诊断。
+第二轮失败分析与修复：AudioClip API 应调用 [getDuration()](https://docs.cocos.com/creator/3.8/api/zh/class/AudioClip)，不存在 duration 属性；已改为原生方法并拒绝非有限/负时长。Creator Layout.onEnable 将零尺寸替换为 300×200 默认值，另有禁用 Widget 配置时的编辑器几何副作用。已在自有场景首次激活后恢复源尺寸/位置，再运行启用的原生布局；后续动态探针不会重置修改后的状态。新增两类语义反例，307 测试通过。第三轮因恢复全部尺寸使一个 Sprite 的 RAW/TRIMMED 尺寸模式被 Editor 切换为 CUSTOM 而终止，PID 57513 已退出，保留 NATIVE_IMPORT_FAILED。随后将恢复严格限制在 uiDrivenFields 未声明的坐标/尺寸轴；值相同不触发编辑器 setter，Prefab 独立激活采用自身预激活快照，同样只恢复未驱动轴。307 项全套及随后 7 项初始化/API 定向测试通过；第四轮 356 音频全部有正时长（0.130417–90.462938 秒）、八组探针完成、零尺寸 Layout 与 Sprite 模式通过；仍有一个禁用 Widget 的 Scene/Prefab 横坐标差异，连同汇总为 4 诊断，未通过。已核对本机 Creator 3.8.8 widget-internal planning reference.ts：手动 updateAlignment 递归祖先时未检查 enabled，而正常帧 visitNode 会检查。monkey 在同步对齐期间仅对自有节点临时过滤禁用 Widget 查找，finally 恢复原方法；不改 Node 原型、引擎文件或 Player 组件。包含异常时恢复的语义测试通过，第五轮最终通过，见上方最终核验。不通过扩大容差或放开未驱动坐标轴消除诊断。
 
 ## 文件路径补充核查
 
@@ -43,4 +43,4 @@ Creator 首轮导入已生成 1,694 Prefab、1 Scene、416 Animation、356 MP3�
 
 Shader 仍是来源代码，Spine 数据不等于播放已接入；8 套非标准 Spine 版本保留文本。部分动画、组件与业务仍为 handoff。远端分包/微信构建、Player 和视觉未验证；本轮候选保持 partial。
 
-输出：outputs/foodstreet-unified-textures；证据：.private/unified-textures-20261025/export-verification.json、image-identity.json、tests.log。最终原生副本及清理回执见上方最终核验；历史输出路径已退役。
+输出：outputs/sample-game-unified-textures；证据：.private/unified-textures-20261025/export-verification.json、image-identity.json、tests.log。最终原生副本及清理回执见上方最终核验；历史输出路径已退役。

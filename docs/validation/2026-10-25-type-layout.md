@@ -8,7 +8,7 @@
 - 所有业务资源按类型→模块组织。小游戏在 Type/MiniGames/Name 下，语言在对应类型下隔离。CupMerge 等同一小游戏名称跨类型统一，源逻辑键和 GUID/UUID 不改。
 - Preview Scene、Prefab、Animation 的生成路径同步迁入指定资源根。代码和转换胶水保留原职责目录；Unity 官方 TMP/插件固定路径属于供应方资产例外。
 - resource-paths.json 提供身份、原始键、新路径和加载键；闭包目录 loadKey=null，避免误当作单资源。旧 partitions 配置拒绝，无自动分包/远端配置。
-- 303 项测试全部通过。最终候选位于 outputs/foodstreet-type-layout-02/{UnityProject,CocosProject}；前一个无 02 后缀候选仅用于发现并修正模块大小写，已被替代。
+- 303 项测试全部通过。最终候选位于 outputs/sample-game-type-layout-02/{UnityProject,CocosProject}；前一个无 02 后缀候选仅用于发现并修正模块大小写，已被替代。
 - 17,201 输入、884,709,704 字节逐项核对，两端保留 0 漏项/哈希差异；manifest 外文件 0。静态均 pass，诊断 0。
 - 两端各 356 音频文件（276 独立内容）、7,587 完整纹理、1,776 Spine 闭包、38 Effect/214 Shader 来源文件、528 配置 JSON。
 - 12,164 共有资源映射文件名一致；中文路径 0，正式资源文件名超 64 字节 0。Cocos 资源区外媒体文件 0；Unity 仅两个 Editor 转换 JSON 位于转换工具目录，业务媒体均进入 Content。

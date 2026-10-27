@@ -5,20 +5,20 @@ from monkey.layout.overrides import validate
 from monkey.layout.verify import scan
 from monkey.sources.compiled import ParseError
 
-FOODSTREET={
-    'remoteAsset:fish':dict(bundle='remoteAsset',logicalPath='Texture/Element/Fish_3/1005302'),
-    'gameAsset:bgm':dict(bundle='gameAsset',logicalPath='Audio/BGM/bgm_Intro'),
-    'gameAsset:sfx':dict(bundle='gameAsset',logicalPath='Audio/Merge/sfx_ItemAddpropUse'),
+DEMO_ASSETS={
+    'bundleA:item':dict(bundle='bundleA',logicalPath='Texture/Element/ItemSet/7001'),
+    'bundleB:theme':dict(bundle='bundleB',logicalPath='Audio/BGM/theme_Intro'),
+    'bundleB:effect':dict(bundle='bundleB',logicalPath='Audio/Merge/sfx_PlaceItem'),
     'zh-tw:label':dict(bundle='zh-tw',logicalPath='Config/label'),
     'zh:label':dict(bundle='zh',logicalPath='Config/label'),
-    'remoteAsset:adorn':dict(bundle='remoteAsset',logicalPath='Prefab/House/Adorns/Room7/10070600'),
-    'miniGameRes:level':dict(bundle='miniGameRes',logicalPath='Texture/rope3d/resources/levels/level_2'),
-    'gameAsset:clip':dict(bundle='gameAsset',logicalPath='Anim/BigDay/PlayerGroup/appear4'),
+    'bundleA:decor':dict(bundle='bundleA',logicalPath='Prefab/House/Decor/Room2/7100'),
+    'bundleC:level':dict(bundle='bundleC',logicalPath='Texture/Grid/Resources/Levels/level_2'),
+    'bundleB:clip':dict(bundle='bundleB',logicalPath='Anim/Avatar/PlayerGroup/appear4'),
     'main:scene':dict(bundle='main',logicalPath='main'),
-    'main:test':dict(bundle='main',logicalPath='room16_test'),
-    'resources:cocos3':dict(bundle='resources',logicalPath='textures/ui/btn_ok/spriteFrame'),
-    'resources:music':dict(bundle='resources',logicalPath='music/UI/109'),
-    'gameAsset:cfg':dict(bundle='gameAsset',logicalPath='Config/AudioCfg'),
+    'main:test':dict(bundle='main',logicalPath='sample_room_test'),
+    'resources:button':dict(bundle='resources',logicalPath='textures/ui/button_confirm/spriteFrame'),
+    'resources:music':dict(bundle='resources',logicalPath='music/UI/55'),
+    'bundleB:cfg':dict(bundle='bundleB',logicalPath='Config/AudioConfig'),
 }
 
 
@@ -37,11 +37,11 @@ class CasingTests(unittest.TestCase):
         self.assertEqual(casing.words('鹅图标'),['E','Tu','Biao'])
 
     def test_three_casings(self):
-        self.assertEqual((casing.pascal('Fish_3'),casing.kebab('Fish_3'),casing.snake('Fish_3')),('Fish3','fish3','fish_3'))
+        self.assertEqual((casing.pascal('Item_3'),casing.kebab('Item_3'),casing.snake('Item_3')),('Item3','item3','item_3'))
         self.assertEqual(casing.snake('CookGo'),'cook_go')
         self.assertEqual(casing.pascal('ui_main'),'UIMain')
         self.assertEqual(casing.kebab('img_box_23_1'),'img-box23-1')
-        self.assertEqual(casing.pascal('10070600'),'10070600')
+        self.assertEqual(casing.pascal('700100'),'700100')
 
     def test_unsafe_device_and_long_names(self):
         self.assertEqual(casing.pascal('CON'),'CON_')
@@ -62,41 +62,41 @@ class PlannerTests(unittest.TestCase):
         self.assertEqual(mappings[0],mappings[1]);self.assertEqual(len(set(mappings[0].values())),2)
 
     def test_packaging_type_words_and_variants_leave_production_paths(self):
-        p=LayoutPlanner('unity',FOODSTREET)
-        self.assertEqual(p.path('remoteAsset:fish','sprite','.png'),'Assets/Game/Content/Textures/Element/Fish3/1005302.png')
-        self.assertEqual(p.path('remoteAsset:fish@original','sprite','.png'),'Assets/Game/Content/Textures/Element/Fish3/1005302_untrimmed.png')
-        self.assertEqual(p.path('remoteAsset:adorn','prefab','.prefab'),'Assets/Game/Content/Prefabs/House/Adorns/Room7/10070600.prefab')
-        self.assertEqual(p.path('gameAsset:clip','animation','.anim'),'Assets/Game/Content/Animations/BigDay/PlayerGroup/appear4.anim')
-        self.assertEqual(p.path('resources:cocos3','sprite','.png'),'Assets/Game/Content/Textures/UI/btn_ok.png')
+        p=LayoutPlanner('unity',DEMO_ASSETS)
+        self.assertEqual(p.path('bundleA:item','sprite','.png'),'Assets/Game/Content/Textures/Element/ItemSet/7001.png')
+        self.assertEqual(p.path('bundleA:item@original','sprite','.png'),'Assets/Game/Content/Textures/Element/ItemSet/7001_untrimmed.png')
+        self.assertEqual(p.path('bundleA:decor','prefab','.prefab'),'Assets/Game/Content/Prefabs/House/Decor/Room2/7100.prefab')
+        self.assertEqual(p.path('bundleB:clip','animation','.anim'),'Assets/Game/Content/Animations/Avatar/PlayerGroup/appear4.anim')
+        self.assertEqual(p.path('resources:button','sprite','.png'),'Assets/Game/Content/Textures/UI/button_confirm.png')
 
     def test_audio_is_never_an_image_and_is_split_by_category(self):
-        p=LayoutPlanner('unity',FOODSTREET)
-        self.assertEqual(p.path('gameAsset:bgm','native','.mp3'),'Assets/Game/Content/Audio/Music/Common/bgm_intro.mp3')
-        self.assertEqual(p.path('gameAsset:sfx','cc.AudioClip','.mp3'),'Assets/Game/Content/Audio/Sfx/Merge/sfx_item_addprop_use.mp3')
-        self.assertEqual(p.path('resources:music','native','.mp3'),'Assets/Game/Content/Audio/Sfx/UI/109.mp3')
+        p=LayoutPlanner('unity',DEMO_ASSETS)
+        self.assertEqual(p.path('bundleB:theme','native','.mp3'),'Assets/Game/Content/Audio/Music/Common/theme_intro.mp3')
+        self.assertEqual(p.path('bundleB:effect','cc.AudioClip','.mp3'),'Assets/Game/Content/Audio/Sfx/Merge/sfx_place_item.mp3')
+        self.assertEqual(p.path('resources:music','native','.mp3'),'Assets/Game/Content/Audio/Sfx/UI/55.mp3')
 
     def test_locale_bundles_become_localization_and_configs_become_tables(self):
-        p=LayoutPlanner('unity',FOODSTREET)
+        p=LayoutPlanner('unity',DEMO_ASSETS)
         self.assertEqual(p.path('zh-tw:label','cc.JsonAsset','.json'),'Assets/Game/Content/Strings/ZhHant/Label.json')
         self.assertEqual(p.path('zh:label','cc.JsonAsset','.json'),'Assets/Game/Content/Strings/ZhHans/Label.json')
-        self.assertEqual(p.path('gameAsset:cfg','cc.JsonAsset','.json'),'Assets/Game/Content/Config/Common/AudioTable.json')
-        self.assertEqual(p.path('miniGameRes:level','cc.JsonAsset','.json'),'Assets/Game/Content/Config/MiniGames/Rope3d/Levels/Level2.json')
+        self.assertEqual(p.path('bundleB:cfg','cc.JsonAsset','.json'),'Assets/Game/Content/Config/Common/AudioTable.json')
+        self.assertEqual(p.path('bundleC:level','cc.JsonAsset','.json'),'Assets/Game/Content/Config/Grid/Resources/Levels/Level2.json')
 
     def test_scenes_and_unknown_sources(self):
-        p=LayoutPlanner('unity',FOODSTREET)
+        p=LayoutPlanner('unity',DEMO_ASSETS)
         self.assertEqual(p.path('main:scene','scene',''),'Assets/Game/Content/Scenes/Common/Main.unity')
-        self.assertEqual(p.path('main:test','scene',''),'Assets/Game/Content/Scenes/Tests/Room16Test.unity')
+        self.assertEqual(p.path('main:test','scene',''),'Assets/Game/Content/Scenes/Tests/SampleRoomTest.unity')
         hashed=p.path('x:1','native','.png',metadata=dict(bundle='x',logicalPath='native/ab/abcd.png',nameProvenance='input-relative-path'))
         self.assertTrue(hashed.startswith('Assets/Game/Content/Textures/Unsorted/texture_'))
         unsafe=p.path('x:2','native','.png',metadata=dict(bundle='x',logicalPath='../escape'))
         self.assertIn('/Unsorted/',unsafe);self.assertNotIn('..',unsafe)
 
     def test_creator_uses_pascalcase_folders_and_same_modules(self):
-        p=LayoutPlanner('creator',FOODSTREET)
-        self.assertEqual(p.path('remoteAsset:fish','sprite','.png'),'assets/resources/Textures/Element/Fish3/1005302.png')
-        self.assertEqual(p.path('gameAsset:clip','animation','.anim'),'assets/resources/Animations/BigDay/PlayerGroup/appear4.anim')
+        p=LayoutPlanner('creator',DEMO_ASSETS)
+        self.assertEqual(p.path('bundleA:item','sprite','.png'),'assets/resources/Textures/Element/ItemSet/7001.png')
+        self.assertEqual(p.path('bundleB:clip','animation','.anim'),'assets/resources/Animations/Avatar/PlayerGroup/appear4.anim')
         self.assertEqual(p.path('zh-tw:label','cc.JsonAsset','.json'),'assets/resources/Strings/ZhHant/Label.json')
-        self.assertEqual(p.folder('spine:x',metadata=dict(bundle='spineAsset',logicalPath='SpineCook/House/Room9/r9_dianshi1')),'assets/resources/Spine/House/Room9/R9Dianshi1')
+        self.assertEqual(p.folder('skeleton:x',metadata=dict(bundle='skeletonAsset',logicalPath='SpineSample/House/Room9/r9_lamp1')),'assets/resources/Spine/SpineSample/House/Room9/R9Lamp1')
 
     def test_collision_winner_is_independent_of_request_order(self):
         meta={'b:2':dict(bundle='resources',logicalPath='UI/Icon'),'a:1':dict(bundle='resources',logicalPath='ui/icon'),'c:3':dict(bundle='resources',logicalPath='Ui/ICON')}
@@ -125,8 +125,8 @@ class PlannerTests(unittest.TestCase):
         self.assertEqual(one.rsplit('/',1)[0],two.rsplit('/',1)[0])
 
     def test_existing_claims_from_another_stage_are_not_reused(self):
-        p=LayoutPlanner('unity',FOODSTREET);p.claim('Assets/Game/Content/Audio/Music/Common/bgm_intro.mp3')
-        self.assertNotEqual(p.path('gameAsset:bgm','native','.mp3'),'Assets/Game/Content/Audio/Music/Common/bgm_intro.mp3')
+        p=LayoutPlanner('unity',DEMO_ASSETS);p.claim('Assets/Game/Content/Audio/Music/Common/theme_intro.mp3')
+        self.assertNotEqual(p.path('bundleB:theme','native','.mp3'),'Assets/Game/Content/Audio/Music/Common/theme_intro.mp3')
 
     def test_layout_overrides_change_paths_only(self):
         overrides=validate(dict(schemaVersion=1,modules=[dict(match='uiraw/icon_*',module='Icons/{1}')],renames={'u:1':'street_sweeper'},
@@ -145,22 +145,22 @@ class PlannerTests(unittest.TestCase):
 
 class ForbiddenNameTests(unittest.TestCase):
     def test_legacy_layout_is_caught_and_canonical_layout_passes(self):
-        legacy=['Assets/Game/Content/Images/Sprites/remoteAsset/Texture/Element/Fish_3/1005302.original.png',
+        legacy=['Assets/Game/Content/Images/Sprites/bundleA/Texture/Element/Item_3/700100.original.png',
                 'Assets/Game/Content/Materials/002aba30c8bc53ce83ca705ea6b1b7fb.mat',
                 'Assets/Game/Content/Config/Recovered/zh-tw/Config/label.json',
                 'Assets/Generated/Views/Candidate.prefab','Assets/Texture2D/6.png','Assets/uiraw/battle/a.asset',
                 'assets/art/images/Original/main/a.png']
         self.assertEqual(len({d['location'] for d in scan(legacy)}),len(legacy))
-        p=LayoutPlanner('unity',FOODSTREET)
-        clean=[p.path(sid,kind,suffix) for sid,kind,suffix in [('remoteAsset:fish','sprite','.png'),('zh-tw:label','cc.JsonAsset','.json'),
-               ('gameAsset:bgm','native','.mp3'),('main:scene','scene',''),('remoteAsset:adorn','prefab','.prefab')]]
+        p=LayoutPlanner('unity',DEMO_ASSETS)
+        clean=[p.path(sid,kind,suffix) for sid,kind,suffix in [('bundleA:item','sprite','.png'),('zh-tw:label','cc.JsonAsset','.json'),
+               ('bundleB:theme','native','.mp3'),('main:scene','scene',''),('bundleA:decor','prefab','.prefab')]]
         clean+=['Assets/Game/Editor/Conversion/MonkeyImporter.cs','Assets/TextMesh Pro/Shaders/TMP_SDF.shader']
         self.assertEqual(scan(clean),[])
 
     def test_class_prefix_check_reads_code(self):
         path='Assets/Game/Presentation/Shop/ShopView.cs'
         self.assertTrue(scan([path],{path:'namespace Recovered.Gameplay { public class ShopView {} }'}))
-        self.assertFalse(scan([path],{path:'namespace FoodStreet.Presentation.Shop { public class ShopView {} }'}))
+        self.assertFalse(scan([path],{path:'namespace Demo.Presentation.Shop { public class ShopView {} }'}))
 
 
 if __name__=='__main__':

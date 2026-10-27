@@ -1,4 +1,4 @@
-# Unity 解析预算优化与向僵尸开炮复测
+# Unity 解析预算优化与样例项目复测
 
 用户要求按已讨论方案修改并再次测试。开发版本 0.3.0.dev2；日常安装 Release 仍为 0.3.0.dev1，既有 tag/附件/安装未修改。原游戏、GREA 只读；本轮没有新建外部任务或 Agent，没有运行游戏源代码，也没有新增 Editor/Player/玩法验收。
 
@@ -35,10 +35,10 @@
 
 ## 输出与限制
 
-最终工程：`outputs/zombie-parser-optimized/UnityProject`。
-冻结 manifest SHA256：`631e0e39edf2e6f941c2b21a4e3daed70a3d0824eef76f17ae5b9fc4af440cd2`。
+最终工程：`outputs/sample-project-parser-optimized/UnityProject`。
+冻结 manifest SHA256：`[private fingerprint omitted]`。
 文件：164,599；逻辑字节：3,267,184,074（比旧候选 3,307,505,149 字节少 40,321,075 字节）。最终 manifest 全文件重新计算 hash 通过。
 
 剩余 36 个都是 MonoBehaviour 严格结构读取长度不匹配；不是预算问题，未降级 check_read 或执行源程序集。此前 425 个 CDN 键缺件、57 GUID / 17,495 处未闭合引用、原方法/业务恢复以及完整 Editor/Player/视觉仍是独立缺口。资源数量及实际生产文件未发生变化，解析完整性提升不能称为完整游戏恢复。
 
-完整本地证据：`.private/zombie-parser-20261026/delivery.json`、`inspection-comparison.json`、`streamed-source-audit.json`、`asset-parity.json`、`tests-final.log`；原失败回执和旧 Release 候选保留。
+完整本地证据：`.private/sample-project-parser-20261026/delivery.json`、`inspection-comparison.json`、`streamed-source-audit.json`、`asset-parity.json`、`tests-final.log`；原失败回执和旧 Release 候选保留。

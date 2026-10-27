@@ -337,7 +337,7 @@ def finish_conversion(conversion, settings, format_profile='none'):
             conversion['nativeExecution'] = dict(status='blocked',reason=str(error))
     conversion['requestedFormat'] = format_profile
     if format_profile == 'grea':
-        # Conversion already relocated the export into monkey-project/1; grea is a deprecated alias.
+        # Conversion already relocated the export into monkey-project/2.0.0; grea is a deprecated alias.
         conversion['format'] = dict(profile='grea',status='retired',applied=False,layout=VERSION)
     write_json(out/'conversion-result.json',conversion)
     return conversion

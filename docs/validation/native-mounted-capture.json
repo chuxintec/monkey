@@ -1,7 +1,7 @@
 {
   "publicationForm": "summary-only",
   "privatePayloadIncluded": false,
-  "privatePayloadSha256": "181e44deb3f5b09f870a980e331d8b840b9b364532fcddcc4a349d03cc3d1570",
+  "privatePayloadSha256": "[private fingerprint omitted]",
   "scope": "native Editor representative proof",
   "schemaVersion": 1,
   "sourceProfile": "cocos-3.4.1-bundle",
@@ -17,7 +17,7 @@
       "mountedNodeCount": 7,
       "mountedComponentCount": 1,
       "sourcePrefabInstanceProofs": 8,
-      "readbackSha256": "73df13907f31f428f2b769f14cc7b89e599aaf49c179696f9bca67e5ae625f57",
+      "readbackSha256": "[private fingerprint omitted]",
       "editorValidation": "partial",
       "strictDiagnostics": 0,
       "processExited": true
@@ -29,7 +29,7 @@
       "mountedNodeCount": 7,
       "mountedComponentCount": 1,
       "sourcePrefabInstanceProofs": 8,
-      "readbackSha256": "386a31f6945a4c6f97324cdb30ae15b7237acfd4e350f517b83776ce53c70b7c",
+      "readbackSha256": "[private fingerprint omitted]",
       "editorValidation": "pass",
       "strictDiagnostics": 0,
       "processExited": true

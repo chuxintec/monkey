@@ -3,19 +3,19 @@
   "contract": "monkey-recovery-ownership-review/1",
   "reviewDate": "2026-10-26",
   "eventId": "monkey-grea-recovery-handoff-scope-20261026-01",
-  "authority": "human01a1764c-0246-7541-88e4-9a84d3556574",
+  "authority": "[private conversation reference]",
   "status": "reviewed-no-consumer-switch",
   "source": {
     "product": "GREA",
-    "head": "e093c4ee15318b412e7ca2dd107791017ff30eb7",
+    "head": "[private fingerprint omitted]",
     "identityRule": "Frozen manifest/content hashes identify snapshot including source WIP; HEAD alone is not the snapshot.",
     "inventoryPath": "validation/development/grea-beaver-handoff-20261026.json",
-    "inventorySha256": "9729c6c61a09f914ce7ddc2578807bab7b8e9bcba1f6de3c7e27937c1d762ba8",
+    "inventorySha256": "[private fingerprint omitted]",
     "snapshotPath": ".private/triad-20261026/source-freeze/source",
-    "snapshotManifestSha256": "327164597eee56a6cef06f09a047270a2c0f5320fd6e779e8e3bb1637c940761",
+    "snapshotManifestSha256": "[private fingerprint omitted]",
     "selectedSourceArchive": {
       "path": "grea-seven-recovery-source.tar.gz",
-      "sha256": "a5237fa6cebefaba01d86d123750ba1e7e5e8a367b79758263f8a0b35183d443",
+      "sha256": "[private fingerprint omitted]",
       "bytes": 128071,
       "files": 23
     },
@@ -23,122 +23,122 @@
       {
         "path": "LICENSE",
         "bytes": 1074,
-        "sha256": "023464f82fdd9559e762f1057cc2d6bc9686bffebb9e99093c4a2dc673d04c4e"
+        "sha256": "[private fingerprint omitted]"
       },
       {
         "path": "THIRD_PARTY.md",
         "bytes": 7053,
-        "sha256": "d84394538c2c31ef67ea7c3c76ee67012128456e14a2ee6cfb0b5473d32c3d2c"
+        "sha256": "[private fingerprint omitted]"
       },
       {
         "path": "pyproject.toml",
         "bytes": 667,
-        "sha256": "37a241546447ffdeed37f3baee8e7fcdc59cfd0a96a5adfac4781933b2963ede"
+        "sha256": "[private fingerprint omitted]"
       },
       {
         "path": "registry.json",
         "bytes": 182728,
-        "sha256": "c13839f9a7c48669bdf2bb312e9801bbd2aae812f1cc9d8288b3c45b1f028ff8"
+        "sha256": "[private fingerprint omitted]"
       },
       {
         "path": "src/grea/common.py",
         "bytes": 3119,
-        "sha256": "8324bf07a14eb7fcb821ba7a6e38588d088af6d71c68aba379be12bad6bce55d"
+        "sha256": "[private fingerprint omitted]"
       },
       {
         "path": "src/grea/data_io.py",
         "bytes": 2454,
-        "sha256": "ab5a04a7e68aafa23bea09aba6f5e95b37fa47f53ffcbb1e272925972fab765c"
+        "sha256": "[private fingerprint omitted]"
       },
       {
         "path": "src/grea/host/files.py",
         "bytes": 5064,
-        "sha256": "30672792d3a44e1c3656cad65451b075ddbb2989d6725b9fe391f153990b57ad"
+        "sha256": "[private fingerprint omitted]"
       },
       {
         "path": "src/grea/host/paths.py",
         "bytes": 4139,
-        "sha256": "8ed6fa9234cf6e5399c577150d14332832f1f061a6184ee0a46abd5f4fe2c045"
+        "sha256": "[private fingerprint omitted]"
       },
       {
         "path": "src/grea/host/windows_files.py",
         "bytes": 2341,
-        "sha256": "272850410847eafc8fc2bdec8b143c1e48926e3eeb463b7a23850b310da4f064"
+        "sha256": "[private fingerprint omitted]"
       },
       {
         "path": "src/grea/host/windows_security.py",
         "bytes": 2561,
-        "sha256": "73daa5e3640d99b792889c1b22810d5e5461dc9a598159602548da1b65757342"
+        "sha256": "[private fingerprint omitted]"
       },
       {
         "path": "src/grea/safe_paths.py",
         "bytes": 3211,
-        "sha256": "fdceb8800ae518db25b2a2a4f7b7c925d5cec5aae21f8480bd8b72ce3d838b14"
+        "sha256": "[private fingerprint omitted]"
       },
       {
         "path": "src/grea/tools/cocos3_evidence.py",
         "bytes": 9156,
-        "sha256": "70a571ec7123ed635763a5a258bf66be208acdf247b825a7063cfc8e527c4261"
+        "sha256": "[private fingerprint omitted]"
       },
       {
         "path": "src/grea/tools/cocos_assets.py",
         "bytes": 21935,
-        "sha256": "ca0a2858d964f43f2423b309b3a89f14ef5bd84ad80afc2d68424e50f061c9d1"
+        "sha256": "[private fingerprint omitted]"
       },
       {
         "path": "src/grea/tools/cocos_convert.py",
         "bytes": 8595,
-        "sha256": "232a774c689b5f6907e0601df999cafdf846528bd96e4b0b8cbce6ae485031db"
+        "sha256": "[private fingerprint omitted]"
       },
       {
         "path": "src/grea/tools/cocos_modules.py",
         "bytes": 3572,
-        "sha256": "8ad4ebebea4012760c5d951da813e4cedd500969b096d61776466784abe394bc"
+        "sha256": "[private fingerprint omitted]"
       },
       {
         "path": "src/grea/tools/cocos_project.py",
         "bytes": 6763,
-        "sha256": "a8c3552f09d8923d9c320523a367f74e98a73a7711b9d7a4a632617bc5b56676"
+        "sha256": "[private fingerprint omitted]"
       },
       {
         "path": "src/grea/tools/laya_contract_audit.py",
         "bytes": 2465,
-        "sha256": "b26eccf5682737a9a1ff55174fc010486d3888f5ac6a2e600c66b6cfe58e8b9d"
+        "sha256": "[private fingerprint omitted]"
       },
       {
         "path": "src/grea/tools/project_templates.py",
         "bytes": 1486,
-        "sha256": "e4133efee52d995947aa762c45a5e77191821157e2f0ae7fca4a0663dee8083a"
+        "sha256": "[private fingerprint omitted]"
       },
       {
         "path": "src/grea/tools/read_elf_values.py",
         "bytes": 2742,
-        "sha256": "7ab4cc379cd8738691c02f2c62daecf182720ad860c57a7741c355f2956604b4"
+        "sha256": "[private fingerprint omitted]"
       },
       {
         "path": "src/grea/tools/shader_probe.py",
         "bytes": 2355,
-        "sha256": "132ee29dcb448d96f63c7d8e488df615d63bbadbb7ab55fd7d86e1b3c0fca9cc"
+        "sha256": "[private fingerprint omitted]"
       },
       {
         "path": "src/grea/tools/unpack_xapk.py",
         "bytes": 7604,
-        "sha256": "8c6800a249a112096559845331a1ceab184d1733132c2371a93e1a6806d55926"
+        "sha256": "[private fingerprint omitted]"
       },
       {
         "path": "tools/cocos/index-modules.cjs",
         "bytes": 10940,
-        "sha256": "462ef1dcac57831c6f430bb86e46b5034405d1b5bedb2a6ddcf0eeafa5feea97"
+        "sha256": "[private fingerprint omitted]"
       },
       {
         "path": "uv.lock",
         "bytes": 260031,
-        "sha256": "7826bae22a3b925431e91119d1c617c47243854840205474e8e1ac9083763551"
+        "sha256": "[private fingerprint omitted]"
       }
     ]
   },
   "monkeyBaseline": {
-    "commit": "db253cb0b0dac4ff426298f005cf6ce5bc0cac31",
+    "commit": "[private fingerprint omitted]",
     "developmentVersion": "0.5.0.dev1",
     "stableInstalledVersion": "0.4.0"
   },
@@ -154,23 +154,23 @@
       "sourceEntry": {
         "path": "src/grea/tools/laya_contract_audit.py",
         "bytes": 2465,
-        "sha256": "b26eccf5682737a9a1ff55174fc010486d3888f5ac6a2e600c66b6cfe58e8b9d"
+        "sha256": "[private fingerprint omitted]"
       },
       "sourceClosure": [
         {
           "path": "src/grea/host/paths.py",
           "bytes": 4139,
-          "sha256": "8ed6fa9234cf6e5399c577150d14332832f1f061a6184ee0a46abd5f4fe2c045"
+          "sha256": "[private fingerprint omitted]"
         },
         {
           "path": "src/grea/host/windows_files.py",
           "bytes": 2341,
-          "sha256": "272850410847eafc8fc2bdec8b143c1e48926e3eeb463b7a23850b310da4f064"
+          "sha256": "[private fingerprint omitted]"
         },
         {
           "path": "src/grea/tools/laya_contract_audit.py",
           "bytes": 2465,
-          "sha256": "b26eccf5682737a9a1ff55174fc010486d3888f5ac6a2e600c66b6cfe58e8b9d"
+          "sha256": "[private fingerprint omitted]"
         }
       ],
       "decision": "reference-only",
@@ -208,23 +208,23 @@
       "sourceEntry": {
         "path": "src/grea/tools/read_elf_values.py",
         "bytes": 2742,
-        "sha256": "7ab4cc379cd8738691c02f2c62daecf182720ad860c57a7741c355f2956604b4"
+        "sha256": "[private fingerprint omitted]"
       },
       "sourceClosure": [
         {
           "path": "src/grea/host/paths.py",
           "bytes": 4139,
-          "sha256": "8ed6fa9234cf6e5399c577150d14332832f1f061a6184ee0a46abd5f4fe2c045"
+          "sha256": "[private fingerprint omitted]"
         },
         {
           "path": "src/grea/host/windows_files.py",
           "bytes": 2341,
-          "sha256": "272850410847eafc8fc2bdec8b143c1e48926e3eeb463b7a23850b310da4f064"
+          "sha256": "[private fingerprint omitted]"
         },
         {
           "path": "src/grea/tools/read_elf_values.py",
           "bytes": 2742,
-          "sha256": "7ab4cc379cd8738691c02f2c62daecf182720ad860c57a7741c355f2956604b4"
+          "sha256": "[private fingerprint omitted]"
         }
       ],
       "decision": "reference-only",
@@ -260,48 +260,48 @@
       "sourceEntry": {
         "path": "src/grea/tools/unpack_xapk.py",
         "bytes": 7604,
-        "sha256": "8c6800a249a112096559845331a1ceab184d1733132c2371a93e1a6806d55926"
+        "sha256": "[private fingerprint omitted]"
       },
       "sourceClosure": [
         {
           "path": "src/grea/common.py",
           "bytes": 3119,
-          "sha256": "8324bf07a14eb7fcb821ba7a6e38588d088af6d71c68aba379be12bad6bce55d"
+          "sha256": "[private fingerprint omitted]"
         },
         {
           "path": "src/grea/data_io.py",
           "bytes": 2454,
-          "sha256": "ab5a04a7e68aafa23bea09aba6f5e95b37fa47f53ffcbb1e272925972fab765c"
+          "sha256": "[private fingerprint omitted]"
         },
         {
           "path": "src/grea/host/files.py",
           "bytes": 5064,
-          "sha256": "30672792d3a44e1c3656cad65451b075ddbb2989d6725b9fe391f153990b57ad"
+          "sha256": "[private fingerprint omitted]"
         },
         {
           "path": "src/grea/host/paths.py",
           "bytes": 4139,
-          "sha256": "8ed6fa9234cf6e5399c577150d14332832f1f061a6184ee0a46abd5f4fe2c045"
+          "sha256": "[private fingerprint omitted]"
         },
         {
           "path": "src/grea/host/windows_files.py",
           "bytes": 2341,
-          "sha256": "272850410847eafc8fc2bdec8b143c1e48926e3eeb463b7a23850b310da4f064"
+          "sha256": "[private fingerprint omitted]"
         },
         {
           "path": "src/grea/host/windows_security.py",
           "bytes": 2561,
-          "sha256": "73daa5e3640d99b792889c1b22810d5e5461dc9a598159602548da1b65757342"
+          "sha256": "[private fingerprint omitted]"
         },
         {
           "path": "src/grea/safe_paths.py",
           "bytes": 3211,
-          "sha256": "fdceb8800ae518db25b2a2a4f7b7c925d5cec5aae21f8480bd8b72ce3d838b14"
+          "sha256": "[private fingerprint omitted]"
         },
         {
           "path": "src/grea/tools/unpack_xapk.py",
           "bytes": 7604,
-          "sha256": "8c6800a249a112096559845331a1ceab184d1733132c2371a93e1a6806d55926"
+          "sha256": "[private fingerprint omitted]"
         }
       ],
       "decision": "partial-coverage-reference-only",
@@ -345,23 +345,23 @@
       "sourceEntry": {
         "path": "src/grea/tools/shader_probe.py",
         "bytes": 2355,
-        "sha256": "132ee29dcb448d96f63c7d8e488df615d63bbadbb7ab55fd7d86e1b3c0fca9cc"
+        "sha256": "[private fingerprint omitted]"
       },
       "sourceClosure": [
         {
           "path": "src/grea/host/paths.py",
           "bytes": 4139,
-          "sha256": "8ed6fa9234cf6e5399c577150d14332832f1f061a6184ee0a46abd5f4fe2c045"
+          "sha256": "[private fingerprint omitted]"
         },
         {
           "path": "src/grea/host/windows_files.py",
           "bytes": 2341,
-          "sha256": "272850410847eafc8fc2bdec8b143c1e48926e3eeb463b7a23850b310da4f064"
+          "sha256": "[private fingerprint omitted]"
         },
         {
           "path": "src/grea/tools/shader_probe.py",
           "bytes": 2355,
-          "sha256": "132ee29dcb448d96f63c7d8e488df615d63bbadbb7ab55fd7d86e1b3c0fca9cc"
+          "sha256": "[private fingerprint omitted]"
         }
       ],
       "decision": "reference-only",
@@ -398,53 +398,53 @@
       "sourceEntry": {
         "path": "src/grea/tools/cocos_assets.py",
         "bytes": 21935,
-        "sha256": "ca0a2858d964f43f2423b309b3a89f14ef5bd84ad80afc2d68424e50f061c9d1"
+        "sha256": "[private fingerprint omitted]"
       },
       "sourceClosure": [
         {
           "path": "src/grea/common.py",
           "bytes": 3119,
-          "sha256": "8324bf07a14eb7fcb821ba7a6e38588d088af6d71c68aba379be12bad6bce55d"
+          "sha256": "[private fingerprint omitted]"
         },
         {
           "path": "src/grea/data_io.py",
           "bytes": 2454,
-          "sha256": "ab5a04a7e68aafa23bea09aba6f5e95b37fa47f53ffcbb1e272925972fab765c"
+          "sha256": "[private fingerprint omitted]"
         },
         {
           "path": "src/grea/host/files.py",
           "bytes": 5064,
-          "sha256": "30672792d3a44e1c3656cad65451b075ddbb2989d6725b9fe391f153990b57ad"
+          "sha256": "[private fingerprint omitted]"
         },
         {
           "path": "src/grea/host/paths.py",
           "bytes": 4139,
-          "sha256": "8ed6fa9234cf6e5399c577150d14332832f1f061a6184ee0a46abd5f4fe2c045"
+          "sha256": "[private fingerprint omitted]"
         },
         {
           "path": "src/grea/host/windows_files.py",
           "bytes": 2341,
-          "sha256": "272850410847eafc8fc2bdec8b143c1e48926e3eeb463b7a23850b310da4f064"
+          "sha256": "[private fingerprint omitted]"
         },
         {
           "path": "src/grea/host/windows_security.py",
           "bytes": 2561,
-          "sha256": "73daa5e3640d99b792889c1b22810d5e5461dc9a598159602548da1b65757342"
+          "sha256": "[private fingerprint omitted]"
         },
         {
           "path": "src/grea/safe_paths.py",
           "bytes": 3211,
-          "sha256": "fdceb8800ae518db25b2a2a4f7b7c925d5cec5aae21f8480bd8b72ce3d838b14"
+          "sha256": "[private fingerprint omitted]"
         },
         {
           "path": "src/grea/tools/cocos3_evidence.py",
           "bytes": 9156,
-          "sha256": "70a571ec7123ed635763a5a258bf66be208acdf247b825a7063cfc8e527c4261"
+          "sha256": "[private fingerprint omitted]"
         },
         {
           "path": "src/grea/tools/cocos_assets.py",
           "bytes": 21935,
-          "sha256": "ca0a2858d964f43f2423b309b3a89f14ef5bd84ad80afc2d68424e50f061c9d1"
+          "sha256": "[private fingerprint omitted]"
         }
       ],
       "decision": "reuse-existing-core-conditional-replacement",
@@ -494,58 +494,58 @@
       "sourceEntry": {
         "path": "src/grea/tools/cocos_modules.py",
         "bytes": 3572,
-        "sha256": "8ad4ebebea4012760c5d951da813e4cedd500969b096d61776466784abe394bc"
+        "sha256": "[private fingerprint omitted]"
       },
       "sourceClosure": [
         {
           "path": "src/grea/common.py",
           "bytes": 3119,
-          "sha256": "8324bf07a14eb7fcb821ba7a6e38588d088af6d71c68aba379be12bad6bce55d"
+          "sha256": "[private fingerprint omitted]"
         },
         {
           "path": "src/grea/data_io.py",
           "bytes": 2454,
-          "sha256": "ab5a04a7e68aafa23bea09aba6f5e95b37fa47f53ffcbb1e272925972fab765c"
+          "sha256": "[private fingerprint omitted]"
         },
         {
           "path": "src/grea/host/files.py",
           "bytes": 5064,
-          "sha256": "30672792d3a44e1c3656cad65451b075ddbb2989d6725b9fe391f153990b57ad"
+          "sha256": "[private fingerprint omitted]"
         },
         {
           "path": "src/grea/host/paths.py",
           "bytes": 4139,
-          "sha256": "8ed6fa9234cf6e5399c577150d14332832f1f061a6184ee0a46abd5f4fe2c045"
+          "sha256": "[private fingerprint omitted]"
         },
         {
           "path": "src/grea/host/windows_files.py",
           "bytes": 2341,
-          "sha256": "272850410847eafc8fc2bdec8b143c1e48926e3eeb463b7a23850b310da4f064"
+          "sha256": "[private fingerprint omitted]"
         },
         {
           "path": "src/grea/host/windows_security.py",
           "bytes": 2561,
-          "sha256": "73daa5e3640d99b792889c1b22810d5e5461dc9a598159602548da1b65757342"
+          "sha256": "[private fingerprint omitted]"
         },
         {
           "path": "src/grea/safe_paths.py",
           "bytes": 3211,
-          "sha256": "fdceb8800ae518db25b2a2a4f7b7c925d5cec5aae21f8480bd8b72ce3d838b14"
+          "sha256": "[private fingerprint omitted]"
         },
         {
           "path": "src/grea/tools/cocos3_evidence.py",
           "bytes": 9156,
-          "sha256": "70a571ec7123ed635763a5a258bf66be208acdf247b825a7063cfc8e527c4261"
+          "sha256": "[private fingerprint omitted]"
         },
         {
           "path": "src/grea/tools/cocos_assets.py",
           "bytes": 21935,
-          "sha256": "ca0a2858d964f43f2423b309b3a89f14ef5bd84ad80afc2d68424e50f061c9d1"
+          "sha256": "[private fingerprint omitted]"
         },
         {
           "path": "src/grea/tools/cocos_modules.py",
           "bytes": 3572,
-          "sha256": "8ad4ebebea4012760c5d951da813e4cedd500969b096d61776466784abe394bc"
+          "sha256": "[private fingerprint omitted]"
         }
       ],
       "decision": "reuse-existing-core-conditional-replacement",
@@ -589,53 +589,53 @@
       "sourceEntry": {
         "path": "src/grea/tools/cocos_convert.py",
         "bytes": 8595,
-        "sha256": "232a774c689b5f6907e0601df999cafdf846528bd96e4b0b8cbce6ae485031db"
+        "sha256": "[private fingerprint omitted]"
       },
       "sourceClosure": [
         {
           "path": "src/grea/common.py",
           "bytes": 3119,
-          "sha256": "8324bf07a14eb7fcb821ba7a6e38588d088af6d71c68aba379be12bad6bce55d"
+          "sha256": "[private fingerprint omitted]"
         },
         {
           "path": "src/grea/host/files.py",
           "bytes": 5064,
-          "sha256": "30672792d3a44e1c3656cad65451b075ddbb2989d6725b9fe391f153990b57ad"
+          "sha256": "[private fingerprint omitted]"
         },
         {
           "path": "src/grea/host/paths.py",
           "bytes": 4139,
-          "sha256": "8ed6fa9234cf6e5399c577150d14332832f1f061a6184ee0a46abd5f4fe2c045"
+          "sha256": "[private fingerprint omitted]"
         },
         {
           "path": "src/grea/host/windows_files.py",
           "bytes": 2341,
-          "sha256": "272850410847eafc8fc2bdec8b143c1e48926e3eeb463b7a23850b310da4f064"
+          "sha256": "[private fingerprint omitted]"
         },
         {
           "path": "src/grea/host/windows_security.py",
           "bytes": 2561,
-          "sha256": "73daa5e3640d99b792889c1b22810d5e5461dc9a598159602548da1b65757342"
+          "sha256": "[private fingerprint omitted]"
         },
         {
           "path": "src/grea/safe_paths.py",
           "bytes": 3211,
-          "sha256": "fdceb8800ae518db25b2a2a4f7b7c925d5cec5aae21f8480bd8b72ce3d838b14"
+          "sha256": "[private fingerprint omitted]"
         },
         {
           "path": "src/grea/tools/cocos_convert.py",
           "bytes": 8595,
-          "sha256": "232a774c689b5f6907e0601df999cafdf846528bd96e4b0b8cbce6ae485031db"
+          "sha256": "[private fingerprint omitted]"
         },
         {
           "path": "src/grea/tools/cocos_project.py",
           "bytes": 6763,
-          "sha256": "a8c3552f09d8923d9c320523a367f74e98a73a7711b9d7a4a632617bc5b56676"
+          "sha256": "[private fingerprint omitted]"
         },
         {
           "path": "src/grea/tools/project_templates.py",
           "bytes": 1486,
-          "sha256": "e4133efee52d995947aa762c45a5e77191821157e2f0ae7fca4a0663dee8083a"
+          "sha256": "[private fingerprint omitted]"
         }
       ],
       "decision": "reuse-existing-subset-conditional-replacement",
@@ -709,10 +709,10 @@
     "moduleRepresentatives": {
       "schemaVersion": 1,
       "scope": "three representative wrappers only; legacy result schema not treated as compatible",
-      "legacySourceSha256": "462ef1dcac57831c6f430bb86e46b5034405d1b5bedb2a6ddcf0eeafa5feea97",
-      "bridgeSha256": "5f20c154a10e7029fc2b09ac7ecb39f346be322677292741d904aa4585a4a68b",
+      "legacySourceSha256": "[private fingerprint omitted]",
+      "bridgeSha256": "[private fingerprint omitted]",
       "bridgeChange": "Only Acorn dependency binding and version lookup use existing pinned monkey vendor; no parser logic change",
-      "providerSha256": "fdb08546776ec6228b03e8d02b40d4ab3255bae5f401adba7ff5dad927ac5c9c",
+      "providerSha256": "[private fingerprint omitted]",
       "cases": [
         {
           "adapter": "browserify-table-v1",

@@ -1,6 +1,6 @@
 # 窗口05纹理推进与TMP资源寻址修复
 
-窗口05于北京时间13:14:28接管，内部截止13:24:28、外层13:26:28，方法预算600秒；固定cf9c012及05 manifest `292255cee09a6940b222ff592afe560a83d08eb108764de0f6be433f253e6d5d`。新独立副本`outputs/acceptance/v05-structured-01/UnityProject`经正常exec审批启动，实际PID17274。
+窗口05于北京时间13:14:28接管，内部截止13:24:28、外层13:26:28，方法预算600秒；固定cf9c012及05 manifest `[private fingerprint omitted]`。新独立副本`outputs/acceptance/v05-structured-01/UnityProject`经正常exec审批启动，实际PID17274。
 
 本轮越过全部纹理方法：计划textures为10358项，即5179帧的trimmed与original两种原生Sprite变体，不是10358个源SpriteFrame。方法计时49.078454秒推进至fonts第6/8项，失败为`Native TMP bitmap shader unavailable after resource import`。不能把49秒当完整导入耗时，接管至确认退出为3分11秒（含复制、初始化及检查）。batch方法抛异常后Unity自行exit1，CLI exit6表示包装命令失败，13:17:39 ps确认PID不存在，已提前释放。sourcePrefab0、Scene保存/重开/读回仍not_run，原05SHA不变。window.json、native-progress.json及脱敏日志为本地证据；没有重启/信号/其他项目操作。
 
@@ -8,7 +8,7 @@
 
 只读本次已安装的`com.unity.ugui@0f30cee369f3`：package.json与packages-lock均为2.6.0 builtin，Editor6000.6.2f1 BuiltInPackages原件也为2.6.0；原manifest种子2.0.0没有阻止Unity解析实际内置版本。这不是新安装或升级全局包。
 
-`TMP Essential Resources.unitypackage`实际存在，SHA `26cdee2072683cb25ceafa4fab23c93c35b2f692e5daf9ca0f33d05c4e163274`。只读tar成员确认如下资源与shader名称匹配，失败工程四者均未生成：
+`TMP Essential Resources.unitypackage`实际存在，SHA `[private fingerprint omitted]`。只读tar成员确认如下资源与shader名称匹配，失败工程四者均未生成：
 
 |资源|原始shader名称|
 |---|---|
@@ -35,7 +35,7 @@
 
 ## 修复候选06
 
-新生成Unity单目标`outputs/structured-foodstreet-06/UnityProject`，manifest `a14f9648201fac01534a8037b3aeca29dd8772d6cd5998eacd2824e573cf14b1`；固定实现`4deb5ea80bc081c10981524da91fe97d63f47e91`。同四根5097文件/243799340字节留存相等，仍含1630独立Prefab计划、30 Spine闭包/1缺bin。实际import-plan的tmpResources为com.unity.ugui 2.6.0和原Essential archive，emit身份核对当前源码一致。原05冻结manifest再次核对不变。
+新生成Unity单目标`outputs/structured-sample-game-06/UnityProject`，manifest `[private fingerprint omitted]`；固定实现`[private fingerprint omitted]`。同四根5097文件/243799340字节留存相等，仍含1630独立Prefab计划、30 Spine闭包/1缺bin。实际import-plan的tmpResources为com.unity.ugui 2.6.0和原Essential archive，emit身份核对当前源码一致。原05冻结manifest再次核对不变。
 
 仅对本次有变化的Unity候选执行静态verify，未重复Creator/旧reader矩阵。06没有启动Editor；资源实际完成导入和所有原生gate仍待新授权窗口。
-06 Unity静态verify零诊断，证据`outputs/structured-foodstreet-06-unity-check`；没有运行其Editor。
+06 Unity静态verify零诊断，证据`outputs/structured-sample-game-06-unity-check`；没有运行其Editor。

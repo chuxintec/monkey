@@ -2,9 +2,9 @@
 
 # 当前 v0.6：C# 代码恢复与模块构建
 
-执行 [统一C1–C9计划](PLAN.md) 和 [完整范围](/Users/wangmeng/Documents/Manager/decisions/20261026-grea-monkey-beaver/MONKEY-V06-CSHARP-PLAN.md)。本版新增投入为完整模块符号/类型/方法体/跨模块依赖、Unity生命周期事件与原字段配置/资源绑定、确定性C#候选/增量/编译行为/AI交接，原后续C#内容不再另排v0.7。CLI只有实装后才登记能力。下方历史数值子集仍兼容，不代表本大版验收。
+执行 [统一C1–C9计划](PLAN.md) 和 完整范围 (local path omitted)。本版新增投入为完整模块符号/类型/方法体/跨模块依赖、Unity生命周期事件与原字段配置/资源绑定、确定性C#候选/增量/编译行为/AI交接，原后续C#内容不再另排v0.7。CLI只有实装后才登记能力。下方历史数值子集仍兼容，不代表本大版验收。
 
-固定肥鹅main/game.js为7,147,892字节/SHA `21af08e48846f6ad1a2e0673b0c945358136723b1664f0cd1f6ec9b3df6c5cb5`。完整词法图928类/16,384方法，原RF914区域不是完整上下文；旧138数值候选保留历史。当前[模块生成](CODE-MODULES.md)/[入口选择](CODE-SELECTION.md)可按显式类型合同批量闭合并实际lowering。4个真实模块16方法候选已编译，16,368未选择不等于不支持；原12方法与新4方法各有独立行为证据。原生9方法有限流程完成6次系统指针操作，非原UI恢复。Unity WASM精确字节链与8纯运算片段另见[WASM来源](WASM-CODE-SOURCES.md)；13波次/触发方法仍缺精确布局/调用目标，caller-map关联假设保留。未知保留具名源位置/原因/编译排除；不执行原JS/WASM/DLL，36正文仅阻断依赖操作。
+固定样例项目main/game.js为7,147,892字节/SHA `[private fingerprint omitted]`。完整词法图928类/16,384方法，原RF914区域不是完整上下文；旧138数值候选保留历史。当前[模块生成](CODE-MODULES.md)/[入口选择](CODE-SELECTION.md)可按显式类型合同批量闭合并实际lowering。4个真实模块16方法候选已编译，16,368未选择不等于不支持；原12方法与新4方法各有独立行为证据。原生9方法有限流程完成6次系统指针操作，非原UI恢复。Unity WASM精确字节链与8纯运算片段另见[WASM来源](WASM-CODE-SOURCES.md)；13波次/触发方法仍缺精确布局/调用目标，caller-map关联假设保留。未知保留具名源位置/原因/编译排除；不执行原JS/WASM/DLL，36正文仅阻断依赖操作。
 
 # 可接续代码子集（v0.2开发中）
 
@@ -61,9 +61,9 @@ monkey convert --input-set inputs.json --target both --out fresh \
 
 首JS native01确实失败（own96108，正常TERM/reaped）：未预分配meta导致identity门失败，且默认`.js`按CommonJS解释，原ESM import不能加载；旧结果保留。使用[官方3.8模块规范](https://docs.cocos.com/creator/3.8/manual/en/scripting/modules/spec.html)所声明的最近package.json/type=module规则，在assets根写明确模块边界，保持ESM JS，不改成TS或plugin；extensions仍在该边界外。实际JS importer=javascript/ver4.0.24来自首轮Editor读回，使用已验证meta结构和namespace/RF固定UUID。
 
-新实际MainUi129节点/5原RF绑定JS native02：own96527于22:41:40.702916Z→22:41:58.153501Z正常TERM/reaped，editorpass/strict0。JS classId `d70c6lDSQpbe7+KyntJCtEm` 对应script UUID `d70c6943-490a-5b7b-bf8a-ca7b490ad126`；Scene与独立Prefab各5绑定、未初始化态、数字边界/隔离/原文字体保持、几何和保存重载通过。candidate manifest `1318825850d7e83cd41f051478286afa0c3c095feaf7971594af9a06fcb18a69`。身份独立只读审计 `outputs/number-label-js-identity-audit-01`六门全true，旧输出未改；4未知方法及SHRINK动态行为继续pending。
+新实际MainUi129节点/5原RF绑定JS native02：own96527于22:41:40.702916Z→22:41:58.153501Z正常TERM/reaped，editorpass/strict0。JS classId `d70c6lDSQpbe7+KyntJCtEm` 对应script UUID `[private identifier]`；Scene与独立Prefab各5绑定、未初始化态、数字边界/隔离/原文字体保持、几何和保存重载通过。candidate manifest `[private fingerprint omitted]`。身份独立只读审计 `outputs/number-label-js-identity-audit-01`六门全true，旧输出未改；4未知方法及SHRINK动态行为继续pending。
 
-公开`convert --cocos-code-language js --format grea --native`合成端到端02（7输入/1组件）：own97084于22:47:18.787472Z→22:47:35.091237Z正常TERM/reaped、editorpass/strict0，manifest `d200ccbdca2a9185fb209dc0b5df281666ec3716bbb319f9c747e06f53131bed`。01只在格式计划哈希变量误用处失败，保留未格式化候选、native未启动。修正不放宽源hash保护。脚本移动而assets/package.json边界保持；installer只把.cs/.ts/.js当脚本，不把模块JSON误作scriptPath。新投射带codeScriptUuid，类型注册和读回均强核实际压缩classId，而非只看类名。C#输出不因Creator语言选择而改变。
+公开`convert --cocos-code-language js --format grea --native`合成端到端02（7输入/1组件）：own97084于22:47:18.787472Z→22:47:35.091237Z正常TERM/reaped、editorpass/strict0，manifest `[private fingerprint omitted]`。01只在格式计划哈希变量误用处失败，保留未格式化候选、native未启动。修正不放宽源hash保护。脚本移动而assets/package.json边界保持；installer只把.cs/.ts/.js当脚本，不把模块JSON误作scriptPath。新投射带codeScriptUuid，类型注册和读回均强核实际压缩classId，而非只看类名。C#输出不因Creator语言选择而改变。
 
 ## 新来源静态数值方法：Creator 3.8.7
 
@@ -74,21 +74,21 @@ monkey convert --input-set inputs.json --target both --out fresh \
   "schemaVersion": 1,
   "kind": "static-number-methods-v1",
   "moduleName": "chunks:///_virtual/ParabolaUtils.ts",
-  "moduleSha256": "7aa554c47306d3b232062cabeec3b84943ffad65c93857535c0b098100dc14f4",
+  "moduleSha256": "[private fingerprint omitted]",
   "helperModuleName": "chunks:///_virtual/rollupPluginModLoBabelHelpers.js",
-  "helperModuleSha256": "1868b5ac170af89a19b39bb47eb12a961ee7e903da127a44fea68cb7a3c7b80c",
+  "helperModuleSha256": "[private fingerprint omitted]",
   "methods": ["radiansToDegrees", "degreesToRadians", "lerp"]
 }
 ```
 
 来自下方了的951字节原模块，RF `db6de0nQuNC66zGTRfLeH+G`；保留8个原方法，3个纯数值方法生成，distance/vectorToAngle/normalize/rotateVector/lerpVector等5个向量方法待恢复。源callback可能是独立`function(...)`表达式，以Acorn表达式模式读取并保留原字节偏移，无源码执行或包装后猜偏移。
 
-严格识别literal import setter→createClass→原导出/构造别名→静态descriptor表→单return表达式，仅参数、有限数值字面量、Math.PI、正负号和四则运算。模块setup/别名变化、局部Math遮蔽、重复/计算descriptor属性、未知helper和模型篡改拒绝。此profile只接受已核对SHA的createClass实现；该helper的自由变量e继续在原完整脚本中追到`e=require("../../@babel/runtime/helpers/typeof")`、声明的`@babel/runtime/helpers/typeof.js`及精确callback SHA `537d17dd369a0b62f68efe94c21de2d7db9e5c3b2170c69027151e79ab4edff4`。静态worker上限32MiB/1M节点/256MiB/30秒；重赋值、require遮蔽、动态词法scope或无法证明时停止，不执行helper/源构造器。
+严格识别literal import setter→createClass→原导出/构造别名→静态descriptor表→单return表达式，仅参数、有限数值字面量、Math.PI、正负号和四则运算。模块setup/别名变化、局部Math遮蔽、重复/计算descriptor属性、未知helper和模型篡改拒绝。此profile只接受已核对SHA的createClass实现；该helper的自由变量e继续在原完整脚本中追到`e=require("../../@babel/runtime/helpers/typeof")`、声明的`@babel/runtime/helpers/typeof.js`及精确callback SHA `[private fingerprint omitted]`。静态worker上限32MiB/1M节点/256MiB/30秒；重赋值、require遮蔽、动态词法scope或无法证明时停止，不执行helper/源构造器。
 
 生成Unity `Monkey.Recovered.ParabolaUtils`静态类及Creator纯ES模块；`--format grea`分别归入`Assets/Game/Domain/Math`和`assets/scripts/domain/math`。函数不依赖源引擎、不绑定Scene组件，binding明确为`static-calls-only-no-component-binding`。工程自带`Docs/STATIC-NUMERIC-UTILITY.md`与聚合任务、原文/方法范围/hash/helper词法证据；当前路径从manifest的codeEmission.scriptPath读取，格式化后不会留下旧路径。
 
 调用合同为显式JS Number/C# double参数，包含-0/NaN/Infinity，Math.PI及类方法保持原定义；非number/省略参数、constructor、helper副作用、向量方法均在外。lerp为未clamp的`t+(e-t)*i`。C#用各一次binary64运算且NoInlining的私有函数保持源运算分组，不能替换成engine Lerp或先折叠常量。
 
-真实公开单命令`outputs/cocos38-parabola-package-10`：496输入/38081754B，83源图/810节点/81Prefab资源计划保持，双目标grea成功；原none完整保留。Unity manifest `d7a6c143a5db8d3e73a847bec6c1d7dbe307942d47fa66bd2c207ea8acdfc56b`，Creator manifest `0ac57d3e28988db54508811333c531ad8095b0db9bbcf8b6080826690e8a20d1`。当前parser重新读取结果相同、helper context完全一致，两工程30974个owned文件全部逐字节核验（各15512/15462）。Unity6 SDK编译与TS5.8.2 strict均通过，C#、TS编译结果、JS次选各13组实际调用通过：包含负零位模式、NaN/Infinity、外插、乘加收缩反例`lerp(-1,1e16,1e-16)`、大数运算顺序溢出。只运行受控生成代码，原代码/helper未执行。
+真实公开单命令`outputs/cocos38-parabola-package-10`：496输入/38081754B，83源图/810节点/81Prefab资源计划保持，双目标grea成功；原none完整保留。Unity manifest `[private fingerprint omitted]`，Creator manifest `[private fingerprint omitted]`。当前parser重新读取结果相同、helper context完全一致，两工程30974个owned文件全部逐字节核验（各15512/15462）。Unity6 SDK编译与TS5.8.2 strict均通过，C#、TS编译结果、JS次选各13组实际调用通过：包含负零位模式、NaN/Infinity、外插、乘加收缩反例`lerp(-1,1e16,1e-16)`、大数运算顺序溢出。只运行受控生成代码，原代码/helper未执行。
 
 本组无新Editor或Player；原生导入/组件接线不由纯数值编译替代。资源原生结果复用前组07/08独立记录，完整视觉/输入/玩法仍未验。审计`outputs/parabola-math-audit-10`保留来源、代码、编译/运行SHA及边界结果；09 Creator代码内容有效但落在旧domain/state，冻结保留，10修正目录。

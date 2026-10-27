@@ -7,7 +7,7 @@
 ```sh
 monkey code-model --source game.js --lexical-graph --expected-source SOURCE_SHA256 --out code-index
 monkey code-emit --source game.js --module-contract code-contract.json --out code-candidate
-monkey code-emit --source game.js --module-profile foodstreet-demand-health-v1 --configuration-table ElementMultiOrderPool.json --out foodstreet-code
+monkey code-emit --source game.js --module-profile foodstreet-demand-health-v1 --configuration-table ElementMultiOrderPool.json --out sample-game-code
 monkey code-emit --source game.js --module-contract code-contract.json --configuration-table ElementMultiOrderPool.json --out code-with-config
 monkey code-emit --source game.js --module-contract code-contract.json --reuse-from code-candidate --expected-manifest CANDIDATE_MANIFEST_SHA256 --out code-candidate-next
 ```
@@ -28,7 +28,7 @@ Map 缺值保留为 `Optional<T>`，而不是零；Number 运算中的 undefined
 
 Mono 静态来源另见 [UNITY-CODE-SOURCES](UNITY-CODE-SOURCES.md)。它的 `draft_closed` 只是观察到的反编译闭包，不冒充原 IL 等价或实际游戏验收。Unity 有限对象适配必须明确是新目标适配，并另行验证源字段、目标引用、生命周期、保存重开与真实运行；不能将源域类包装成“所有原组件已恢复”。
 
-`--configuration-table` 当前只接精确 FoodStreet recipe profile，见 [CODE-CONFIGURATION](CODE-CONFIGURATION.md)。它核整源、原表与静态字节跨度哈希，逐字节保留原 JSON 和 meta GUID；强类型 reader 在运行时解析原字段、按原顺序构建 Map。它不生成第二份数值表，不嵌入配方数值，不声称补齐 CookEffect/完整 Kp。非匹配来源、namespace、Recipe 字段形状明确拒绝，不按同名表猜套。
+`--configuration-table` 当前只接精确 sample-game recipe profile，见 [CODE-CONFIGURATION](CODE-CONFIGURATION.md)。它核整源、原表与静态字节跨度哈希，逐字节保留原 JSON 和 meta GUID；强类型 reader 在运行时解析原字段、按原顺序构建 Map。它不生成第二份数值表，不嵌入配方数值，不声称补齐 CookEffect/完整 Kp。非匹配来源、namespace、Recipe 字段形状明确拒绝，不按同名表猜套。
 
 可用 `monkey code-native-probe --candidate code-candidate --expected-manifest SHA256 --out new-unity-probe` 准备独立原生代表工程；命令只准备、不启动 Editor。当前 profile 与额外新适配器的边界、执行方法和各验证层见 [CODE-NATIVE-PROBE](CODE-NATIVE-PROBE.md)。准备成功不能视为原生验证通过。
 

@@ -1,13 +1,13 @@
 {
   "publicationForm": "summary-only",
   "privatePayloadIncluded": false,
-  "privatePayloadSha256": "9ca91b9fd1fff383cae4964fc53f7b2f139baf0d007727ddc9abebbf49df0f43",
+  "privatePayloadSha256": "[private fingerprint omitted]",
   "scope": "normalized actual inputs only; cached multiple rows are not a runtime assertion",
   "schemaVersion": 1,
-  "auditSha256": "d2f41f713a98e05dc95eec2487515ae4b5f56e2801e477acf5e6958ccab8a3a1",
+  "auditSha256": "[private fingerprint omitted]",
   "cases": [
     {
-      "case": "foodstreet",
+      "case": "sample-game",
       "nodes": 24784,
       "layouts": 964,
       "distribution": [
@@ -97,7 +97,7 @@
       "gridActualScale": 0
     },
     {
-      "case": "tianming",
+      "case": "sample-project",
       "nodes": 22503,
       "layouts": 1400,
       "distribution": [

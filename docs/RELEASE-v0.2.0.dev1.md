@@ -35,7 +35,7 @@ python3 -m venv .venv
 
 ## 必须保留的限制
 
-这是 **partial / blocked 分层恢复工具，不是所有引擎版本或完整游戏的一键无损还原器**。Research 11 例均保留，10 例不同范围导出、1 例团结 blocked，完整游戏 0；不能把此数量换算为完整兼容率。Laya/LayaAir、自研及其他格式仍需具体 adapter，图片 gallery 不代表源 UI 已恢复。
+这是 **partial / blocked 分层恢复工具，不是所有引擎版本或完整游戏的一键无损还原器**。source archive 11 例均保留，10 例不同范围导出、1 例团结 blocked，完整游戏 0；不能把此数量换算为完整兼容率。Laya/LayaAir、自研及其他格式仍需具体 adapter，图片 gallery 不代表源 UI 已恢复。
 
 47 份其他布局 guard 保留：27 负缩放线性、19 NONE、1 浮点 padding。Spine 运行/播放、Egret 源 UI、缺模板、未知或受保护方法/组件、部分 Unity 类型/实例值、Creator 根继承与未验证的任意 mounted/removed 等按逐 case 限制保留。原生代表是 Editor 强制更新和保存重开；Player 逐帧、原版视觉/输入及完整玩法仍 `not_run`。部分候选返回 exit 1；请读取 `conversion-result.json`，`completed=true` 只表示声明流程完成。
 
@@ -47,10 +47,10 @@ python3 -m venv .venv
 
 |文件|字节|SHA-256|
 |---|---:|---|
-|monkey_native-0.2.0.dev1-py3-none-any.whl|398326|e1bec49ee36c8bed5519c37955c045b38a69c0a805f3ee11406da3828efb950e|
-|monkey_native-0.2.0.dev1.tar.gz|609147|d00575b17075381b72597a1da10910098e7db19e0d8c1b3e53853a0f83800640|
-|SHA256SUMS|206|396940c8ed89a71a92611957f5889ec98ce2f4d73bf65d743ff13c17c16d1a62|
+|monkey_native-0.2.0.dev1-py3-none-any.whl|398326|[private fingerprint omitted]|
+|monkey_native-0.2.0.dev1.tar.gz|609147|[private fingerprint omitted]|
+|SHA256SUMS|206|[private fingerprint omitted]|
 
-包源码快照为本地 `0a523d5b279afadb1960a40d29a48705e5d1056c`；106 个包载荷文件与发布 tag 的产品源码逐字节一致。tag 指向的提交另含最新发布文档和精简验收摘要；没有重造功能或更改包版本。完整开发历史与逐节点证据载荷保留在本地，不推送该含载荷的开发分支；发布提交由既有 main 正常快进产生，不强推，不移动 v0.1。
+包源码快照为本地 `[private fingerprint omitted]`；106 个包载荷文件与发布 tag 的产品源码逐字节一致。tag 指向的提交另含最新发布文档和精简验收摘要；没有重造功能或更改包版本。完整开发历史与逐节点证据载荷保留在本地，不推送该含载荷的开发分支；发布提交由既有 main 正常快进产生，不强推，不移动 v0.1。
 
 wheel / sdist 不包含游戏原件、下载资源、私有样本、outputs、引擎/provider 二进制或凭据。GitHub 自动生成的 tag 源码归档对应发布提交文档；附件 sdist 对应上述已验包快照，两者的文档内容可不同。

@@ -1,4 +1,4 @@
-"""monkey-project/1 fixed locations (docs/PROJECT-SPEC.md). The only module that spells target roots.
+"""monkey-project/2.0.0 fixed locations (docs/PROJECT-SPEC.md). The only module that spells target roots.
 
 Each fixed file is (current, legacy). Candidates whose manifest carries projectLayout=VERSION use the
 current path; older frozen candidates resolve the legacy path through their own pathMap.

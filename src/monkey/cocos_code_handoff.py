@@ -33,7 +33,7 @@ def enrich(candidate,output,expected_manifest=None,apply=False,reuse_facts=None,
             process=subprocess.run([node,'--max-old-space-size=768',str(Path(__file__).with_name('code-handoff-batch.cjs')),str(out/'job.json'),str(out/'facts.json')],env=env,cwd=out,stdout=log,stderr=subprocess.STDOUT,timeout=180)
         if process.returncode:fail('CODE_HANDOFF_AST',str(out),'Static batch parser failed; no source executed')
     facts=load(read(out/'facts.json',max_bytes=128*1024**2),max_nodes=8_000_000);by={r['id']:r for r in facts['records']};entries=[];emitted=[]
-    # monkey-project/1 keeps one draft per class: the named draft replaces the untouched stub at the same path.
+    # monkey-project/2.0.0 keeps one draft per class: the named draft replaces the untouched stub at the same path.
     current=standard.current(manifest);replaced=set()
     for m in modules:
         record=by[m['sourceId']]

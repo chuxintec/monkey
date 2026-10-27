@@ -1,6 +1,6 @@
 # 窗口06与异步资源导入执行层
 
-窗口06于北京时间13:40:34接管，内部截止13:50:34、外层13:52:34；新副本`outputs/acceptance/v06-structured-01/UnityProject`固定4deb5ea及06 SHA。正常exec审批启动PID25790。方法44.5275847秒完成纹理后进入tmp-resources，取得com.unity.ugui 2.6.0 BuiltIn与Essential archive SHA `26cdee2072683cb25ceafa4fab23c93c35b2f692e5daf9ca0f33d05c4e163274`，但Import与同步Refresh返回后所需文件未生成，抛TMP_ESSENTIAL_IMPORT_INCOMPLETE。
+窗口06于北京时间13:40:34接管，内部截止13:50:34、外层13:52:34；新副本`outputs/acceptance/v06-structured-01/UnityProject`固定4deb5ea及06 SHA。正常exec审批启动PID25790。方法44.5275847秒完成纹理后进入tmp-resources，取得com.unity.ugui 2.6.0 BuiltIn与Essential archive SHA `[private fingerprint omitted]`，但Import与同步Refresh返回后所需文件未生成，抛TMP_ESSENTIAL_IMPORT_INCOMPLETE。
 
 Unity自行exit1、CLI exit6；13:43:56按实际工具时钟确认ps无PID，提前释放。先前报告误填13:43:44，已向总监更正，window.json亦更正。没有信号/重启/其他工程操作，原06SHA不变。sourcePrefab0、Scene保存/重开/回读not_run。证据含window.json、native-progress、tmp-resources及脱敏日志；包路径/身份修复有效，时序尚未闭合。
 
@@ -26,8 +26,8 @@ C# ImportBatchAsync：先核对Editor/新候选状态、计划SHA和注册包身
 
 ## 新候选07与启动计划
 
-固定emitter实现08d5e98，新Unity单目标`outputs/structured-foodstreet-07/UnityProject`，manifest `bc3305c8a624fa03319c6280508c71738dee9a42a9f0604c06cb8474f55c77e3`。同5097文件/243799340字节留存相等；仍1630独立Prefab计划、30 Spine闭包/1缺bin。emit身份与当前代码一致，Unity本次有变化的静态verify零诊断，证据`outputs/structured-foodstreet-07-unity-check`，原06SHA再次核对不变。
+固定emitter实现08d5e98，新Unity单目标`outputs/structured-sample-game-07/UnityProject`，manifest `[private fingerprint omitted]`。同5097文件/243799340字节留存相等；仍1630独立Prefab计划、30 Spine闭包/1缺bin。emit身份与当前代码一致，Unity本次有变化的静态verify零诊断，证据`outputs/structured-sample-game-07-unity-check`，原06SHA再次核对不变。
 
-实际执行native-import默认规划，`outputs/structured-foodstreet-07-launch-plan-01/native-plan.json`返回planned/processStarted=false，未创建UnityProject。其中未来时间仅作离线规划检查，不是资源窗口或启动许可；新grant后使用新的实际截止与新目录。
+实际执行native-import默认规划，`outputs/structured-sample-game-07-launch-plan-01/native-plan.json`返回planned/processStarted=false，未创建UnityProject。其中未来时间仅作离线规划检查，不是资源窗口或启动许可；新grant后使用新的实际截止与新目录。
 
 宿主IO错误也会普通终止自己已创建的child，避免日志写入失败遗留引擎；另补模拟journal写失败的反例。当前launcher4项通过，模拟不是实际Unity。此后controller小修与计划源码SHA一起记录，不改变07 emitter制品。没有用新的无-quit执行方式启动Editor，实际许可/完成通知/场景与引用回读仍not_run。

@@ -74,7 +74,7 @@ Unity meta GUIDs across retained assets and support helpers are rejected.
 The pinned `unity-6000.6.2f1-ugui` compiler profile is recorded from the existing
 read-only response file
 `.private/v060-architecture-first-20261027/NativeAudioNativeProbe01/Evidence/editor-compile.rsp`
-(SHA-256 `b9389a49a3c1afa8334ae777369c85bfe3b646f69dc201dc759b7e80b860932b`).
+(SHA-256 `[private fingerprint omitted]`).
 It uses C# 9 and references both the Unity 6000.6.2f1 managed assemblies and
 netstandard2.1 reference assemblies; it has no `/define` switch. An offline
 compile with those same references reports CS0518 for a minimal `record` plus

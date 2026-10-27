@@ -7,7 +7,7 @@ monkey distributes independent Python implementations adapted from GREA and the 
 
 Pillow12.2.0 and pypinyin0.55.0 (MIT, https://pypi.org/project/pypinyin/0.55.0/) are external runtime dependencies; texture2ddecoder1.0.6 is optional. Their distributions supply their own license texts. Node.js, Unity and Cocos Creator are external tools and are not bundled.
 
-No private game source/assets, editor binaries or AssetDeoce implementation are distributed. References to the user's AssetDeoce tool describe independently implemented behavior and do not assert that the private repository is MIT licensed. Exact algorithm origins, hashes and limitations are recorded in `docs/PROVENANCE.md`.
+No private game source/assets, editor binaries or private tool implementations are distributed. Descriptions of independently implemented behavior do not extend this repository's license to external private tools. Algorithm provenance and limitations are recorded in `docs/PROVENANCE.md`.
 
 
 ## Cocos engine Layout geometry reference

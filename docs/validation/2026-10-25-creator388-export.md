@@ -5,8 +5,8 @@
 实际导出通过 monkey CLI（本地版本 0.2.0.dev3 工作树）：
 
 ```sh
-bin/monkey convert --input-set /Users/wangmeng/Documents/Games/projects/20-肥鹅美食街/Analysis/v11-monkey-integration-20261024/inputs.json --target cocos38 --namespace foodstreet-v11-monkey --out outputs/foodstreet-creator388 --offline
-bin/monkey verify --candidate outputs/foodstreet-creator388/CocosProject --level static --out outputs/foodstreet-creator388/StaticVerification
+bin/monkey convert --input-set [local path] --target cocos38 --namespace sample-game-v11-monkey --out outputs/sample-game-creator388 --offline
+bin/monkey verify --candidate outputs/sample-game-creator388/CocosProject --level static --out outputs/sample-game-creator388/StaticVerification
 ```
 
 - 目标 package.json 声明 Creator 3.8.8；导出 completed=true，整体 partial。
@@ -17,8 +17,8 @@ bin/monkey verify --candidate outputs/foodstreet-creator388/CocosProject --level
 - 工程 manifest 63,896 项文件，中文路径 0；正式文件按拼音命名，原配置内容保留。
 - 15 项相关离线测试通过；没有本轮功能代码修改、发布或游戏工程修改。
 
-配置入口：outputs/foodstreet-creator388/CocosProject/Docs/CONFIGURATION.md。
+配置入口：outputs/sample-game-creator388/CocosProject/Docs/CONFIGURATION.md。
 
 导出的 4 项源恢复警告仍保留：2 个 UNSUPPORTED_WRAPPER、1 个 MODULE_RECOVERY_PARTIAL、1 个 NATIVE_OBJECT_RECOVERY_PENDING；覆盖范围内仍有 1,521 个缺失引用。不把静态 pass 理解为完整可运行游戏。按最新范围，原生导入、编译、浏览器运行与视觉验收均未执行。
 
-完整回执：.private/creator388-export-20261025/delivery.json，CLI 原始结果位于 outputs/foodstreet-creator388/conversion-result.json 与 StaticVerification/verification.json。
+完整回执：.private/creator388-export-20261025/delivery.json，CLI 原始结果位于 outputs/sample-game-creator388/conversion-result.json 与 StaticVerification/verification.json。

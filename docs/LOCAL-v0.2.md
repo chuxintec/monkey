@@ -2,7 +2,7 @@
 
 # v0.2 本地候选与分发验收
 
-2026-10-24，总监已确认 **v0.2声明支持范围的本地工具交付验收通过**，依据[总监本地验收决定](/Users/wangmeng/Documents/Manager/decisions/20261024-monkey-v01-v02/LOCAL-ACCEPTANCE.md)，事件monkey-v02-director-local-acceptance-20261024-01。总监独立核对分发02两包大小/SHA、4份回执SHA与106包文件等于源码；原生记录和隔离安装证据复用，不重打包或重验。
+2026-10-24，总监已确认 **v0.2声明支持范围的本地工具交付验收通过**，依据总监本地验收决定 (local path omitted)，事件monkey-v02-director-local-acceptance-20261024-01。总监独立核对分发02两包大小/SHA、4份回执SHA与106包文件等于源码；原生记录和隔离安装证据复用，不重打包或重验。
 
 版本仍为 `0.2.0.dev1`，未正式发布；本轮开发结束，保留成果，后续等待用户反馈或明确发布指令。不推送/tag/Release，正式v0.1保持冻结。47份其他布局guard、Spine/Egret源UI、缺模板及未知方法等限制保持逐case记录，Player逐帧、原版视觉/输入/完整玩法仍not_run；本地验收不表示全部引擎/布局或完整游戏恢复。
 
@@ -22,7 +22,7 @@ Cocos目标可选unity/cocos/both，其他源引擎统一unity6；默认格式no
 
 - 统一原包/输入集获取、逐文件字节台账和来源隔离，未知格式/方法保留明确限制与接续入口。
 - Cocos3.8.7模板DAG、嵌套实例、局部ID和override，以及真实动态Label/Widget/Layout状态变化，两端原生代表闭环；布局集成同时核对资源与生命周期。
-- 天命3.4.1专用资源/节点/位图字库/实例reader接公开双目标：同11962文件输入，7071帧、15字库、856图、22503节点、52关系。1份null旋转图拒绝猜值。实际新增7节点/1Widget两端原生表、模板对应与保存重开均闭环。
+- 样例项目3.4.1专用资源/节点/位图字库/实例reader接公开双目标：同11962文件输入，7071帧、15字库、856图、22503节点、52关系。1份null旋转图拒绝猜值。实际新增7节点/1Widget两端原生表、模板对应与保存重开均闭环。
 - 有原文证据的NumberLabel C#/TS优先/JS次选代码及实际绑定、新来源Parabola数值方法；unknown/异步/受保护方法不伪造实现。
 - 默认none及可选grea保留typed身份/引用/动态key与人工边界；受影响既有证明复用，不重开全部游戏。
 
@@ -34,16 +34,16 @@ Cocos目标可选unity/cocos/both，其他源引擎统一unity6；默认格式no
 
 |制品|字节|SHA-256|
 |---|---:|---|
-|monkey_native-0.2.0.dev1-py3-none-any.whl|393326|819ab94fdcf09b6a2512d41a11f0f32a6498fbad8e15a401ce367dc02a11110e|
-|monkey_native-0.2.0.dev1.tar.gz|598875|995f4703146e04edbbe18b9bd33b63e2f32726d7dab7a846d8d8fd959e22d376|
+|monkey_native-0.2.0.dev1-py3-none-any.whl|393326|[private fingerprint omitted]|
+|monkey_native-0.2.0.dev1.tar.gz|598875|[private fingerprint omitted]|
 
 在全新私有venv实际安装wheel及原固定Pillow12.2.0；离线缓存未命中后仅从官方PyPI获取该固定版本，没有全局安装。Python3.14.7，仓库src不在sys.path；从独立cwd运行安装后的8条CLI，none/grea各双目标，四份静态verify均通过，输入哈希不变。最低声明Python3.11未另装解释器验证。ASTC extra和Unity provider没有纳入本次最小安装smoke。
 
-完整230项工具检查通过，受影响49项通过，另25项最终接口定向检查通过。已通过的真实Editor helpers与包内代码字节相同；未为打包重复启动引擎。Research重新发现仍11例、10例不同范围输出、1例团结blocked、完整游戏0。原版视觉/真实交互/存档/业务、未覆盖格式和方法各按机器状态保留，不能用这些测试数替代游戏验收。
+完整230项工具检查通过，受影响49项通过，另25项最终接口定向检查通过。已通过的真实Editor helpers与包内代码字节相同；未为打包重复启动引擎。source archive重新发现仍11例、10例不同范围输出、1例团结blocked、完整游戏0。原版视觉/真实交互/存档/业务、未覆盖格式和方法各按机器状态保留，不能用这些测试数替代游戏验收。
 
 
 ## 有限动态续修后的分发02
 
-源码快照 `0a523d5`（实现df68c59），235个登记文件；wheel 398326B，SHA `e1bec49ee36c8bed5519c37955c045b38a69c0a805f3ee11406da3828efb950e`；sdist 609147B，SHA `d00575b17075381b72597a1da10910098e7db19e0d8c1b3e53853a0f83800640`。在 `.private/v02-delivery-02/dist/`，旧01不覆盖。106份包载荷逐字节匹配源码，sdist重建wheel载荷相同，无原包/游戏图片/outputs/引擎二进制。
+源码快照 `0a523d5`（实现df68c59），235个登记文件；wheel 398326B，SHA `[private fingerprint omitted]`；sdist 609147B，SHA `[private fingerprint omitted]`。在 `.private/v02-delivery-02/dist/`，旧01不覆盖。106份包载荷逐字节匹配源码，sdist重建wheel载荷相同，无原包/游戏图片/outputs/引擎二进制。
 
 新私有venv从项目缓存离线安装本地wheel与固定Pillow12.2.0，独立cwd8条安装后CLI包含缩放Grid+child-resize合成输入，none/grea各双目标、4份静态验证通过，原输入SHA不变、仓库src不在sys.path；新Flow组件及完整MIT许可已确认随包和生成工程保留。实际原生6组/54态和232工具测试通过。布局helpers与实际最终代表字节相同，Grid02仅后增许可头、源码体一致。声明范围本地交付现已获总监验收；不推送/发布，Player时序/视觉/玩法和其他组合保留限制。

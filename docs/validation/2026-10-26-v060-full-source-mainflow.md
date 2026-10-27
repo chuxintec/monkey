@@ -4,7 +4,7 @@
 
 ## 完整输入与实际输出
 
-公开 `convert --reuse-candidate ... --expected-candidate ... --target unity6 --out ... --offline` 已实际生成同一独立工程。3份肥鹅冻结JS共9,358,387字节，源及所有方法/字段字节范围、SHA、目标文件/成员和详情分片位置均核验；源程序没有执行。
+公开 `convert --reuse-candidate ... --expected-candidate ... --target unity6 --out ... --offline` 已实际生成同一独立工程。3份样例项目冻结JS共9,358,387字节，源及所有方法/字段字节范围、SHA、目标文件/成员和详情分片位置均核验；源程序没有执行。
 
 | 分母 | 主源 | App | SubContext | 合计 |
 |---|---:|---:|---:|---:|
@@ -30,7 +30,7 @@ C#文件数含辅助函数和未确定所有者的容器，不能当成原业务
 
 最终统一候选 `.private/v060-package-mainflow-20261026/FullDraftCandidate03/UnityProject`：
 
-- owning manifest SHA-256：`bfe05ee75c18bd0213345e3d48220766a6ed3d00c29e9ff804c667613a02151e`。
+- owning manifest SHA-256：`[private fingerprint omitted]`。
 - 112,758个文件，3,484,952,335字节；原资源资产hash完全保留，仅原Docs/START-HERE增加接续入口。
 - 2个Scene、1,696个Prefab，包含原来源及辅助预览；不据数量声称全部原版场景已恢复。
 - 原JSON/资源键/GUID/localID/组件映射与完整初稿同一工程、同一owning inventory。
@@ -42,23 +42,23 @@ C#文件数含辅助函数和未确定所有者的容器，不能当成原业务
 
 默认全工程共享上限继续为500,000文件、8GiB总量、512MiB单文件、128MiB manifest；严格方法子集仍保持原20,000/256MiB，只有明确的full-source draft kind可使用whole预算。源AST解析预算独立，Node仅作静态解析，不运行原游戏代码。
 
-在最终真实候选上同时禁止`code_drafts.prepare`和`code_graph.draft_records`，完整初稿阶段仍实际复用24,263文件、328,742,065字节，覆盖全部3源/19,571索引方法/47,384函数；耗时6.148秒，原候选manifest不变，没有创建第二份资源工程。检查生成器完整签名、源SHA及全部阶段文件owner/大小/hash。公开包级复用用例验证了同一调用链；篡改/人工所有权不被静默接收。旧v0.5的肥鹅/向僵尸资源大工程复用证据保持冻结，未重复重导。
+在最终真实候选上同时禁止`code_drafts.prepare`和`code_graph.draft_records`，完整初稿阶段仍实际复用24,263文件、328,742,065字节，覆盖全部3源/19,571索引方法/47,384函数；耗时6.148秒，原候选manifest不变，没有创建第二份资源工程。检查生成器完整签名、源SHA及全部阶段文件owner/大小/hash。公开包级复用用例验证了同一调用链；篡改/人工所有权不被静默接收。旧v0.5的样例项目/向样例项目资源大工程复用证据保持冻结，未重复重导。
 
 ## 验证与范围
 
 本组父级21项定向集成检查通过：writer12、包级公开默认/增强/冻结/暖阶段/篡改拒绝6、字段上下文1、whole预算/dirty守卫2。类型证据模块11项及renderer原8项沿用模块证据，新增机械语法2项由模块开发者验证；其小型Acorn生成C#通过本地Roslyn编译，临时编译制品未保存，不能当成完整草稿编译回执。
 
-向僵尸继续使用已批准冻结来源：既有8个纯i64运算片段和精确WASM字节证据复用，关联仍有caller-map假设；13个状态方法不伪造正文，不再启动其原生工程。36个精确schema缺口继续约束不安全二进制字段写回，不妨碍有源JS初稿导出。真实游戏Mono样本、完整IL2CPP状态方法、全游戏业务/原UI/Player/视觉仍未验证。
+向样例项目继续使用已批准冻结来源：既有8个纯i64运算片段和精确WASM字节证据复用，关联仍有caller-map假设；13个状态方法不伪造正文，不再启动其原生工程。36个精确schema缺口继续约束不安全二进制字段写回，不妨碍有源JS初稿导出。真实游戏Mono样本、完整IL2CPP状态方法、全游戏业务/原UI/Player/视觉仍未验证。
 
 私有完整回执位于 `.private/v060-package-mainflow-20261026/`：`final-candidate-verification.json`、`final-large-stage-reuse.json`、`final-integration-tests.log`、`full-convert-03.log`。原样本、候选、诊断载荷和编译私有制品不纳入Git或发行包；分发身份由本目录`delivery.json`固定。稳定0.4不变。
 
 ## 固定本地分发03
 
-源码提交 `d3f22ab7a3bffc580c326a40b776aaa5fdb1c19c`，tree `ff1c567d5c3d908878837c6f98dc9ad209242f79`。从`git archive`快照构建一次wheel/sdist，182个产品文件与提交及隔离安装副本逐字节一致；无游戏原件、私有样本、outputs或恢复DLL/WASM入包。
+源码提交 `[private fingerprint omitted]`，tree `[private fingerprint omitted]`。从`git archive`快照构建一次wheel/sdist，182个产品文件与提交及隔离安装副本逐字节一致；无游戏原件、私有样本、outputs或恢复DLL/WASM入包。
 
 | 制品 | 字节 | SHA-256 |
 |---|---:|---|
-| monkey_native-0.6.0.dev1-py3-none-any.whl | 719,239 | `59335598b8153988dfc9eafc5d5b733ef293a29bb32094ab005cd570d0d75d02` |
-| monkey_native-0.6.0.dev1.tar.gz | 1,054,967 | `23231fda81199cb16b8e891378c71ff89f2e4a5adf9dbb770656f73043aaa5de` |
+| monkey_native-0.6.0.dev1-py3-none-any.whl | 719,239 | `[private fingerprint omitted]` |
+| monkey_native-0.6.0.dev1.tar.gz | 1,054,967 | `[private fingerprint omitted]` |
 
 隔离安装实际执行capabilities、code-draft冷生成、code-draft逐文件hash复用、code-types数字方法自动类型提取4次调用，全部预期状态；小源为自有测试代码且从未执行。只验证新增主链，没有重复旧24CLI、16方法编译、WASM8或Unity/CUA6。路径为`.private/v060-package-mainflow-20261026/distribution-03/`；不作为全局安装或正式Release。

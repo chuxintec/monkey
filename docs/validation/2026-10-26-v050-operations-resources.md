@@ -4,9 +4,9 @@
 
 ## 本地交付索引状态（裁定补记）
 
-事件 `monkey-v05-local-restricted-delivery-20261026-01` / [MONKEY-V05-LOCAL-EXIT](/Users/wangmeng/Documents/Manager/decisions/20261026-grea-monkey-beaver/MONKEY-V05-LOCAL-EXIT.md) 接受 `acceptedDelivery=local_declared_subset`。原全范围 `versionComplete=false`、`originalScopeComplete=false` 与以下全部未完成项保持。该补记只整理状态，不新增验证结论。
+事件 `monkey-v05-local-restricted-delivery-20261026-01` / MONKEY-V05-LOCAL-EXIT (local path omitted) 接受 `acceptedDelivery=local_declared_subset`。原全范围 `versionComplete=false`、`originalScopeComplete=false` 与以下全部未完成项保持。该补记只整理状态，不新增验证结论。
 
-沿用产品源码 `71c177df4f177c3a2151d1420b93e59b37b0b634`、原验收收据 `1582dc702deefde5c63816b96bff0b975c0e8fae` 以及下列同 SHA 的 wheel/sdist；没有重测、重导、重构建、启动引擎或更换日常安装。机器交付索引 `.private/v050-continuation-20261026/delivery.json` 增补裁定字段，原制品身份不变。
+沿用产品源码 `[private fingerprint omitted]`、原验收收据 `[private fingerprint omitted]` 以及下列同 SHA 的 wheel/sdist；没有重测、重导、重构建、启动引擎或更换日常安装。机器交付索引 `.private/v050-continuation-20261026/delivery.json` 增补裁定字段，原制品身份不变。
 
 继续恢复的输入以逐对象 blocker 为准：匹配 `2021.3.30f1` / platform20 / scriptId / typeHash 的可信 schema/原程序集及匹配依据；字段写回另需独立原字段值与精确目标 GUID/localId/hash。没有这些输入时等待，不循环尝试，不自动启动 v0.6。
 
@@ -23,11 +23,11 @@
 
 证据根 `.private/v050-continuation-20261026/`，游戏资源和原生日志不入 Git。
 
-- `spine-validation.json`：源候选 manifest `ec116852912495023cd364c55df8acf7b9f59b4e08240348a7018f7cc7e50ced`；第二轮探针 manifest `6623864be8b30bc01c64ab4c56c62f28f1f5ca7569f01d13e075ae05ca0cc035`。Creator child 58759 在 native_completed 后受控回收（exit -15，非引擎自然 exit0），CLI 返回 candidate、读回通过。第一轮仅时间推进、姿态 false 的证据保留；修正为原生 state.apply/native model.updateWorldTransform 后新轮通过，不覆盖旧结论。
-- `shader-module/native-receipt-v7.json`：Shader SHA `4c9100c196aaf6a3361ae19b17a05af7846772d89d2b285a078bd90a1bafe001`；result SHA `15f21fdfddfd5ac504a7bd467c17e008b01fb0676006c6d9c2475b9caf82ade1`；Unity exit0。首轮 C# enum 编译失败后退出，离线修正/SDK 编译后新窗口执行。日志只保留脱敏身份，不复制启动环境/凭据。
+- `spine-validation.json`：源候选 manifest `[private fingerprint omitted]`；第二轮探针 manifest `[private fingerprint omitted]`。Creator child 58759 在 native_completed 后受控回收（exit -15，非引擎自然 exit0），CLI 返回 candidate、读回通过。第一轮仅时间推进、姿态 false 的证据保留；修正为原生 state.apply/native model.updateWorldTransform 后新轮通过，不覆盖旧结论。
+- `shader-module/native-receipt-v7.json`：Shader SHA `[private fingerprint omitted]`；result SHA `[private fingerprint omitted]`；Unity exit0。首轮 C# enum 编译失败后退出，离线修正/SDK 编译后新窗口执行。日志只保留脱敏身份，不复制启动环境/凭据。
 - 透明混合复核后从初版 `One` alpha source factor 修正为精确源 Sprite 默认 `SrcAlpha`；旧 `shader-public-cli` / `catalog-integration` 已标记 superseded。`shader-public-cli-final` 和 `catalog-integration-final` 重新由公开 CLI/catalog 生成，核到与原生 v7 一样的 Shader 字节，6 原生产物、5 原源文件、2 原生路径映射，Unicode namespace 通过；复用原生语义证据，未重复启动 Editor。
 - `affected-tests.log`：46 项相关回归通过。`final-guards.log`：最后 12 项（含前组重复 guard 与新增 Shader 拒绝反例）通过，不把重复用例加成独立总数。Shader 模块标准 unittest 4 项和 SDK 编译证据复用其交付。JS 语法检查通过；未重跑 601 容器/全量导出/原生采用矩阵。
-- 僵尸诊断显式提高预算后读取两份既有证据 60,479,267 字节、35,965 条 issue，0 omitted；它们包含来源路径映射缺口和汇总，不能称作新增 35,965 个资源损坏。肥鹅同样读取 5 文档 116,589,028 字节，40,000 发出/1,490 omitted，明确 complete=false；这是选定历史回执索引，不是新的全游戏核验。
+- 样例项目诊断显式提高预算后读取两份既有证据 60,479,267 字节、35,965 条 issue，0 omitted；它们包含来源路径映射缺口和汇总，不能称作新增 35,965 个资源损坏。样例项目同样读取 5 文档 116,589,028 字节，40,000 发出/1,490 omitted，明确 complete=false；这是选定历史回执索引，不是新的全游戏核验。
 
 ## 版本真实阻断
 
@@ -37,9 +37,9 @@
 
 ## 本地分发身份
 
-从不可变产品提交 `71c177df4f177c3a2151d1420b93e59b37b0b634` 构建，后续验收文档提交不替换该源码身份：
+从不可变产品提交 `[private fingerprint omitted]` 构建，后续验收文档提交不替换该源码身份：
 
-- wheel：575981 字节，SHA256 `6b7621a440461fe51900cc8f20438588179bb6f87a18345fb5571a4450e2360b`。
-- sdist：847047 字节，SHA256 `233767422dc73f811c71868925f793d9742f30b3d6f1304a412fdeaa2c4c4bb3`。
+- wheel：575981 字节，SHA256 `[private fingerprint omitted]`。
+- sdist：847047 字节，SHA256 `[private fingerprint omitted]`。
 - 159 个 product 文件在 Git 源快照 / wheel / sdist / 隔离安装之间相同；MIT 元数据及新增 Shader/JS/C# 模板齐全。macOS arm64 / Python3.14.7 的 13 CLI 检查通过，临时工作目录在 checkout 外。首次构建启动脚本误 resolve venv Python 符号链接，导致找不到 setuptools、0 制品；保留失败日志，改为使用原 venv 入口后成功，未安装全局 backend。
 - `delivery.json`、`distribution.json`、`package-audit.json`、`installed-smoke.json` 在上述私有证据根，159 安装文件再核哈希通过。验证结束只读主进程清单为空；日常 `monkey --version` 仍为 0.4.0。没有发布、推送或全局安装。

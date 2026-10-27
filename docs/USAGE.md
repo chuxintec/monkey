@@ -39,7 +39,7 @@ PYTHONPATH=src .venv/bin/python -m monkey.cli convert --reuse-candidate /path/to
 本地开发版本0.2.0.dev1；v0.1发行包/标签保持0.1.0不变。
 
 ```sh
-monkey research-matrix --root /path/to/Research/games --out /path/to/new-matrix
+monkey research-matrix --root /path/to/source archive/games --out /path/to/new-matrix
 ```
 
 只读动态发现所有非点号/下划线游戏目录，缺RESEARCH.json、未知引擎、缺源及符号链接均保留在case分母并列原因。只记录来源元数据/显式清单和已知Analysis目录；不跟随外部来源指针，不执行转换。输出cases.json/discovery.json/coverage.md；metadata_hint_only不等于版本正文已解析或游戏导出成功。
@@ -143,7 +143,7 @@ Editor导入、编译、保存重开、画面和业务验收分开记录，目�
 
 ## Unity 导入
 
-用独立、获准资源窗口打开生成候选，执行 `Tools > Monkey > Import Candidate`。独立 batchmode 入口为 `MonkeyImporter.ImportBatch`。工具不会自行启动 Editor；不得拿肥鹅正式 Editor 执行。首次导入使用 AssetDatabase/TextureImporter/PrefabUtility 保存原生资产，不调用全局 SaveAssets；已有生成 Prefab/Scene 则拒绝重复导入。
+用独立、获准资源窗口打开生成候选，执行 `Tools > Monkey > Import Candidate`。独立 batchmode 入口为 `MonkeyImporter.ImportBatch`。工具不会自行启动 Editor；不得拿样例项目正式 Editor 执行。首次导入使用 AssetDatabase/TextureImporter/PrefabUtility 保存原生资产，不调用全局 SaveAssets；已有生成 Prefab/Scene 则拒绝重复导入。
 
 导入指令和源身份只在 `Assets/Monkey/Editor`。原生 Prefab 位于 `Assets/Generated/Views`，Scene 位于 `Assets/Generated/Scenes`，普通 View 组件仅保留 Image/TMP/Button 引用，不带源节点 ID、业务回调或运行时解释器。导入后移除 Assets/Monkey 仍应可编辑/编译；这项真正 Editor 脱离测试尚未执行。
 
@@ -184,7 +184,7 @@ Creator新候选保留source overflow/sizeMode，同时显式声明`source-baked
 
 CONTINUE-01只给原奖励页zh场景的3个系统Label绑定了已取得的zh-bold文件，另2个数量文本使用原BitmapFont。没有绑定时仍报缺口，不换系统字体。Bitmap图集包含原彩色描边，采用TMP Bitmap Custom Atlas材质；TTF描边和垂直度量仍等待真正画面对照。
 
-隔离Unity第一次导入需要TMP资源时，adapter只在该候选工程通过已注册包的`resolvedPath`定位UGUI 2.6.0必需资源，导入Essential archive后同步刷新并核验原名shader/settings；不弹交互窗口、不导入Examples、不修改引擎或肥鹅。未生成或未就绪会明确失败，不用其他shader替代。新Scene包含固定750×1334设计坐标框、原生Canvas/EventSystem，Editor导入后会尝试离屏捕获`Analysis/native-page.png`；只有文件和真实回读存在才是Unity画面。`scripts/probe_bitmap.py`产物明确标OFFLINE，不是Unity预览。
+隔离Unity第一次导入需要TMP资源时，adapter只在该候选工程通过已注册包的`resolvedPath`定位UGUI 2.6.0必需资源，导入Essential archive后同步刷新并核验原名shader/settings；不弹交互窗口、不导入Examples、不修改引擎或样例项目。未生成或未就绪会明确失败，不用其他shader替代。新Scene包含固定750×1334设计坐标框、原生Canvas/EventSystem，Editor导入后会尝试离屏捕获`Analysis/native-page.png`；只有文件和真实回读存在才是Unity画面。`scripts/probe_bitmap.py`产物明确标OFFLINE，不是Unity预览。
 
 机器交接包按模块/根因聚合并保留全部明细。真实View数组索引和Prefab component fileID必须读Editor回执；在此之前只提供字段/目标路径，不猜fileID。
 
@@ -403,7 +403,7 @@ bin/monkey convert --input-set inputs.json --remote-manifest downloads.json \
 
 新导出的目标工程文件/目录使用无声调拼音，再应用 Unity/Creator 原有大小写规则；同音文件按稳定源身份消歧。`Analysis/Mappings/*name-map.json` 保留原中文名称与目标路径；源游戏只读，JSON 键和值、界面文本、骨骼 region 名称不改。原始输入缓存保持源路径供哈希追溯。
 
-整包 `convert` 自动识别已支持的 BON 配置，不需要另加参数。进入 `Docs/CONFIGURATION.md` 可直接打开逐表 JSON，机器索引为 `Analysis/Mappings/config.json`。肥鹅主表位于 Unity `Assets/Game/Content/Config/Base/`；地区配置独立保存，语言表位于 `Content/Strings/<Locale>/`。目前支持有静态 decoder 证据的 BON tagged-le-v1；其他二进制、含 Binary/Date 的表列 needs_adapter，不能仅将 `.bin` 改后缀。JSON 导出不代表游戏运行时已接入这些表。
+整包 `convert` 自动识别已支持的 BON 配置，不需要另加参数。进入 `Docs/CONFIGURATION.md` 可直接打开逐表 JSON，机器索引为 `Analysis/Mappings/config.json`。样例项目主表位于 Unity `Assets/Game/Content/Config/Base/`；地区配置独立保存，语言表位于 `Content/Strings/<Locale>/`。目前支持有静态 decoder 证据的 BON tagged-le-v1；其他二进制、含 Binary/Date 的表列 needs_adapter，不能仅将 `.bin` 改后缀。JSON 导出不代表游戏运行时已接入这些表。
 
 已有工程应重新生成到新输出，使用 `layout-migration` 核对 GUID 与路径差异后受控迁移；不直接批量重命名旧工程或改原包。Unity 来源的脚本类型名、Resources 动态键和第三方固定路径仍有身份约束，不能脱离消费者直接改名。
 

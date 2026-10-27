@@ -97,7 +97,7 @@ def _owned_bytes(root: Path, files: dict[str, dict[str, Any]], relative: str, ex
 def _check_health_contract(report: dict[str, Any], health_source: bytes) -> dict[str, Any]:
     source = report.get("source")
     if not isinstance(source, dict) or source.get("sha256") != EXPECTED_SOURCE_SHA256 or source.get("bytes") != EXPECTED_SOURCE_BYTES:
-        fail("CODE_NATIVE_SOURCE_IDENTITY", MODULE_REPORT, "Only the explicitly approved FoodStreet source identity is supported")
+        fail("CODE_NATIVE_SOURCE_IDENTITY", MODULE_REPORT, "Only the explicitly pinned source identity is supported")
     if report.get("sourceExecuted") is not False:
         fail("CODE_NATIVE_SOURCE_EXECUTION", MODULE_REPORT, "Code-module report must affirm that source was not executed")
     if report.get("namespace") != "Game.Domain.Recovered":

@@ -1,6 +1,6 @@
 # 自定义二进制资源格式储备
 
-当前`egret-custom-resource-plist-v1`是按本次代码核对的格式profile，范围为Egret/EUI加项目自定义资源包装。用户先提出Laya线索、随后要求核实；本聊天已核验最新human01a16b77-a82c-7e53-805d-265e0f7296d0并独立核原件：当前wxcbc1fc07fb13d667/166包与Research同SHA，实际入口egret.runEgret、运行时实现及Capabilities.engineVersion确定为Egret5.2.32。证据[egret5232-source-baseline.json](../validation/egret5232-source-baseline.json)含精确字节范围/hash。并非只凭EUI词猜主引擎，也不把该样本记作Laya已支持；其他Laya版本仍等真实样本。既有冻结输出engineVersion=unknown保留历史，不回写旧证据。
+当前 `egret-custom-resource-plist-v1` 是按既有来源检查形成的格式 profile，覆盖 Egret/EUI 的自定义资源包装。历史来源身份、包标识和私人校验值已从发布文档删除；文档说明的是格式处理边界，不代表对新样本的复测。
 
 ## 公共命令
 
@@ -27,7 +27,7 @@ bin/monkey convert --input-set source-tables.json --target unity6 --out fresh-wi
 
 ## 实际已验证层级
 
-旧4解密包40文件/19112966B，读出3清单/48252声明，53图集/1920源切片，3026源Skin；当时仅28声明本地可得、53页均缺。07纯数据新出口grea成功，manifest a8fb684e5faba9388c29ccdc0ba7978ef35ba961cacb23bb21b9efd4e7a2d507。数据验证之外，旧图片gallery不是源码/源图恢复。
+早期来源检查记录了清单、图集和皮肤数据的部分可用性差异。具体来源名称、数量指纹与候选日志已删除；该记录属于历史证据，不能替代当前素材/源码恢复验证。
 
 基于入口中的**默认**inChina=true/testMode=false分支及生产CDN literal，按清单原哈希文件名取得53页：52 GET+1已核缓存，共7975531B，53/53可用，未尝试其他地区/猜文件名。真实runtime是否覆盖默认参数未观察；本次URL选择和取得文件SHA均单列来源回执。Emoji页1537×509/290374B，SHA61142f5aabd84a130c11505855b6fc0e2efee703a57baa5859d638279fe8d104。
 
@@ -35,4 +35,4 @@ bin/monkey convert --input-set source-tables.json --target unity6 --out fresh-wi
 
 公开全53页offline10：93输入27088497B，53页闭合/1920源切片/69派生整图，资源声明81可得/48171未提供，Skin仍3026。1920切片及3840目标trim/full变体逐像素相等，manifest47277e354e8674ad02570cb152369e8c78adc835386ad1d9d1112a4ba64e1a62。全10的Editor未跑，不能把09代表结果改写为全10已原生通过。证据outputs/egret-linghuashi-atlas-pixel-audit-10/audit.json。
 
-27项资源/缓存/编排定向检查、35项关联格式检查通过。原生UI布局、动画/字体、原方法及业务仍pending；后续主优先转当前缓存身份核验、天命/机智补源、真实嵌套Prefab/override与动态布局。
+27项资源/缓存/编排定向检查、35项关联格式检查通过。原生UI布局、动画/字体、原方法及业务仍pending；后续主优先转当前缓存身份核验、样例项目/样例项目补源、真实嵌套Prefab/override与动态布局。

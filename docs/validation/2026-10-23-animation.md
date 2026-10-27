@@ -4,7 +4,7 @@ CONTINUE-03只接续既有v0.3的有限AnimationClip/事件清单。真实Unity/
 
 ## 实际来源与选择
 
-奖励页已有`Rewards_Show`，但使用sineOut缩放/透明度，本子集不近似改写。只读检查已有冻结bundle后，选`Prefab/Merge/LevelBox/CellBoxReward`（gameAsset索引1504），其原生cc.Animation组件#16明确引用`CellBoxClicked`（索引3225，UUID bdb0d9f4-1091-4f77-941a-94256ce6164e）；不是凭动画名猜目标。24个依赖资产的输入闭包按现有inspect/normalize执行，原件只读。
+奖励页已有`Rewards_Show`，但使用sineOut缩放/透明度，本子集不近似改写。只读检查已有冻结bundle后，选`Prefab/Merge/LevelBox/CellBoxReward`（gameAsset索引1504），其原生cc.Animation组件#16明确引用`CellBoxClicked`（索引3225，UUID [private identifier]）；不是凭动画名猜目标。24个依赖资产的输入闭包按现有inspect/normalize执行，原件只读。
 
 该0.5秒剪辑的根x摇动与item节点y/scale(x,y,z)/opacity生成6条标量轨道，源时间与目标节点对应已回查。BubbleIdle.active、lock.active两条轨道明确unsupported，因此是partial clip子集；不自动播放，不冒充完整CellBoxReward表现。真实剪辑没有事件，事件合同用明确标识的合成fixture测试。
 
@@ -16,9 +16,9 @@ CONTINUE-03只接续既有v0.3的有限AnimationClip/事件清单。真实Unity/
 - `.runtime/animation-compile-02`：实际C#薄层对现有Unity6000.6.2f1/uGUI/TMP程序集窄编译pass，未启动Editor；三份Creator JS通过node --check，仅语法/API声明核对。
 - `.private/continue03-animation-receipt.json`：本包机器回执。
 
-Unity manifest SHA-256：`f6b13156aaa766cf9cdf09e4f55c7690552257c9a6c6847bb7a3c60f6f920dbc`。
+Unity manifest SHA-256：`[private fingerprint omitted]`。
 
-Creator manifest SHA-256：`a60a5403dba906f8503a89ebbd6784f7923f7267ce6ffaa72757e5bc524c003a`。
+Creator manifest SHA-256：`[private fingerprint omitted]`。
 
 6组动画定向测试pass：线性四分点、constant阶跃边界、透明度0..255→0..1换算、事件仅合同；未知easing/循环/时间/字段拒绝；缺失/重名路径、重叠通道、Layout冲突；伪造native绑定/中点/回调拒绝；IR兼容/未来动画schema拒绝、双目标导出/重复与plan篡改保护。合成轨道只验证子集合同，不是原版实玩证据。
 

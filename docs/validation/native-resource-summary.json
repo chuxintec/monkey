@@ -15,8 +15,8 @@
   "native": [
     {
       "target": "unity",
-      "receipt": "outputs/tianming341-native-resource-01-unity-native/execution-result.json",
-      "receiptSha256": "aa34ed54446db9c78883ded511a55c4ecdc1df71c65da4548022147c516759c1",
+      "receipt": "outputs/sample-project341-native-resource-01-unity-native/execution-result.json",
+      "receiptSha256": "[private fingerprint omitted]",
       "pid": 82339,
       "startedUtc": "2026-10-24T05:33:01.404123Z",
       "endedUtc": "2026-10-24T05:33:12.118426Z",
@@ -30,8 +30,8 @@
     },
     {
       "target": "cocos",
-      "receipt": "outputs/tianming341-native-resource-01-cocos-native/execution-result.json",
-      "receiptSha256": "354cb056786303624c5804f4f4741457b624de984682ceba40fe83ec040d466e",
+      "receipt": "outputs/sample-project341-native-resource-01-cocos-native/execution-result.json",
+      "receiptSha256": "[private fingerprint omitted]",
       "pid": 82795,
       "startedUtc": "2026-10-24T05:33:34.323595Z",
       "endedUtc": "2026-10-24T05:33:53.194053Z",

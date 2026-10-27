@@ -1,6 +1,6 @@
 # 2026-10-25 资源补全与双端分区目录
 
-用户在本聊天明确要求执行 Cocos resources/Bundles 与 Unity Content/<Group> 方案，并修复此前缺失资源。工具源码在 monkey 工作树内修改；原始肥鹅/GREA/正式游戏工程只读，未发布。
+用户在本聊天明确要求执行 Cocos resources/Bundles 与 Unity Content/<Group> 方案，并修复此前缺失资源。工具源码在 monkey 工作树内修改；原始样例项目/GREA/正式游戏工程只读，未发布。
 
 ## 已完成的离线验证
 
@@ -14,9 +14,9 @@
 
 ## 输出路径
 
-- `outputs/foodstreet-resource-layout/UnityProject/Assets/Game/Content/<Group>/<Type>/<Module>/...`
-- `outputs/foodstreet-resource-layout/CocosProject/assets/resources/<Group>/<Type>/<Module>/...`
-- `outputs/foodstreet-resource-layout/CocosProject/assets/Bundles/<Group>/<Type>/<Module>/...`
+- `outputs/sample-game-resource-layout/UnityProject/Assets/Game/Content/<Group>/<Type>/<Module>/...`
+- `outputs/sample-game-resource-layout/CocosProject/assets/resources/<Group>/<Type>/<Module>/...`
+- `outputs/sample-game-resource-layout/CocosProject/assets/Bundles/<Group>/<Type>/<Module>/...`
 
 40 个分组；Boot/Common 位于 Creator resources，其他位于 Bundle。所有默认交付方式 local，可用 layout.partitions 显式声明 remote/subpackage 意图。Creator Bundle 根已生成 directory meta；Unity Addressables/AssetBundle 仅输出分组/地址方案，未安装或配置构建后端。
 

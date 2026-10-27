@@ -91,14 +91,14 @@ public static partial class MonkeyImporter
     }
     // Editor-only typed output locations. Original game source and text are never rewritten.
     [Serializable] public class OutputPaths {
-        // monkey-project/1 defaults (docs/PROJECT-SPEC.md); candidates declare their own copy in output-paths.json.
+        // monkey-project/2.0.0 defaults (docs/PROJECT-SPEC.md); candidates declare their own copy in output-paths.json.
         public string plan="Assets/Game/Editor/Conversion/import-plan.json";
         public string prefab="Assets/Game/Scenes/Preview/ContentPreview.prefab",scene="Assets/Game/Scenes/Preview/ContentPreview.unity",bootstrap="Assets/Game/Scenes/Boot.unity";
         public string artRoot="Assets/Game/Content",controllersRoot="Assets/Game/Content/Animations",materialsRoot="Assets/Game/Content/Materials",animationsRoot="Assets/Game/Content",sourcePrefabsRoot="Assets/Game/Content";
         public string editableProbe="Assets/Game/Scenes/Preview/EditableProbe.prefab";
         public string[] nativeRoots={"Assets/Game/Content","Assets/Game/Scenes","Assets/Game/Presentation","Assets/Game/Domain","Assets/TextMesh Pro"},metaRoots={"Assets/Game/Editor/Conversion"};
     }
-    // Analysis receipts are grouped by purpose (monkey-project/1); an older candidate may still hold the flat file.
+    // Analysis receipts are grouped by purpose (monkey-project/2.0.0); an older candidate may still hold the flat file.
     internal static string AnalysisFile(string group,string name) {
         var current="Analysis/"+group+"/"+name;var legacy="Analysis/"+name;
         return File.Exists(current)||!File.Exists(legacy)?current:legacy;

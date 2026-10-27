@@ -2,7 +2,7 @@
 
 `monkey.shader_profiles` currently supports one deliberately narrow adapter: the supplied Cocos Creator 2.4.15 `builtin-2d-sprite` EffectDescription, with the pinned `glsl1` vertex and fragment stages and one fixed macro assignment. It emits a standalone Unity ShaderLab shader and a companion material into a caller-assigned project-relative `Assets/` folder; the default is `Assets/Game/Content/Shaders/RecoveredBuiltin2DSprite/`. The namespace binds deterministic asset identities and is recorded in the report. It does not modify or bind any game material automatically.
 
-The input identity is `internal:2874f8dd-416c-4440-81b7-555975426e93`. Call `describe(effect, effect_sha256=<raw EffectDescription SHA-256>)`; parsing and re-serializing JSON does not prove source-byte identity. The raw digest must match `d4fce14f78a0eba3c48a6d2e86408c724110bad7f9e2d075618f7a3d03ac6c26`, and the embedded `glsl1.vert` and `glsl1.frag` must match their independently pinned program digests. The exporter also requires the exact source ID. A mismatch returns an unsupported report; it never selects a shader by name or approximate hash.
+The input identity is `internal:[private identifier]`. Call `describe(effect, effect_sha256=<raw EffectDescription SHA-256>)`; parsing and re-serializing JSON does not prove source-byte identity. The raw digest must match `[private fingerprint omitted]`, and the embedded `glsl1.vert` and `glsl1.frag` must match their independently pinned program digests. The exporter also requires the exact source ID. A mismatch returns an unsupported report; it never selects a shader by name or approximate hash.
 
 The fixed profile sets `USE_TEXTURE=true`; `CC_USE_MODEL`, `USE_ALPHA_TEST`, `CC_USE_ALPHA_ATLAS_texture`, `INPUT_IS_GAMMA`, and `USE_BGRA` are false. Its observable fragment operation is `texture * vertexColor`. The source EffectDescription stores only `blend: true`, so the profile resolves the missing factors from the supported Cocos 2.4 Sprite default: the pinned engine `BlendFunc` initializes `srcBlendFactor=SRC_ALPHA` and `dstBlendFactor=ONE_MINUS_SRC_ALPHA`; when applying a non-default blend it supplies the same pair to both color and alpha equations. The official 2.4 Sprite manual documents the matching `source.RGB * source.A + dest.RGB * (1 - source.A)` formula. Unity therefore uses `Blend SrcAlpha OneMinusSrcAlpha, SrcAlpha OneMinusSrcAlpha` for color and alpha. This is a source-engine default contract; the local CPU oracle checks that equation, while native Unity readback checks the generated target shader. Alpha discard, atlas alpha, gamma conversion, BGRA swizzle, other macro combinations, other Cocos versions, other effects, and general GLSL translation are unsupported. Preserve the original effect and stages and report an adapter gap for those cases.
 
@@ -13,11 +13,11 @@ from pathlib import Path
 from monkey.shader_profiles import describe, export_profile, prepare_probe
 
 effect = ...  # Parsed JSON from the catalogued source file
-raw_sha256 = "d4fce14f78a0eba3c48a6d2e86408c724110bad7f9e2d075618f7a3d03ac6c26"
+raw_sha256 = "[private fingerprint omitted]"
 profile = describe(effect, effect_sha256=raw_sha256)
 if profile["supported"]:
     result = export_profile(
-        effect, Path("/path/to/isolated/UnityProject"), "foodstreet", profile["sourceId"],
+        effect, Path("/path/to/isolated/UnityProject"), "sample-game", profile["sourceId"],
         effect_sha256=raw_sha256, folder="Assets/Game/Content/Shaders/RecoveredBuiltin2DSprite",
     )
     plan = prepare_probe(
@@ -33,11 +33,11 @@ All generated outputs are new files; the exporter refuses an existing path. A ca
 
 ## Evidence and limits
 
-- Source EffectDescription SHA-256: `d4fce14f78a0eba3c48a6d2e86408c724110bad7f9e2d075618f7a3d03ac6c26`.
-- Source `glsl1.vert` SHA-256: `3bb2a65a00f3d6de2dbbe654f9ebda74152bd3b83a8b8651f7b7c65fda7a1ef0`.
-- Source `glsl1.frag` SHA-256: `2bcdc12679e7a37a820c0de2e3f9c1197b11f11fa129896c6fc7364d3db10ce1`.
+- Source EffectDescription SHA-256: `[private fingerprint omitted]`.
+- Source `glsl1.vert` SHA-256: `[private fingerprint omitted]`.
+- Source `glsl1.frag` SHA-256: `[private fingerprint omitted]`.
 - Source version: Cocos Creator 2.4.15 as identified by the provided input contract; this module does not independently establish engine provenance.
-- Blend-source evidence: [pinned Cocos Creator 2.4.15 `blend-func.js`](https://raw.githubusercontent.com/cocos-creator/engine/a2f4b48f64e8117cf0d5a93229bfe31932c42384/cocos2d/core/utils/blend-func.js) and [official Cocos Creator 2.4 Sprite texture/blend documentation](https://docs.cocos.com/creator/2.4/manual/en/asset-workflow/sprite.html).
+- Blend-source evidence: [pinned Cocos Creator 2.4.15 `blend-func.js`](https://raw.githubusercontent.com/cocos-creator/engine/[private fingerprint omitted]/cocos2d/core/utils/blend-func.js) and [official Cocos Creator 2.4 Sprite texture/blend documentation](https://docs.cocos.com/creator/2.4/manual/en/asset-workflow/sprite.html).
 - The shader adapter was developed against the input contract. Neither this evidence nor the probe claims that all 38 source Effects were compiled or visually validated.
 - A v7 candidate produced from this profile passed in Unity 6000.6.2f1 on Metal: ShaderUtil reported no errors, the serialized `.mat` resolved its deterministic shader GUID and retained that reference after save/reimport, and one controlled GPU pixel was within the CPU oracle tolerance. The result and sanitized Editor log receipt are in `.private/v050-continuation-20261026/shader-module/native-receipt-v7.json`.
 - This is a fixed-profile target pixel check, not a direct Cocos Editor/runtime screenshot comparison or full visual parity result. Game material adoption and all other 37 source Effects remain unvalidated.

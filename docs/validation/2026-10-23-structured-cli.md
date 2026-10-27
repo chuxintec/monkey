@@ -4,7 +4,7 @@
 
 ## 真实输入与结果
 
-`outputs/structured-foodstreet-03`使用`.private/foodstreet-input-set.json`明确列出的四个冻结根：main、internal、gameAsset、remoteAsset。声明SHA为`c6c6e4a71805ac79f2893725d30a427a87a006f62563f96e6967b31a1378ee53`；冻结来源回执关系已核验，appId/游戏版本仍未知。输入5097文件、243799340字节，两个目标accounted文件与字节数均完全相等。它与此前73文件主分包属于不同输入集，不比较百分比。
+`outputs/structured-sample-game-03`使用`.private/sample-game-input-set.json`明确列出的四个冻结根：main、internal、gameAsset、remoteAsset。声明SHA为`[private fingerprint omitted]`；冻结来源回执关系已核验，appId/游戏版本仍未知。输入5097文件、243799340字节，两个目标accounted文件与字节数均完全相等。它与此前73文件主分包属于不同输入集，不比较百分比。
 
 共享reader识别13994对象；验证IR为20605节点、23373组件、5179 SpriteFrame、6字体、8 JsonAsset。源里一个父子图不一致的资产被整体隔离，未猜测修复。原生计划中Unity10426、Creator9562个组件标记可转换，其余保留缺口。
 
@@ -12,7 +12,7 @@
 
 源1632 Prefab图已规范化，但当前原生适配器生成共享候选森林，不是1632个已保存的原生Prefab。914 RF代码区域保持源码证据与编译排除区合同初稿，不能视为完整业务转译。5399处精确脚本身份绑定；任务按707页面批、6资源批和1不派工的未分类池聚合为714项，336代码区域仍未分类，没有启动Agent。
 
-工程manifest：Unity `cc4f0950846bd3139435a25b5bd52919f0c4ddcc6b5f2be00f3df450abbaa987`；Creator `d0d5736bc1b17bd17e4e2093602737338753ac79932da3a9047c759e4abadc96`。标准目录game-standard-v1，原始JSON payload保持值与路径文本；目标工程不依赖原件或另一目标。
+工程manifest：Unity `[private fingerprint omitted]`；Creator `[private fingerprint omitted]`。标准目录game-standard-v1，原始JSON payload保持值与路径文本；目标工程不依赖原件或另一目标。
 
 ## 续跑和失败证据
 
@@ -28,4 +28,4 @@
 
 整包Editor导入、保存重开、场景/Prefab回读、画面、业务与Player均not_run；Spine闭包、更多组件/业务语义、独立源Prefab生成和编辑器预检/编排仍待实现。CLI产物是独立可交接候选，不能报告完整游戏已转换可玩。
 
-两目标整包`verify --level static`已通过，诊断均0：`outputs/structured-foodstreet-unity-check-01`及`outputs/structured-foodstreet-cocos-check-01`。它们核验生成文件哈希/资源引用/GUID与目录边界，不构成Editor导入通过。
+两目标整包`verify --level static`已通过，诊断均0：`outputs/structured-sample-game-unity-check-01`及`outputs/structured-sample-game-cocos-check-01`。它们核验生成文件哈希/资源引用/GUID与目录边界，不构成Editor导入通过。

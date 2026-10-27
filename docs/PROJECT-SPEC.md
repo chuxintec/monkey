@@ -1,11 +1,11 @@
 # monkey 目标工程规范（monkey-project/2）
 
-状态：**已确认**（2026-10-25，用户在本聊天确认 D1–D6 全部采用推荐项；实施分支 `monkey`，起点 eb91533）。本文件是 monkey 生成 Unity6 / Creator3.8.8 工程目录、文件命名、配置表与交接文件的唯一规范；`targets/layout.py`、`names.py` 及各 emitter 中现有的路径常量都按本文重构。版本号 `monkey-project/2.0.0`，破坏性修改升主版本，兼容新增升次版本。
+本文件是 monkey 生成 Unity 6 / Creator 3.8.8 工程目录、文件命名、配置表与交接文件的当前规范。实际合同版本为 `monkey-project/2.0.0`；它定义生成目标，不改变 Python 工具发行版本。实现以当前 `src/monkey/targets/` 为准。
 
-参照工程：
-- 肥鹅美食街 `projects/20-肥鹅美食街/FoodStreet`（Cocos 2.4.15 → Unity6，已采用 dev3 全量初版）。
-- 向僵尸开炮 `projects/21-向僵尸开炮/Unity`（Unity 2021.3 IL2CPP → Unity6，已采用 AssetRipper 全量初版）。
-- 工作区规范：GREA `grea-unity-standard` STR/ARC 规则、`grea-native-port` 原生转换规范、Manager `COCOS-FIVE-LAYER.md`、`UNITY-CONFIGURATION.md`。本文与它们一致；不同之处在第 9 节列出。
+参照工程与规范：
+- 私有候选与验证工程不在此公开；本文件只规定可复用的目标目录合同。
+- 引擎工程结构参照 GREA `grea-unity-standard`，跨引擎原生转换参照 GREA `grea-native-port`。
+- 通用 Unity JSON 配置要求遵循项目适用的公开配置合同；具体值以本项目当前实现为准。
 
 ---
 
@@ -14,9 +14,9 @@
 
 本规范继续由 monkey 单写恢复候选路径/身份/归属和映射，目录合同仍为 `monkey-project/2.0.0`。源解析、恢复型代码/Prefab/原配置转换、候选差异与未解析诊断归 monkey；对人工开发工程三方合并、移动/改名、apply/rollback、DTO/配置制作、UI/框架生成和构建发布支持归 beaver。GREA 维护可读方法、选择与工具路由。
 
-用户批准依据：总监 human `01a1764c-0246-7541-88e4-9a84d3556574`；[三产品合同](/Users/wangmeng/Documents/Manager/decisions/20261026-grea-monkey-beaver/CONTRACT.md)。后文迁移步骤如涉及**已有开发工程**，由 beaver 消费冻结候选及映射，不授权 monkey 直接改人工工程；候选内部原生生成/验证仍属 monkey。未完成转写不得以生成业务骨架/DTO 掩盖。原始资源与只读证据不并入新工具发行。
+授权与边界：本文件遵循当前项目 ownership contract；后续迁移步骤如涉及已有开发工程，由 beaver 消费冻结候选及映射，不授权 monkey 直接改人工工程。候选内部生成与验证仍属 monkey。未完成转写不得以骨架/DTO 掩盖；原始资源与只读证据不并入新工具发行。
 
-原 05-B adopt WIP 与兼容 CLI 保留，状态/提取范围见 [BEAVER-HANDOFF](BEAVER-HANDOFF.md)；替代验证前不删、不空实现、不依赖对方可变工作树。正式肥鹅由其开发者维护，向僵尸继续暂停；规划中的双端测试不恢复暂停的游戏开发。
+原有兼容工作流与 CLI 的状态见 [BEAVER-HANDOFF](BEAVER-HANDOFF.md)；它们在替代验证前保留。既有开发工程由其所有者维护，本文不授权暂停项目恢复。
 
 ## 2026-10-25 最新确认：统一类型优先目录（覆盖旧布局示例）
 
@@ -44,8 +44,8 @@ Spine 数据、atlas、页图进入正式 Spine，非标准版本保留文本并
 | 6 | `Content/Prefabs/Recovery/Sources/remoteAsset/Prefab/House/Adorns/Room7/10070600.prefab` | 6 层来源嵌套（Recovery/Sources/包/Prefab） |
 | 7 | `Assets/Generated/`、`Assets/Monkey/`、`Assets/Manual/`、`Assets/Game/` 四个并列根 | 同一工程四套归属根；转换胶水散在 3 处 |
 | 8 | `SourceRecovery/CodeDrafts/NamedCSharp/AutoSeriesBoxElement-5983162.cs`，`namespace Recovered.Gameplay`；另有 `CSharp/snapshot/` 同名第二份 | 文件名带哈希；命名空间是来源词；两套草稿 |
-| 9 | 向僵尸 `Assets/Texture2D/`、`MonoBehaviour/`、`AnimationClip/`、`Sprite/`、`TextAsset/` 与 `uiraw/`、`effect/`、`actormodel/` 并列；`Font/`+`fonts/`、`Material/`+`materials/` 重复 | 直接沿用 AssetRipper 类型根和源工程小写目录 |
-| 10 | 向僵尸 `Assets/Resources/config/` 27,740 个原始 `.bytes` 表在生产 Assets | 原始二进制表混入运行资产；正式配置真源不清 |
+| 9 | 向样例项目 `Assets/Texture2D/`、`MonoBehaviour/`、`AnimationClip/`、`Sprite/`、`TextAsset/` 与 `uiraw/`、`effect/`、`actormodel/` 并列；`Font/`+`fonts/`、`Material/`+`materials/` 重复 | 直接沿用 AssetRipper 类型根和源工程小写目录 |
+| 10 | 向样例项目 `Assets/Resources/config/` 27,740 个原始 `.bytes` 表在生产 Assets | 原始二进制表混入运行资产；正式配置真源不清 |
 
 两款游戏为了弥补，自己又建了 `Art/Original/<批次>`、`Content/BulkInitial/`、`Product/`、`Original*`/`Source*` 类名前缀、`*.UIRecovery.unity`——说明工具输出无法直接当作日常工程。本规范要让生成工程**打开即是按模块组织的普通工程**，来源信息全部留在 `Analysis/` 和 `SourceRecovery/`。
 
@@ -129,7 +129,7 @@ UnityProject/
 
 小游戏使用 `<Type>/MiniGames/<Name>/...`，MiniGames 是模块层，不另设资源类型根。
 
-Unity 来源的补充规则（向僵尸开炮实测）：
+Unity 来源的补充规则（样例项目实测）：
 - `Resources/` 下的资产保持 `Resources.Load` 键：`Content/<Type>/Resources/<原相对键>`（键内目录与文件名逐字保留，GREA STR 规则）；TextMesh Pro 的 `TMP Settings`、`LineBreaking …` 作为包运行时资源保留。
 - AssetRipper 类型根（`Texture2D/`、`Sprite/`、`MonoBehaviour/`、`TextAsset/` 等）中的文件没有容器路径，进入 `Content/<Type>/Unsorted/<原文件名>`。
 - 未被任何 YAML 资产按 GUID 引用的原始 `.bytes` 表移出 Assets 到 `SourceRecovery/Config/`（D6）；被引用的保留在 `Content/Data/…`。
@@ -175,8 +175,8 @@ monkey 写入的全部 Editor 代码与计划集中于此，删除整个目录�
 **Cocos 等非 Unity 来源**：可编译代码进五层 `Assets/Game/<Layer>/<Module>/<Class>.cs`；不可编译初稿进 `SourceRecovery/Code/Drafts/CSharp/<Layer>/<Module>/<Class>.cs`（与将来目标位置一一对应，可直接搬入）。
 
 - 文件名＝类名，一文件一个公开类型，**不带哈希**；同模块同名冲突在 `Analysis/Mappings/code.json` 登记，按第 5.4 节消解。
-- 命名空间 `<RootNamespace>.<Layer>.<Module>`；`RootNamespace` 来自 `layout.json`（如 `FoodStreet`、`ZombieShooter`），未设置时为 `Game`。不再使用 `Recovered.*`。
-- 层/模块推断（结果与理由写 `code.json`）：①被 Prefab/Scene 组件绑定 → `Presentation/<该 Prefab 的模块>`；②类名后缀 `Window|View|Panel|Hud|Item|Cell|Button|Btn|Comp` → Presentation，`Manager|Mgr|System|Controller|Ctrl|Logic` → Gameplay，`Config|Cfg|Data|Model|Info|Vo|Def` → Domain，`Net|Http|Socket|Sdk|Storage|Platform|Ad|Ads` → Services；③模块取绑定 Prefab 模块或类名前缀匹配的已知模块；④仍不确定 → `Gameplay/Unclassified/`。`layout.json` 可逐类覆盖。
+- 命名空间 `<RootNamespace>.<Layer>.<Module>`；`RootNamespace` 来自 `layout.json`（如 `sample-game`、`sample-projectShooter`），未设置时为 `Game`。不再使用 `Recovered.*`。
+- 层/模块推断（结果与理由写 `code.json`）：①被 Prefab/Scene 组件绑定 → `Presentation/<该 Prefab 的模块>`；②类名后缀 `Window|View|Panel|Hud|Item|Cell|Button|Btn|Comp` → Presentation，`internal planning reference|Mgr|System|Controller|Ctrl|Logic` → Gameplay，`Config|Cfg|Data|Model|Info|Vo|Def` → Domain，`Net|Http|Socket|Sdk|Storage|Platform|Ad|Ads` → Services；③模块取绑定 Prefab 模块或类名前缀匹配的已知模块；④仍不确定 → `Gameplay/Unclassified/`。`layout.json` 可逐类覆盖。
 - 取消 `CSharp/snapshot/` 与 `NamedCSharp/` 两套并存，只保留具名初稿一套。
 
 **Unity 来源**：原程序集的类型壳（为保持序列化字段与 MonoScript 身份）放 `Assets/Game/Scripts/<AssemblyName>/<命名空间转目录>/<Class>.cs`，每个程序集一个 asmdef，**类名与命名空间保持原样**（它们是序列化类型身份）。第三方/引擎程序集（`UnityEngine.UI`、`Unity.TextMeshPro`、`Spine`、`YooAsset`、`HybridCLR.Runtime`、`wx-*` 等）不作为游戏代码输出：有官方包的改用包，SDK 进 `SourceRecovery/Code/ThirdParty/<Assembly>/` 并在台账标 `excluded-sdk`。
@@ -188,7 +188,7 @@ monkey 写入的全部 Editor 代码与计划集中于此，删除整个目录�
 | `NativeLinearLayoutGroup`、`NativeChildLayoutGroup`、`NativeRectConstraints`、`NativeTextLineBox`、`IntrinsicGridLayoutGroup` | `Assets/Game/Presentation/Common/Layout/<Class>.cs` | 全局（保持） |
 | `MonkeyCandidateView` → `ContentPreviewView` | `Assets/Game/Presentation/Preview/ContentPreviewView.cs` | 全局（保持） |
 
-这些通用组件保持类名与全局命名空间：同一份源码在所有游戏间逐字节一致，肥鹅已按 GUID 采用，改命名空间需要逐游戏改写源码却无收益；脚本 GUID 不变。退役的 `NativeFlowLayoutGroup` 不再输出。游戏代码（草稿与有据生成代码）使用 `<Root>.<Layer>.<Module>`，如数值 Label 适配器 `<Root>.Presentation.UI`、静态数值工具 `<Root>.Domain.Math`。
+这些通用组件保持类名与全局命名空间：同一份源码在所有游戏间逐字节一致，样例项目已按 GUID 采用，改命名空间需要逐游戏改写源码却无收益；脚本 GUID 不变。退役的 `NativeFlowLayoutGroup` 不再输出。游戏代码（草稿与有据生成代码）使用 `<Root>.<Layer>.<Module>`，如数值 Label 适配器 `<Root>.Presentation.UI`、静态数值工具 `<Root>.Domain.Math`。
 
 ## 5. 命名规则
 
@@ -294,7 +294,7 @@ SourceRecovery/
 ```json
 {
   "schemaVersion": 1,
-  "rootNamespace": "FoodStreet",
+  "rootNamespace": "sample-game",
   "defaultLocale": "zh-Hans",
   "bundles": {
     "miniGameRes": {"role": "minigame"},
@@ -369,7 +369,7 @@ CocosProject/
 
 ### 与工作区规范的差异
 
-| 项 | GREA / Manager | 本规范 | 理由 |
+| 项 | GREA / internal planning reference | 本规范 | 理由 |
 |---|---|---|---|
 | 图片类型目录 | `Images/` `Sprites/` 并列 | 统一 `Textures/`，保留各自导入角色 | 按用户最新要求合并并去除可安全复用的完整纹理副本 |
 | Unity 来源代码 | 五层 | `Scripts/<Assembly>/` 保留原程序集与类型名 | 原类型名是序列化身份，未经语义分析不能拆层 |
@@ -435,8 +435,8 @@ CocosProject/
 ## 12. 验收
 
 1. 静态：两款游戏的完整输入各生成一次，第 8 节禁止项 0 命中；每个 Content 文件的类型目录与导入类型一致；同输入两次运行 `Analysis/Mappings/` 中命名与来源映射字节相同。
-2. 身份：与冻结 dev3（肥鹅 manifest `b8dde1e1…`、向僵尸 `f2410ed9…`）比较，共有 sourceId 的 GUID 全部相等；`layout-migration.json` 覆盖全部移动项。
-3. 原生：在自有副本按既有原生窗口规则做一次 Unity 导入回读（代表子集：肥鹅 MainUi 与 1 个含 Spine/字体的窗口，向僵尸 1 个 UI 场景），Missing Script 0、引用回读一致。Creator 用 3.8.7 下方了样本做一次。
+2. 身份：与冻结 dev3（样例项目 manifest `b8dde1e1…`、向样例项目 `f2410ed9…`）比较，共有 sourceId 的 GUID 全部相等；`layout-migration.json` 覆盖全部移动项。
+3. 原生：在自有副本按既有原生窗口规则做一次 Unity 导入回读（代表子集：样例项目 MainUi 与 1 个含 Spine/字体的窗口，向样例项目 1 个 UI 场景），Missing Script 0、引用回读一致。Creator 用 3.8.7 下方了样本做一次。
 4. 文档：生成工程 `Docs/PROJECT-STRUCTURE.md` 引用 `monkey-project/1.0.0` 并列出实际模块表。
 5. 状态分别报告：静态通过、Editor 导入通过、画面/业务未验证——布局整理不等于还原完成。
 
@@ -460,7 +460,7 @@ CocosProject/
 | D3 | 重构范围 | 只重构目标工程布局及其生成代码 | 同时把 monkey 自身 `src/monkey/` 按 sources/targets/unity 子包重排 |
 | D4 | `monkey` 分支起点 | 当前 `codex/native-layout-production-fix`（eb91533） | `main`（v0.2.0.dev1） |
 | D5 | `--format none/grea` | 新输出统一本规范，参数保留为弃用别名 | 保留三种布局并存 |
-| D6 | 向僵尸原始 `.bytes` 表 | 移出 Assets 到 `SourceRecovery/Config/` | 保留在 `Content/Data/<Module>/` |
+| D6 | 向样例项目原始 `.bytes` 表 | 移出 Assets 到 `SourceRecovery/Config/` | 保留在 `Content/Data/<Module>/` |
 
 ## 变更记录
 

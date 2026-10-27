@@ -1,4 +1,4 @@
-"""Actual imported kind -> monkey-project/1 type folder (PROJECT-SPEC 4.2). Extensions only break ties."""
+"""Actual imported kind -> monkey-project/2.0.0 type folder (PROJECT-SPEC 4.2). Extensions only break ties."""
 IMAGE={'.png','.jpg','.jpeg','.webp','.tga','.psd','.bmp'}
 AUDIO={'.mp3','.ogg','.wav','.m4a','.aac'}
 VIDEO={'.mp4','.webm','.mov'}

@@ -1,14 +1,14 @@
 # full14 单命令双端资源原生验证
 
-2026-10-24 本地开发候选，代码90253c8。实际命令及阶段详见本机 outputs/full-foodstreet-14/conversion-result.json、outputs/full-foodstreet-14-native/native-orchestration.json；原件不写、旧失败不覆盖、未发布。
+2026-10-24 本地开发候选，代码90253c8。实际命令及阶段详见本机 outputs/full-sample-game-14/conversion-result.json、outputs/full-sample-game-14-native/native-orchestration.json；原件不写、旧失败不覆盖、未发布。
 
 ## 输入与冻结身份
 
 每端17201文件、884709704字节全部入账；16627声明CDN文件799052150字节全SHA缓存匹配，无新增GET。这只覆盖明确清单，不消除先前7个HTTP404或未知URL。双端静态、名称稳定、来源路由核对均零问题。
 
-- Unity manifest: 65e59177410266aa075b13d58ac4991715e19cefa1d198821ed1b72d70b43a74
-- Creator manifest: eacbf1bfff274f9abb2d7dc64abc4b9537ca9863e32eaa26a060608e2f485cf6
-- 源输入清单: 1fef746ef5f4483aa9605da81aef4a8ed6cea736834b2024169a00c6aa60fff2
+- Unity manifest: [private fingerprint omitted]
+- Creator manifest: [private fingerprint omitted]
+- 源输入清单: [private fingerprint omitted]
 
 ## 实际原生结果
 
@@ -29,7 +29,7 @@ Unity11992/28514、Creator12568/28514源组件进入当前转换子集；1006 Cr
 
 ## CLI本地制品
 
-monkey_native-0.3.0.dev1-py3-none-any.whl，223337字节，SHA256 a1fee4bd2efa48f8349ced34bbf13032bbeb0c32b1c5daba60d03c9f6b1d1e58。包含55条目，导入器、Grid原生组件、Acorn和许可证齐全，无私有样本/转换产物。通过项目私有target安装后，在独立cwd确认实际加载安装模块并完成合成wxapkg五文件→双端候选；没有全局安装或发布。dist/full14-local/BUILD.json及.private/wheel-smoke-14/smoke.stdout为本机回执。
+monkey_native-0.3.0.dev1-py3-none-any.whl，223337字节，SHA256 [private fingerprint omitted]。包含55条目，导入器、Grid原生组件、Acorn和许可证齐全，无私有样本/转换产物。通过项目私有target安装后，在独立cwd确认实际加载安装模块并完成合成wxapkg五文件→双端候选；没有全局安装或发布。dist/full14-local/BUILD.json及.private/wheel-smoke-14/smoke.stdout为本机回执。
 
 
 ## v0.2 源字段回查补充
