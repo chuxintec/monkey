@@ -17,6 +17,7 @@ from .candidate_snapshot import snapshot
 from .sources.compiled import fail
 from . import code_architecture as architecture
 from . import code_architecture_asset_context as asset_contexts
+from . import code_architecture_inheritance as inheritance
 from . import code_postprocess as worker
 
 MANIFEST = 'architecture-module-manifest.json'
@@ -562,7 +563,41 @@ def _joined_namespace(blocks):
     return path
 
 
-def _implementation_markers(raw, class_record):
+def _module_inheritance_evidence(class_rows, source_by_path):
+    """Resolve only same-module class sources supplied by the verified workflow.
+
+    Other source kinds remain governed by their existing declaration checks. The
+    resolver's output is lexical evidence, never a compile or behavior acceptance.
+    """
+    records = []
+    mappings = {}
+    required = {}
+    for row in class_rows:
+        if row.get('kind') != 'class':
+            continue
+        path = row['path']
+        raw = source_by_path[path]
+        digest = sha(raw)
+        records.append({**row, 'sha256': digest})
+        mappings[path] = {'path': path, 'source': raw, 'sha256': digest, 'bytes': len(raw)}
+        required[row['classId']] = {
+            **{member['name']: 'method' for member in row.get('plannedMethods', [])},
+            **{member['name']: None for member in row.get('plannedFields', [])},
+        }
+    result = inheritance.resolve_inherited_members(records, mappings, required)
+    by_id = {row['classId']: row for row in records}
+    for evidence in result['results']:
+        for ancestor in evidence['baseShaChain'][1:]:
+            record = by_id[ancestor['classId']]
+            diagnostics = _implementation_markers(source_by_path[record['path']], record)
+            for marker in diagnostics:
+                if not marker.startswith(('planned-method-declaration-missing:',
+                                          'planned-field-declaration-missing:')):
+                    evidence['blockers'].append('source-contract-guard:' + record['classId'] + ':' + marker)
+    return {row['classId']: row for row in result['results']}
+
+
+def _implementation_markers(raw, class_record, *, inheritance_evidence=None):
     markers = []
     code = _strip_csharp_comments_and_literals(raw)
     if code is None:
@@ -660,6 +695,28 @@ def _implementation_markers(raw, class_record):
         if not pattern.search(body):
             markers.append('planned-field-declaration-missing:' + field['name'])
 
+    if inheritance_evidence and not inheritance_evidence.get('blockers'):
+        chain = inheritance_evidence.get('baseShaChain', [])
+        class_id = class_record.get('classId')
+        if (chain and inheritance_evidence.get('classId') == class_id
+                and chain[0].get('classId') == class_id
+                and chain[0].get('path') == class_record.get('path')
+                and chain[0].get('sha256') == sha(raw)):
+            inherited = inheritance_evidence.get('requiredMembers', {})
+            retained = []
+            for marker in markers:
+                prefix, _, name = marker.partition(':')
+                allowed_kinds = {
+                    'planned-method-declaration-missing': ('method',),
+                    'planned-field-declaration-missing': ('field', 'property'),
+                }.get(prefix, ())
+                evidence = inherited.get(name, {})
+                if (allowed_kinds and evidence.get('satisfied') is True
+                        and evidence.get('declaredBy') != class_id
+                        and evidence.get('kind') in allowed_kinds):
+                    continue
+                retained.append(marker)
+            markers = retained
     return markers
 
 
@@ -1153,10 +1210,13 @@ def _materialize_result(root, request, result, *, recovery_evidence=None, recove
     class_rows = []
     manifest = _json(root / MANIFEST)
     old_files = {row['targetPath']: row for row in manifest['files']}
+    source_by_path = {row['path']: read(inside(task_root / 'workspace', row['path']),
+                                      max_bytes=worker.FILE_BYTES)
+                      for row in manifest['classes']}
+    inheritance_by_class = _module_inheritance_evidence(manifest['classes'], source_by_path)
     for class_record in manifest['classes']:
         path = class_record['path']
-        workspace_path = inside(task_root / 'workspace', path)
-        data = read(workspace_path, max_bytes=worker.FILE_BYTES)
+        data = source_by_path[path]
         seed = read(inside(root / 'Seed', path), max_bytes=worker.FILE_BYTES)
         target = inside(root, path); target.parent.mkdir(parents=True, exist_ok=True)
         worker._atomic(target, data)
@@ -1166,7 +1226,8 @@ def _materialize_result(root, request, result, *, recovery_evidence=None, recove
             fail('CODE_ARCH_MODULE_BOUNDARY', path, 'Workspace bytes changed without an actualChanges record')
         if change and change.get('afterSha256') != new_hash:
             fail('CODE_ARCH_MODULE_BOUNDARY', path, 'Worker afterSha256 differs from materialized workspace bytes')
-        completeness = _implementation_markers(data, class_record)
+        inheritance_row = inheritance_by_class.get(class_record['classId'])
+        completeness = _implementation_markers(data, class_record, inheritance_evidence=inheritance_row)
         if new_hash == sha(seed):
             row_status = 'unimplemented_seed'
         elif completeness:
@@ -1174,7 +1235,8 @@ def _materialize_result(root, request, result, *, recovery_evidence=None, recove
         else:
             row_status = 'generated_unreviewed'
         class_rows.append({**class_record, 'status': row_status, 'sha256': new_hash, 'bytes': len(data),
-                           'completenessDiagnostics': completeness})
+                           'completenessDiagnostics': completeness,
+                           'inheritanceEvidence': inheritance_row})
         artifact_rows.append({'path': path, 'targetPath': path, 'artifactPath': path, 'sha256': new_hash,
                               'bytes': len(data), 'classId': class_record['classId'],
                               'sourceUnitIds': class_record['sourceUnitIds'],
@@ -1394,6 +1456,9 @@ def recheck(output):
         fail('CODE_ARCH_MODULE_RECHECK_BOUNDARY', str(task_root), 'Finalized task changes differ from the pinned module path boundary')
 
     artifact_by_path = {row.get('targetPath'): row for row in manifest.get('files', [])}
+    source_by_path = {row['path']: read(inside(root, row['path']), max_bytes=worker.FILE_BYTES)
+                      for row in manifest.get('classes', [])}
+    inheritance_by_class = _module_inheritance_evidence(manifest.get('classes', []), source_by_path)
     class_rows = []
     for class_record in manifest.get('classes', []):
         path = class_record.get('path')
@@ -1410,7 +1475,8 @@ def recheck(output):
         change = actual.get(path)
         if change and change.get('afterSha256') != digest:
             fail('CODE_ARCH_MODULE_RECHECK_OUTPUT', path, 'Task actualChanges SHA differs from the saved implementation')
-        diagnostics = _implementation_markers(output_raw, class_record)
+        inheritance_row = inheritance_by_class.get(class_record['classId'])
+        diagnostics = _implementation_markers(output_raw, class_record, inheritance_evidence=inheritance_row)
         if digest == class_record.get('seedSha256'):
             classification = 'unimplemented_seed'
         elif 'seed-marker-remains' in diagnostics:
@@ -1422,7 +1488,8 @@ def recheck(output):
         class_rows.append({'classId': class_record.get('classId'), 'path': path,
             'sourceUnitIds': class_record.get('sourceUnitIds', []), 'sourceMemberIds': class_record.get('sourceMemberIds', []),
             'sha256': digest, 'bytes': len(output_raw), 'priorStatus': class_record.get('status'),
-            'classification': classification, 'completenessDiagnostics': diagnostics})
+            'classification': classification, 'completenessDiagnostics': diagnostics,
+            'inheritanceEvidence': inheritance_row})
     counts = {name: sum(1 for row in class_rows if row['classification'] == name)
               for name in sorted({row['classification'] for row in class_rows})}
     aggregate = 'generated_unreviewed' if counts and set(counts) == {'generated_unreviewed'} else 'partial_unimplemented_seed'

@@ -29,6 +29,10 @@ unless the caller explicitly sets `allow_partial=True`; resulting missing or
 partial classes remain recorded as partial and never imply successful
 compilation.
 
+`implementedClassPaths` records the presence of an owned generated class file.
+It does not establish recovered behavior, successful compilation, or runtime
+acceptance; consult each file's partial/unresolved metadata and separate evidence.
+
 Assembly keeps all manifest-owned files under `Assets/Game/Content/`,
 `ProjectSettings/`, and the two package lock inputs (`Packages/manifest.json`
 and `Packages/packages-lock.json`), plus required ancestor metadata when

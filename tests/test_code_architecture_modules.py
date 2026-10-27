@@ -15,6 +15,49 @@ from monkey.sources.compiled import ParseError
 
 
 class ArchitectureModuleWorkflowTests(unittest.TestCase):
+    def test_pinned_inherited_members_count_without_clearing_layer_guards(self):
+        parent = dict(classId='ViewBase', name='ViewBase', kind='class', layer='Presentation',
+                      module='UI', namespace='Demo.Presentation.UI', path='Base.cs',
+                      plannedMethods=[], plannedFields=[])
+        child = dict(parent, classId='View', name='View', path='View.cs',
+                     plannedMethods=[{'name':'Bind'}], plannedFields=[{'name':'Snapshot'}])
+        sources = {
+            'Base.cs': b'namespace Demo.Presentation.UI { public class ViewBase { public void Bind() {} protected int Snapshot { get; set; } } }',
+            'View.cs': b'using Demo.Services.Store; namespace Demo.Presentation.UI { public class View : ViewBase { public int Local; } }',
+        }
+        evidence = modules._module_inheritance_evidence([parent,child], sources)['View']
+        direct = modules._implementation_markers(sources['View.cs'], child)
+        self.assertIn('planned-method-declaration-missing:Bind', direct)
+        checked = modules._implementation_markers(sources['View.cs'], child, inheritance_evidence=evidence)
+        self.assertEqual(checked, ['layer-dependency-reference:Services'])
+        changed = sources['View.cs'].replace(b'Local', b'Changed')
+        self.assertIn('planned-method-declaration-missing:Bind',
+                      modules._implementation_markers(changed, child, inheritance_evidence=evidence))
+        sources['Base.cs'] = b'using Demo.Services.Store; ' + sources['Base.cs']
+        blocked = modules._module_inheritance_evidence([parent,child], sources)['View']
+        self.assertTrue(blocked['blockers'])
+        self.assertIn('planned-method-declaration-missing:Bind',
+                      modules._implementation_markers(sources['View.cs'], child, inheritance_evidence=blocked))
+
+    def test_private_parent_and_unrelated_classes_cannot_supply_planned_api(self):
+        parent = dict(classId='Base', name='Base', kind='class', layer='Presentation',
+                      module='UI', namespace='Demo.Presentation.UI', path='Base.cs',
+                      plannedMethods=[], plannedFields=[])
+        child = dict(parent, classId='View', name='View', path='View.cs',
+                     plannedMethods=[{'name':'Bind'}])
+        sources = {
+            'Base.cs': b'namespace Demo.Presentation.UI { public class Base { private void Bind() {} } }',
+            'View.cs': b'namespace Demo.Presentation.UI { public class View : Base { public int Local; } }',
+        }
+        evidence = modules._module_inheritance_evidence([parent,child], sources)['View']
+        self.assertIn('planned-method-declaration-missing:Bind',
+                      modules._implementation_markers(sources['View.cs'], child, inheritance_evidence=evidence))
+        sources['Base.cs'] = sources['Base.cs'].replace(b'private', b'public')
+        sources['View.cs'] = sources['View.cs'].replace(b' : Base', b'')
+        evidence = modules._module_inheritance_evidence([parent,child], sources)['View']
+        self.assertIn('planned-method-declaration-missing:Bind',
+                      modules._implementation_markers(sources['View.cs'], child, inheritance_evidence=evidence))
+
     def test_gameplay_cannot_construct_service_store_but_services_can_implement_gameplay_port(self):
         record=dict(name='Coordinator',kind='class',layer='Gameplay',module='Session',
                     namespace='Demo.Gameplay.Session',plannedMethods=[],plannedFields=[])

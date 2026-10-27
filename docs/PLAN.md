@@ -1,5 +1,19 @@
 # monkey 项目计划与执行进度
 
+## 最新集成状态（2026-10-27，覆盖下方早期在途计数）
+
+公开 `code-native-revise` 已将54项修订合入 `NativeFullCoreIntegration03`（根即工程，manifest `06abc50b9eec1793864b1fdfb792606ddb42314e8ea8745e656203ab03d74c31`）：51,076文件、1,555 C#。四组配置解析移入Services并保留Domain强类型，19个Tutorial/Narrative文件由实际来源及基类哈希证明继承API，不造方法。对应公开分类器修订只去除已证实的planned-member-missing，保留其他架构guard，条件编译/源漂移/私有成员/不明继承不放行。已通过9 inheritance、27 module、11 reassembly、10 pipeline、17 revision定向测试。
+
+`NativeCompileSurvey08` 已实际编译全部1,555源、305真实引用，**23 error / 3,243 warning**：22处为SessionController的缺少enum alias/对immutable GameSnapshot使用with赋值，1处为GuideController调用已退休FromJson；相关模块正在有界修复。不是旧Survey07的326缺类型诊断，也不能把警告计入错误宣称回退。原始模型代码仍unreviewed；五层独立全编译和最终原生接线仍待完成。
+
+剩余两个planned missing分类：PayTiersBasic原JSON仅3字节`{}\n`，已由EmptyTableDescriptor+严格reader承接，旧空行class不补造（原classPath仍保留缺失，API退休有证据）；UnityAudioService的原候选显式Unavailable，缺少pinned Audio模块和typed native引用，不补假播放。两项均不等于全工程/全部业务正确。资源47956份冻结path/size/hash一致的既有证据复用，不重复全导。
+
+坐标核查发现Presentation01对Board2/Board6上下翻转，生成格子不在会滚动的Layers下。`NativeCoreBoardCoordinatesAudit02`已据源字节定位；Presentation04按源坐标保留全部348格，index335在m0 mask-local(250,-150)、m4(250,-550)。输入router旧翻转同时待改，Bootstrap07已准备显式viewport/mask/fog注入；尚未做新的Editor/真实触控/画面对照。RuntimeProbe03原事务与重开证据保留，其视觉一直not_run。
+
+本轮集中最终集成，不增加旁路平台或下一版本；按总监 `monkey-v06-final-integration-focus-20261027-01` 汇合公开工具路径、完整候选、全源码编译与受影响核心原生验证。无发布/推送/安装/正式游戏写入。
+
+## 早期核心接续记录（保留历史状态）
+
 2026-10-27 核心联合编译：NativeCoreBootstrapRevision01真实Content/Session/Presentation/Bootstrap窄链共66源码、183Unity managed refs，以netstandard2.1/C#9编译0警告/0错误；含明确compiler shim而非游戏DTO替身，整47仍未过编译。34终态1159源文件早期全编译72条均为未来模块namespace缺失（NativeCompileSurvey04，不外推其他错误不会显现）。公共candidate按实际record/init需求生成唯一Domain公共IsExternalInit及稳定meta/ownership；真实无shim复现CS0518，有shim通过，48组装/reassembly/revision定向检查通过。Session02已在真实28格Board2保持初态的独立local policy下完成normal→同IDweb merge、升级消网/原子存储/重开并标remote-unreconciled，正在接五层编译与自有PlayMode探针；非原厂角色/远端成功，物理输入/视觉/完整游戏未验。
 
 2026-10-27 核心接续实绩：Orders34 已通过公开 module-recover 离线物化64类，worker receipt 明确 partial / exit-not-recorded，事件SHA ce4917e326cfeb8af4876bdb6dbe6b759367c688a3e808e6538b5dbb047945f3；公开只读 recheck 64类通过。没有伪造OS退出0或重跑模型。当前唯一串行 supervisor 接续 NativeCorePriority03，34终态、Street35在途（以run状态为准）。恢复、module/revision/pipeline与JSON producer共102定向测试通过；新JSON producer只附加明确自编local-test资产，未补音频。五层词法守卫禁止Gameplay反向Services等依赖；未完成类型不会生成空壳。启动helper已写WIP，核心View拆纯core helper以切断legacy GameSnapshot44活动依赖，完整旧API与全量类型继续保留。整候选编译/真实启动未完成。
@@ -13,11 +27,23 @@
 
 ### 当前执行记录（2026-10-27 架构阶段）
 
-**最新可核查候选**：`NativeCoreIntegration03/UnityProject`已通过公共`code-native-add-json`附加显式candidate-local-test policy/1，manifest `428bbbff87daa0dc9716bfeb25d0473c8fbe1456961d92f5ad66e0a4b1de9dba`，50,516 files/1,274 C#，1269 implementedClassPaths/247 missing。C#全清单与下述Integration02逐path/SHA完全一致（inventory digest `bdceeae63b09bb288cea1ef57a4a2e50191037731e909a6548e5c5fbaedbbb58`），因此仍保留254静态诊断，不宣称已编译/运行全工程。JSON首次自拟声明不等于严格合同固定文字，在输出前拒绝；失败spec/receipt保留，新的JsonPlan02按明确“Self-authored test data; not recovered from the original game.”声明成功，未放宽validator或改旧输入。完整操作回执在`CoreIntegrationExecution01/result.json`。下一主链为Production→真实唯一Session原子store接线、Orders/Street来源规则；三独立模块实施中，父仍单写公共契约/候选与唯一实际模型队列。
+**最新统一候选（全47资源 + 核心修订）**：公开只读reassemble已产`NativeFullIntegrationBase01/UnityProject`，manifest `a85f070569609e2cf1162b1b0124c4526ac054d7925b4aa59bbc7a8373b36a0e`，50,792文件/1413 C#/1408实现类path/76缺失。再公开code-native-revise应用100项（7 replace/93 helper）生成`NativeFullCoreIntegration01/UnityProject`，manifest `79b8f27df093fea2bebdddbb89c11c3c9a1df35634f0ac736294ef821977da0e`，50,978文件/1506 C#/37缺失。此处“实现path”仅指有归属源文件，不证明功能恢复。NativeCompileSurvey07编译全部1506源、无排除/假API，共326诊断（CS0234=53/CS0246=273）；比37模块旧254增多是加入余10模块暴露新类型依赖，不能称回退/已过全编译。主要缺UpgradeRace State/Command、CookfishController、FoodDelivery State/Command及三untyped definitions。源/原候选/失败收据均保留。
+
+**真实核心内容扩展**：ProgressionContent01通过4个真实TextAsset调用封存Orders03/Street02 reader，只有两边全部成功才发布，否则清旧catalog并失败关闭。Bootstrap05已接这四表与Session04，137实际源按Domain89/Gameplay17/Presentation5/Services25/Bootstrap1五个独立assembly编译通过，0 error/33 CS0649序列化字段警告；非全候选、非Editor。Presentation02曾反向引用Bootstrap，未采用；03改typed delegate+clock注入并独立Presentation→Domain/Gameplay编译通过。父正在Bootstrap06接线，Board6可视/滚动及201401精确Sprite缺口仍在，不能称真实生产触控/画面通过。
+
+**47模块生成终态与组装修复**：NativeRemainder04 已取得全部47份终态收据（具体generated/partial计数见CoreIntegrationExecution02/pipeline-assembly-failure.json），单一真实CLI supervisor exit2/reaped；失败在自动aggregate将所有完整source-ID映射代码标partial却缺少具体未审阅原因，严格assembler按合同拒绝IGameCommandPort。原state仍保留running属于失败前旧状态，不能据此称模型还在运行；不改旧manifest/收据。公共修复`fe1ebe9`保持partial并写明确semantic-unreviewed原因，且未来收集/组装异常持久blocked并清activeModule；21项pipeline/reassembly定向测试通过，回归测试先复现缺失原因。当前使用公开code-native-reassemble新输出重核47终态，不重跑模型、不放宽assembler。
+
+**核心接续（Session04 / Bootstrap03，待全量候选整合）**：真实11表与Board6（58×6）生产源201801/index335→201401/index334，已进入唯一CoreSession coordinator与v4原子快照，新协调器重开保持生产计数、seed、HP/timer、metadata和单一RoleRuntime能量；失败写入/旧revision不发布。源码GetClosestBlankCell仅排除occupied/locked，旧Production01额外排除空UnderBox导致错误选格；04已按字节pin纠正，旧候选保留。政策为明确自编session-policy/3及production-policy/2，不代表远端状态。原policy/1候选Integration03保持不变，下一候选必须从无JSON新基线附加新政策。
+
+Bootstrap03实际83源码/6项目/183 Unity refs联合netstandard2.1/C#9编译0警告/0错误（MSBuild求值后的receipt `38957b0ba8ccfe6db0286cd9be1cd83d949ddc4be17b6daee0d28b5ad7d2251b`；旧清单脚本忽略Exclude误报88，旧receipt保留，5个排除项与errata已记录）；只证明核心闭包，不替代完整47编译或Editor。Session04的7/7 UTF8 byte spans、31/31源码、11/11表hash复核通过；Production01的三条误将字符串偏移标为byte的来源引用已在04 errata记录，旧证据不改。当前Presentation仍只把同格点击发为SelectCell，生产点击与Board6完整视口尚未接通，core_presentation在独立Presentation02查源接线。
+
+**Orders/Street依赖审计**：Orders02 harness曾有手写OrdersDefinitions/NamespaceMarker，其编译证据无效，保留原件与errata；Orders03改为真实Module0034及Integration03依赖后，3432行原Order JSON严格reader/构造编译通过。43项Compile pin核验通过，无替身，19项Link虚拟显示路径仍旧名不影响实际Include。Street01 typed proposal与Street02真实Build954/Area26/Adron409 reader使用真实依赖通过，复核无fake API；Street02 parser两处引用行号不完整记录于follow-up audit，实际严格实现/反例存在。Orders/Street目前仅定义读取与Pending proposal，不声称Session原子消费、RPC或奖励成功。
+
+**最新可核查候选**：`NativeCoreIntegration03/UnityProject`已通过公共`code-native-add-json`附加显式candidate-local-test policy/1，manifest `428bbbff87daa0dc9716bfeb25d0473c8fbe1456961d92f5ad66e0a4b1de9dba`，50,516 files/1,274 C#，1269 implementedClassPaths/247 missing。C#全清单与下述Integration02逐path/SHA完全一致（inventory digest `bdceeae63b09bb288cea1ef57a4a2e50191037731e909a6548e5c5fbaedbbb58`），因此仍保留254静态诊断，不宣称已编译/运行全工程。JSON首次自拟声明不等于严格合同固定文字，在输出前拒绝；失败spec/receipt保留，新的JsonPlan02按明确“Self-authored test data; not recovered from the original game.”声明成功，未放宽validator或改旧输入。完整操作回执在`CoreIntegrationExecution01/result.json`。其后的Session04/Orders03/Street02成果见上方；下一主链为全47重新组装、统一源修订与整工程编译。父仍单写公共契约/候选与唯一实际模型队列。
 
 **公开整合更新**：公共`code-native-revise`已实际将核心69-row计划与strict record39-row计划合并（ShopColumn只保留有双来源pin的record+关键词修复版本），一次应用107项修改；`NativeCoreIntegration02/UnityProject` manifest `2c5d2e358c4f88614a47fb0ccccfc161a942480a165f3d064e7a0f0dac2ce33a`，50,514 files，1,274 C#。完整未排除静态编译`NativeCompileSurvey06`为254诊断（CS0234=103/CS0246=151），相同基线Survey05为615，预留缺失类型247；仍未编译通过，不隐藏Cookfish事务所有者/缺失FoodDelivery等类型以凑成功。record39项经实际Unity Roslyn C#9/netstandard2.1闭包编译通过，另7项明确保留拒绝。公共revision单次root namespace扫描实际2.778s，已按单次调用复用验证结果以避免71 helper重复扫描，所有文件hash仍在copy前检查，17 revision+10 JSON unittest通过，源码d6ac314。
 
-Production01已交付真实11表/Board6的201801→201401候选规则与typed port harness，远端仍Pending，尚未接真实CoreSession原子store。core_session继续独立Session04补唯一写者、完整runtime与versioned codec/真实重开，不写02/03；worker_recovery继续独立Orders01来源规则。其余模块NativeRemainder04继续同一真实CLI串行，版本未完；不追加组件旁路验证。
+历史检查点：Production01已交付真实11表/Board6的201801→201401候选规则与typed port harness，远端仍Pending；其后Session04已接真实CoreSession原子store（见上方）。core_session继续独立Session04补唯一写者、完整runtime与versioned codec/真实重开，不写02/03；worker_recovery继续独立Orders01来源规则。其余模块NativeRemainder04继续同一真实CLI串行，版本未完；不追加组件旁路验证。
 
 
 **最新已实测核心链（本段覆盖下方在途历史）**：`NativeCoreRuntimeProbe03` 使用 Unity6000.6.2f1，真实11份JSON/TextAsset→Board2的28格/15占格/10种原生Sprite→源MergeScreen/Cell Prefab→EventSystem点击与16→17带Web合并→原子本地JSON→退出Play后第二次新coordinator从盘恢复，报告passed；revision0→2，BoardCommitted与ViewRender各2，source清空/target升级9001102并清Web，身份/状态文件哈希保持，Prefab保存重开引用和无MissingScript检查通过。own native child exit0/reaped，458 owned文件未变，仅2个声明可变源Prefab在独立工程挂接后变化，核心C#没有手改。`Evidence/core-runtime-probe-report.json` SHA `3f075848a8fe16f6d59597389b12406b47be1fc3a9bab2309b1a90e3f2a5ca7a`。这是实际核心闭包而非全47工程；physicalInput/visualComparison not_run、remoteAuthority not_connected/RemoteReconciliationPending=true、whole47 not_verified。Editor日志含2次Unity QuickSearch启动索引异常（栈无游戏代码），保留原文，不能称零诊断。
