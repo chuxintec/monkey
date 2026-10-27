@@ -1,6 +1,6 @@
 # monkey
 
-当前版本为 **0.4.0**，采用 [monkey-project/1 工程规范](docs/PROJECT-SPEC.md)。新增 Unity 字体/引用表分块读取和可配置解析预算，详见 [解析预算](docs/providers/UNITY-PARSE-BUDGETS.md) 和 [v0.4.0 发布说明](docs/RELEASE-v0.4.0.md)。资源候选、原生导入、画面及业务验收分别记录。
+当前版本为 **0.4.1**（0.4.0 加 GREA 来源侧工具，随 GREA 2026.10.27 作为模块发布），采用 [monkey-project/1 工程规范](docs/PROJECT-SPEC.md)。新增 Unity 字体/引用表分块读取和可配置解析预算，详见 [解析预算](docs/providers/UNITY-PARSE-BUDGETS.md) 和 [v0.4.0 发布说明](docs/RELEASE-v0.4.0.md)。资源候选、原生导入、画面及业务验收分别记录。
 
 新输出直接生成规范目录；`--format none|grea` 保留为弃用兼容参数。`convert --layout layout.json` 可使用游戏级命名覆盖；`layout-preview` 预览已完成转换的路径变化，`layout-migration` 按 GUID/UUID 生成旧候选到新候选的迁移清单。进度和未验证项见 [PLAN](docs/PLAN.md)，用法见 [USAGE](docs/USAGE.md)。
 
@@ -116,3 +116,8 @@ Python 最低 3.11，本次实际验证为 macOS arm64 / Python 3.14.7。Pillow 
 正式资源区包含已解析音频、完整纹理、SpriteFrame 图片、Spine 数据闭包与 Shader 来源代码，原件仍保留于 SourceRecovery。Scene/Prefab/Animation 由原生导入阶段生成。Shader 源文件、Spine 数据与原生渲染/播放分别验收；本轮不配置远端分组或构建。
 
 图片统一使用 `Textures/<Module>/`，不再生成 Sprites 目录。保留 Sprite 导入设置与引用；仅合并字节一致且无独立绑定要求的附加完整纹理，尺寸/裁切不同的图片不强行删除。`resource-catalog.json` 记录纹理别名；Spine/字体页图仍留在对应闭包旁。
+
+
+## 0.4.1：接收 GREA 来源侧工具
+
+在 0.4.0 上新增 `toolkit`：GREA 2026.10.27 把 7 个来源侧执行工具（laya_contract_audit、read_elf_values、unpack_xapk、shader_probe、decrypt_v1mmwx_wxapkg、unpack_wxapkg、export_config_tables）移交 monkey，ID、参数、报告与退出码不变，用 `monkey tool <id> [args]` 运行；GREA 的 `run-tool` 同 ID 自动委托。转换功能与 0.4.0 相同；在途 0.6 开发不受影响。
