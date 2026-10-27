@@ -7,6 +7,10 @@
 
 ### 当前执行记录（2026-10-27 架构阶段）
 
+NativeAudioNativeProbe01实际原生验收通过：Unity6000.6.2f1导入357路径（356冻结Content+1有receipt的派生WAV），0失败；67 cue、31个独立AudioSource的序列化引用、Prefab保存重开及service可用性通过。方法16秒、own launcher退出0且回收，窗口结束后无Editor残留。633源音频行重新哈希全一致、冻结07 manifest不变。首轮沙箱因授权数据库只读在方法前退出198，保留失败记录；只读核实既有Unity Personal有效后，正常用户运行时权限复测通过，无激活/安装。隔离probe锁文件仅内置audio依赖depth从1变0，版本仍1.0.0；记录差异，不篡改原ownership。`Evidence/latest-editor-probe.json` SHA `5edafc7e35691fa3a200f294dd3081ac224288ecf2daacc9bd04e17110abe985`，postrun回执固定输入与输出。没有调用Play，声音播放/游戏触发/整工程仍未验收。
+
+当前29/47终态、Playable运行中（实时以run为准）。AudioControllerRevision02显式JSON初值及74组件断言通过，legacy Session测试替身明确排除候选；继续NativeAudioIntegration03修正本地播放/停播与cue前缀，不能以gain0冒充停播。NativeServicesContent06接实际Inventory聚合/singleton与reader，不发明配置键。通用新增资源producer开发中，仅向fresh candidate新增有pin的JSON/WAV及派生meta，不借C# revision偷写资源或修改旧07。
+
 新组装器补齐manifest-owned `.cs.meta`/`.asmdef.meta`：Script GUID按project namespace/root namespace/classId派生，不因方法正文或输出目录变动；冲突中止，全部路径与输出预算核对。`scriptIdentities`记录实际C#/meta SHA，后续revision保留旧GUID并刷新新C#哈希。绑定planner可验证完整新candidate manifest pin、原架构/来源、未变的模块class字节、owned meta与GUID/index关系，取得后生成authoring意图，不改旧module receipt；修改过C#仍须新receipt。62项相关定向检查通过。当前在途supervisor使用旧导入代码，47模块终态后以新reassemble组装才会采用，不热改已完成产物；整工程/Editor脚本挂接仍待验。
 
 音频实际漏导已定位并补通用normalizer：633条扩展名文件记录=356 Content路径+277 SourceRecovery原件，276原件与Content同字节，另1份fireworks.m4a（46,239B）此前`UNSUPPORTED_NATIVE`而未生成Content。新增可选本地ffmpeg有界解码，固定provider版本/二进制SHA、输入/输出SHA及PCM形状；8MiB输入/16MiB输出、超时/child回收/截断或无效WAV均明确失败，不造音频，原件保留。实际公共normalize→Unity plan→export得到483,590B、44.1kHz立体声WAV，SHA `6e088bebda4142fb535d12244e36dd2ef89c609b0f38d3c8149d3e0c56f8dbe8`，目标`Assets/Game/Content/Audio/Sfx/MiniGames/Garden/Common/fireworks.wav`；原件哈希不变，10项decoder/6项progress/4项原target回归通过。NativeAudioNativeProbe01正在接收该派生资源，356+1导入与67 cue/31 sources原生保存重开尚未运行；不是冻结07已被修改。

@@ -1,10 +1,10 @@
 # v0.6 模块执行登记
 
-当前执行：父持有NativeProject01唯一实际CLI串行supervisor；检查点28/47首轮输出保存，Platform运行中，实时以run为准。父单写CLI/PLAN/统一候选与Editor。整版/整工程编译/跨层业务尚未验收，持续推进。
+当前执行：父持有NativeProject01唯一实际CLI串行supervisor；检查点29/47首轮输出保存，Playable运行中，实时以run为准。父单写CLI/PLAN/统一候选与Editor。整版/整工程编译/跨层业务尚未验收，持续推进。
 
-- code_regeneration：Content05交付停止写入；继续仅NativeAudioControllerRevision02，将本地偏好初值改显式JSON注入，保留source flags、原子store及端口/事件失败边界；legacy类型测试替身不进入候选或真实闭包验收。
-- codex_postprocess：Snapshot04交付20/44 codec、string account文件存储78断言，aggregate仍pending；继续仅NativeAudioNativeProbe01准备356+1音频/67 cue/31 source的原生导入绑定，父持有Editor启动权。1080s方法/显式UTC deadline，未运行/播放not_run。
-- shader_profile：M4A decoder及normalizer产品交付停止写入，父10+6+4定向通过；编译调查24终态825源码、303闭合Domain通过，实际whole compile仍84个未来namespace缺口。旧绑定盘点/身份规则不改，不操作Editor。
+- code_regeneration：AudioControllerRevision02交付74组件断言、JSON初值，无C#默认音量；继续仅新NativeServicesContent06，闭合真实Inventory JSON→DTO→aggregate，singleton不造字典键；旧05/02停止写入。
+- codex_postprocess：NativeAudioNativeProbe01交付且父实际357音频导入/67 cue/31 sources保存重开通过，playback not_run；继续新NativeAudioIntegration03本地音频生命周期/配置与cue到port功能链，旧probe/02停止写入。不操作Editor。
+- shader_profile：继续仅code_architecture_resources.py/专测/CODE-NATIVE-RESOURCES.md，通用fresh candidate新增有pin JSON/WAV/meta producer；CLI/PLAN父写。旧M4A decoder/调查/绑定结果停止写入，不操作Editor。
 - 父：8个无较早待实现类型依赖的新模块已准备完整class+chain JSON与有界绑定context，旧supervisor按原序消费；4个有待实现依赖模块不提前准备。新helpers/原组件修订通过统一hash-pinned revision再整合，未重写已有模块/状态/排序，0额外模型调用。
 - 父原生窗口：真实42节点进度条与生产CLI两节点独立导入均完成、own child退出，原件不变；通用ProgressBar子集已接公共导出器，完整游戏/输入/视觉未验。正式工程/GREA/beaver只读，无发布/安装。
 
