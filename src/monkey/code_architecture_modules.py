@@ -695,6 +695,36 @@ def _previous(previous_module, module_id, source_pin, module_plan_sha):
 
 def prepare(architecture_stage, module_id, output, *, dependency_roots=(), previous_module=None,
             codex=worker.DEFAULT_CODEX, timeout_seconds=3600, idle_seconds=900):
+    """Prepare a module; retain failed new evidence outside its executable slot."""
+    created = []
+    try:
+        return _prepare(architecture_stage, module_id, output,
+            dependency_roots=dependency_roots, previous_module=previous_module,
+            codex=codex, timeout_seconds=timeout_seconds, idle_seconds=idle_seconds,
+            _created=created)
+    except Exception as error:
+        if created:
+            # No model runs during prepare. Preserve all newly created evidence,
+            # but do not leave an incomplete directory that run() could mistake
+            # for a prepared task. Existing caller-owned directories are untouched.
+            import uuid
+            root = created[0]
+            if root.is_dir():
+                archived = root.with_name(root.name + '.prepare-failed-' + uuid.uuid4().hex)
+                root.rename(archived)
+                _save(archived / 'prepare-failure.json', {
+                    'schemaVersion': 1, 'status': 'prepare_failed_evidence_retained',
+                    'moduleId': module_id, 'originalOutput': str(root),
+                    'errorCode': getattr(error, 'code', type(error).__name__),
+                    'error': str(error), 'modelInvoked': False,
+                    'resumable': False,
+                })
+        raise
+
+
+def _prepare(architecture_stage, module_id, output, *, dependency_roots=(), previous_module=None,
+             codex=worker.DEFAULT_CODEX, timeout_seconds=3600, idle_seconds=900,
+             _created=None):
     """Prepare one complete designed module as an isolated architecture-stage worker task.
 
     `previous_module` is either None or `{root, manifestSha256}`. Dependency roots must
@@ -739,6 +769,8 @@ def prepare(architecture_stage, module_id, output, *, dependency_roots=(), previ
         fail('CODE_ARCH_MODULE_PREVIOUS', module_id, 'Prior module contains class paths outside the current plan')
 
     root.mkdir(parents=True)
+    if _created is not None:
+        _created.append(root)
     context_root = root / 'Evidence'
     files, source_summary = _copy_stage_context(stage, classes, module, context_root)
     asset_context = asset_contexts.write_module_context(stage, classes, context_root, files,

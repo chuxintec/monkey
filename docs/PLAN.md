@@ -7,6 +7,10 @@
 
 ### 当前执行记录（2026-10-27 架构阶段）
 
+2026-10-27 新prepare边界实测：主队列已保存16/47首轮模块，Flower运行中。在不改变既有输入/状态/排序前提下，尝试为尚未启动且无缺失前置实现的Interface预置class+chain配置context；模型调用前发现完整module-asset-bindings.json超过8MiB，尚未成为prepared任务。完整失败Evidence已移入NativeFutureContextPreparation01/InterfaceFailedPreparation01，0022槽恢复不存在，未调用额外模型。正在按每片/整组双预算实现无截断绑定上下文分片，完成后才准备新任务供既有supervisor按原序消费。
+
+同一真实失败暴露prepare异常会遗留无request/state的输出目录、阻碍后续续跑。现仅对本次调用成功独占新建的目录，失败时整目录移至同级.prepare-failed-唯一ID并写明确未调用模型/不可续跑回执；原已存在目录绝不移动。17项模块检查通过，含完整Evidence保留、槽位恢复、拒绝接管既有目录；不删除失败证据，不改既有运行模块。
+
 2026-10-27 配置上下文根因补修：实际Audio旧manifest configPaths=[]，但Global05三Definition的configPaths/fieldKeyMap及冻结CookSound/PropSound/SFX完整存在。producer此前只取integrationChains.configPaths，现取所选classes.configPaths与相关chain并集，继续验证catalog/完整字节/SHA/预算；15项模块定向检查通过（新增类独有配置/篡改反例）。NativeConfigurationContext01实际只读重建AudioContext02并完整携带三表；静态影响18模块、180个模块内遗漏路径引用，非180份唯一文件。既有运行supervisor已加载旧函数，不热改当前队列或旧context；完整实现经独立版本化修订消费真实证据后再集成，未据此自动宣称旧输出恢复完成。
 
 BigDaySourceBehavior01以146份Domain编译产物实际读取原BigDay/BigDayRaceStage JSON，对四段精确源公式独立Python binary64转写的1,005分数/阶段/进度向量及9毫秒时钟边界执行通过，.NET8编译0警告/错误。原JS未执行，仅实际JSON、安全整数及秒→毫秒合同子集；活动启动/奖励/结算/服务端、Unity与整工程仍未验收。

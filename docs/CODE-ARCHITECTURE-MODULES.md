@@ -41,3 +41,10 @@ mentions them; catalog identity, full bytes, SHA and context budgets still
 apply. Previously prepared/running modules keep their pinned input context and
 are not rewritten by this change. A later explicit revision must consume the
 omitted evidence before its implementations can be treated as connected.
+
+If a fresh `prepare` fails after creating its output, the new directory is
+moved intact to a sibling `<name>.prepare-failed-<id>/` with a
+`prepare-failure.json` receipt. No model is invoked during preparation. This
+retains failed input evidence while leaving the intended pipeline slot absent
+for a later corrected prepare. The archive is not an executable/resumable task.
+Directories that already existed before the call are rejected and never moved.

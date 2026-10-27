@@ -178,6 +178,37 @@ class ArchitectureModuleWorkflowTests(unittest.TestCase):
                 modules._copy_stage_context(stage, [cls], stage['plan']['modules'][0], root / 'Context')
             self.assertEqual(caught.exception.code, 'CODE_ARCH_MODULE_CONFIG')
 
+    def test_failed_new_prepare_preserves_evidence_outside_pipeline_slot(self):
+        with tempfile.TemporaryDirectory(dir='/private/tmp') as directory:
+            root = Path(directory)
+            stage, _, _, _, _ = self.make_stage(root)
+            output = root / 'Module'
+            def fail_after_copy(*args, **kwargs):
+                raise ParseError('CODE_ARCH_ASSET_BUDGET', 'module-asset-bindings.json', 'Too large')
+            with patch.object(modules.asset_contexts, 'write_module_context', side_effect=fail_after_copy), \
+                    patch.object(modules.worker, 'prepare') as worker_prepare:
+                with self.assertRaises(ParseError):
+                    modules.prepare(stage, 'Recipe', output)
+            worker_prepare.assert_not_called()
+            self.assertFalse(output.exists())
+            archives = list(root.glob('Module.prepare-failed-*'))
+            self.assertEqual(len(archives), 1)
+            self.assertEqual((archives[0] / 'Evidence/Config/000.json').read_bytes(), b'{"items":[1,2]}')
+            failure = json.loads((archives[0] / 'prepare-failure.json').read_bytes())
+            self.assertEqual(failure['errorCode'], 'CODE_ARCH_ASSET_BUDGET')
+            self.assertFalse(failure['modelInvoked'])
+
+    def test_existing_prepare_output_is_never_archived(self):
+        with tempfile.TemporaryDirectory(dir='/private/tmp') as directory:
+            root = Path(directory)
+            stage, _, _, _, _ = self.make_stage(root)
+            output = root / 'Module'; output.mkdir()
+            (output / 'keep.txt').write_bytes(b'owned by caller')
+            with self.assertRaises(ParseError):
+                modules.prepare(stage, 'Recipe', output)
+            self.assertEqual((output / 'keep.txt').read_bytes(), b'owned by caller')
+            self.assertEqual(list(root.glob('Module.prepare-failed-*')), [])
+
     def test_prepare_pins_exact_module_source_config_and_empty_seed(self):
         with tempfile.TemporaryDirectory(dir='/private/tmp') as directory:
             root = Path(directory)
