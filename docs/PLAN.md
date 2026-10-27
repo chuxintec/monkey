@@ -11,6 +11,8 @@
 
 2026-10-27 字段映射边界核对：第41批观测大小写差异后复用renderer实例，授权样本Function_b6facd65dd为owner_unresolved、无classId/ownerBindingId及对应PascalCase字段声明，不据此认定renderer造成同一字段错名。合成AST确认独立render_field只见targetName，跨render_method须显式_draftMember身份注解；无映射维持源名和诊断。未增加全局大小写猜测或修改renderer逻辑，仅补文档与映射/未映射边界用例，父复跑34项、py_compile及diff检查通过；不是已修复所有动态字段或全工程编译的声明，实际串行队列继续。
 
+2026-10-27 命令记录增量检查02：仅前轮25批之外已完成26–43批的18份尝试归档，614条去重命令项；560段Python AST可解析，13个敏感compile命中均re.compile，os仅观测创建允许的__Reviews目录，random用于自有4096组低/高字乘法公式核对，不执行原JS/WASM/DLL或C#候选。51条引用/转义文本shell解析缺口及3条脱敏Python解析缺口保留，不重构脱敏内容；4条pwd复合命令含可解析Python静态变换。所见无原程序、引擎、联网或第二Codex启动，限定证据`EventAudit02/command-launch-signals.json`、`python-static-signals.json`、`manual-review.json`，不能作为每个操作的绝对证明。实际3221/6445，第44批96文件继续；未重跑旧引擎/资源或原生套件。
+
 
 2026-10-27 生成器控制流补修：新鲜discard局部声明自带block，避免无花括号if/else、while、for中CS1023；保留真实`_`赋值及Sequence求值顺序。renderer模块23项通过，独立.NET8反例先用022fc8c复现3处CS1023，再以修复版编译零警告/错误并得到`embedded=7,7`；回执`.private/v060-full-postprocess-20261026/RendererEmbeddedBehavior02/receipt.json`。仅合成代码执行，不是游戏全量编译。修复影响未来生成，冻结07与实际串行队列不改；检查点1294/6445，第20批实际审阅中，全量未完成。
 
