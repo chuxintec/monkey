@@ -421,6 +421,23 @@ class CodeDraftRenderTests(unittest.TestCase):
         self.assertIn("= (!2);", field["source"])
         self.assertIn("truthiness_approximation", {d["code"] for d in field["diagnostics"]})
 
+    def test_field_target_name_does_not_guess_unrelated_dynamic_member_case(self):
+        raw = b"this.scale_label"
+        field = render_field({"name": "scale_label", "targetName": "ScaleLabel", "static": False,
+                              "sourceBytes": {"start": 0, "end": len(raw)}}, n("Literal", value=1), raw)
+        self.assertEqual("public dynamic ScaleLabel = 1;", field["source"])
+        unresolved_member = n("MemberExpression", computed=False, object=n("ThisExpression"), property=ident("scale_label"),
+                              _draftUnresolvedMember={"reason": "no owner field binding"})
+        unresolved = render_method({"name": "readScale", "sourceBytes": {"start": 0, "end": len(raw)}},
+            n("FunctionExpression", params=[], body=n("BlockStatement", body=[n("ReturnStatement", argument=unresolved_member)])), raw)
+        self.assertIn("return (this).scale_label;", unresolved["source"])
+        self.assertIn("unresolved_member_mapping", {d["code"] for d in unresolved["diagnostics"]})
+        mapped_member = n("MemberExpression", computed=False, object=n("ThisExpression"), property=ident("scale_label"),
+                          _draftMember={"name": "ScaleLabel", "ownerClass": "Owner", "receiver": "source"})
+        mapped = render_method({"name": "readScale", "sourceBytes": {"start": 0, "end": len(raw)}},
+            n("FunctionExpression", params=[], body=n("BlockStatement", body=[n("ReturnStatement", argument=mapped_member)])), raw)
+        self.assertIn("return (this).ScaleLabel;", mapped["source"])
+
     def test_incomplete_binding_scan_reports_budget_and_skips_new_renames(self):
         raw = b"function f($,_){return $+_;}"
         dollar_param = n("Identifier", name="$", bindingId="budget-dollar", _draftIdentifierTarget="keptDollar")

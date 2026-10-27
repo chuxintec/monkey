@@ -10,6 +10,8 @@
 
 2026-10-27 同一renderer实例`!0/!1`窄补修已交付并停止写入：仅普通数字Literal 0/1一元!转true/false，其他输入维持诊断。父33项复跑通过；独立.NET8用例06旧方法/字段CS0023、修复后零警告/错误并得True/False/字段True。父已接管集成与新异常信号原文复核，实际唯一全量CLI继续，冻结候选不改。
 
+2026-10-27 第41批字段大小写有界根因模块已交付并停止写入：样本Function_b6facd65dd属于owner_unresolved，无classId/ownerBindingId及对应PascalCase字段声明，不能按名字猜测；render_field目标名不自动传递至独立render_method，须由调用方明确owner/field身份并注解_draftMember。本次未改renderer逻辑，仅文档及有/无映射边界测试，父34项复跑、py_compile与diff检查通过。实际候选/07不改，不执行原程序/另启Codex/Editor；父继续唯一真实CLI、PLAN/TEAM、私有审计与集成。
+
 运行期性能/记录协议：codex_postprocess 已交付fixed JSON ledger与artifact级错误、26项检查并停止写入；父单写项目task/API/CLI、实际queue与采用。当前模型自然收尾后切换，不重跑已审阅批次，不把语义未知当未审阅，也不把未知ID算入验证覆盖。
 
 首批实际运行暴露预算过短：父维护项目pause/configure/CLI/运行资料；复用codex_postprocess在既有三文件内补低层合作式检查点和停机预算调整。真实CLI仍父唯一串行，既有工作进程自然退出后才交接，不重置耗时或尝试次数。
