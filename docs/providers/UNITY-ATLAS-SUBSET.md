@@ -22,7 +22,7 @@ The reflections, half turn and unchanged topology were compared against bound so
 
 ## Explicit texture cache families
 
-An explicit frozen cache manifest may identify `Assets/Textures/astc/<maximum-dimension>/<exact-token-key>.txt` or `Assets/Textures/dds/<maximum-dimension>/<exact-token-key>.txt`. Only one supplied cache may match a source key. Names and block-size hints do not establish the encoding: DDS magic, complete header, FOURCC and payload length are checked before decoding.
+An explicit frozen cache manifest may identify `Assets/Textures/astc/<literal-bucket>/<exact-token-key>.txt` or `Assets/Textures/dds/<literal-bucket>/<exact-token-key>.txt`. The source bucket is not inferred from image dimensions. Only one supplied cache may match a source key unless an exact object/path binding selects one. See [exact texture selection](UNITY-TEXTURE-SELECTION.md) for the unpublished selected-object contract and partial-derivative boundary. Names and block-size hints do not establish the encoding: DDS magic, complete header, FOURCC and payload length are checked before decoding.
 
 The new DDS subset is one single-level DXT5/BC3 image with matching positive dimensions, no cubemap/volume, no trailing bytes and at most 16,777,216 pixels. Pillow **12.2.0** is required in the selected provider Python. Its canonical normalization is `DDS-DXT5-to-RGBA-no-flip-v1`. ASTC continues to require texture2ddecoder **1.0.6**; DDS bytes are never passed to the ASTC decoder. Missing or mismatched decoder dependencies produce explicit diagnostics and do not trigger installation.
 

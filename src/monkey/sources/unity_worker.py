@@ -291,57 +291,89 @@ def decode_cached_texture(cached,width,height,hint=None,kind='astc'):
 
 def hydrate_manifest(job_path,output):
     import UnityPy
+    from monkey.unity_texture_selection import matching_cache,validate_selection,cache_index
     if UnityPy.__version__!=PROVIDER_VERSION:raise RuntimeError('Expected UnityPy '+PROVIDER_VERSION)
     job=json.loads(job_path.read_text());source=Path(job['source']);raw=source.read_bytes()
     if len(raw)>MAX_BYTES or digest(raw)!=job['sourceSha256']:raise ValueError('Source changed')
-    env=UnityPy.load(raw);before={(a.name,identifier(o.path_id)):(o.type.name,digest(o.get_raw_data())) for a in env.assets for o in a.objects.values()}
-    pool={x['logicalPath']:x for x in job['cache']};resolved=[];missing=[];modified=set()
+    selection=job.get('selection')
+    if selection is not None:selection=validate_selection(dict(schemaVersion=1,sourceSha256=job['sourceSha256'],objects=selection),job['sourceSha256'])
+    chosen={(r['file'],r['pathId']):r for r in selection}if selection is not None else None
+    env=UnityPy.load(raw);before={}
     for asset in env.assets:
-        if not asset.unity_version.startswith('2021.3.'):raise ValueError('Texture token hydration currently verified for Unity2021.3 profile only')
+        for obj in asset.objects.values():
+            key=(asset.name,identifier(obj.path_id))
+            if key in before:raise ValueError('Ambiguous serialized-file/object identity')
+            before[key]=(obj.type.name,digest(obj.get_raw_data()))
+    pool={x['logicalPath']:x for x in job['cache']};index=cache_index(pool);resolved=[];missing=[];deferred=[];diagnostics=[];modified=set()
+    def finish(status,**extra):
+        if digest(source.read_bytes())!=job['sourceSha256']:raise ValueError('Original changed during hydration')
+        report=dict(schemaVersion=1,provider=dict(name='UnityPy',version=PROVIDER_VERSION),sourceSha256=digest(raw),status=status,
+                    scope='selected-texture-set'if chosen is not None else'container',selectionComplete=(not missing and not diagnostics)if chosen is not None else None,
+                    wholeContainerComplete=status=='hydrated',resolved=resolved,missing=missing,deferred=deferred,diagnostics=diagnostics,
+                    originalSourceWritten=False,sourceCodeExecuted=False,pixelsDecoded=bool(resolved),serializationCommitted=False,inventoryComplete=False,
+                    canonicalPixelDecoder=(resolved[0]['decoder']if resolved and len({r['decoder']for r in resolved})==1 else'per-cache-family-pinned-decoder'))
+        report.update(extra);output.write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+    if chosen is not None:
+        for key,row in chosen.items():
+            actual=before.get(key)
+            if actual!=('Texture2D',row['rawSha256']):
+                reason='selected-object-missing'if actual is None else'selected-object-wrong-type'if actual[0]!='Texture2D'else'selected-object-raw-sha-changed'
+                diagnostics.append(dict(code='UNITY_TEXTURE_SELECTION_IDENTITY',file=key[0],pathId=key[1],reason=reason,message='Exact selected Texture2D identity could not be verified'))
+        if diagnostics:finish('needs_action');return
+    for asset in env.assets:
         for obj in asset.objects.values():
             if obj.type.name!='Texture2D':continue
-            typed=obj.read_typetree(check_read=True);token=texture_payload(typed)
-            if token['kind']!='external-key-token-candidate':continue
+            key=(asset.name,identifier(obj.path_id));binding=chosen.get(key)if chosen is not None else None
+            if chosen is not None and binding is None:
+                deferred.append(dict(file=key[0],pathId=key[1],rawSha256=before[key][1],reason='not-selected-not-evaluated'));continue
+            if not asset.unity_version.startswith('2021.3.'):
+                diagnostics.append(dict(code='UNITY_TEXTURE_SOURCE_PROFILE',file=key[0],pathId=key[1],message='Texture token hydration currently verified for Unity2021.3 profile only'));finish('needs_action');return
+            try:typed=obj.read_typetree(check_read=True)
+            except Exception:
+                diagnostics.append(dict(code='UNITY_TEXTURE_TYPE_TREE',file=key[0],pathId=key[1],message='Texture2D TypeTree could not be read; no inferred fields'));finish('needs_action');return
+            token=texture_payload(typed)
+            if token['kind']!='external-key-token-candidate':
+                if binding:diagnostics.append(dict(code='UNITY_TEXTURE_SELECTION_PAYLOAD',file=key[0],pathId=key[1],message='Selected object is not an external-key texture token'));finish('needs_action');return
+                continue
             if typed.get('m_MipCount')!=1 or typed.get('m_ImageCount')!=1:raise ValueError('Only original single-mip 2D texture hydration supported')
-            logicals={kind:'Assets/Textures/'+kind+'/'+str(max(typed['m_Width'],typed['m_Height']))+'/'+token['key']+'.txt' for kind in ('astc','dds')}
-            matches=[(kind,logical,pool[logical])for kind,logical in logicals.items()if logical in pool]
+            try:matches=matching_cache(pool,token['key'],binding['logicalPath']if binding else None,index)
+            except ValueError as error:
+                diagnostics.append(dict(code='UNITY_TEXTURE_BINDING',file=key[0],pathId=key[1],message=str(error)));finish('needs_action');return
             if not matches:
-                missing.append(dict(file=asset.name,pathId=identifier(obj.path_id),key=token['wireKey'],logicalPath=logicals['astc'],acceptedLogicalPaths=list(logicals.values()),reason='exact-cache-key-missing'));continue
-            if len(matches)!=1:raise ValueError('Ambiguous supplied cache encodings for one exact source texture key')
+                missing.append(dict(file=key[0],pathId=key[1],key=token['wireKey'],logicalPath=binding['logicalPath']if binding else None,filename=token['key']+'.txt',reason='exact-cache-key-missing'));continue
+            if len(matches)!=1:
+                diagnostics.append(dict(code='UNITY_TEXTURE_CACHE_AMBIGUOUS',file=key[0],pathId=key[1],logicalPaths=[r[1]for r in matches],message='Explicit object binding required; no path or encoding is guessed'));finish('needs_action');return
             kind,logical,item=matches[0]
-            with Path(item['path']).open('rb') as stream:cached=stream.read(MAX_BYTES+1)
-            if len(cached)!=item['bytes'] or digest(cached)!=item['sha256']:raise ValueError('Texture cache identity changed')
-            try:
-                rgba,decoded_evidence=decode_cached_texture(cached,typed['m_Width'],typed['m_Height'],token.get('blockSizeHint'),kind)
-            except (ImportError,ValueError) as error:
+            with Path(item['path']).open('rb')as stream:cached=stream.read(MAX_BYTES+1)
+            if len(cached)!=item['bytes']or digest(cached)!=item['sha256']:
+                diagnostics.append(dict(code='UNITY_TEXTURE_CACHE_IDENTITY',logicalPath=logical,message='Frozen cache bytes or SHA-256 changed'));finish('needs_action');return
+            try:rgba,evidence=decode_cached_texture(cached,typed['m_Width'],typed['m_Height'],token.get('blockSizeHint'),kind)
+            except (ImportError,ValueError)as error:
                 from monkey.sources.unity_dds import DdsDependencyError
                 code=getattr(error,'code','DEPENDENCY_MISSING')if isinstance(error,(ImportError,DdsDependencyError))else'UNITY_TEXTURE_CACHE_ENCODING'
-                output.write_text(json.dumps(dict(schemaVersion=1,status='needs_action'if code.startswith('DEPENDENCY_')else'blocked',resolved=[],missing=[],diagnostics=[dict(code=code,logicalPath=logical,message=str(error))],originalSourceWritten=False,sourceCodeExecuted=False),indent=2)+'\n',encoding='utf-8')
-                return
-            fmt=4
-            typed['image data']=bytes(rgba);typed['m_CompleteImageSize']=len(rgba);typed['m_TextureFormat']=fmt
-            obj.save_typetree(typed);modified.add((asset.name,identifier(obj.path_id)))
-            resolved.append(dict(file=asset.name,pathId=identifier(obj.path_id),key=token['wireKey'],logicalPath=logical,
-                                 cacheSha256=digest(cached),cacheBytes=len(cached),cacheFamily=kind,sourceTokenBlockSizeHint=token.get('blockSizeHint'),textureFormat=fmt,rgbaRawSha256=digest(rgba),**decoded_evidence))
-    report=dict(schemaVersion=1,provider=dict(name='UnityPy',version=PROVIDER_VERSION),sourceSha256=digest(raw),
-                status='blocked' if missing else 'hydrated',resolved=resolved,missing=missing,originalSourceWritten=False,
-                sourceCodeExecuted=False,pixelsDecoded=bool(resolved),canonicalPixelDecoder=(resolved[0]['decoder'] if resolved and len({r['decoder']for r in resolved})==1 else 'per-cache-family-pinned-decoder'))
-    if not missing:
-        encoded=env.file.save(packer='lz4')
-        if len(encoded)>MAX_BYTES:raise ValueError('Derived bundle byte budget')
-        check=UnityPy.load(encoded);after={(a.name,identifier(o.path_id)):(o.type.name,digest(o.get_raw_data())) for a in check.assets for o in a.objects.values()}
-        if before.keys()!=after.keys() or any(before[k]!=after[k] for k in before if k not in modified):
-            raise ValueError('Non-texture source object changed during serialization')
-        for asset in check.assets:
-            for obj in asset.objects.values():
-                if (asset.name,identifier(obj.path_id))in modified:
-                    d=obj.read_typetree(check_read=True)
-                    if texture_payload(d)['kind']!='inline-payload':raise ValueError('Texture hydration did not roundtrip')
-        (output.parent/'hydrated.bundle').write_bytes(encoded)
-        report.update(derivedBundleSha256=digest(encoded),derivedBundleBytes=len(encoded),nonTextureObjectsUnchanged=True,modifiedTextures=len(modified))
+                diagnostics.append(dict(code=code,logicalPath=logical,message=str(error)));finish('needs_action'if code.startswith('DEPENDENCY_')else'blocked');return
+            typed['image data']=bytes(rgba);typed['m_CompleteImageSize']=len(rgba);typed['m_TextureFormat']=4
+            obj.save_typetree(typed);modified.add(key)
+            resolved.append(dict(file=key[0],pathId=key[1],sourceRawSha256=before[key][1],key=token['wireKey'],logicalPath=logical,
+                                 cacheSha256=digest(cached),cacheBytes=len(cached),cacheFamily=kind,sourceTokenBlockSizeHint=token.get('blockSizeHint'),
+                                 textureFormat=4,width=typed['m_Width'],height=typed['m_Height'],rgbaRawSha256=digest(rgba),**evidence))
+    if missing:finish('needs_action'if chosen is not None else'blocked',inventoryComplete=True);return
+    encoded=env.file.save(packer='lz4')
+    if len(encoded)>MAX_BYTES:raise ValueError('Derived bundle byte budget')
+    check=UnityPy.load(encoded);after={(a.name,identifier(o.path_id)):(o.type.name,digest(o.get_raw_data()))for a in check.assets for o in a.objects.values()}
+    if before.keys()!=after.keys()or any(before[k]!=after[k]for k in before if k not in modified):raise ValueError('Unselected or non-texture object changed during serialization')
+    proofs={(r['file'],r['pathId']):r for r in resolved}
+    for asset in check.assets:
+        for obj in asset.objects.values():
+            key=(asset.name,identifier(obj.path_id))
+            if key in modified:
+                data=obj.read_typetree(check_read=True);proof=proofs[key]
+                if data['m_TextureFormat']!=4 or data['m_Width']!=proof['width']or data['m_Height']!=proof['height']or digest(data['image data'])!=proof['rgbaRawSha256']:
+                    raise ValueError('Texture RGBA hydration did not roundtrip exactly')
     if digest(source.read_bytes())!=job['sourceSha256']:raise ValueError('Original changed during hydration')
-    output.write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n')
-
+    (output.parent/'hydrated.bundle').write_bytes(encoded)
+    finish('partial'if deferred else'hydrated',derivedBundleSha256=digest(encoded),derivedBundleBytes=len(encoded),
+           serializationCommitted=True,inventoryComplete=True,nonTextureObjectsUnchanged=True,unselectedObjectsUnchanged=True,modifiedTextures=len(modified))
 
 
 def quarantine_invalid_textures(job_path,output):
