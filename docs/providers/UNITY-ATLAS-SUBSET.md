@@ -10,13 +10,15 @@ The verified tight geometry source is Unity 2021.3.30f1, platform 20. Decode `se
 | --- | --- | --- | --- | --- |
 | 65 | yes | Tight | None | Tight |
 | 67 | yes | Rectangle | None | Tight |
+| 69 | yes | Tight | FlipHorizontal | Tight |
 | 73 | yes | Tight | FlipVertical | Tight |
+| 77 | yes | Tight | Rotate180 | Tight |
 
 Unknown combinations and reserved bits are rejected. In particular, 73 encodes a vertical reflection, rather than a quarter turn. The tight profile preserves the original float32 planar vertices, vertex order and uint16 triangle indices. It requires the known position/unused-UV stream layout and one triangle submesh; it does not round vertices or regenerate a hull.
 
-For each original position `(vx, vy)`, the atlas affine transform gives `u = (vx * uv.x + uv.y) / width` and `v = (vy * uv.z + uv.w) / height`. A vertical reflection applies `v = (2 * rect.y + rect.height) / height - v`. This uses the serialized atlas rectangle without integer rounding. Original Sprite bounds/pivot and the packed atlas rectangle are distinct descriptors.
+For each original position `(vx, vy)`, the atlas affine transform gives `u = (vx * uv.x + uv.y) / width` and `v = (vy * uv.z + uv.w) / height`. A horizontal reflection applies `u = (2 * rect.x + rect.width) / width - u`; a vertical reflection applies `v = (2 * rect.y + rect.height) / height - v`. A half turn applies both reflections. This uses the serialized atlas rectangle without integer rounding. Original Sprite bounds/pivot and the packed atlas rectangle are distinct descriptors.
 
-The reflection and unchanged topology were compared against a bound source SpriteAtlas in a Unity 6 Play session. Merely loading an unbound Sprite in the Editor can return zero UVs and is not a valid source control. Generated assets were separately imported, saved, reopened and read back in Unity 6000.6.2f1. These checks cover resource identity and geometry, not gameplay or visual acceptance.
+The reflections, half turn and unchanged topology were compared against bound source SpriteAtlases in Unity 6 Play sessions. Vertex float32 values and triangle indices must match exactly. UVs retain the existing native verifier tolerance of 0.000001 for float32 arithmetic; the two additional source controls observed maximum UV differences below 0.000000106. This does not permit vertex rounding or hull regeneration. Merely loading an unbound Sprite in the Editor can return zero UVs and is not a valid source control. Generated assets were separately imported, saved, reopened and read back in Unity 6000.6.2f1. These checks cover resource identity and geometry, not gameplay or visual acceptance.
 
 ## Explicit texture cache families
 

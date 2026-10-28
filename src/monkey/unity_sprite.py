@@ -1,8 +1,8 @@
 """Strict geometry descriptors for the verified Unity 2021.3 tight Sprite profile.
 
 Only float32, planar position + unused UV streams, one uint16 triangle submesh,
-and packed tight atlas UV transforms with no rotation or a vertical flip are covered.
-The flip is around the exact serialized atlas rect center. No hull or pixels are invented.
+and packed tight atlas UV transforms with axis reflections or a half turn are covered.
+Reflections use the exact serialized atlas rect center. No hull or pixels are invented.
 """
 import base64
 import math
@@ -15,10 +15,10 @@ def atlas_settings(raw):
     """Decode the verified serialized bit subset, rejecting reserved/unknown modes."""
     if type(raw)is not int or not 0<=raw<=127:raise ValueError('Unsupported Sprite settings bits')
     values=(raw&1,(raw>>1)&1,(raw>>2)&15,(raw>>6)&1)
-    if values not in ((1,0,0,1),(1,1,0,1),(1,0,2,1)):
+    if values not in ((1,0,0,1),(1,1,0,1),(1,0,1,1),(1,0,2,1),(1,0,3,1)):
         raise ValueError('Unverified packed/mode/rotation/mesh-type combination: '+str(values))
     return dict(settingsRaw=raw,packed=bool(values[0]),packingMode='Tight'if values[1]==0 else'Rectangle',
-                packingRotation='None'if values[2]==0 else'FlipVertical',meshType='Tight')
+                packingRotation=('None','FlipHorizontal','FlipVertical','Rotate180')[values[2]],meshType='Tight')
 
 
 def tight_geometry(data,atlas,width,height):
@@ -46,10 +46,11 @@ def tight_geometry(data,atlas,width,height):
     uv=atlas['uvTransform'];values=[uv[k] for k in ('x','y','z','w')]
     check(all(type(v) in (int,float) and math.isfinite(v) for v in (*values,width,height)) and width>0 and height>0,'Invalid tight atlas UV transform')
     coords=[dict(x=(x*uv['x']+uv['y'])/width,y=(y*uv['z']+uv['w'])/height) for x,y,_ in vertices]
-    if settings['packingRotation']=='FlipVertical':
+    if settings['packingRotation']!='None':
         rect=atlas['textureRect']
-        check(set(rect)=={'x','y','width','height'} and all(type(v)in(int,float)and math.isfinite(v)for v in rect.values())and rect['width']>0 and rect['height']>0,'Exact finite packed rect required for vertical flip')
-        center_twice=(2*rect['y']+rect['height'])/height
-        for row in coords:row['y']=center_twice-row['y']
+        check(set(rect)=={'x','y','width','height'} and all(type(v)in(int,float)and math.isfinite(v)for v in rect.values())and rect['width']>0 and rect['height']>0,'Exact finite packed rect required for atlas rotation')
+        for row in coords:
+            if settings['packingRotation']in('FlipHorizontal','Rotate180'):row['x']=(2*rect['x']+rect['width'])/width-row['x']
+            if settings['packingRotation']in('FlipVertical','Rotate180'):row['y']=(2*rect['y']+rect['height'])/height-row['y']
     check(all(math.isfinite(v) and abs(v)<=1 for row in coords for v in row.values()),'Unbounded or nonfinite tight atlas UV')
     return dict(meshVertices=[dict(x=x,y=y) for x,y,_ in vertices],triangleIndices=triangles,meshUv=coords,verifyMesh=True)
