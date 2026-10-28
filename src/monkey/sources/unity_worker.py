@@ -376,6 +376,65 @@ def hydrate_manifest(job_path,output):
            serializationCommitted=True,inventoryComplete=True,nonTextureObjectsUnchanged=True,unselectedObjectsUnchanged=True,modifiedTextures=len(modified))
 
 
+def export_selected_textures(job_path,output):
+    import UnityPy
+    from monkey.unity_texture_selection import validate_selection,matching_cache
+    if UnityPy.__version__!=PROVIDER_VERSION:raise ValueError('Expected UnityPy '+PROVIDER_VERSION)
+    job=json.loads(job_path.read_text());raw={}
+    for name,path in job['paths'].items():
+        with Path(path).open('rb')as stream:data=stream.read(MAX_BYTES+1)
+        if len(data)>MAX_BYTES or digest(data)!=job['pins'][name]:raise ValueError('Frozen export input identity changed')
+        raw[name]=data
+    selection=validate_selection(json.loads(raw['selectionManifest']),job['pins']['source']);proof=json.loads(raw['hydrationReport'])
+    if selection!=job['selection']or proof!=job['proof']:raise ValueError('Frozen export job differs from its receipts')
+    if proof.get('sourceSha256')!=job['pins']['source']or proof.get('derivedBundleSha256')!=job['pins']['derivative']or proof.get('selectionComplete')is not True or proof.get('serializationCommitted')is not True:
+        raise ValueError('Hydration source/derivative proof is incomplete or changed')
+    def objects(data):
+        env=UnityPy.load(data);rows={}
+        for asset in env.assets:
+            for obj in asset.objects.values():
+                key=(asset.name,identifier(obj.path_id))
+                if key in rows:raise ValueError('Ambiguous serialized-file/object identity')
+                rows[key]=obj
+        return env,rows
+    original,source=objects(raw['source']);derived,after=objects(raw['derivative']);chosen={(r['file'],r['pathId']):r for r in selection}
+    if source.keys()!=after.keys():raise ValueError('Derivative object inventory differs')
+    for key,obj in source.items():
+        if key not in chosen and (obj.type.name!=after[key].type.name or digest(obj.get_raw_data())!=digest(after[key].get_raw_data())):
+            raise ValueError('An unselected object differs from original bytes')
+    deferred={(k[0],k[1]):digest(obj.get_raw_data())for k,obj in source.items()if k not in chosen and obj.type.name=='Texture2D'}
+    reported={(r['file'],r['pathId']):r['rawSha256']for r in proof.get('deferred',[])}
+    if reported!=deferred or len(reported)!=len(proof.get('deferred',[]))or proof['status']!=('partial'if deferred else'hydrated'):
+        raise ValueError('Deferred texture inventory or partial state differs from original objects')
+    proofs={}
+    for row in proof['resolved']:
+        key=(row['file'],row['pathId'])
+        if key in proofs:raise ValueError('Duplicate hydration object proof')
+        proofs[key]=row
+    if proofs.keys()!=chosen.keys():raise ValueError('Hydration proof does not exactly cover selected objects')
+    records=[];total=0
+    for key,binding in chosen.items():
+        obj=source.get(key);target=after.get(key);p=proofs[key]
+        if obj is None or obj.type.name!='Texture2D'or target.type.name!='Texture2D'or digest(obj.get_raw_data())!=binding['rawSha256']or p['sourceRawSha256']!=binding['rawSha256']or p['logicalPath']!=binding['logicalPath']:
+            raise ValueError('Exact selected source Texture2D identity differs')
+        before=obj.read_typetree(check_read=True);data=target.read_typetree(check_read=True);token=texture_payload(before)
+        if token['kind']!='external-key-token-candidate'or not matching_cache({binding['logicalPath']:p},token['key'],binding['logicalPath']):raise ValueError('Original texture token binding differs')
+        w,h=p['width'],p['height']
+        if type(w)is not int or type(h)is not int or w<=0 or h<=0 or w*h>16777216:raise ValueError('Selected texture pixel budget')
+        if any(d.get('m_Width')!=w or d.get('m_Height')!=h or d.get('m_MipCount')!=1 or d.get('m_ImageCount')!=1 or d.get('m_TextureDimension')!=2 for d in (before,data)):
+            raise ValueError('Exact single-mip 2D dimensions differ')
+        if p.get('normalization')not in('BGRA-to-RGBA-no-flip-v1','DDS-DXT5-to-RGBA-no-flip-v1'):raise ValueError('Unproven canonical pixel normalization')
+        pixels=data.get('image data');total+=len(pixels)if isinstance(pixels,bytes)else MAX_BYTES+1
+        if data.get('m_TextureFormat')!=4 or not isinstance(pixels,bytes)or len(pixels)!=w*h*4 or digest(pixels)!=p['rgbaRawSha256']or total>MAX_BYTES:
+            raise ValueError('Selected derivative pixels differ from hydration proof')
+        relative='Payloads/'+digest((key[0]+'\0'+key[1]+'\0'+binding['rawSha256']).encode())+'.rgba';path=output.parent/relative;path.parent.mkdir(exist_ok=True);path.write_bytes(pixels)
+        records.append(dict(file=key[0],pathId=key[1],sourceRawSha256=binding['rawSha256'],sourceName=before.get('m_Name'),
+                            sourceSettings={k:before.get(k)for k in ('m_ColorSpace','m_TextureSettings','m_MipCount','m_TextureDimension')},
+                            payloadPath=relative,width=w,height=h,**{k:p[k]for k in ('rgbaRawSha256','logicalPath','cacheSha256','normalization','decoder')}))
+    if any(digest(Path(job['paths'][k]).read_bytes())!=job['pins'][k]for k in raw):raise ValueError('An export input changed during readback')
+    output.write_text(json.dumps(dict(schemaVersion=1,status='selected-pixels-verified',textures=records,unselectedObjectsUnchanged=True,sourceAndDerivativeUnchanged=True,sourceCodeExecuted=False),ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+
+
 def quarantine_invalid_textures(job_path,output):
     import UnityPy
     if UnityPy.__version__!=PROVIDER_VERSION:raise RuntimeError('Expected UnityPy '+PROVIDER_VERSION)
@@ -499,6 +558,7 @@ def main():
 if __name__ == '__main__':
     if len(sys.argv)==4 and sys.argv[1]=='--inspect-batch':inspect_batch(Path(sys.argv[2]),Path(sys.argv[3]))
     elif len(sys.argv)==4 and sys.argv[1]=='--hydrate':hydrate_manifest(Path(sys.argv[2]),Path(sys.argv[3]))
+    elif len(sys.argv)==4 and sys.argv[1]=='--export-selected-textures':export_selected_textures(Path(sys.argv[2]),Path(sys.argv[3]))
     elif len(sys.argv)==4 and sys.argv[1]=='--quarantine-invalid-textures':quarantine_invalid_textures(Path(sys.argv[2]),Path(sys.argv[3]))
     elif len(sys.argv)==4 and sys.argv[1]=='--index':index_manifest(Path(sys.argv[2]),Path(sys.argv[3]))
     else:main()

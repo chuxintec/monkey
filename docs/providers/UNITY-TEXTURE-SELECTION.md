@@ -48,3 +48,26 @@ Missing selected data returns `needs_action`; missing required data in default w
 ## Validation boundary
 
 Focused tests cover exact non-square bucket matching, unchanged unreadable neighbors, original/pixel identities, full-container blocking, ambiguous cache paths, explicit-path mismatch, stale selectors and serialization drift. A private synthetic two-Texture2D UnityFS fixture additionally exercises the real UnityPy 1.25.3 worker and pinned DDS/ASTC decoders for 256×512 pixels with a literal `256` bucket. This is provider/serialization evidence, not a claim that a consumer's undisclosed real source input, native project or gameplay has been validated.
+
+## Selected PNG delivery without a whole-container exporter
+
+`export-unity` remains a whole-container AssetRipper operation. Passing it a partial hydration derivative can fail on unrelated token-backed textures. Use the separate `unity-selected-texture-export/1` operation for the exact proven texture set:
+
+```sh
+monkey export-unity-textures --source <same-original.bundle> \
+  --derivative <hydration-output/hydrated.bundle> \
+  --hydration-report <hydration-output/hydration.json> \
+  --expected-hydration-sha256 <frozen-report-SHA-256> \
+  --selection-manifest <same-selection.json> \
+  --provider-python <pinned-UnityPy-1.25.3-python> --out <fresh-export>
+```
+
+This operation requires a committed selected-hydration receipt and its external SHA pin, the original/derivative byte identities and the original object selector. It independently compares the object inventories and every unselected object byte hash, reads only selected Texture2D TypeTrees, and verifies original object SHA, literal token binding, 2D/single-mip dimensions, derived RGBA format and canonical pixel SHA. It never runs AssetRipper, resolves unrelated textures, deletes objects or writes another bundle. Cache decoding provenance comes from the frozen hydration receipt; the export verifies its resulting derivative pixels rather than reinterpreting or reacquiring the cache.
+
+The clean `Candidate/` directory contains PNGs under `Assets/Game/Content/Textures/Selected/` and `manifest.json`. PNG rows use the same vertical flip for Unity as the existing lossless exporter; PNG decode plus inverse flip must exactly reproduce the hydration RGBA hash. Filenames derive from source identity rather than source names. The manifest locks PNG bytes, source file/pathID/raw SHA, input/derivative/report/selection hashes, cache provenance, pixel dimensions and orientation, and the literal source texture settings. Provider work files and raw RGBA staging stay outside `Candidate/`.
+
+Importer intent is Uncompressed, alphaIsTransparency=false and CPU readability=false. Sampling/color-space source fields are retained as source metadata for controlled adoption, not silently translated. No `.meta`, original GUID/localFileID or completed native import is fabricated. The consumer adopts the PNG while preserving or explicitly binding existing target identities and separately verifies importer/platform/color behavior in the Editor. This operation produces a resource candidate, not a UnityProject or a verified Texture2D import.
+
+When the source receipt is partial, export stays `status: partial`, `exportComplete: true`, `wholeContainerComplete: false`, with the original deferred list and CLI exit **1**. The PNG is available for explicit scoped consumption; whole-container gates remain unchanged. A non-partial selected source may return `exported`/exit 0. Failed or uncommitted proofs cannot create a successful candidate manifest.
+
+Additional checks cover asymmetric PNG orientation, unreadable unselected neighbors, pixel/receipt/selector drift and unselected-byte changes. A private synthetic 225-Texture2D UnityFS case exercises hydration of one object and direct PNG delivery while retaining 224 unrelated external-key textures. This does not establish acceptance of a consumer's real game input or native import.
