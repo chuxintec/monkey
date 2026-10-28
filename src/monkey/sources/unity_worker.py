@@ -266,6 +266,29 @@ def astc_header(raw,width,height,hint=None):
     return dict(block=bx,width=w,height=h,payloadBytes=required)
 
 
+def decode_cached_texture(cached,width,height,hint=None,kind='astc'):
+    """Decode only the explicit cache family; the wire name is not a codec."""
+    if kind not in ('astc','dds'):raise ValueError('Unsupported explicit texture cache family')
+    if kind=='dds':
+        from monkey.sources.unity_dds import decode_dds_dxt5
+        rgba,header=decode_dds_dxt5(cached,width,height)
+        return rgba,dict(dds=header,decoder=header['decoder'],normalization='DDS-DXT5-to-RGBA-no-flip-v1')
+    header=astc_header(cached,width,height,hint)
+    from importlib.metadata import version,PackageNotFoundError
+    try:
+        import texture2ddecoder
+        installed=version('texture2ddecoder')
+    except (ImportError,PackageNotFoundError) as error:
+        raise ImportError('ASTC requires texture2ddecoder==1.0.6 in the selected provider; no automatic installation') from error
+    if installed!='1.0.6':
+        error=ImportError('ASTC requires texture2ddecoder==1.0.6 in the selected provider; found '+installed)
+        error.code='DEPENDENCY_VERSION';raise error
+    decoded=texture2ddecoder.decode_astc(cached[16:],width,height,header['block'],header['block'])
+    if len(decoded)!=width*height*4:raise ValueError('Decoded texture byte budget/size differs')
+    rgba=bytearray(len(decoded));rgba[0::4]=decoded[2::4];rgba[1::4]=decoded[1::4];rgba[2::4]=decoded[0::4];rgba[3::4]=decoded[3::4]
+    return bytes(rgba),dict(astc=header,decoder='texture2ddecoder1.0.6',normalization='BGRA-to-RGBA-no-flip-v1')
+
+
 def hydrate_manifest(job_path,output):
     import UnityPy
     if UnityPy.__version__!=PROVIDER_VERSION:raise RuntimeError('Expected UnityPy '+PROVIDER_VERSION)
@@ -280,29 +303,29 @@ def hydrate_manifest(job_path,output):
             typed=obj.read_typetree(check_read=True);token=texture_payload(typed)
             if token['kind']!='external-key-token-candidate':continue
             if typed.get('m_MipCount')!=1 or typed.get('m_ImageCount')!=1:raise ValueError('Only original single-mip 2D texture hydration supported')
-            logical='Assets/Textures/astc/'+str(max(typed['m_Width'],typed['m_Height']))+'/'+token['key']+'.txt'
-            item=pool.get(logical)
-            if item is None:
-                missing.append(dict(file=asset.name,pathId=identifier(obj.path_id),key=token['wireKey'],logicalPath=logical,reason='exact-cache-key-missing'));continue
+            logicals={kind:'Assets/Textures/'+kind+'/'+str(max(typed['m_Width'],typed['m_Height']))+'/'+token['key']+'.txt' for kind in ('astc','dds')}
+            matches=[(kind,logical,pool[logical])for kind,logical in logicals.items()if logical in pool]
+            if not matches:
+                missing.append(dict(file=asset.name,pathId=identifier(obj.path_id),key=token['wireKey'],logicalPath=logicals['astc'],acceptedLogicalPaths=list(logicals.values()),reason='exact-cache-key-missing'));continue
+            if len(matches)!=1:raise ValueError('Ambiguous supplied cache encodings for one exact source texture key')
+            kind,logical,item=matches[0]
             with Path(item['path']).open('rb') as stream:cached=stream.read(MAX_BYTES+1)
             if len(cached)!=item['bytes'] or digest(cached)!=item['sha256']:raise ValueError('Texture cache identity changed')
-            header=astc_header(cached,typed['m_Width'],typed['m_Height'],token.get('blockSizeHint'))
-            # Normalize once with the same pinned decoder as monkey's Cocos ASTC path.
-            # Raw BGRA -> RGBA channel mapping only; no vertical flip, rounding tolerance or invented pixels.
-            from importlib.metadata import version
-            import texture2ddecoder
-            if version('texture2ddecoder')!='1.0.6':raise ValueError('Expected texture2ddecoder1.0.6')
-            decoded=texture2ddecoder.decode_astc(cached[16:],header['width'],header['height'],header['block'],header['block'])
-            if len(decoded)!=header['width']*header['height']*4:raise ValueError('Decoded texture byte budget/size differs')
-            rgba=bytearray(len(decoded));rgba[0::4]=decoded[2::4];rgba[1::4]=decoded[1::4];rgba[2::4]=decoded[0::4];rgba[3::4]=decoded[3::4]
+            try:
+                rgba,decoded_evidence=decode_cached_texture(cached,typed['m_Width'],typed['m_Height'],token.get('blockSizeHint'),kind)
+            except (ImportError,ValueError) as error:
+                from monkey.sources.unity_dds import DdsDependencyError
+                code=getattr(error,'code','DEPENDENCY_MISSING')if isinstance(error,(ImportError,DdsDependencyError))else'UNITY_TEXTURE_CACHE_ENCODING'
+                output.write_text(json.dumps(dict(schemaVersion=1,status='needs_action'if code.startswith('DEPENDENCY_')else'blocked',resolved=[],missing=[],diagnostics=[dict(code=code,logicalPath=logical,message=str(error))],originalSourceWritten=False,sourceCodeExecuted=False),indent=2)+'\n',encoding='utf-8')
+                return
             fmt=4
             typed['image data']=bytes(rgba);typed['m_CompleteImageSize']=len(rgba);typed['m_TextureFormat']=fmt
             obj.save_typetree(typed);modified.add((asset.name,identifier(obj.path_id)))
             resolved.append(dict(file=asset.name,pathId=identifier(obj.path_id),key=token['wireKey'],logicalPath=logical,
-                                 cacheSha256=digest(cached),cacheBytes=len(cached),textureFormat=fmt,astc=header,rgbaRawSha256=digest(rgba),decoder='texture2ddecoder1.0.6',normalization='BGRA-to-RGBA-no-flip-v1'))
+                                 cacheSha256=digest(cached),cacheBytes=len(cached),cacheFamily=kind,sourceTokenBlockSizeHint=token.get('blockSizeHint'),textureFormat=fmt,rgbaRawSha256=digest(rgba),**decoded_evidence))
     report=dict(schemaVersion=1,provider=dict(name='UnityPy',version=PROVIDER_VERSION),sourceSha256=digest(raw),
                 status='blocked' if missing else 'hydrated',resolved=resolved,missing=missing,originalSourceWritten=False,
-                sourceCodeExecuted=False,pixelsDecoded=bool(resolved),canonicalPixelDecoder='texture2ddecoder1.0.6')
+                sourceCodeExecuted=False,pixelsDecoded=bool(resolved),canonicalPixelDecoder=(resolved[0]['decoder'] if resolved and len({r['decoder']for r in resolved})==1 else 'per-cache-family-pinned-decoder'))
     if not missing:
         encoded=env.file.save(packer='lz4')
         if len(encoded)>MAX_BYTES:raise ValueError('Derived bundle byte budget')
