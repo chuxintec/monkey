@@ -1,4 +1,5 @@
 'use strict';
+const sourceChildren=require('./static-richtext.js').sourceChildren;
 // Editor-only native Prefab serialization; no source runtime or business execution.
 const cc=require('cc');
 const jobs=require('./jobs.js');
@@ -9,10 +10,11 @@ function uiState(node,src) {
     const group=node.getComponent(cc.UIOpacity);const opacity=group&&group.enabled?group.opacity:255;
     if(node.layer!==src.sourceLayer||Math.abs(opacity-src.opacity)>.001)throw Error('Source UI layer/opacity differs: '+src.sourceId);
     const state={sourceLayer:node.layer,opacity};
-    if(src.verifyUiColor) {
-        const renderer=node.getComponent(cc.Sprite)||node.getComponent(cc.Label);
+    if(src.verifyUiColor||node.getComponent(cc.RichText)||node.getComponent(cc.sp.Skeleton)) {
+        const renderer=node.getComponent(cc.Sprite)||node.getComponent(cc.Label)||node.getComponent(cc.RichText)||node.getComponent(cc.sp.Skeleton);
         if(!renderer)throw Error('Source UI renderer missing: '+src.sourceId);
-        const color=[renderer.color.r,renderer.color.g,renderer.color.b,renderer.color.a];
+        const nativeColor=renderer instanceof cc.RichText?renderer.fontColor:renderer.color;
+        const color=[nativeColor.r,nativeColor.g,nativeColor.b,nativeColor.a];
         if(!near(color,src.color))throw Error('Source renderer color differs: '+src.sourceId);
         state.color=color;
     }
@@ -29,7 +31,7 @@ async function serialize(plan,nodes) {
             root.parent=null;
             if(spec.rootNamePolicy==='creator-asset-basename-v1')root.name=spec.nativeRootName;
             const mapped=new Map();const sources=new Map(plan.nodes.map(n=>[n.sourceId,n]));
-            function walk(sid,n){mapped.set(sid,n);sources.get(sid).children.forEach((child,i)=>walk(child,n.children[i]));}walk(spec.root,root);
+            function walk(sid,n){mapped.set(sid,n);sources.get(sid).children.forEach((child,i)=>walk(child,sourceChildren(n)[i]));}walk(spec.root,root);
             const nativeInitialNodes=dynamic.settleRoot(root,mapped,plan);
             const prefab=new cc.Prefab();prefab.name=root.name;prefab.data=root;
             const raw=EditorExtends.serialize(prefab);
@@ -38,7 +40,7 @@ async function serialize(plan,nodes) {
     }
     return result;
 }
-function read(prefab,spec,plan,info,templates) {
+function read(prefab,spec,plan,info,templates,staticAssets) {
     const root=cc.instantiate(prefab);
     try {
         if(root.parent)throw Error('Saved prefab has external parent');
@@ -47,18 +49,18 @@ function read(prefab,spec,plan,info,templates) {
         function match(sid,node) {
             const original=sources.get(sid),src=dynamic.expected(original,plan,info.nativeInitialNodes),ui=node.getComponent(cc.UITransform);
             const expectedName=sid===spec.root&&spec.rootNamePolicy==='creator-asset-basename-v1'?spec.nativeRootName:src&&src.name;
-            if(!src||expectedName!==node.name||src.children.length!==node.children.length||!ui)throw Error('Prefab hierarchy differs: '+sid);
+            if(!src||expectedName!==node.name||src.children.length!==sourceChildren(node).length||!ui)throw Error('Prefab hierarchy differs: '+sid);
             const actual={position:[node.position.x,node.position.y,node.position.z],scale:[node.scale.x,node.scale.y,node.scale.z],
                 rotation:[node.rotation.x,node.rotation.y,node.rotation.z,node.rotation.w],size:[ui.width,ui.height],anchor:[ui.anchorX,ui.anchorY],active:node.active,...uiState(node,src)};
             const fields=Object.keys(actual).filter(key=>['active','sourceLayer','opacity'].includes(key)?actual[key]!==src[key]:!near(actual[key],src[key]));
             if(fields.length)geometryMismatches.push({sourceId:sid,fields,expected:Object.fromEntries(fields.map(key=>[key,src[key]])),actual:Object.fromEntries(fields.map(key=>[key,actual[key]]))});
-            mapped.set(sid,node);src.children.forEach((child,i)=>match(child,node.children[i]));
+            mapped.set(sid,node);src.children.forEach((child,i)=>match(child,sourceChildren(node)[i]));
         }
         match(spec.root,root);
         const persistent=new Map();
         function savedMap(sid,node){
             if(!node)throw Error('Saved behavior owner absent: '+sid);
-            persistent.set(sid,node);sources.get(sid).children.forEach((child,i)=>savedMap(child,node.children[i]));
+            persistent.set(sid,node);sources.get(sid).children.forEach((child,i)=>savedMap(child,sourceChildren(node)[i]));
         }
         savedMap(spec.root,prefab.data);
         if(mapped.size!==spec.nodeCount||spec.nodes.some(id=>!mapped.has(id)))throw Error('Prefab node boundary differs');
@@ -71,8 +73,10 @@ function read(prefab,spec,plan,info,templates) {
             if(c.behaviorBinding)behaviorBindings.push(require('./behavior-bindings.js').readPersistent(persistent.get(c.node),c.behaviorBinding,c.enabled,c.sourceId,info.uuid));
             if(c.codeClassName)numericCodeBindings.push(require('./numeric-code.js').read(comp,c));
             if(c.type==='cc.Sprite'&&c.spriteFrame&&(!comp.spriteFrame||comp.spriteFrame._uuid!==assets.get(c.spriteFrame).spriteFrameUuid))throw Error('Prefab sprite reference differs');
+            if(c.nativeSpriteOutlineMaterialSourceId&&(!plan.spriteOutlineBinding||!require('./sprite-outline-material-bindings.js').readBound(plan.spriteOutlineBinding,comp.customMaterial,c.sourceId,comp,id=>staticAssets.get(id))))throw Error('Prefab outline material differs: '+c.sourceId);
             if(c.nativeMaterialSourceId&&(!plan.materialBinding||!comp.customMaterial||comp.customMaterial._uuid!==plan.materialBinding.creator.materialUuid||
                !require('./material-bindings.js').readBound(plan.materialBinding,comp.customMaterial,comp)))throw Error('Prefab custom material differs: '+c.sourceId);
+            if(c.type==='cc.RichText'&&(comp.string!==c.text||comp.fontFamily!==c.fontFamily))throw Error('Prefab RichText font/text differs');
             if(c.type==='cc.Label') {
                 const fontMatches=c.nativeSystemFont?
                     comp.useSystemFont&&comp.font===null&&comp.fontFamily===c.fontFamily:
@@ -82,7 +86,16 @@ function read(prefab,spec,plan,info,templates) {
             if(c.type==='cc.Label'&&comp.overflow!==(c.nativeOverflow??c.overflow))throw Error('Prefab Label overflow policy differs');
             if(c.type==='cc.Sprite'&&comp.sizeMode!==(c.nativeSizeMode??c.sizeMode))throw Error('Prefab Sprite sizing policy differs');
             if(c.type==='cc.ScrollView'&&comp.content!==mapped.get(c.content))throw Error('Prefab scroll reference escapes graph');
-            if(c.type==='cc.Button'&&comp.target!==node)throw Error('Prefab button reference differs');
+            if(c.type==='cc.Button'){
+                const target=c.staticButtonBinding&&c.target?mapped.get(c.target):node;
+                if(comp.target!==target)throw Error('Prefab button reference differs');
+                if(c.staticButtonBinding){
+                    if(comp.enabled||comp.transition!==c.transition||comp.interactable!==c.interactable||Math.abs(comp.duration-c.duration)>.0001)throw Error('Static button state differs');
+                    for(const name of ['normalColor','hoverColor','pressedColor','disabledColor']){
+                        const v=comp[name];if(!near([v.r,v.g,v.b,v.a],c.staticButtonBinding[name]))throw Error('Static button color differs: '+name);
+                    }
+                }
+            }
             if(c.type==='cc.Widget'&&comp.target!==(c.target?mapped.get(c.target):null))throw Error('Prefab widget reference differs');
             components.push(c.sourceId);
         }
@@ -90,7 +103,14 @@ function read(prefab,spec,plan,info,templates) {
         const spineBindings=require('./spine-bindings.js').readCreatorSpineBindings(spineSpecs.map(c=>c.spineBinding),id=> {
             const c=spineSpecs.find(c=>c.sourceId===id);return c?persistent.get(c.node).getComponents(cc.sp.Skeleton):[];
         });
-        return {...info,spineBindings,prefabInstances:require('./prefab-instances.js').read(plan,mapped,templates,plan.savedPrefabs||[],spec.sourceId),nodeCount:mapped.size,savedReloaded:true,geometryVerified:geometryMismatches.length===0,geometryMismatches,referencesVerified:true,components,
+        const staticFieldBindings=plan.components.some(c=>c.staticFieldBinding&&persistent.has(c.node))?require('./static-field-integration.js').read(plan,persistent,staticAssets,info.uuid):[];
+        let toggleFields=null;
+        if(plan.toggleBinding){
+            const subset={bindings:plan.toggleBinding.bindings.filter(x=>persistent.has(x.nodeSourceId))};
+            toggleFields=require('./static-toggle.js').Read(subset,id=>persistent.get(id),require('./static-field-integration.js').resolver(plan,persistent,staticAssets));
+            if(toggleFields.fields.some(x=>!x.verified))throw Error('STATIC_TOGGLE_SAVED_READBACK_FAILED');
+        }
+        return {...info,toggleFields,staticFieldBindings,spineBindings,prefabInstances:require('./prefab-instances.js').read(plan,mapped,templates,plan.savedPrefabs||[],spec.sourceId),nodeCount:mapped.size,savedReloaded:true,geometryVerified:geometryMismatches.length===0,geometryMismatches,referencesVerified:true,components,
             numericCodeBindings,behaviorBindings,rootNamePolicy:spec.rootNamePolicy||'source-name-v1',sourceRootName:sources.get(spec.root).name,nativeRootName:root.name};
     } finally {root.destroy();}
 }

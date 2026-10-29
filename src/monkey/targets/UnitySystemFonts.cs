@@ -164,6 +164,12 @@ public static class UnitySystemFonts
         public bool fontSourcePathEmpty;
         public bool clearDynamicDataOnBuild;
         public int pointSize;
+        public float sdfSpread;
+        public float normalStyle;
+        public float boldStyle;
+        public float gradientScale;
+        public float weightNormal;
+        public float weightBold;
         public int atlasCount;
         public int characterCount;
         public int requiredUnicodeCount;
@@ -230,6 +236,35 @@ public static class UnitySystemFonts
         public string newCharacterBoundary;
         public string[] fallbackAssetIds;
         public string[] fallbackAssetPaths;
+    }
+
+    // Outline material variants are created only for the isolated preview instance.
+    // TMP fallback materials inherit the primary material's shader values, so a
+    // spread normalized for the primary face can saturate on a wide-spread static
+    // fallback face. This readback records the per-face conversion used below.
+    [Serializable]
+    public sealed class OutlineFaceReadback
+    {
+        public string fontAssetPath;
+        public string materialName;
+        public float pointSize;
+        public float gradientScale;
+        public float faceDilate;
+        public float sourceWidth;
+        public float normalizedOutlineWidth;
+        public int[] assignedUnicode;
+    }
+
+    [Serializable]
+    public sealed class OutlineReadback
+    {
+        public string status;
+        public string sourceLabelId;
+        public string textSha256;
+        public float sourceOutlineWidth;
+        public Color sourceOutlineColor;
+        public OutlineFaceReadback[] faces;
+        public string[] diagnostics;
     }
 
     [Serializable]
@@ -334,6 +369,7 @@ public static class UnitySystemFonts
         public FontSpec spec;
         public TMP_FontAsset asset;
         public NativeGlyphState initialGlyphState;
+        public float sdfSpread;
     }
 
     sealed class StaticSdfInput
@@ -346,6 +382,11 @@ public static class UnitySystemFonts
 
     const string ExpectedSchema = "monkey-unity-system-fonts/1";
     const string ExpectedFontRoot = "Assets/Game/Content/Fonts/System/";
+    // TMP 2.6.0 CreateFontAsset(family, style, pointSize) uses SDFAA padding 9
+    // plus a 1 px packing modifier, so its canonical GradientScale is 10.
+    const float TmpDefaultSdfGradientScale = 10f;
+    const float TmpSdfRatioClamp = 1f;
+    const float TmpDefaultBoldStyle = 0.75f;
 
     /// <summary>
     /// Create, persist, reopen and verify DynamicOS TMP assets on macOS Editor.
@@ -354,6 +395,107 @@ public static class UnitySystemFonts
     public static Readback Import(BindingSet bindingSet)
     {
         return Import(bindingSet, null, null);
+    }
+
+    /// <summary>
+    /// Editor-side source validation and persistent NativeStaticTextOutline setup.
+    /// The runtime component stores only presentation values and reapplies them on
+    /// each TMP pre-render; source identity/text checks remain editor input checks.
+    /// </summary>
+    public static OutlineReadback ApplySourceOutline(TMP_Text label, BindingSet bindingSet,
+        string sourceLabelId, float sourceOutlineWidth, Color sourceOutlineColor)
+    {
+        if (label == null || bindingSet == null || bindingSet.labelBindings == null
+            || string.IsNullOrWhiteSpace(sourceLabelId))
+            throw new InvalidOperationException("SYSTEM_FONT_OUTLINE_INPUT_MISSING");
+        if (float.IsNaN(sourceOutlineWidth) || float.IsInfinity(sourceOutlineWidth) || sourceOutlineWidth < 0f)
+            throw new InvalidOperationException("SYSTEM_FONT_OUTLINE_WIDTH_INVALID");
+        var bindings = bindingSet.labelBindings.Where(row => row != null && row.sourceLabelId == sourceLabelId).ToArray();
+        if (bindings.Length != 1)
+            throw new InvalidOperationException("SYSTEM_FONT_OUTLINE_LABEL_BINDING_NOT_UNIQUE: " + sourceLabelId);
+        var binding = bindings[0];
+        if (!string.Equals(label.text ?? string.Empty, binding.sourceText ?? string.Empty, StringComparison.Ordinal))
+            throw new InvalidOperationException("SYSTEM_FONT_OUTLINE_TEXT_BINDING_MISMATCH: " + sourceLabelId);
+        if (label.font == null || AssetDatabase.GetAssetPath(label.font) != binding.nativeFontAssetPath)
+            throw new InvalidOperationException("SYSTEM_FONT_OUTLINE_PRIMARY_FONT_MISMATCH: " + sourceLabelId);
+        if (float.IsNaN(label.fontSize) || float.IsInfinity(label.fontSize) || label.fontSize <= 0f)
+            throw new InvalidOperationException("SYSTEM_FONT_OUTLINE_LABEL_SIZE_INVALID: " + sourceLabelId);
+
+        var component = label.GetComponent<NativeStaticTextOutline>();
+        if (component == null) component = label.gameObject.AddComponent<NativeStaticTextOutline>();
+        component.Configure(label, sourceOutlineWidth, sourceOutlineColor);
+        EditorUtility.SetDirty(component);
+        PrefabUtility.RecordPrefabInstancePropertyModifications(component);
+        var serializedOutline = new SerializedObject(component);
+        serializedOutline.Update();
+        if (serializedOutline.FindProperty("target") == null
+            || serializedOutline.FindProperty("target").objectReferenceValue != label
+            || serializedOutline.FindProperty("sourceOutlineWidth") == null
+            || !Mathf.Approximately(serializedOutline.FindProperty("sourceOutlineWidth").floatValue, sourceOutlineWidth)
+            || serializedOutline.FindProperty("sourceOutlineColor") == null
+            || serializedOutline.FindProperty("sourceOutlineColor").colorValue != sourceOutlineColor)
+            throw new InvalidOperationException("SYSTEM_FONT_OUTLINE_SERIALIZED_STATE_READBACK_MISMATCH: " + sourceLabelId);
+        var native = component.LastReadback;
+        if (native != null && native.status == "not_visible_empty_text"
+            && string.IsNullOrEmpty(label.text)
+            && Mathf.Approximately(native.sourceOutlineWidth, sourceOutlineWidth)
+            && native.sourceOutlineColor == sourceOutlineColor)
+            return new OutlineReadback {
+                status = "not_visible_empty_text",
+                sourceLabelId = sourceLabelId,
+                textSha256 = Sha256(Encoding.UTF8.GetBytes(string.Empty)),
+                sourceOutlineWidth = sourceOutlineWidth,
+                sourceOutlineColor = sourceOutlineColor,
+                faces = Array.Empty<OutlineFaceReadback>(),
+                diagnostics = new[] { "Empty source text has no glyph geometry; serialized width/color and primary font binding were validated." },
+            };
+        if (native == null || native.status != "material_values_applied_and_read_back"
+            || native.faces == null || native.faces.Length == 0)
+            throw new InvalidOperationException("SYSTEM_FONT_OUTLINE_NATIVE_READBACK_FAILED: "
+                + string.Join(",", native == null ? Array.Empty<string>() : native.diagnostics ?? Array.Empty<string>()));
+
+        var allowedPaths = new List<string> { binding.nativeFontAssetPath };
+        allowedPaths.AddRange(binding.nativeFallbackAssetPaths ?? Array.Empty<string>());
+        var faces = new List<OutlineFaceReadback>();
+        foreach (var row in native.faces)
+        {
+            if (row == null || row.fontAsset == null || !row.materialValuesVerified)
+                throw new InvalidOperationException("SYSTEM_FONT_OUTLINE_FACE_READBACK_INCOMPLETE: " + sourceLabelId);
+            string path = AssetDatabase.GetAssetPath(row.fontAsset);
+            if (!allowedPaths.Contains(path, StringComparer.Ordinal))
+                throw new InvalidOperationException("SYSTEM_FONT_OUTLINE_UNBOUND_RENDER_FONT: " + path);
+            foreach (int unicode in row.assignedUnicode ?? Array.Empty<int>())
+            {
+                string expectedPath = null;
+                foreach (string candidatePath in allowedPaths)
+                {
+                    var candidate = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(candidatePath);
+                    if (candidate != null && candidate.HasCharacter(unicode)) { expectedPath = candidatePath; break; }
+                }
+                if (expectedPath != path)
+                    throw new InvalidOperationException("SYSTEM_FONT_OUTLINE_GLYPH_FONT_ASSIGNMENT_MISMATCH: U+"
+                        + unicode.ToString("X4") + " expected=" + (expectedPath ?? "missing") + " actual=" + path);
+            }
+            faces.Add(new OutlineFaceReadback {
+                fontAssetPath = path,
+                materialName = row.materialName,
+                pointSize = row.pointSize,
+                gradientScale = row.gradientScale,
+                faceDilate = row.faceDilate,
+                sourceWidth = row.sourceOutlineWidth,
+                normalizedOutlineWidth = row.normalizedOutlineWidth,
+                assignedUnicode = row.assignedUnicode ?? Array.Empty<int>(),
+            });
+        }
+        return new OutlineReadback {
+            status = native.status,
+            sourceLabelId = sourceLabelId,
+            textSha256 = Sha256(Encoding.UTF8.GetBytes(label.text ?? string.Empty)),
+            sourceOutlineWidth = native.sourceOutlineWidth,
+            sourceOutlineColor = native.sourceOutlineColor,
+            faces = faces.ToArray(),
+            diagnostics = new[] { "Serialized NativeStaticTextOutline state was applied and its current material values were read back; save/reopen persistence and visual equivalence require separate validation." },
+        };
     }
 
     /// <summary>
@@ -407,7 +549,11 @@ public static class UnitySystemFonts
                     + "; TryAddCharacters=" + glyphState.tryAddCharactersReturned);
             }
             VerifyRuntimeResources(font, fontSpec);
-            pending.Add(fontSpec.assetId, new PendingFont { spec = fontSpec, asset = font, initialGlyphState = glyphState });
+            pending.Add(fontSpec.assetId, new PendingFont {
+                spec = fontSpec, asset = font, initialGlyphState = glyphState,
+                sdfSpread = fontSpec.populationMode == "StaticSDFRequired" && staticInputs != null
+                    ? staticInputs.metrics.sdfSpread : 0f
+            });
         }
 
         foreach (var item in pending.Values)
@@ -505,6 +651,7 @@ public static class UnitySystemFonts
                                           || !sourceGlyphs.TryGetValue(glyph.unicode, out var sourceGlyph)
                                           || sourceGlyph.codepoint != glyph.codepoint || sourceGlyph.character != glyph.character
                                           || glyph.rect.x < 0 || glyph.rect.y < 0 || glyph.rect.width <= 0 || glyph.rect.height <= 0
+                                          || glyph.rect.width <= 2 * metrics.glyphPadding || glyph.rect.height <= 2 * metrics.glyphPadding
                                           || glyph.rect.x + glyph.rect.width > metrics.atlasWidth
                                           || glyph.rect.y + glyph.rect.height > metrics.atlasHeight))
             throw new InvalidOperationException("SYSTEM_FONT_STATIC_SDF_GLYPH_SET_MISMATCH: only exact receipt glyphs may be imported");
@@ -564,6 +711,12 @@ public static class UnitySystemFonts
         asset.name = spec.assetId;
         asset.atlasPopulationMode = AtlasPopulationMode.Static;
         asset.isMultiAtlasTexturesEnabled = false;
+        // TMP_Text applies synthetic bold as style * 0.25 * GradientScale *
+        // ScaleRatioA. With no outline, UpdateShaderRatios makes ScaleRatioA
+        // (GradientScale - 1) / GradientScale. Keep the actual dilation equal
+        // to TMP's normal G=10 SDF when our atlas uses a wider distance range.
+        asset.normalStyle = ScaleTmpStyleWeight(asset.normalStyle, metrics.sdfSpread);
+        asset.boldStyle = ScaleTmpStyleWeight(asset.boldStyle, metrics.sdfSpread);
         var face = asset.faceInfo;
         face.familyName = metrics.family;
         face.styleName = metrics.styleName;
@@ -600,9 +753,14 @@ public static class UnitySystemFonts
         material.SetTexture("_MainTex", atlas);
         material.SetFloat("_TextureWidth", metrics.atlasWidth);
         material.SetFloat("_TextureHeight", metrics.atlasHeight);
-        material.SetFloat("_GradientScale", metrics.sdfSpread + 1f);
+        // CoreText encodes [-spread,+spread] into [0,1]; TMP needs that full range.
+        material.SetFloat("_GradientScale", 2f * metrics.sdfSpread + 1f);
         material.SetFloat("_WeightNormal", asset.normalStyle);
         material.SetFloat("_WeightBold", asset.boldStyle);
+        if (!Mathf.Approximately(material.GetFloat("_GradientScale"), 2f * metrics.sdfSpread + 1f)
+            || !Mathf.Approximately(material.GetFloat("_WeightNormal"), asset.normalStyle)
+            || !Mathf.Approximately(material.GetFloat("_WeightBold"), asset.boldStyle))
+            throw new InvalidOperationException("SYSTEM_FONT_STATIC_SDF_STYLE_MATERIAL_MISMATCH: " + spec.assetId);
         asset.material = material;
 
         // The lookup-table getters call ReadFontAssetDefinition, which expects
@@ -613,10 +771,14 @@ public static class UnitySystemFonts
         foreach (var row in metrics.glyphs.OrderBy(glyph => glyph.unicode))
         {
             int atlasY = metrics.atlasHeight - row.rect.y - row.rect.height;
-            var glyphRect = new GlyphRect(row.rect.x, atlasY, row.rect.width, row.rect.height);
-            float pad = metrics.glyphPadding;
-            var glyphMetrics = new GlyphMetrics(row.metrics.width + 2f * pad, row.metrics.height + 2f * pad,
-                                                row.metrics.bearingX - pad, row.metrics.bearingY + pad,
+            int pad = metrics.glyphPadding;
+            // CoreText rects cover the raster plus SDF padding. TMP glyph metrics
+            // describe the visible outline and its bearings, so keep the GlyphRect
+            // aligned to that content; TMP adds only material-derived UV padding.
+            var glyphRect = new GlyphRect(row.rect.x + pad, atlasY + pad,
+                                          row.rect.width - 2 * pad, row.rect.height - 2 * pad);
+            var glyphMetrics = new GlyphMetrics(row.metrics.width, row.metrics.height,
+                                                row.metrics.bearingX, row.metrics.bearingY,
                                                 row.metrics.advance);
             var glyph = new Glyph(row.glyphIndex, glyphMetrics, glyphRect, 1f, 0);
             asset.glyphTable.Add(glyph);
@@ -639,6 +801,34 @@ public static class UnitySystemFonts
             throw new InvalidOperationException("SYSTEM_FONT_STATIC_SDF_SOURCE_FONT_PRESENT: static asset must not retain a font file");
         asset.ReadFontAssetDefinition();
         return asset;
+    }
+
+    internal static float ScaleTmpStyleWeight(float styleWeight, float sdfSpread)
+    {
+        if (float.IsNaN(styleWeight) || float.IsInfinity(styleWeight)
+            || float.IsNaN(sdfSpread) || float.IsInfinity(sdfSpread) || sdfSpread <= 0f)
+            throw new InvalidOperationException("SYSTEM_FONT_STATIC_SDF_STYLE_RANGE_INVALID");
+        float gradientScale = 2f * sdfSpread + 1f;
+        float referenceDilateRange = TmpDefaultSdfGradientScale - TmpSdfRatioClamp;
+        float targetDilateRange = gradientScale - TmpSdfRatioClamp;
+        if (targetDilateRange <= 0f)
+            throw new InvalidOperationException("SYSTEM_FONT_STATIC_SDF_STYLE_GRADIENT_INVALID");
+        return styleWeight * referenceDilateRange / targetDilateRange;
+    }
+
+    static void VerifyStaticSdfStyle(TMP_FontAsset asset, float sdfSpread, string assetId)
+    {
+        float gradientScale = 2f * sdfSpread + 1f;
+        float expectedNormal = ScaleTmpStyleWeight(0f, sdfSpread);
+        float expectedBold = ScaleTmpStyleWeight(TmpDefaultBoldStyle, sdfSpread);
+        if (asset.material == null || !asset.material.HasProperty("_GradientScale")
+            || !asset.material.HasProperty("_WeightNormal") || !asset.material.HasProperty("_WeightBold")
+            || !Mathf.Approximately(asset.material.GetFloat("_GradientScale"), gradientScale)
+            || !Mathf.Approximately(asset.normalStyle, expectedNormal)
+            || !Mathf.Approximately(asset.boldStyle, expectedBold)
+            || !Mathf.Approximately(asset.material.GetFloat("_WeightNormal"), expectedNormal)
+            || !Mathf.Approximately(asset.material.GetFloat("_WeightBold"), expectedBold))
+            throw new InvalidOperationException("SYSTEM_FONT_STATIC_SDF_STYLE_READBACK_MISMATCH: " + assetId);
     }
 
     static void SetStringProperty(SerializedObject serialized, string propertyName, string value)
@@ -990,6 +1180,8 @@ public static class UnitySystemFonts
                     + "; sourcePath=" + savedGlyphState.sourceFontFilePath);
             }
             VerifyRuntimeResources(saved, item.spec);
+            if (item.sdfSpread > 0f)
+                VerifyStaticSdfStyle(saved, item.sdfSpread, item.spec.assetId);
             var actualFallbacks = saved.fallbackFontAssetTable ?? new List<TMP_FontAsset>();
             var expectedFallbackIds = item.spec.fallbackAssetIds ?? Array.Empty<string>();
             if (actualFallbacks.Count != expectedFallbackIds.Length)
@@ -1016,6 +1208,15 @@ public static class UnitySystemFonts
                                       || (saved.sourceFontFile == null
                                           && string.IsNullOrEmpty(GetStringProperty(new SerializedObject(saved), "m_SourceFontFilePath"))),
                 pointSize = item.spec.pointSize,
+                sdfSpread = item.sdfSpread,
+                normalStyle = saved.normalStyle,
+                boldStyle = saved.boldStyle,
+                gradientScale = saved.material != null && saved.material.HasProperty("_GradientScale")
+                    ? saved.material.GetFloat("_GradientScale") : 0f,
+                weightNormal = saved.material != null && saved.material.HasProperty("_WeightNormal")
+                    ? saved.material.GetFloat("_WeightNormal") : 0f,
+                weightBold = saved.material != null && saved.material.HasProperty("_WeightBold")
+                    ? saved.material.GetFloat("_WeightBold") : 0f,
                 atlasCount = saved.atlasTextures == null ? 0 : saved.atlasTextures.Count(texture => texture != null),
                 characterCount = saved.characterTable == null ? 0 : saved.characterTable.Count,
                 requiredUnicodeCount = item.spec.requiredUnicode == null ? 0 : item.spec.requiredUnicode.Distinct().Count(),

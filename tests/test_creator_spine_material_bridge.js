@@ -28,10 +28,12 @@ function makeContract() {
   return {
     profile: 'cocos24-builtin-spine-material-v1',
     creatorBindingStatus: 'source-semantics-exact-builtin-spine',
-    pins: { effectProgramCanonicalSha256: 'fa1eb573d4176d66532beaa206631488779d0a04edde8f974131acdaee643b38' },
+    pins: { effectProgramCanonicalSha256: 'fa1eb573d4176d66532beaa206631488779d0a04edde8f974131acdaee643b38',
+      materialReferenceSourceId: 'gameAsset:material-ref', materialSourceId: 'internal:material-ref' },
     spec: { creator38: {
       sourceVariantConditions: { INPUT_IS_GAMMA: false, CC_USE_ALPHA_ATLAS_texture: false, USE_ALPHA_TEST: false },
-      perComponent: [{ sourceComponentId: 'prefab#1/components/0', premultipliedAlpha: false,
+      perComponent: [{ sourceComponentId: 'prefab#1/components/0', sourceMaterialReferenceSourceId: 'gameAsset:material-ref',
+        sourceMaterialSourceId: 'internal:material-ref', premultipliedAlpha: false,
         useTint: false, enableBatch: false, sourceCacheMode: { effectiveDefaultCacheMode: 0 },
         sourceBlendModeCounts: { normal: 1, additive: 0, multiply: 0, screen: 0 } }],
     } },
@@ -82,10 +84,11 @@ const component = makeComponent({ drawList: { length: 1, data: [{ material: acti
   texture: { uuid: 'page-texture-uuid' }, indexOffset: 0, indexCount: 6 }] } });
 const bindResult = bridge.bindCreatorSpineMaterial(sourceId, component, makeContract(), {
   builtinResMgr: { get(id) { builtinLookupCount++; return id === 'default-spine-material' ? inactiveMaterial : null; } },
-});
+}, { sourceMaterialReferenceSourceId: 'gameAsset:material-ref' });
 assert.equal(builtinLookupCount, 1);
 assert.equal(bindResult.status, 'bound_resource_observed_runtime_separately');
 assert.equal(bindResult.targetMaterialIdentity.effectProgramHash, 3890043391);
+assert.equal(bindResult.sourceMaterialBinding.resolvedSourceId, 'internal:material-ref');
 assert.equal(bindResult.readback.runtimeReadback.status, 'observed_active_draw_materials');
 assert.equal(bindResult.runtimeValidation.status, 'matched_observations');
 assert.equal(component.premultipliedAlpha, false);
@@ -95,7 +98,7 @@ assert.equal(component.enableBatch, false);
 const wrongMaterial = makeMaterial({ hash: 1 });
 const wrong = bridge.bindCreatorSpineMaterial(sourceId, makeComponent(), makeContract(), {
   builtinResMgr: { get() { return wrongMaterial; } },
-});
+}, { sourceMaterialReferenceSourceId: 'gameAsset:material-ref' });
 assert.equal(wrong.status, 'binding_not_attempted');
 assert.equal(wrong.resourceGuard.code, 'SPINE_BUILTIN_EFFECT_PROGRAM_HASH_MISMATCH');
 
@@ -105,8 +108,19 @@ const unexpectedComponent = makeComponent({ drawList: { length: 1, data: [{ mate
   texture: { uuid: 'page-texture-uuid' }, indexOffset: 0, indexCount: 6 }] } });
 const mismatch = bridge.bindCreatorSpineMaterial(sourceId, unexpectedComponent, makeContract(), {
   builtinResMgr: { get() { return inactiveMaterial; } },
-});
+}, { sourceMaterialReferenceSourceId: 'gameAsset:material-ref' });
 assert.equal(mismatch.runtimeValidation.status, 'mismatch');
 assert.equal(mismatch.readback.runtimeReadback.draws[0].material.passes[0].blendState.targets[0].blendSrc.value, 7);
+
+const sourceRefMissing = bridge.bindCreatorSpineMaterial(sourceId, makeComponent(), makeContract(), {
+  builtinResMgr: { get() { return inactiveMaterial; } },
+});
+assert.equal(sourceRefMissing.status, 'binding_not_attempted');
+assert.equal(sourceRefMissing.sourceMaterialStatus, 'source_material_reference_not_supplied');
+const sourceRefWrong = bridge.bindCreatorSpineMaterial(sourceId, makeComponent(), makeContract(), {
+  builtinResMgr: { get() { return inactiveMaterial; } },
+}, { sourceMaterialReferenceSourceId: 'gameAsset:other-material' });
+assert.equal(sourceRefWrong.status, 'binding_not_attempted');
+assert.equal(sourceRefWrong.sourceMaterialStatus, 'source_material_reference_mismatch');
 
 console.log('Creator Spine material bridge neutral tests passed');

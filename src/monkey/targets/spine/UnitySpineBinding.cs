@@ -42,7 +42,7 @@ namespace Monkey.Targets.Spine
                 foreach (var pair in explicitTargetFields)
                 {
                     if (pair.Key != "initialSkinName" && pair.Key != "startingAnimation" &&
-                        pair.Key != "startingLoop" && pair.Key != "timeScale" &&
+                        pair.Key != "startingLoop" && pair.Key != "AnimationName" && pair.Key != "loop" && pair.Key != "timeScale" &&
                         pair.Key != "pmaVertexColors")
                         throw new InvalidOperationException("Unsupported or unresolved Unity Spine field: " + pair.Key);
                     SetMember(component, pair.Key, pair.Value);

@@ -67,8 +67,8 @@ UNITY_SPINE38_REFERENCE = {
     "targetUse": "official 3.8 runtime source reference; local Unity runtime package/native material readback is still required",
 }
 UNITY_PROFILE_SHADER_SHA256 = "0fe1ea3481787d0de2bd7545c8e77d769c681a7d30ca48d6ad56482bdeec549b"
-CREATOR_BINDING_HELPER_SHA256 = "d264e070d4af58390573c9742d1af8677bccbd5fa4cebeb603455e7509f09df3"
-UNITY_BINDING_HELPER_SHA256 = "d8104bf7f5ec9807e1182522dd6485838a462a89906670c14aa9298e16245ebc"
+CREATOR_BINDING_HELPER_SHA256 = "fa5adf1ef29280f22976a6d9df5d01dbd3dc52abcb0825d87878b1e59a8b9bee"
+UNITY_BINDING_HELPER_SHA256 = "464fb0e61a938257837f993640a0ba8944708aac2cad786aee8c6a39ef241f00"
 TARGET_DIR = Path(__file__).parent / "targets" / "materials" / "spine"
 
 
@@ -464,6 +464,7 @@ def _runtime_variants(manifest: dict, occurrences: list[dict]) -> dict:
     result = []
     for occurrence in occurrences:
         row = {"sourceComponentId": occurrence["sourceComponentId"],
+               "materialUuid": occurrence.get("materialUuid"),
                "premultipliedAlpha": occurrence["premultipliedAlpha"],
                "useTint": occurrence["useTint"], "enableBatch": occurrence["enableBatch"]}
         pma = occurrence["premultipliedAlpha"]
@@ -703,6 +704,8 @@ def inspect_spine_materials(manifest_path: str | Path, ir_path: str | Path,
                                         "useModelPerComponent": "runtimeVariantEvidence.components[].sourceUseModelDefine"},
             "macroMapping": semantics["creator388BuiltinMapping"],
             "perComponent": [{"sourceComponentId": row["sourceComponentId"],
+                              "sourceMaterialReferenceSourceId": f"gameAsset:{row['materialUuid']}",
+                              "sourceMaterialSourceId": material_asset["sourceId"],
                               "targetMaterialUuid": "default-spine-material",
                               "premultipliedAlpha": row["sourcePmaEffective"],
                               "useTint": row["sourceUseTintDefine"],

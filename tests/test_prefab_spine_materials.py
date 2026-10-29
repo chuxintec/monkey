@@ -149,6 +149,9 @@ class PrefabSpineMaterialTests(unittest.TestCase):
             self.assertTrue(result["source"]["runtimeVariantEvidence"]["components"][0]["sourceUseModelDefine"])
             self.assertEqual(result["binding"]["creator38"]["targetMaterialUuid"], "default-spine-material")
             self.assertEqual(result["binding"]["creator38"]["nativeShaderHash"], 3890043391)
+            component_binding = result["binding"]["creator38"]["perComponent"][0]
+            self.assertEqual(component_binding["sourceMaterialReferenceSourceId"], "gameAsset:material-uuid")
+            self.assertEqual(component_binding["sourceMaterialSourceId"], "internal:material-uuid")
 
     def test_same_effect_name_with_changed_formula_fails_exact_stage_profile(self):
         with tempfile.TemporaryDirectory() as temp:

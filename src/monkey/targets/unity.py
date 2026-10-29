@@ -87,6 +87,8 @@ def cross_axis_mapping(layout, parent, children):
 
 
 def untrimmed_frames(ir):
+    if ir.get('previewResourceSelection'):
+        return {f['sourceId']for f in ir['spriteFrames']}
     """Untrimmed sprite variants exist only for Sprites that reference them (PROJECT-SPEC 5.4)."""
     aliases=ir.get('aliases',{})
     def resolve(value):
@@ -96,11 +98,19 @@ def untrimmed_frames(ir):
     return {resolve(c['spriteFrame']) for c in ir['components'] if c['type']=='cc.Sprite' and c.get('spriteFrame') and c.get('trim',True) is False}
 
 
-def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None,layout=None,system_font_resolution=None,expected_system_font_resolution=None,static_font_generation=None,expected_static_font_generation=None):
+def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None,layout=None,system_font_resolution=None,expected_system_font_resolution=None,static_font_generation=None,expected_static_font_generation=None,static_source_bundle=None,expected_static_source_bundle=None):
     ir_path = safe(ir_path)
     ir = stage_document(ir_path)
     if ir.get('schemaVersion') != 1 or ir.get('sourceProfile') not in ('cocos-2.4.15-bundle','cocos-2.4.15-project','cocos-3.8.7-bundle','cocos-3.4.1-bundle','cocos-2.4.11-bundle','cocos-2.1.2-resource','generic-image-resources-v1','egret-custom-resource-plist-v1'):
         fail('UNSUPPORTED_IR', '$', 'Expected normalize schema 1')
+    from ..prefab_static_pipeline import ensure_static_fields
+    ensure_static_fields(ir)
+    from ..prefab_richtext_pipeline import enrich as enrich_richtext
+    enrich_richtext(ir)
+    from ..prefab_static_button import enrich as enrich_buttons
+    enrich_buttons(ir)
+    from ..prefab_static_pipeline import enrich_declarations
+    enrich_declarations(ir,static_source_bundle,expected_static_source_bundle)
     source_files = stage_manifest(ir_path.parent)['files']
     expected = {f['path']: f['sha256'] for f in source_files}
     diagnostics = list(ir['diagnostics'])
@@ -153,7 +163,8 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
                              originalSize=frame['originalSize'],offset=frame['offset']))
         if sid in untrimmed:
             textures.append(dict(id=sid+'@original',path=resource(frame['originalImage'],sid+'@original','sprite','sprite'),
-                                 border=[0,0,0,0],size=frame['originalSize'],originalSize=frame['originalSize'],offset=[0,0]))
+                                 border=[left,bottom,right,top] if frame['rect'][2:4]==frame['originalSize'] and all(v==0 for v in frame['offset']) else [0,0,0,0],
+                                 size=frame['originalSize'],originalSize=frame['originalSize'],offset=[0,0]))
     assets=[]
     for asset in ir['assets']:
         item=dict(id=asset['sourceId'],kind=asset['kind'],path=resource(asset['path'],asset['sourceId'],'native',asset['kind']),fontCoverage=asset.get('fontCoverage'))
@@ -248,6 +259,9 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
 
         if material_pipeline.supported_component(c,material_profile,resolve_id):
             entry['nativeMaterialSourceId']=material_profile['spec']['materialSourceId']
+        elif material_pipeline.identity_text_component(c,material_profile,resolve_id):
+            entry['nativeTextMaterialIdentitySourceId']=material_profile['spec']['materialSourceId']
+            entry['nativeTextMaterialPolicy']='source-proven-identity-default-only'
         elif any(resolve_id(mat) not in native_materials for mat in c.get('materials',[])):
             entry['convertible']=False
             diagnostics.append(diagnostic('CUSTOM_MATERIAL_HANDOFF',c['sourceId'],'Material is not recognized standard UI texture',c['sourceId']))
@@ -258,7 +272,11 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
             if c.get('spriteFrame') is None:
                 entry['needsSpriteBinding']=True
                 diagnostics.append(diagnostic('SOURCE_SPRITE_UNBOUND',c['sourceId'],'Source Sprite has no frame; native Image is disabled until AI binds an actual Sprite and enables it',c['sourceId']))
-            if not c.get('trim',True) and c['mode'] in (1,2):
+            frame=next((t for t in textures if t['id']==c.get('spriteFrame')),None)
+            untrimmed_identity=bool(frame and frame['size']==frame['originalSize'] and frame['offset']==[0,0])
+            if not c.get('trim',True) and c['mode'] in (1,2) and untrimmed_identity:
+                entry['untrimmedGeometryPolicy']='identity-full-frame-zero-offset'
+            if not c.get('trim',True) and c['mode'] in (1,2) and not untrimmed_identity:
                 entry['convertible']=False
                 diagnostics.append(diagnostic('SLICED_UNTRIMMED_UNSUPPORTED',c['sourceId'],'Needs Cocos size-mode evidence',c['sourceId']))
         elif c['type']=='cc.Label':
@@ -309,9 +327,11 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
                 entry['convertible']=False
                 diagnostics.append(diagnostic('MASK_SUBSET_UNSUPPORTED',c['sourceId'],'Only non-inverted rectangular mask supported',c['sourceId']))
         elif c['type']=='cc.ScrollView':
-            if c['horizontal'] or c['vertical'] or c['content'] not in node_ids:
+            if c['content'] not in node_ids or by_node[c['content']].get('parent') not in node_ids:
                 entry['convertible']=False
-                diagnostics.append(diagnostic('SCROLL_SUBSET_UNSUPPORTED',c['sourceId'],'First subset preserves disabled axes and native content/viewport references',c['sourceId']))
+                diagnostics.append(diagnostic('SCROLL_SUBSET_UNSUPPORTED',c['sourceId'],'Native content and viewport must both resolve',c['sourceId']))
+            entry['staticNativeBinding']=True;entry['dynamicScrollingVerified']=False
+            diagnostics.append(diagnostic('SCROLL_PHYSICS_NOT_VERIFIED',c['sourceId'],'Native axes/content/viewport retained for static recovery; drag and inertia remain unverified',c['sourceId']))
         elif c['type']=='cc.Layout':
             children=[by_node[k]for k in by_node[c['node']]['children']]
             for code,message in layout_issues(c,children):
@@ -327,7 +347,8 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
                     entry['convertible']=False
                     diagnostics.append(diagnostic('NATIVE_GRID_REVIEW_REQUIRED',c['sourceId'],'Authored rectangles retained; no source layout runtime emitted: '+str(error),c['sourceId']))
         elif c['type']=='cc.Button':
-            if c['transition'] not in (0,3) or c['target'] not in (None,c['node']):
+            static_color=c.get('staticButtonBinding',{}).get('renderReady') and c.get('target') in (node_ids|{None})
+            if not static_color and (c['transition'] not in (0,3) or c['target'] not in (None,c['node'])):
                 entry['convertible']=False
                 diagnostics.append(diagnostic('BUTTON_SUBSET_UNSUPPORTED',c['sourceId'],'Only self-targeted none/scale transitions supported',c['sourceId']))
             if c['events']:
@@ -398,17 +419,39 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
             diagnostics.append(diagnostic('COCOS3_UNITY_LAYER_HANDOFF',node['sourceId'],'Original layer bits retained as provenance; native uGUI uses target UI layer 5, source camera visibility is pending',node['sourceId']))
     from ..prefab_target_behaviors import prepare as prepare_behaviors
     behavior_scripts=prepare_behaviors(ir,ir_path.parent,'unity',namespace,out)
+    from ..prefab_static_carriers import prepare as prepare_static
+    static_fields=prepare_static([c for c in components if c.get('staticFieldSnapshot')], 'unity', 'Monkey.StaticFields.N'+sha(namespace.encode())[:12], out)
+    for c in components:
+        if c['sourceId'] in static_fields['bindings']:c['staticFieldBinding']=static_fields['bindings'][c['sourceId']]
+
     material_binding=material_pipeline.prepare(material_profile,'unity',out)
     if material_binding:
         material_binding['spec']['spriteBindings']=[dict(sourceId=c['sourceId'])for c in components if c.get('convertible')and c.get('nativeMaterialSourceId')]
     result=dict(schemaVersion=1,toolVersion=__version__,targetProfile=PROFILE,namespace=namespace,projectLayout=VERSION,layoutOverridesSha256=overrides_sha,
-                behaviorScripts=behavior_scripts,systemFontBinding=system_font_binding,staticFontInputs=static_font_inputs,materialBinding=material_binding,
+                staticFieldScripts=static_fields['scripts'],behaviorScripts=behavior_scripts,systemFontBinding=system_font_binding,staticFontInputs=static_font_inputs,materialBinding=material_binding,
                 sourcePrefabs=source_prefabs,prefabInstances=prefab_instances,naming=naming.report(),
                 scopeMode=ir.get('scopeMode','asset-selection'),
                 sourceIrSha256=sha(stage_bytes(ir_path)),sourceManifestPath=ir.get('sourceManifestPath'),sourceManifestSha256=ir['sourceManifestSha256'],
                 sourceRoots=ir.get('sourceRoots',{}),sourceLocations=ir.get('sourceLocations',{}),designSize=[750,1334],pixelsPerUnit=100,
                 textures=textures,assets=assets,bitmapFonts=bitmap_fonts,animations=animations,bindings=binding_receipt,nodes=nodes,components=components,copies=copies,
                 diagnostics=diagnostics,galleryOnly=not bool(nodes),editorValidation='not_run')
+    if any(c['type']in('cc.Toggle','cc.ToggleContainer')for c in components):
+        from ..prefab_static_toggle import prepare as prepare_toggle
+        toggle=prepare_toggle(ir['sourceManifestPath'],result,'unity',out/'toggle-source')
+        result['toggleBinding']={**toggle,'bindings':list(toggle['bindings'].values())}
+        result['diagnostics'].extend(toggle['diagnostics'])
+        for c in components:
+            if c['sourceId']in toggle['bindings']:
+                c['convertible']=toggle['bindings'][c['sourceId']]['staticComplete']
+                c['nativeType']=c['type'];c['staticToggleBinding']=True
+    if ir.get('sourceProfile') in ('cocos-2.4.15-bundle','cocos-2.4.15-project'):
+        from ..prefab_sync_instances import load_verified_source_manifest, bind_sync_prefab_instances, needs_sync_prefab_binding, SyncPrefabError
+        if needs_sync_prefab_binding(result):
+            try:
+                sync_manifest=load_verified_source_manifest(ir.get('sourceManifestPath'),ir.get('sourceManifestSha256'),ir.get('sourceProfile'))
+                result=bind_sync_prefab_instances(result,sync_manifest,source_ir=ir,source_profile=ir.get('sourceProfile'))
+            except SyncPrefabError as error:
+                fail(error.code,error.where,error.detail)
     write_json(out/'plan.json',result)
     return finish(out,result)
 
@@ -454,10 +497,18 @@ def export(plan_path, output):
             ('IntrinsicGridLayoutGroup.cs',standard.UNITY_LAYOUT_DIR+'/IntrinsicGridLayoutGroup.cs','intrinsic-grid-script'),
             ('UnityNumericCode.cs',standard.unity('numericCode'),'numeric-code-editor'),
             ('UnityBehaviorBindings.cs',str(Path(standard.unity('importer')).with_name('UnityBehaviorBindings.cs')),'behavior-bindings-editor'),
+            ('UnityStaticFields.cs',str(Path(standard.unity('importer')).with_name('UnityStaticFields.cs')),'static-fields-editor'),
+            ('UnityStaticFieldIntegration.cs',str(Path(standard.unity('importer')).with_name('UnityStaticFieldIntegration.cs')),'static-field-integration-editor'),
             ('materials/ui_color/UnityMaterialBindings.cs',str(Path(standard.unity('importer')).with_name('UnityMaterialBindings.cs')),'material-bindings-editor'),
+            ('UnityPreviewState.cs',str(Path(standard.unity('importer')).with_name('UnityPreviewState.cs')),'preview-state-editor'),
+            ('UnityStaticSpriteFrames.cs',str(Path(standard.unity('importer')).with_name('UnityStaticSpriteFrames.cs')),'static-sprite-frames-editor'),
+            ('UnityPreviewClones.cs',str(Path(standard.unity('importer')).with_name('UnityPreviewClones.cs')),'preview-clones-editor'),
+            ('UnityStaticPreview.cs',str(Path(standard.unity('importer')).with_name('UnityStaticPreview.cs')),'static-preview-editor'),
+            ('UnityStaticRichText.cs',str(Path(standard.unity('importer')).with_name('UnityStaticRichText.cs')),'static-richtext-editor'),
+            ('UnityStaticToggle.cs',str(Path(standard.unity('importer')).with_name('UnityStaticToggle.cs')),'static-toggle-editor'),
             ('UnitySystemFonts.cs',str(Path(standard.unity('importer')).with_name('UnitySystemFonts.cs')),'system-fonts-editor'),
             ('UnityPrefabInstances.cs',standard.unity('prefabInstances'),'prefab-instances-editor'),
-            *[(name,standard.UNITY_LAYOUT_DIR+'/'+name,'native-ui/'+name) for name in ('NativeLinearLayoutGroup.cs','NativeRectConstraints.cs','NativeTextLineBox.cs','NativeHorizontalProgressFill.cs','NativeInputBlocker.cs','NativeInputBlockerSurface.cs')],
+            *[(name,standard.UNITY_LAYOUT_DIR+'/'+name,'native-ui/'+name) for name in ('NativeLinearLayoutGroup.cs','NativeRectConstraints.cs','NativeTextLineBox.cs','NativeHorizontalProgressFill.cs','NativeInputBlocker.cs','NativeInputBlockerSurface.cs','NativeStaticButtonTarget.cs','NativeStaticTextOutline.cs')],
             ('UnityDynamicUi.cs',standard.unity('dynamicUi'),'native-ui/UnityDynamicUi.cs'),
             ('UnityButtonAnimations.cs',Path(standard.unity('importer')).with_name('NativeButtonAnimations.cs').as_posix(),'button-animations-editor'),
             ('UnityImporter.cs',standard.unity('importer'),'editor-adapter')]:
@@ -465,6 +516,14 @@ def export(plan_path, output):
         Path(str(dest)+'.meta').write_text('fileFormatVersion: 2\nguid: '+guid(p['namespace'],key)+'\n')
     from ..prefab_target_behaviors import emit as emit_behaviors
     emit_behaviors(p,plan_path.parent,'unity',out)
+    if p.get('spineNativeStage'):
+        from ..prefab_spine_native_stage import emit_unity_stage
+        emit_unity_stage(p['spineNativeStage'],plan_path.parent,out)
+    from ..prefab_static_carriers import emit as emit_static
+    emit_static(p,plan_path.parent,'unity',out)
+    if p.get('spriteOutlineBinding'):
+        from ..prefab_sprite_outline_pipeline import emit_attached
+        emit_attached(plan_path.parent,plan_path.parent,out)
     from ..prefab_material_pipeline import emit as emit_material
     emit_material(p.get('materialBinding'),plan_path.parent,out)
     # Only the typed, finite import instruction subset is sent to the Editor.
@@ -473,10 +532,14 @@ def export(plan_path, output):
     instruction['staticFontReceiptPath']=(static_fonts or {}).get('portableReceiptRelativePath')
     instruction['staticFontReceiptSha256']=(static_fonts or {}).get('portableReceiptSha256')
     instruction['materialBinding']=(p.get('materialBinding')or {}).get('spec')
+    instruction['spriteOutlineBindingJson']=encoded(p['spriteOutlineBinding']).decode('utf-8') if p.get('spriteOutlineBinding') else None
     instruction['tmpResources']=dict(packageName='com.unity.ugui',packageVersion='2.6.0',resource='Package Resources/TMP Essential Resources.unitypackage',importMode='package-completion-callback')
     instruction['glyphReadback']='native-quad-padding-v1'
     instruction['sceneRoundtrip']=True
     instruction['sourcePrefabReadback']='native-layout-settled-v1'
+    instruction['previewState']=p.get('previewState')
+    instruction['previewStates']=p.get('previewStates')
+    instruction['toggleBinding']=p.get('toggleBinding')
     instruction['behaviorBindingReadback']='persistent-source-fields-v1'
     instruction['transformReadback']='full-local-v1'
     instruction['sourceDiagnosticCount']=len(p['diagnostics'])
@@ -674,6 +737,9 @@ def verify(candidate, output, level='static'):
             for prefab in instruction.get('sourcePrefabs',[]):
                 source_nodes=set(prefab['nodes']);specs=[c for c in instruction['components']if c.get('node')in source_nodes]
                 diagnostics.extend(verify_numeric(specs,actual_prefabs.get(prefab['sourceId'],{}).get('numericCodeBindings'),'unity',prefab['sourceId']))
+                from ..prefab_static_readback import verify as verify_static
+                static_observed=actual_prefabs.get(prefab['sourceId'],{})
+                diagnostics.extend(verify_static(specs,static_observed.get('staticFieldBindings'),static_observed.get('guid'),'unity',prefab['sourceId']))
                 if instruction.get('behaviorBindingReadback')=='persistent-source-fields-v1':
                     from ..prefab_target_behaviors import verify_bindings
                     observed=actual_prefabs.get(prefab['sourceId'],{})

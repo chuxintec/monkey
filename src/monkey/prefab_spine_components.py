@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 from pathlib import Path
 from typing import Any
@@ -370,7 +371,9 @@ def build_component_binding_plan(
                 "runtimeBinding": "apply static asset only when source UUID exists; leave resource unset for unbound rows",
             },
             "unity": {
-                "componentType": "Spine.Unity.SkeletonAnimation",
+                "componentType": None,
+                "componentTypeSelection": "caller must choose from exact target node UI context",
+                "componentTypeChoices": ["Spine.Unity.SkeletonGraphic", "Spine.Unity.SkeletonAnimation"],
                 "runtimePackage": "existing local Spine 3.8.99 branch3.8; not copied",
                 "nativeComponentInstance": "requires sourceComponentId -> created native component mapping",
                 "fields": properties,
@@ -442,6 +445,8 @@ def prepare_spine_emission(
     normalized_ir_sha256: str,
     closure_receipts: dict[str, dict[str, Any]],
     component_plan: dict[str, Any],
+    creator_material_contract: dict[str, Any] | None = None,
+    creator_material_contract_sha256: str | None = None,
 ) -> dict[str, Any]:
     """Prepare a path-relative target emission payload from explicitly pinned inputs.
 
@@ -572,9 +577,52 @@ def prepare_spine_emission(
             },
         })
 
+    material_profile = None
+    material_by_component: dict[str, dict[str, Any]] = {}
+    if creator_material_contract is not None:
+        if not isinstance(creator_material_contract_sha256, str) or not re.fullmatch(r"[0-9a-f]{64}", creator_material_contract_sha256):
+            raise ValueError("Creator material contract requires an explicit SHA-256 pin")
+        contract = creator_material_contract
+        pins = contract.get("pins", {})
+        profile = contract.get("spec", {}).get("creator38", {})
+        if (contract.get("schema") != "monkey-spine-material-contract/1"
+                or contract.get("profile") != "cocos24-builtin-spine-material-v1"
+                or contract.get("creatorBindingStatus") != "source-semantics-exact-builtin-spine"
+                or pins.get("sourceManifestSha256") != source_manifest_sha256
+                or pins.get("normalizedIrSha256") != normalized_ir_sha256
+                or profile.get("strategy") != "explicit-native-builtin-spine-material-reference"
+                or profile.get("targetMaterialUuid") != "default-spine-material"
+                or profile.get("effect") != "builtin-spine"):
+            raise ValueError("Creator Spine material profile is not pinned to this source/IR and built-in material contract")
+        rows = profile.get("perComponent")
+        if not isinstance(rows, list):
+            raise ValueError("Creator material profile has no per-component source mapping")
+        material_by_component = {row.get("sourceComponentId"): row for row in rows if row.get("sourceComponentId")}
+        expected_ids = {row["sourceComponentId"] for row in component_plan["components"]}
+        if len(material_by_component) != len(rows) or set(material_by_component) != expected_ids:
+            raise ValueError("Creator material profile component denominator differs from Spine emission")
+        for source_id, row in material_by_component.items():
+            if (row.get("targetMaterialUuid") != "default-spine-material"
+                    or not isinstance(row.get("sourceMaterialReferenceSourceId"), str)
+                    or not isinstance(row.get("sourceMaterialSourceId"), str)
+                    or row.get("runtimeMaterialStrategy") != "Creator Spine runtime creates per-slot MaterialInstance over builtin-spine and selects blend factors from component PMA"):
+                raise ValueError(f"Creator material mapping is incomplete or ambiguous for {source_id}")
+        material_profile = {
+            "contract": contract["profile"],
+            "contractSha256": creator_material_contract_sha256,
+            "sourceMaterialReferenceSourceId": pins.get("materialReferenceSourceId"),
+            "sourceMaterialSourceId": pins.get("materialSourceId"),
+            "effectSourceId": pins.get("effectSourceId"),
+            "effectProgramCanonicalSha256": pins.get("effectProgramCanonicalSha256"),
+            "targetMaterialUuid": "default-spine-material",
+            "targetEffect": "builtin-spine",
+            "strategy": profile["strategy"],
+            "evidenceStatus": "source_to_internal_to_creator_builtin_pinned",
+        }
+
     component_specs = []
     for row in component_plan["components"]:
-        component_specs.append({
+        spec = {
             "sampleId": row.get("sampleId"),
             "sourcePrefabId": row.get("sourcePrefabId"),
             "sourceComponentId": row.get("sourceComponentId"),
@@ -585,7 +633,34 @@ def prepare_spine_emission(
             "creator": row.get("creator"),
             "unity": row.get("unity"),
             "runtimeDynamicAssignment": row.get("runtimeDynamicAssignment"),
-        })
+        }
+        if material_profile:
+            spec["creatorMaterialBinding"] = {
+                **material_by_component[row["sourceComponentId"]],
+                "contract": material_profile["contract"],
+                "contractSha256": material_profile["contractSha256"],
+                "evidenceStatus": material_profile["evidenceStatus"],
+            }
+            time_scale = row.get("creator", {}).get("fields", {}).get("timeScale", {})
+            creator_time_scale = time_scale.get("creator") or {}
+            if creator_time_scale.get("status") not in {"explicit", "resolved_source_engine_default"}:
+                raise ValueError(f"Creator timeScale source/default is not evidenced for static visible pose: {row['sourceComponentId']}")
+            source_scale = creator_time_scale.get("value")
+            if isinstance(source_scale, bool) or not isinstance(source_scale, (int, float)) or not math.isfinite(source_scale):
+                raise ValueError(f"Creator timeScale is not a finite evidenced number for {row['sourceComponentId']}")
+            spec["creatorStaticPose"] = {
+                "policy": "enabled_realtime_renderer_with_serialized_timeScale_zero",
+                "nativeEnabled": True,
+                "nativeTimeScale": 0,
+                "sourceTimeScale": {"value": source_scale, "status": creator_time_scale["status"]},
+                "sourceFieldValueRetainedInEmission": True,
+                "sourceMaterialRoute": "Creator sp.Skeleton updateMaterial -> builtinResMgr.get(default-spine-material)",
+                "targetEngineSource": "cocos/spine/skeleton.ts",
+                "targetEngineSourceSha256": "2e86383e7e7dfb93bc40ec1d7e44c6bb2b8ebe4e95c100ad16620bd24114329",
+                "animationFrozenBySerializedTimeScale": True,
+                "businessCallbacksExecuted": False,
+            }
+        component_specs.append(spec)
     return {
         "schemaVersion": 1,
         "contract": "monkey-spine-emission/1",
@@ -594,6 +669,7 @@ def prepare_spine_emission(
             "normalizedIrSha256": normalized_ir_sha256,
             "creatorClosureReceiptSha256": closure_receipts["creator"].get("receiptSha256"),
             "unityClosureReceiptSha256": closure_receipts["unity"].get("receiptSha256"),
+            **({"creatorMaterialContractSha256": creator_material_contract_sha256} if material_profile else {}),
         },
         "sourceProfile": source_manifest.get("sourceProfile"),
         "sourceVersion": source_manifest.get("sourceVersion"),
@@ -616,6 +692,7 @@ def prepare_spine_emission(
         "assets": prepared_assets,
         "copies": copies,
         "components": component_specs,
+        **({"creatorMaterialProfile": material_profile} if material_profile else {}),
         "originalSourceCodeExecuted": False,
         "nativeImportStatus": {"creator": "resource_probe_verified; source_prefab_component_readback_pending", "unity": "not_run"},
     }

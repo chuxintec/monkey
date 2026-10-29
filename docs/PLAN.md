@@ -2,7 +2,17 @@
 
 Development version: **0.7.0.dev1**. Formal 0.6.0 and fixed local consumer packages remain unchanged. This is the active plan; the prior status below is historical.
 
-## Acceptance and current work
+## Current scope — 2026-10-30
+
+First preserve the current implementation checkpoint on the existing development branch. This is work in progress, not a formal release. Then expand the original thirteen selected Prefabs to thirty distinct representative source Prefabs, with frozen source identities/hashes and component-coverage reasons. Dependency Prefabs and alternate states do not inflate the thirty-item denominator.
+
+Run actual Creator 3.8.8 and Unity 6000.6.2f1 import/compile, load/instantiate, required fixed-state initialization, reference resolution and affected save/reload checks in bounded groups. Keep disabled/partial business behavior and unavailable dependencies explicit. This iteration does not require per-page screenshot comparisons; visual status is `pending_user_review`. Provide one existing-capability viewing entry point and per-target results for user review. No main/tag/Release, global installation or game-project changes are authorized.
+
+The current checkpoint adds source-declaration-derived typed fields, nested Prefab synchronization, static state/list projection, font/outline fixes and optional native Spine/material bindings. The latest candidate compiled against the installed Unity assemblies; native import reached two explicit blockers: Unity outline fallback-font identity and Creator saved outline-material identity. 173 affected tests passed before public-test isolation; JavaScript material checks passed. Animation binding helpers are delivered but not integrated. Recursive preview-plan serialization warnings remain open. Existing scoped native evidence is retained; neither the original eleven interfaces nor thirty samples are claimed complete.
+
+The older ten-of-thirteen visual gate and counts below are historical and superseded for this iteration. They remain evidence of earlier limits, not the current exit requirement.
+
+## Historical acceptance and work before scope expansion
 
 Freeze all 13 proposed core Prefabs against original source identities, resources and code. At least 10 distinct core Prefabs must pass both Creator 3.8.8 and Unity 6000.6.2f1: source-to-IR completeness, target native hierarchy/components/fields/references, static images/text/materials/layout in a source-evidenced fixed state, save/reopen and deterministic regeneration. Business scripts may be disabled, not run or partial, with all source fields and references retained. Dynamic behavior and physical input are a separate second phase. Unknown components remain in the source denominator. No acceptance by file counts or zero MissingScript alone.
 
@@ -13,6 +23,14 @@ Execution order: freeze source identities and baseline; implement independent co
 Current: all 13 source anchors are mapped; one instance variant retains an explicit base/override distinction. Original package bytes independently confirm the recovered code bundle and its version literal. Independent node/component/field accounting is integrated into normalization. The initial eleven-core baseline contains 627 nodes, 935 components and 181 custom occurrences (51 classes); these are not the larger dependency-closure totals.
 
 Native subset import/save/reopen has run in both editors. Eleven Creator and four Unity source-bound local behavior components are emitted with unresolved semantics retained. Sixteen selected Spine resources pass Creator resource-reference and observed bone-motion probes; this is not yet Prefab component or visual acceptance. Unity native save/reopen now verifies 928 source nodes across 22 closure Prefabs, separately accounting for 68 TMP-generated nonpersistent submeshes. Source-pinned static fallback and DynamicOS fonts survive Editor exit with zero file-hash diagnostics; this is native subset evidence, not full core acceptance. Exact UI-color material references pass Creator native readback. User-provided visual references cover order states, shop scroll positions, avatar, handbook, goose details and construction; the user explicitly permits cross-version references, with versions recorded separately. Static component/field/resource binding and visual comparison remain incomplete. Static accepted samples: 0/13 on each target; dynamic accepted samples: 0/13; versionComplete=false. Source-family/CDN expansion including 3.8.5 is deferred. Only the explicitly authorized development-branch push is permitted; no formal release, global install or game writes.
+
+## Integration checkpoint and current increment
+
+All existing branch tips are contained in the verified development-branch checkpoint `6109a8b24067a0217ec48c31f4d8700571a6f4ff`; main, tags and formal release were not changed. The branch ledger is in [integration record](BRANCH-INTEGRATION-20261029.md).
+
+The subsequent static-field increment preserves 217 custom components and 694 serialized fields from the existing dependency closure in both target plans. These are conversion-time records, not native field-carrier acceptance. Existing resources are hash-verified and reused. Declaration defaults and native binding remain unverified; all 217 retain their unsupported native disposition. A separate seven-criterion acceptance evaluator and thirteen-core matrix keep dynamic status independent. Static accepted cores remain 0/13 on both targets.
+
+Next: derive typed field carriers and missing defaults from source declarations, bind exact native object references, then close representative fixed-state renders and save/reopen/regeneration using existing evidence. Prefer the source-evidenced shop and handbook states; GuideTalk asynchronous behavior stays outside this static critical path.
 
 ## Static-first convergence
 
@@ -79,3 +97,18 @@ The approved P0 adds a content-first Shader classifier and `classify-unity-shade
 The bounded existing-candidate check classified 126 serialized platform-compiled Shaders and one unsupported variant collection, hashing about 5.5 MB of Shader/meta content rather than rerunning the full pool. All 127 target identities are serialized declarations, not native readback. The old source map lacks original object associations for the 126 Shaders; these remain explicitly unmapped, with no name-based ID or raw hash inference. A neutral consumer-contract check is accepted by beaver's read-only planner and remains blocked for unproven dynamic runtime use; it is not Editor or isolation-execution evidence.
 
 The fixed candidate, game project, shared installation and formal release are unchanged. beaver owns actual build target/pipeline, dependency coverage, native identities/compilation and any reversible filtering; game-directory migration remains with its owner. No P1 parser/recovery expansion is included. Public schema/example/CLI and limitations are in [Shader handoff](providers/UNITY-SHADER-HANDOFF.md).
+
+## 2026-10-29 current static recovery acceptance
+
+The source-generated StaticBatch10 candidate supersedes the earlier P07 checkpoint and eleven-core audit. P07's source-backed locked state now passes actual Unity 6000.6.2f1 and Creator 3.8.8 open/save/unload/reopen with visible screenshots, six complete native static carriers, and verified state operations. The full Unity independent PNG is visually checked; the live reopened layout is stable. Both windows remain on P07.
+
+P04 and P09 also have actual dual-Editor saved/reopened screenshots. P04's missing untrimmed nine-slice border and P09's Creator RichText fontColor persistence are fixed. P04 still has a heavier Unity title and only 1/5 complete native carriers; P09 has 0/2, with explicit unresolved declarations/references. The other eight baseline pages lack fixed-state dual-Editor visual acceptance. Eleven-interface completion remains false; snapshot-json is not counted as native typed completion. Source Prefabs remain separate from derived preview states; only the latter freeze evaluated Unity layout for static display.
+
+Private current evidence: `.private/v070-prefab-20261029/StaticBatch10/acceptance.json` and `验收说明.md`. Same-plan bounded exports reproduce all 914 Unity and 715 Creator generated files byte-for-byte; this is exporter determinism, not a second native import. 58 focused tests passed. No Player/gameplay/full-state acceptance or release is implied. Next work is the remaining actual field/reference/visual gaps, starting with P04 title rendering; do not expand accounting scaffolding or claim all eleven complete.
+
+
+## Static continuation after the bounded checkpoint
+
+Continue the original thirteen-sample matrix and source-backed component combinations; the eleven-page audit and P07 checkpoint do not complete this work. Current integration adds Creator 2.4 auto-synced nested Prefabs, source-defined list clones, typed record arrays, exact asset redirects, static COLOR Buttons and native material references. P04 font weight correction is compiled but awaits a fresh native candidate. StaticBatch11 preserves pre-Editor integration failures; none is counted as visual acceptance.
+
+Primary owns shared preview integration, final candidate export and both Editors. Isolated modules own clone validation/helpers, P03 source fixtures/font supplementation, Spine static binding, and P05/P02 fixtures. Original source assets and prior native evidence remain immutable. All new fixture states explicitly distinguish test inputs from observed player state.

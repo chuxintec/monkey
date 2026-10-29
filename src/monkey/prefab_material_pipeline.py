@@ -32,6 +32,17 @@ def supported_component(component, profile, resolve):
             [resolve(m) for m in component.get('materials',[])]==[spec['materialSourceId']])
 
 
+def identity_text_component(component,profile,resolve):
+    """A proven identity UI-color transform needs no text shader replacement.
+
+    This is only the frozen default static material. Nonidentity parameters and
+    later source behavior remain outside this projection.
+    """
+    if not profile or component.get('type') not in ('cc.Label','cc.RichText'):return False
+    spec=profile['spec']
+    if [resolve(m)for m in component.get('materials',[])]!=[spec['materialSourceId']]:return False
+    return spec.get('properties')==dict(brightness=1.0,constrast=1.0,gray=0.0,saturation=1.0,silhouette=[1.0,1.0,1.0,1.0])
+
 def prepare(profile,target,output):
     if not profile:return None
     prefix='Assets/' if target=='unity' else 'assets/'

@@ -322,6 +322,9 @@ def normalize(manifest_path, output, *, audio_provider=None):
                                           'mapped', 'unmapped', 'unknown')},
             fieldSemantics='unverified', native='not_run', runtime='not_run',
             visual='not_run', complete=False)
+    if m['sourceProfile'] in SUPPORTED:
+        from .prefab_static_pipeline import attach_static_fields
+        write_json(out / 'prefab-static-fields.json', attach_static_fields(m, result))
     write_json(out / 'ir.json', result)
     return finish(out, result)
 

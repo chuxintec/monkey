@@ -32,17 +32,50 @@ function applyCreatorSpineBinding(binding, resolveComponent, resolveSkeletonData
     // An absent source UUID intentionally leaves skeletonData untouched. This
     // preserves room for source code to assign it later without inventing one.
     const fields = binding.creator.fields;
-    for (const name of ['skin', 'animation', 'loop', 'timeScale', 'premultipliedAlpha',
+    const staticPose = binding.creatorStaticPose || null;
+    const staticSourceScale = staticPose && staticPose.sourceTimeScale;
+    for (const name of ['skin', 'animation', 'loop', ...(staticPose ? [] : ['timeScale']), 'premultipliedAlpha',
         'tint', 'debugSlots', 'debugBones', 'debugMesh', 'enableBatch', 'caching'])
         assign(component, explicitField(fields, name, 'creator'));
+
+    if (staticPose) {
+        const sourceScale = staticPose.sourceTimeScale;
+        const sourceScaleRow = explicitField(fields, 'timeScale', 'creator');
+        if (staticPose.policy !== 'enabled_realtime_renderer_with_serialized_timeScale_zero' ||
+            staticPose.nativeEnabled !== true || staticPose.nativeTimeScale !== 0 ||
+            !sourceScale || !sourceScaleRow ||
+            !Object.is(sourceScale.value, sourceScaleRow.value) ||
+            !['explicit', 'resolved_source_engine_default'].includes(sourceScale.status))
+            throw new Error('Invalid source-pinned Creator static t0 policy');
+        // Creator's Skeleton.updateAnimation() continues to update render data
+        // while timeScale=0. This serialized value freezes realtime animation
+        // at its initialized pose and survives Prefab save/reopen; `paused` is
+        // runtime-only and is intentionally not used.
+        component.timeScale = 0;
+        component.enabled = true;
+        if (typeof component.updateMaterial === 'function') component.updateMaterial();
+    }
+
+    const materialBinding = binding.creatorMaterialBinding || null;
+    if (materialBinding && (materialBinding.targetMaterialUuid !== 'default-spine-material' ||
+        materialBinding.contract !== 'cocos24-builtin-spine-material-v1' ||
+        materialBinding.evidenceStatus !== 'source_to_internal_to_creator_builtin_pinned' ||
+        !/^[0-9a-f]{64}$/.test(materialBinding.contractSha256 || '') ||
+        materialBinding.sourceComponentId !== binding.sourceComponentId ||
+        !materialBinding.sourceMaterialReferenceSourceId || !materialBinding.sourceMaterialSourceId))
+        throw new Error('Invalid exact Creator built-in Spine material mapping');
 
     return {
         sourceComponentId: binding.sourceComponentId,
         staticDataBound: !!(data && data.sourceAssetId),
         unresolvedDynamicAssignment: !(data && data.sourceAssetId),
-        appliedFields: ['skin', 'animation', 'loop', 'timeScale', 'premultipliedAlpha',
+        appliedFields: ['skin', 'animation', 'loop', ...(staticPose ? ['staticPose.nativeTimeScale'] : ['timeScale']), 'premultipliedAlpha',
             'tint', 'debugSlots', 'debugBones', 'debugMesh', 'enableBatch', 'caching']
-            .filter(name => !!explicitField(fields, name, 'creator')),
+            .filter(name => name === 'staticPose.nativeTimeScale' || !!explicitField(fields, name, 'creator')),
+        sourceTimeScale: staticPose ? staticSourceScale.value : undefined,
+        nativeTimeScale: staticPose ? component.timeScale : undefined,
+        nativeEnabled: staticPose ? component.enabled : undefined,
+        materialRoute: materialBinding ? 'builtin-spine-material' : undefined,
         sourceCallbacksExecuted: false,
     };
 }
@@ -102,6 +135,7 @@ function readCreatorSpineBinding(binding, resolveComponent) {
         currentAnimation: actualAnimation,
         loop: component.loop,
         timeScale: component.timeScale,
+        enabled: component.enabled,
         premultipliedAlpha: component.premultipliedAlpha,
         useTint: component.useTint,
         debugBones: component.debugBones,
@@ -119,8 +153,33 @@ function readCreatorSpineBinding(binding, resolveComponent) {
         requestedAnimationActive: requestedAnimation === null || !runtimeData ? null : actualAnimation === requestedAnimation,
         requestedSkinActive: requestedSkin === null || !runtimeData ? null : actualSkin === requestedSkin,
     };
+    const staticPose = binding.creatorStaticPose || null;
+    if (staticPose) {
+        const sourceScale = staticPose.sourceTimeScale;
+        const sourceScaleRow = explicitField(fields, 'timeScale', 'creator');
+        checks.sourceTimeScaleRetainedInPinnedSpec = !!sourceScale && !!sourceScaleRow &&
+            Object.is(sourceScale.value, sourceScaleRow.value) &&
+            ['explicit', 'resolved_source_engine_default'].includes(sourceScale.status);
+        checks.nativeTimeScaleFrozenAtT0 = component.timeScale === 0 && staticPose.nativeTimeScale === 0;
+        checks.nativeRendererEnabled = component.enabled === true && staticPose.nativeEnabled === true;
+        checks.serializedAnimationContinuesToRender = staticPose.policy === 'enabled_realtime_renderer_with_serialized_timeScale_zero';
+    }
+    const materialBinding = binding.creatorMaterialBinding || null;
+    if (materialBinding) {
+        checks.exactBuiltinMaterialContract = materialBinding.sourceComponentId === binding.sourceComponentId &&
+            materialBinding.targetMaterialUuid === 'default-spine-material' &&
+            materialBinding.contract === 'cocos24-builtin-spine-material-v1' &&
+            materialBinding.evidenceStatus === 'source_to_internal_to_creator_builtin_pinned' &&
+            /^[0-9a-f]{64}$/.test(materialBinding.contractSha256 || '') &&
+            typeof materialBinding.sourceMaterialReferenceSourceId === 'string' &&
+            typeof materialBinding.sourceMaterialSourceId === 'string';
+        // The Creator engine resolves the built-in Spine material internally
+        // in _updateBuiltinMaterial(). Do not assign a custom material here.
+        checks.usesDefaultBuiltinMaterialRoute = component.customMaterial == null;
+    }
     for (const key of ['skin', 'animation', 'loop', 'timeScale', 'premultipliedAlpha',
         'tint', 'debugSlots', 'debugBones', 'debugMesh', 'enableBatch', 'caching']) {
+        if (key === 'timeScale' && staticPose) continue;
         const row = explicitField(fields, key, 'creator');
         if (!row) continue;
         const actualValue = key === 'skin' ? actual.defaultSkin
@@ -133,9 +192,10 @@ function readCreatorSpineBinding(binding, resolveComponent) {
     return {
         sourceComponentId: binding.sourceComponentId,
         nativeComponentType: component.constructor && component.constructor.name || 'sp.Skeleton',
-        status: !hasStaticSourceData ? 'incomplete_dynamic_assignment'
+        status: failures.length ? 'mismatch'
+            : !hasStaticSourceData ? 'incomplete_dynamic_assignment'
             : !runtimeData ? 'incomplete_runtime_data'
-                : failures.length ? 'mismatch' : 'verified',
+                : 'verified',
         staticDataBoundBySource: hasStaticSourceData,
         expectedTargetDataUuidAvailable: !!expectedData,
         runtimeDataAvailable: !!runtimeData,
@@ -147,6 +207,13 @@ function readCreatorSpineBinding(binding, resolveComponent) {
         checks,
         failures,
         sourceCodeExecuted: false,
+        staticVisiblePose: staticPose ? {
+            policy: staticPose.policy,
+            sourceTimeScale: staticPose.sourceTimeScale,
+            nativeTimeScale: component.timeScale,
+            nativeEnabled: component.enabled === true,
+            sourceMaterialRoute: staticPose.sourceMaterialRoute,
+        } : null,
     };
 }
 

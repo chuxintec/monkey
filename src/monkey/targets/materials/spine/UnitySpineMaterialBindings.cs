@@ -16,7 +16,9 @@ namespace Monkey.Targets.SpineMaterials
         public const string ShaderSourceSha256 = "0fe1ea3481787d0de2bd7545c8e77d769c681a7d30ca48d6ad56482bdeec549b";
         public const int BlendZero = 0;
         public const int BlendOne = 1;
+        public const int BlendDstColor = 2;
         public const int BlendSrcAlpha = 5;
+        public const int BlendOneMinusSrcColor = 6;
         public const int BlendOneMinusSrcAlpha = 10;
 
         public sealed class NativeShaderProof
@@ -40,6 +42,34 @@ namespace Monkey.Targets.SpineMaterials
             public int additiveDstBlend;
             public bool pmaVertexColors;
             public bool materialReferencesVerified;
+            public bool pmaVertexColorsMemberApplicable;
+        }
+
+        /// <summary>Apply one source-pinned blend mode to an owned native profile Material.</summary>
+        public static void ConfigureProfileMaterial(Material material, string blendMode, bool premultipliedAlpha)
+        {
+            if (material == null || material.shader == null || material.shader.name != ShaderName)
+                throw new InvalidOperationException("Unity Spine source-profile Material/Shader identity is invalid.");
+            var factors = BlendFactors(blendMode, premultipliedAlpha);
+            SetBlend(material, factors[0], factors[1]);
+        }
+
+        public static bool ProfileMaterialMatches(Material material, string blendMode, bool premultipliedAlpha)
+        {
+            if (material == null || material.shader == null || material.shader.name != ShaderName) return false;
+            var factors = BlendFactors(blendMode, premultipliedAlpha);
+            return material.HasProperty("_SrcBlend") && material.HasProperty("_DstBlend") &&
+                material.GetInt("_SrcBlend") == factors[0] && material.GetInt("_DstBlend") == factors[1];
+        }
+
+        public static int[] BlendFactors(string blendMode, bool premultipliedAlpha)
+        {
+            int source = premultipliedAlpha ? BlendOne : BlendSrcAlpha;
+            if (blendMode == "normal") return new[] { source, BlendOneMinusSrcAlpha };
+            if (blendMode == "additive") return new[] { source, BlendOne };
+            if (blendMode == "multiply") return new[] { BlendDstColor, BlendOneMinusSrcAlpha };
+            if (blendMode == "screen") return new[] { BlendOne, BlendOneMinusSrcColor };
+            throw new InvalidOperationException("Unsupported source Spine blend mode: " + blendMode);
         }
 
         /// <summary>
@@ -69,11 +99,11 @@ namespace Monkey.Targets.SpineMaterials
                 (additiveMaterial != null && (additiveMaterial.shader == null || additiveMaterial.shader.name != ShaderName)))
                 throw new InvalidOperationException("Unity Spine materials do not use the pinned source-profile shader.");
 
+            bool pmaMemberApplicable = skeletonRenderer.GetType().FullName != "Spine.Unity.SkeletonGraphic";
             int src = premultipliedAlpha ? BlendOne : BlendSrcAlpha;
             SetBlend(normalMaterial, src, BlendOneMinusSrcAlpha);
-            if (additiveMaterial != null)
-                SetBlend(additiveMaterial, src, BlendOne);
-            SetBooleanMember(skeletonRenderer, "pmaVertexColors", premultipliedAlpha);
+            if (additiveMaterial != null) SetBlend(additiveMaterial, src, BlendOne);
+            if (pmaMemberApplicable) SetBooleanMember(skeletonRenderer, "pmaVertexColors", premultipliedAlpha);
 
             var readback = new Readback
             {
@@ -85,7 +115,8 @@ namespace Monkey.Targets.SpineMaterials
                 normalDstBlend = normalMaterial.GetInt("_DstBlend"),
                 additiveSrcBlend = additiveMaterial != null ? additiveMaterial.GetInt("_SrcBlend") : BlendZero,
                 additiveDstBlend = additiveMaterial != null ? additiveMaterial.GetInt("_DstBlend") : BlendZero,
-                pmaVertexColors = ReadBooleanMember(skeletonRenderer, "pmaVertexColors"),
+                pmaVertexColors = pmaMemberApplicable ? ReadBooleanMember(skeletonRenderer, "pmaVertexColors") : false,
+                pmaVertexColorsMemberApplicable = pmaMemberApplicable,
                 materialReferencesVerified = materialReferencesVerified,
             };
             if (readback.normalSrcBlend != src || readback.normalDstBlend != BlendOneMinusSrcAlpha ||

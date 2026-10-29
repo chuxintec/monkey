@@ -34,8 +34,16 @@ def bitmap_text(font,atlas_name,face="MonkeySourceBitmap"):
     return ('\n'.join(lines)+'\n').encode()
 
 
-def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None,layout=None,spine_bindings=None,expected_spine_bindings=None,spine_resources=None):
+def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None,layout=None,spine_bindings=None,expected_spine_bindings=None,spine_resources=None,static_source_bundle=None,expected_static_source_bundle=None):
     path,ir,bindings,receipt,resource,resolve=input_ir(ir_path,bindings_path)
+    from ..prefab_static_pipeline import ensure_static_fields
+    ensure_static_fields(ir)
+    from ..prefab_richtext_pipeline import enrich as enrich_richtext
+    enrich_richtext(ir)
+    from ..prefab_static_button import enrich as enrich_buttons
+    enrich_buttons(ir)
+    from ..prefab_static_pipeline import enrich_declarations
+    enrich_declarations(ir,static_source_bundle,expected_static_source_bundle)
     from .. import prefab_spine_pipeline as spine_pipeline
     spine_profile=spine_pipeline.load_binding(ir,path,spine_bindings,expected_spine_bindings,spine_resources)
     spine_components={c['sourceComponentId']:c for c in spine_profile['record']['components']}if spine_profile else {}
@@ -83,8 +91,11 @@ def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None,la
     for src in ir['components']:
         c=dict(src);sid=c['sourceId'];c['convertible']=c['type'] in supported and c.get('node') in node_ids
         if sid in spine_components:
-            c.update(spineBinding=spine_components[sid],nativeType='sp.Skeleton',convertible=c.get('node')in node_ids and not c.get('materials'))
-            if c.get('materials'):
+            spine_row=spine_components[sid];material_proof=spine_row.get('creatorMaterialBinding')or{}
+            exact_builtin=(material_proof.get('contract')=='cocos24-builtin-spine-material-v1' and material_proof.get('targetMaterialUuid')=='default-spine-material'
+                           and c.get('materials') in ([material_proof.get('sourceMaterialReferenceSourceId')],[material_proof.get('sourceMaterialSourceId')]))
+            c.update(spineBinding=spine_row,nativeType='sp.Skeleton',convertible=c.get('node')in node_ids and (not c.get('materials')or exact_builtin))
+            if c.get('materials')and not exact_builtin:
                 diagnostics.append(diagnostic('SPINE_MATERIAL_HANDOFF',sid,'Exact source Spine material requires its own verified native profile',sid))
             diagnostics.append(diagnostic('SPINE_RUNTIME_UNVERIFIED',sid,'Native component binding; exact animation, dynamic resource assignment and visual checks remain',sid))
             components.append(c);continue
@@ -106,6 +117,8 @@ def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None,la
             c['convertible']=False;diagnostics.append(diagnostic(code,sid,message,sid))
         if material_pipeline.supported_component(c,material_profile,resolve):
             c['nativeMaterialSourceId']=material_profile['spec']['materialSourceId']
+        elif material_pipeline.identity_text_component(c,material_profile,resolve):
+            c['nativeTextMaterialIdentitySourceId']=material_profile['spec']['materialSourceId'];c['nativeTextMaterialPolicy']='source-proven-identity-default-only'
         elif any(resolve(m) not in materials for m in c.get('materials',[])):gap('CUSTOM_MATERIAL_HANDOFF','Unrecognized source material')
         if c['type']=='cc.Sprite':
             if c['mode'] not in (0,1,2) or c['sizeMode'] not in (0,1,2):gap('SPRITE_SUBSET_UNSUPPORTED','Unknown mode')
@@ -138,9 +151,11 @@ def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None,la
             if c['maskType']!=0 or c['inverted']:gap('MASK_SUBSET_UNSUPPORTED','Only plain rectangle')
         elif c['type']=='cc.ScrollView':
             if c.get('content') not in {n['sourceId'] for n in ir['nodes']}:gap('MISSING_SCROLL_CONTENT','Scroll content absent')
-            if c['horizontal'] or c['vertical']:gap('SCROLL_SUBSET_UNSUPPORTED','Dynamic scrolling physics not yet verified')
+            c['staticNativeBinding']=True;c['dynamicScrollingVerified']=False
+            diagnostics.append(diagnostic('SCROLL_PHYSICS_NOT_VERIFIED',sid,'Native axes and content retained for static recovery; dynamic scrolling remains unverified',sid))
         elif c['type']=='cc.Button':
-            if c['transition'] not in (0,3) or c['target'] not in (None,c['node']):gap('BUTTON_SUBSET_UNSUPPORTED','Only none/scale self-target')
+            static_color=c.get('staticButtonBinding',{}).get('renderReady') and c.get('target') in (node_ids|{None})
+            if not static_color and (c['transition'] not in (0,3) or c['target'] not in (None,c['node'])):gap('BUTTON_SUBSET_UNSUPPORTED','Unsupported button transition/target')
             if c['events']:diagnostics.append(diagnostic('BUTTON_BUSINESS_UNBOUND',sid,'Original click handlers remain native AI work',sid))
         elif c['type']=='cc.LabelOutline':
             if not any(x['type']=='cc.Label' and x['node']==c['node'] for x in ir['components']):gap('MISSING_OUTLINE_LABEL','Outline has no Label')
@@ -189,17 +204,39 @@ def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None,la
     diagnostics.extend(diagnostic('TILED_GEOMETRY_UNSUPPORTED',sid,message,sid) for sid,message in tile_gaps)
     from ..prefab_target_behaviors import prepare as prepare_behaviors
     behavior_scripts=prepare_behaviors(ir,path.parent,'creator',namespace,out)
+    from ..prefab_static_carriers import prepare as prepare_static
+    static_fields=prepare_static([c for c in components if c.get('staticFieldSnapshot')], 'creator', 'Monkey.StaticFields.N'+sha(namespace.encode())[:12], out)
+    for c in components:
+        if c['sourceId'] in static_fields['bindings']:c['staticFieldBinding']=static_fields['bindings'][c['sourceId']]
+
     material_binding=material_pipeline.prepare(material_profile,'creator',out)
     spine_binding=spine_pipeline.prepare(spine_profile,out)
     if material_binding:
         material_binding['spec']['spriteBindings']=[dict(sourceId=c['sourceId'])for c in components if c.get('convertible')and c.get('nativeMaterialSourceId')]
     result=dict(schemaVersion=1,toolVersion=__version__,targetProfile=PROFILE,namespace=namespace,projectLayout=VERSION,layoutOverridesSha256=overrides_sha,
-        behaviorScripts=behavior_scripts,materialBinding=material_binding,spineBinding=spine_binding,
+        staticFieldScripts=static_fields['scripts'],behaviorScripts=behavior_scripts,materialBinding=material_binding,spineBinding=spine_binding,
         scopeMode=ir.get('scopeMode','asset-selection'),
         sourceIrSha256=sha(stage_bytes(path)),sourceManifestSha256=ir['sourceManifestSha256'],sourceManifestPath=ir.get('sourceManifestPath'),
         sourceRoots=ir.get('sourceRoots',{}),sourceLocations=ir.get('sourceLocations',{}),bindings=receipt,
         designSize=[750,1334],rendererBudget=render_budget,assets=assets,copies=copies,animations=animations,sourcePrefabs=prefabs,prefabInstances=instances,naming=naming.report(),nodes=native_color_nodes(ir['nodes'],components),components=components,
         diagnostics=diagnostics,editorValidation='not_run',subresourceValidation='pending-native-import')
+    if any(c['type']in('cc.Toggle','cc.ToggleContainer')for c in components):
+        from ..prefab_static_toggle import prepare as prepare_toggle
+        toggle=prepare_toggle(ir['sourceManifestPath'],result,'creator',out/'toggle-source')
+        result['toggleBinding']={**toggle,'bindings':list(toggle['bindings'].values())}
+        result['diagnostics'].extend(toggle['diagnostics'])
+        for c in components:
+            if c['sourceId']in toggle['bindings']:
+                c['convertible']=toggle['bindings'][c['sourceId']]['staticComplete']
+                c['nativeType']=c['type'];c['staticToggleBinding']=True
+    if ir.get('sourceProfile') in ('cocos-2.4.15-bundle','cocos-2.4.15-project'):
+        from ..prefab_sync_instances import load_verified_source_manifest, bind_sync_prefab_instances, needs_sync_prefab_binding, SyncPrefabError
+        if needs_sync_prefab_binding(result):
+            try:
+                sync_manifest=load_verified_source_manifest(ir.get('sourceManifestPath'),ir.get('sourceManifestSha256'),ir.get('sourceProfile'))
+                result=bind_sync_prefab_instances(result,sync_manifest,source_ir=ir,source_profile=ir.get('sourceProfile'))
+            except SyncPrefabError as error:
+                fail(error.code,error.where,error.detail)
     write_json(out/'plan.json',result);return finish(out,result)
 
 
@@ -225,12 +262,18 @@ def export(plan_path,output):
         write_json(Path(str(target)+'.meta'),m)
     from ..prefab_target_behaviors import emit as emit_behaviors
     emit_behaviors(p,path.parent,'creator',out)
+    from ..prefab_static_carriers import emit as emit_static
+    emit_static(p,path.parent,'creator',out)
+    if p.get('spriteOutlineBinding'):
+        from ..prefab_sprite_outline_pipeline import emit_attached
+        emit_attached(path.parent,path.parent,out)
     from ..prefab_material_pipeline import emit as emit_material
     emit_material(p.get('materialBinding'),path.parent,out)
     from ..prefab_spine_pipeline import emit as emit_spine
     emit_spine(p.get('spineBinding'),path.parent,out)
     project_id=identity(p['namespace'],'project')
     write_json(out/'package.json',dict(name='monkey-native-candidate',version='3.8.8',uuid=project_id,creator=dict(version='3.8.8')))
+    write_json(out/'settings/v2/packages/project.json',dict(__version__='1.0.6',general=dict(designResolution=dict(width=p['designSize'][0],height=p['designSize'][1]))))
     if p.get('rendererBudget',{}).get('macroConfig',{}).get('BATCHER2D_MEM_INCREMENT',144)>144:
         write_json(out/'settings/v2/packages/engine.json',dict(__version__='1.0.12',macroConfig=p['rendererBudget']['macroConfig']))
         (out/'Docs').mkdir(exist_ok=True)
@@ -247,8 +290,16 @@ def export(plan_path,output):
     ext=out/'extensions/monkey-import'
     for name in ['main.js','scene.js']:(ext/name).write_bytes(files('monkey.targets').joinpath('Creator'+('Main.js' if name=='main.js' else 'Scene.js')).read_bytes())
     (ext/'execution.js').write_bytes(files('monkey.targets').joinpath('CreatorExecution.js').read_bytes())
+    (ext/'static-toggle.js').write_bytes(files('monkey.targets').joinpath('CreatorStaticToggle.js').read_bytes())
+    (ext/'static-richtext.js').write_bytes(files('monkey.targets').joinpath('CreatorStaticRichText.js').read_bytes())
     (ext/'numeric-code.js').write_bytes(files('monkey.targets').joinpath('CreatorNumericCode.js').read_bytes())
     (ext/'behavior-bindings.js').write_bytes(files('monkey.targets').joinpath('CreatorBehaviorBindings.js').read_bytes())
+    (ext/'preview-state.js').write_bytes(files('monkey.targets').joinpath('CreatorPreviewState.js').read_bytes())
+    (ext/'static-sprite-frames.js').write_bytes(files('monkey.targets').joinpath('CreatorStaticSpriteFrames.js').read_bytes())
+    (ext/'preview-clones.js').write_bytes(files('monkey.targets').joinpath('CreatorPreviewClones.js').read_bytes())
+    (ext/'static-preview.js').write_bytes(files('monkey.targets').joinpath('CreatorStaticPreview.js').read_bytes())
+    (ext/'static-fields.js').write_bytes(files('monkey.targets').joinpath('CreatorStaticFields.js').read_bytes())
+    (ext/'static-field-integration.js').write_bytes(files('monkey.targets').joinpath('CreatorStaticFieldIntegration.js').read_bytes())
     (ext/'prefab.js').write_bytes(files('monkey.targets').joinpath('CreatorPrefab.js').read_bytes())
     (ext/'prefab-instances.js').write_bytes(files('monkey.targets').joinpath('CreatorPrefabInstances.js').read_bytes())
     (ext/'dynamic-ui.js').write_bytes(files('monkey.targets').joinpath('CreatorDynamicUi.js').read_bytes())
@@ -266,8 +317,12 @@ def export(plan_path,output):
     write_json(ext/'import-plan.json',{k:p[k] for k in ['schemaVersion','targetProfile','designSize','assets','nodes','components'] }|dict(resourceProbes=p.get('resourceProbes'),rendererBudget=p.get('rendererBudget'),projectUuid=project_id,animations=p.get('animations',[]),sourcePrefabs=p.get('sourcePrefabs',[]),prefabInstances=p.get('prefabInstances',[]),prefabRelationshipReadback='creator-native-fileid-v1',uiGeometryReadback='native-ui-layout-roundtrip-v1',sceneGeometryReadback='full-local-v1',bitmapPageReadback='sprite-frame-v1',spriteMeshReadback='native-rect-mesh-v1',outputPaths=standard.creator_output_paths()))
     from .dynamic_ui import driven_fields
     instruction_path=ext/'import-plan.json';instruction=load(instruction_path.read_bytes())
+    instruction['previewState']=p.get('previewState')
+    instruction['previewStates']=p.get('previewStates')
+    instruction['toggleBinding']=p.get('toggleBinding')
     instruction['behaviorBindingReadback']='persistent-source-fields-v1'
     instruction['materialBinding']=(p.get('materialBinding')or {}).get('spec')
+    instruction['spriteOutlineBinding']=p.get('spriteOutlineBinding')
     instruction['spineBinding']={k:v for k,v in (p.get('spineBinding')or {}).items()if k!='copies'}or None
     instruction['uiStateProbeVersion']=2
     from .dynamic_ui import probe_sources
@@ -401,6 +456,9 @@ def verify(candidate,output,level='static'):
             for sid,spec in expected_prefabs.items():
                 actual=actual_prefabs.get(sid,{})
                 source_nodes=set(spec['nodes']);code_specs=[c for c in plan['components']if c.get('node')in source_nodes]
+                from ..prefab_static_readback import verify as verify_static
+                static_gaps=verify_static(code_specs,actual.get('staticFieldBindings'),actual.get('uuid'),'creator',sid)
+                if static_gaps:good=False;diagnostics.extend(static_gaps)
                 code_gaps=verify_numeric(code_specs,actual.get('numericCodeBindings'),'cocos',sid)
                 if code_gaps:good=False;diagnostics.extend(code_gaps)
                 spine_gaps=verify_spines(code_specs,actual.get('spineBindings'),sid)

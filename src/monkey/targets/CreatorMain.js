@@ -135,7 +135,7 @@ module.exports = {
                     // another metadata write. Observe this one import until its
                     // actual generated payload matches the requested meta.
                     const library=within(root,'library/'+sf.uuid.slice(0,2)+'/'+sf.uuid+'.json');
-                    const readyEnd=Math.min(Date.now()+10000,execution.deadlineMs());
+                    const readyEnd=Math.min(Date.now()+10000,execution.deadlineMs()??Infinity);
                     while(true){
                         let data=null;try{data=JSON.parse(fs.readFileSync(library,'utf8'));}catch(error){if(error.code&&error.code!=='ENOENT')throw error;}
                         if(spriteMetadata.libraryMatches(a,data))break;
@@ -149,7 +149,7 @@ module.exports = {
             });
             fs.mkdirSync(within(root,'Analysis/Readback'),{recursive:true});fs.writeFileSync(within(root,'Analysis/Readback/native-api-timing.json'),JSON.stringify({stage:'assets',apiTiming},null,2)+'\n',{flag:'wx'});
             execution.checkpoint('hierarchy',0,plan.nodes.length);
-            const nativeDeadlineMs=execution.deadlineMs();
+            const nativeDeadlineMs=execution.deadlineMs()??Date.now()+1200000;
             const resourceProbes=plan.resourceProbes?JSON.parse(JSON.stringify(plan.resourceProbes)):null;
             if(resourceProbes) {
                 if(resourceProbes.profile!=='creator-spine-3.8-v1'||resourceProbes.spines.length>16)throw Error('Unsupported resource probe scope');
@@ -183,7 +183,23 @@ module.exports = {
                 materialReadback=await sceneJob('readMaterial',[{...spec,nativeDeadlineMs}],'materials');
                 materialReadback.metaUuid=meta.uuid;materialReadback.metaUuidVerified=true;
             }
-            const nativePlan={...plan,resourceProbes,assets,nativeDeadlineMs,components:plan.components.filter(c=>c.convertible),animations:(plan.animations||[]).filter(a=>a.convertible)};
+            let spriteOutlineReadback=null;
+            if(plan.spriteOutlineBinding) {
+                const spec=plan.spriteOutlineBinding,materialPath=within(root,spec.creator.materialPath),metaPath=within(root,spec.creator.materialMetaPath);
+                if(fs.existsSync(materialPath))throw Error('Outline material output already exists');
+                const serialized=await sceneJob('prepareOutlineMaterial',[{...spec,nativeDeadlineMs}],'materials');
+                fs.mkdirSync(path.dirname(materialPath),{recursive:true});
+                if(fs.existsSync(metaPath)){
+                    if(JSON.parse(fs.readFileSync(metaPath,'utf8')).uuid!==spec.creator.materialUuid)throw Error('Outline material metadata UUID conflict');
+                }else fs.writeFileSync(metaPath,JSON.stringify({ver:'1.0.5',importer:'material',imported:false,uuid:spec.creator.materialUuid,files:[],subMetas:{},userData:{}},null,2),{flag:'wx'});
+                fs.writeFileSync(materialPath,serialized,{flag:'wx'});
+                await timedReq('refresh-asset','db://'+path.dirname(spec.creator.materialPath));
+                const info=await timedReq('query-asset-info','db://'+spec.creator.materialPath),meta=JSON.parse(fs.readFileSync(metaPath,'utf8'));
+                if(!info||info.invalid||info.uuid!==spec.creator.materialUuid||meta.uuid!==spec.creator.materialUuid)throw Error('Outline material import UUID differs');
+                spriteOutlineReadback=await sceneJob('readOutlineMaterial',[{...spec,nativeDeadlineMs}],'materials');
+                spriteOutlineReadback.metaUuid=meta.uuid;spriteOutlineReadback.metaUuidVerified=true;
+            }
+            const nativePlan={...plan,resourceProbes,assets,nativeDeadlineMs,components:plan.components.filter(c=>c.convertible||c.staticFieldBinding),animations:(plan.animations||[]).filter(a=>a.convertible)};
             let result = await sceneJob('assemble',[nativePlan],'hierarchy');
             if (!result || (typeof result.serialized !== 'string'&&!result.assemblyId)) throw Error('No native scene serialization');
             const assemblyId=result.assemblyId;const savedPrefabs=[];
@@ -235,6 +251,29 @@ module.exports = {
             execution.checkpoint('native-readback');
             const saved = await sceneJob('readSaved',[scene.uuid,{...nativePlan,animationAssets,savedPrefabs,nativeInitialNodes:result.nativeInitialNodes}],'native-readback');
             saved.materialBinding=materialReadback;
+            saved.spriteOutlineBinding=spriteOutlineReadback;
+            fs.mkdirSync(within(root,'Analysis/Readback'),{recursive:true});
+            fs.writeFileSync(within(root,'Analysis/Readback/source-prefabs-readback.json'),JSON.stringify(saved,null,2)+'\n');
+            saved.staticPreviews=[];
+            for(const state of nativePlan.previewStates||(nativePlan.previewState?[nativePlan.previewState]:[])) {
+                const statePlan={...nativePlan,savedPrefabs,previewState:state};
+                const source=savedPrefabs.find(p=>p.sourceId===state.sourcePrefabId);
+                if(!source)throw Error('STATIC_PREVIEW_SOURCE_MISSING');
+                const body=await sceneJob('createStaticPreview',[source.uuid,statePlan],'candidate-save');
+                const stem='assets/Game/Preview/States/State_'+state.stateSha256.slice(0,16);
+                fs.mkdirSync(path.dirname(within(root,stem)),{recursive:true});
+                await timedReq('refresh-asset','db://assets/Game/Preview');
+                const prefab=await timedReq('create-asset','db://'+stem+'.prefab',body.prefabSerialized,{overwrite:false,rename:false});
+                const preview=await timedReq('create-asset','db://'+stem+'.scene',body.sceneSerialized,{overwrite:false,rename:false});
+                if(!prefab||!preview||prefab.invalid||preview.invalid)throw Error('STATIC_PREVIEW_SAVE_FAILED');
+                saved.staticPreview=await sceneJob('readStaticPreview',[preview.uuid,statePlan],'native-readback');
+                saved.staticPreview.prefabPath=stem+'.prefab';saved.staticPreview.scenePath=stem+'.scene';
+                saved.staticPreview.prefabUuid=prefab.uuid;
+                fs.mkdirSync(within(root,'Analysis/Readback'),{recursive:true});fs.writeFileSync(within(root,'Analysis/Readback/static-preview-attempt.json'),JSON.stringify(saved.staticPreview,null,2)+'\n');
+                if(!saved.staticPreview.state.verified||(saved.staticPreview.clones||[]).some(x=>!x.verified)||(saved.staticPreview.spriteProjections&&!saved.staticPreview.spriteProjections.verified))throw Error('STATIC_PREVIEW_READBACK_FAILED');
+                saved.staticPreviews.push(saved.staticPreview);
+            }
+
             for(const p of savedPrefabs)if(p.sha256&&hash(fs.readFileSync(within(root,p.path)))!==p.sha256)throw Error('Shared native template changed: '+p.sourceId);
             const nativeFiles = [];
             function collect(relative) {

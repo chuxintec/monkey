@@ -296,6 +296,30 @@ function bindCreatorSpineMaterial(componentSourceId, component, contract, cclega
   const rows = contract.spec.creator38.perComponent;
   const source = Array.isArray(rows) && rows.find(row => row.sourceComponentId === componentSourceId);
   if (!source) throw error('SPINE_MATERIAL_SOURCE_COMPONENT', 'Source component is outside the pinned material plan.');
+  if (typeof source.sourceMaterialReferenceSourceId !== 'string' ||
+      source.sourceMaterialReferenceSourceId !== contract.pins.materialReferenceSourceId ||
+      source.sourceMaterialSourceId !== contract.pins.materialSourceId) {
+    throw error('SPINE_SOURCE_MATERIAL_CONTRACT_MISMATCH', 'Source material reference or redirect target differs from the pinned profile.');
+  }
+  if (!options.sourceMaterialReferenceSourceId) {
+    return {
+      schema: 'creator-spine-material-bind/1', sourceComponentId: componentSourceId, status: 'binding_not_attempted',
+      sourceProfile: SOURCE_PROFILE, sourceMaterialStatus: 'source_material_reference_not_supplied',
+      expectedSourceMaterialReferenceSourceId: source.sourceMaterialReferenceSourceId,
+      expectedSourceMaterialSourceId: source.sourceMaterialSourceId,
+      readback: component ? collectCreatorSpineMaterialReadback(componentSourceId, component, options) : null,
+    };
+  }
+  if (options.sourceMaterialReferenceSourceId !== source.sourceMaterialReferenceSourceId) {
+    return {
+      schema: 'creator-spine-material-bind/1', sourceComponentId: componentSourceId, status: 'binding_not_attempted',
+      sourceProfile: SOURCE_PROFILE, sourceMaterialStatus: 'source_material_reference_mismatch',
+      expectedSourceMaterialReferenceSourceId: source.sourceMaterialReferenceSourceId,
+      observedSourceMaterialReferenceSourceId: options.sourceMaterialReferenceSourceId,
+      expectedSourceMaterialSourceId: source.sourceMaterialSourceId,
+      readback: component ? collectCreatorSpineMaterialReadback(componentSourceId, component, options) : null,
+    };
+  }
   if (!component || typeof component !== 'object' || !('premultipliedAlpha' in component) ||
       !('customMaterial' in component) || !component.node) {
     throw error('SPINE_MATERIAL_COMPONENT_TYPE', 'Expected a native Creator sp.Skeleton component.');
@@ -336,6 +360,12 @@ function bindCreatorSpineMaterial(componentSourceId, component, contract, cclega
     schema: 'creator-spine-material-bind/1', sourceComponentId: componentSourceId,
     status: materialBindingReadback ? 'bound_resource_observed_runtime_separately' : 'binding_readback_missing',
     sourceProfile: SOURCE_PROFILE,
+    sourceMaterialBinding: {
+      referenceSourceId: source.sourceMaterialReferenceSourceId,
+      resolvedSourceId: source.sourceMaterialSourceId,
+      targetResourceUuid: 'default-spine-material',
+      status: 'exact_source_builtin_profile_mapping',
+    },
     targetMaterialIdentity: { status: 'observed', uuid: resolved.material._uuid, effectName: resolved.material.effectAsset.name,
                              effectProgramName: resourceGuard.observedProgramName,
                              effectProgramHash: resourceGuard.observedProgramHash },

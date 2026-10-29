@@ -44,7 +44,7 @@ function serializeNative(root,asset){
 }
 function session(id,plan) {
     if(!current||current.id!==id||current.plan!==plan&&current.plan.projectUuid!==plan.projectUuid)throw Error('Native assembly session differs');
-    if(Date.now()>=plan.nativeDeadlineMs)throw Error('NATIVE_BUDGET_EXHAUSTED');
+    if(plan.nativeDeadlineMs!=null&&Date.now()>=plan.nativeDeadlineMs)throw Error('NATIVE_BUDGET_EXHAUSTED');
     return current;
 }
 function keep(plan,scene,nodes,result){if(current)throw Error('Native assembly session already exists');current={id:'prefabs-'+(++sequence),plan,scene,nodes,result,prepared:new Set()};return current.id;}
@@ -61,6 +61,10 @@ function value(v,replacements=new Map()) {
     if(Array.isArray(v))return v.map(x=>value(x,replacements));
     if(v instanceof cc.ValueType&&typeof v.clone==='function')return v.clone();
     if(Object.getPrototypeOf(v)===Object.prototype)return Object.fromEntries(Object.entries(v).map(([k,x])=>[k,value(x,replacements)]));
+    const name=cc.js.getClassName(v),ctor=v.constructor,keys=ctor&&ctor.__values__;
+    if(typeof name==='string'&&name.startsWith('Monkey.StaticFields.')&&cc.js.getClassByName(name)===ctor&&Array.isArray(keys)) {
+        const copy=new ctor();for(const key of keys)copy[key]=value(v[key],replacements);return copy;
+    }
     throw Error('Unsupported native serialized override value');
 }
 function equal(a,b) {
@@ -97,6 +101,21 @@ async function prepare(state,owner,saved,load) {
         const template=mapTree(root,spec,plan),replacements=new Map(),components=[],added=[];
         const ids=targetIds(root),instance=root._prefab.instance,{u}=api();
         for(const pair of link.nodes){const old=nodes.get(pair.instanceObject),node=template.get(pair.templateObject);if(!old||!node)throw Error('Instance node correspondence absent');replacements.set(old,node);
+            // Opacity curves add a native UIOpacity authoring dependency to the
+            // standalone template. Recreate that same planned dependency on
+            // the source instance before comparing native component sets.
+            if(node.getComponent(cc.UIOpacity)&&!old.getComponent(cc.UIOpacity)) {
+                const authored=(plan.animations||[]).some(a=>a.convertible&&(a.tracks||[]).some(t=>t.node===pair.templateObject&&t.property.split('.')[0]==='opacity'));
+                if(authored){const source=plan.nodes.find(n=>n.sourceId===pair.instanceObject);const opacity=old.addComponent(cc.UIOpacity);opacity.opacity=source.opacity;}
+            }
+            const sourceMask=old.getComponent(cc.Mask),templateMask=node.getComponent(cc.Mask);
+            if(sourceMask&&templateMask&&sourceMask.type===templateMask.type&&node.getComponent(cc.Graphics)&&!old.getComponent(cc.Graphics)) {
+                if(sourceMask.type!==cc.Mask.Type.GRAPHICS_RECT&&sourceMask.type!==cc.Mask.Type.GRAPHICS_ELLIPSE)throw Error('Unexpected native Mask graphics dependency');
+                // Creator 3.8.8 Mask.onLoad authors its native Graphics helper.
+                // Materialize it on inactive source nodes as the saved template
+                // already has, without activating any recovered user scripts.
+                sourceMask.onLoad();
+            }
             const used=new Map();for(const from of old.components){const cls=from.constructor,i=used.get(cls)||0;used.set(cls,i+1);let to=node.getComponents(cls)[i];
                 if(!to){
                     const mounted=(link.mountedComponents||[]).find(m=>m.node===pair.instanceObject&&nativeClass(m.nativeType)===cls);
@@ -107,7 +126,7 @@ async function prepare(state,owner,saved,load) {
                     markMounted(to,root);const group=new u.MountedComponentsInfo();group.targetInfo=new u.TargetInfo();group.targetInfo.localID=localID;group.components=[to];instance.mountedComponents.push(group);added.push(to);
                 }
                 replacements.set(from,to);components.push([from,to]);}
-            if(node.components.length!==old.components.length)throw Error('Removed component needs native delta adapter');
+            if(node.components.length!==old.components.length)throw Error('Removed component needs native delta adapter: '+JSON.stringify({instanceNode:pair.instanceObject,templateNode:pair.templateObject,source:old.components.map(c=>cc.js.getClassName(c)),template:node.components.map(c=>cc.js.getClassName(c))}));
         }
         for(const mount of link.mountedChildren||[]){
             const oldParent=nodes.get(mount.parent),parentNode=replacements.get(oldParent)||oldParent,localID=ids.get(parentNode);

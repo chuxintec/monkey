@@ -1,6 +1,7 @@
 'use strict';
 // Editor scene script. It creates an isolated native tree, never touches the open scene.
 const cc = require('cc');
+const sourceChildren=require('./static-richtext.js').sourceChildren;
 const motion=require('./animation.js');
 const prefabs=require('./prefab.js');
 const relations=require('./prefab-instances.js');
@@ -33,12 +34,23 @@ const loadAsset = (uuid, type) => new Promise((resolve,reject) => cc.assetManage
 }));
 function describe(root, plan) {
     const nodes=[];
-    const visit=n=>{nodes.push(n);for(const child of n.children)visit(child);};visit(root);
+    const visit=n=>{nodes.push(n);for(const child of sourceChildren(n))visit(child);};visit(root);
     return {nodeCount:plan.nodes.length, treeNodeCount:nodes.length};
 }
 module.exports = {
     load() {}, unload() {},
     methods: {
+        async createStaticPreview(uuid,plan){return require("./static-preview.js").create(uuid,plan,loadAsset);},
+        async readStaticPreview(uuid,plan){return require("./static-preview.js").read(uuid,plan,loadAsset);},
+        async prepareOutlineMaterial(spec) {
+            const helper=require('./sprite-outline-material-bindings.js');
+            const effect=await loadAsset(spec.creator.effectUuid,cc.EffectAsset),material=helper.create(spec,effect);
+            try{return helper.serialize(spec,material);}finally{material.destroy();}
+        },
+        async readOutlineMaterial(spec) {
+            return require('./sprite-outline-material-bindings.js').readback(spec,
+                await loadAsset(spec.creator.materialUuid,cc.Material),await loadAsset(spec.creator.effectUuid,cc.EffectAsset));
+        },
         async prepareMaterial(spec) {
             const helper=require('./material-bindings.js');
             const effect=await loadAsset(spec.creator.effectUuid,cc.EffectAsset);
@@ -81,6 +93,7 @@ module.exports = {
                 const spineAssets=new Map();
                 for(const asset of (plan.spineBinding&&plan.spineBinding.assets)||[])
                     spineAssets.set(asset.sourceId,await loadAsset(asset.creator.nativeUuid,cc.sp.SkeletonData));
+                for(const [id,asset]of spineAssets)native.set(id,asset);
                 let nodeProgress=0;
                 for(const n of plan.nodes) {
                     if(nodeProgress%256===0){jobs.progress('hierarchy',nodeProgress,plan.nodes.length);await new Promise(resolve=>setTimeout(resolve,0));}nodeProgress++;
@@ -101,18 +114,22 @@ module.exports = {
                 for(const c of plan.components) {
                     if(componentProgress%256===0){jobs.progress('components',componentProgress,plan.components.length);await new Promise(resolve=>setTimeout(resolve,0));}componentProgress++;
                     checkTime(plan);
-                    if(!c.convertible || c.type==='cc.LabelOutline')continue;
+                    if(!c.convertible || c.type==='cc.LabelOutline'||c.type==='cc.Toggle'||c.type==='cc.ToggleContainer')continue;
                     const node=nodes.get(c.node);const source=sourceNodes.get(c.node);let comp;
                     if(c.spineBinding) {
                         comp=node.addComponent(cc.sp.Skeleton);
                         require('./spine-bindings.js').applyCreatorSpineBinding(c.spineBinding,
                             id=>id===c.sourceId?comp:null,id=>spineAssets.get(id));
+                        comp.color=color(source.color);
                     } else if(c.behaviorBinding) {
                         comp=behaviors.bind(node,c.behaviorBinding,c.enabled);
                     } else if(c.type==='cc.Sprite') {
                         comp=node.addComponent(cc.Sprite);comp.type=c.mode;comp.sizeMode=c.nativeSizeMode??c.sizeMode;comp.trim=c.trim;
                         comp.spriteFrame=c.spriteFrame?native.get(c.spriteFrame):null;comp.color=color(source.color);
                         comp.enabled=c.enabled&&!c.needsSpriteBinding;
+                    } else if(c.type==='cc.RichText') {
+                        comp=node.addComponent(cc.RichText);comp.font=null;comp.fontFamily=c.fontFamily;comp.fontColor=color(source.color);
+                        require('./static-richtext.js').apply(comp,c.staticRichText);
                     } else if(c.type==='cc.Label') {
                         comp=node.addComponent(c.codeClassName?numeric.type(c):cc.Label);if(c.codeClassName)codeEntries.push({component:comp,spec:c});comp.overflow=c.nativeOverflow??c.overflow;
                         if(c.nativeSystemFont){comp.font=null;comp.useSystemFont=true;comp.fontFamily=c.fontFamily;}
@@ -121,8 +138,9 @@ module.exports = {
                         comp.horizontalAlign=c.horizontalAlign;comp.verticalAlign=c.verticalAlign;
                         comp.enableWrapText=c.wrap;comp.isBold=!!c.bold;comp.isItalic=!!c.italic;comp.isUnderline=!!c.underline;comp.color=color(source.color);
                     } else if(c.type==='cc.Button') {
-                        comp=node.addComponent(cc.Button);comp.target=node;comp.transition=c.transition;comp.duration=c.duration;
+                        comp=node.addComponent(cc.Button);comp.enabled=false;comp.target=c.staticButtonBinding?(c.target?nodes.get(c.target):node):node;comp.transition=c.transition;comp.duration=c.duration;
                         comp.zoomScale=c.zoomScale;comp.interactable=c.interactable;comp.clickEvents=[];
+                        if(c.staticButtonBinding)for(const name of ['normalColor','hoverColor','pressedColor','disabledColor'])comp[name]=color(c.staticButtonBinding[name]);
                     } else if(c.type==='cc.BlockInputEvents') {comp=node.addComponent(cc.BlockInputEvents);
                     } else if(c.type==='cc.Mask') {comp=node.addComponent(cc.Mask);comp.type=cc.Mask.Type.GRAPHICS_RECT;
                     } else if(c.type==='cc.ProgressBar') {
@@ -145,11 +163,17 @@ module.exports = {
                         if(c.layoutType===2)comp.alignHorizontal=!!c.alignCross;
                         comp.constraint=c.constraint||0;comp.constraintNum=c.constraintCount||2;
                     } else throw Error('Unimplemented native type: '+c.type);
-                    if(c.type!=='cc.Sprite')comp.enabled=c.enabled;
+                    if(c.type!=='cc.Sprite')comp.enabled=c.spineBinding&&c.spineBinding.creatorStaticPose?c.spineBinding.creatorStaticPose.nativeEnabled:c.staticButtonBinding?false:c.enabled;
                     nativeRefs.push({sourceId:c.sourceId,nodeUuid:node.uuid,componentUuid:comp.uuid,type:c.type});
+                }
+                if(plan.spriteOutlineBinding) {
+                    const outlineMaterial=await loadAsset(plan.spriteOutlineBinding.creator.materialUuid,cc.Material);
+                    native.set(plan.spriteOutlineBinding.materialSourceId,outlineMaterial);
+                    require('./sprite-outline-importer.js').bind(plan.spriteOutlineBinding,plan.components,nodes,outlineMaterial,id=>native.get(id));
                 }
                 if(plan.materialBinding) {
                     const material=await loadAsset(plan.materialBinding.creator.materialUuid,cc.Material);
+                    native.set(plan.materialBinding.materialSourceId,material);
                     const sprites=new Map(plan.materialBinding.spriteBindings.map(binding=> {
                         const c=plan.components.find(c=>c.sourceId===binding.sourceId&&c.convertible);
                         if(!c)throw Error('Planned material component absent');
@@ -168,6 +192,11 @@ module.exports = {
                 // Components are built in an isolated, non-running Scene. Flush the
                 // public Label API after all properties/outlines so the default
                 // "Label" measurement cannot leak into the saved UITransform.
+                if(plan.toggleBinding){
+                    const gaps=require('./static-toggle.js').Create(plan.toggleBinding,id=>nodes.get(id),require('./static-field-integration.js').resolver(plan,nodes,native));
+                    if(gaps.length)throw Error('STATIC_TOGGLE_BINDING_FAILED: '+gaps.join(','));
+                }
+                require('./static-field-integration.js').createAssign(plan,nodes,native);
                 for(const c of plan.components.filter(c=>c.convertible&&c.type==='cc.Label')) {
                     checkTime(plan);nodes.get(c.node).getComponent(cc.Label).updateRenderData(true);
                 }
@@ -199,15 +228,15 @@ module.exports = {
             // where Creator expands native instance placeholders. Initialize
             // this owned, inactive Scene without running/activating it.
             if((plan.prefabInstances||[]).length)scene._load();
-            const nodes=[];const visit=n=>{nodes.push(n);for(const child of n.children)visit(child);};visit(scene);
+            const nodes=[];const visit=n=>{nodes.push(n);for(const child of sourceChildren(n))visit(child);};visit(scene);
             const design=nodes.find(n=>n.name==='DesignRoot');if(!design)throw Error('Saved scene missing DesignRoot');
-            const saved=[];const walk=n=>{saved.push(n);for(const child of n.children)walk(child);};for(const n of design.children)walk(n);
+            const saved=[];const walk=n=>{saved.push(n);for(const child of sourceChildren(n))walk(child);};for(const n of design.children)walk(n);
             if(saved.length!==plan.nodes.length)throw Error('Saved source node count mismatch: '+saved.length+'/'+plan.nodes.length);
             // Match hierarchy by child indices; duplicate source names do not lose identity.
             const mapped=new Map(),sourceNodes=new Map(plan.nodes.map(n=>[n.sourceId,n]));
             function match(sid,n) {
-                const src=sourceNodes.get(sid);if(!src||src.name!==n.name||src.children.length!==n.children.length)throw Error('Saved hierarchy differs');
-                mapped.set(sid,n);src.children.forEach((id,i)=>match(id,n.children[i]));
+                const src=sourceNodes.get(sid);if(!src||src.name!==n.name||src.children.length!==sourceChildren(n).length)throw Error('Saved hierarchy differs');
+                mapped.set(sid,n);src.children.forEach((id,i)=>match(id,sourceChildren(n)[i]));
             }
             plan.nodes.filter(n=>n.parent===null).forEach((n,i)=>match(n.sourceId,design.children[i]));
             for(const n of plan.nodes)if(n.sourceUITransformEnabled===false&&mapped.get(n.sourceId).getComponent(cc.UITransform).enabled!==false)throw Error('Saved UITransform enabled state differs');
@@ -215,6 +244,7 @@ module.exports = {
             for(const c of plan.components.filter(c=>c.convertible)) {
                 const n=mapped.get(c.node);const type=c.type==='cc.LabelOutline'?'Label':c.type.slice(3);const comp=c.behaviorBinding?behaviors.read(n,c.behaviorBinding,c.enabled):n.getComponent(c.spineBinding?cc.sp.Skeleton:cc[type]);
                 if(!comp)throw Error('Saved component missing: '+c.type);
+                if(c.nativeSpriteOutlineMaterialSourceId&&(!plan.spriteOutlineBinding||!require('./sprite-outline-material-bindings.js').readBound(plan.spriteOutlineBinding,comp.customMaterial,c.sourceId,comp,id=>{const a=plan.assets.find(x=>x.sourceId===id);return a&&comp.spriteFrame&&comp.spriteFrame._uuid===a.spriteFrameUuid?comp.spriteFrame:null;})))throw Error('Saved outline material differs: '+c.sourceId);
                 if(c.nativeMaterialSourceId&&(!plan.materialBinding||!comp.customMaterial||comp.customMaterial._uuid!==plan.materialBinding.creator.materialUuid||
                    !require('./material-bindings.js').readBound(plan.materialBinding,comp.customMaterial,comp)))throw Error('Saved custom material differs: '+c.sourceId);
                 if(c.type==='cc.ProgressBar')require('./progress.js').read(comp,c,mapped);
@@ -222,7 +252,7 @@ module.exports = {
                 if(c.type==='cc.Label'&&comp.overflow!==(c.nativeOverflow??c.overflow))throw Error('Saved Label overflow policy differs: '+c.sourceId);
                 if(c.type==='cc.Sprite'&&comp.sizeMode!==(c.nativeSizeMode??c.sizeMode))throw Error('Saved Sprite sizing policy differs: '+c.sourceId);
                 refs.push({sourceId:c.sourceId,nodeUuid:n.uuid,componentUuid:comp.uuid,type:c.type});
-                if(c.type==='cc.Label')labels.push({sourceId:c.sourceId,text:comp.string,fontUuid:comp.font&&comp.font._uuid,useSystemFont:comp.useSystemFont,fontFamily:comp.fontFamily});
+                if(c.type==='cc.Label'||c.type==='cc.RichText')labels.push({sourceId:c.sourceId,text:comp.string,fontUuid:comp.font&&comp.font._uuid,useSystemFont:comp.useSystemFont,fontFamily:comp.fontFamily});
             }
             const frames=[];
             const savedFrames=new Map(saved.flatMap(n=>n.getComponents(cc.Sprite)).map(s=>s.spriteFrame).filter(Boolean).map(sf=>[sf._uuid,sf]));
@@ -263,6 +293,11 @@ module.exports = {
             }
             const templates=new Map();
             for(const info of plan.savedPrefabs||[])templates.set(info.sourceId,await loadAsset(info.uuid,cc.Prefab));
+            const staticAssets=new Map(templates);
+            if(plan.spriteOutlineBinding)staticAssets.set(plan.spriteOutlineBinding.materialSourceId,await loadAsset(plan.spriteOutlineBinding.creator.materialUuid,cc.Material));
+            for(const a of (plan.spineBinding&&plan.spineBinding.assets)||[])staticAssets.set(a.sourceId,await loadAsset(a.creator.nativeUuid,cc.sp.SkeletonData));
+            if(plan.materialBinding)staticAssets.set(plan.materialBinding.materialSourceId,await loadAsset(plan.materialBinding.creator.materialUuid,cc.Material));
+            if(plan.components.some(c=>c.staticFieldBinding))for(const a of plan.assets)staticAssets.set(a.sourceId,await loadAsset(a.kind==='sprite'?a.spriteFrameUuid:a.uuid,a.kind==='sprite'?cc.SpriteFrame:a.kind==='json'?cc.JsonAsset:a.kind==='audio'?cc.AudioClip:cc.Font));
             const prefabInstances=relations.read(plan,mapped,templates,plan.savedPrefabs||[]);
             const sourcePrefabs=[];
             for(const spec of plan.sourcePrefabs||[]) {
@@ -271,7 +306,7 @@ module.exports = {
                 checkTime(plan);
                 const info=(plan.savedPrefabs||[]).find(p=>p.sourceId===spec.sourceId);
                 if(!info)throw Error('Saved prefab identity absent');
-                sourcePrefabs.push(prefabs.read(templates.get(spec.sourceId),spec,plan,info,templates));
+                sourcePrefabs.push(prefabs.read(templates.get(spec.sourceId),spec,plan,info,templates,staticAssets));
             }
             const dynamicUiProbes=await dynamic.probe(plan,design,(done,total)=>jobs.progress('native-readback',sourcePrefabs.length+done,sourcePrefabs.length+total));
             const spineSpecs=plan.components.filter(c=>c.convertible&&c.spineBinding);

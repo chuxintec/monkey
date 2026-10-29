@@ -114,6 +114,9 @@ class PrefabSpineComponentBindingTests(unittest.TestCase):
         self.assertEqual(plan['staticAssetUnboundComponents'], 1)
         self.assertEqual(plan['uniqueStaticDataAssets'], 2)
         first, second, unbound = plan['components']
+        self.assertIsNone(first['unity']['componentType'])
+        self.assertEqual(first['unity']['componentTypeChoices'], ['Spine.Unity.SkeletonGraphic', 'Spine.Unity.SkeletonAnimation'])
+        self.assertEqual(first['unity']['componentTypeSelection'], 'caller must choose from exact target node UI context')
         self.assertEqual(first['creator']['fields']['skeletonData']['creator']['nativeUuid'], 'native-a')
         self.assertEqual(first['unity']['fields']['skeletonData']['unity']['candidateInputMetaGuid'], '1' * 32)
         self.assertIsNone(first['unity']['fields']['skeletonData']['unity']['nativeSkeletonDataAssetGuid'])
@@ -208,7 +211,8 @@ class PrefabSpineComponentBindingTests(unittest.TestCase):
                                                           creator_execution_result=execution,
                                                           creator_verification=verification,
                                                           creator_import_plan_sha256='d' * 64,
-                                                          creator_cache_mode_evidence=CACHE_MODE_EVIDENCE)
+                                                          creator_cache_mode_evidence=CACHE_MODE_EVIDENCE,
+                                                          source_default_evidence=DEFAULT_EVIDENCE)
             source_ids = ['gameAsset:prefab-uuid#1', 'gameAsset:prefab-uuid#2', 'gameAsset:prefab-uuid#3']
             source_manifest = {'sourceProfile': 'cocos-2.4.15-bundle', 'sourceVersion': '2.4.15',
                                'assets': [{'sourceId': 'gameAsset:prefab-uuid'},
@@ -255,10 +259,46 @@ class PrefabSpineComponentBindingTests(unittest.TestCase):
             self.assertEqual(len(emission_hash), 64)
             self.assertEqual(json.loads(out.read_text())['contract'], 'monkey-spine-emission/1')
 
+            material_contract = {
+                'schema': 'monkey-spine-material-contract/1',
+                'profile': 'cocos24-builtin-spine-material-v1',
+                'creatorBindingStatus': 'source-semantics-exact-builtin-spine',
+                'pins': {'sourceManifestSha256': 'c' * 64, 'normalizedIrSha256': 'b' * 64,
+                         'materialReferenceSourceId': 'gameAsset:material-reference',
+                         'materialSourceId': 'internal:material-source', 'effectSourceId': 'internal:spine-effect',
+                         'effectProgramCanonicalSha256': 'f' * 64},
+                'spec': {'creator38': {
+                    'strategy': 'explicit-native-builtin-spine-material-reference',
+                    'targetMaterialUuid': 'default-spine-material', 'effect': 'builtin-spine',
+                    'perComponent': [{
+                        'sourceComponentId': row['sourceComponentId'],
+                        'sourceMaterialReferenceSourceId': 'gameAsset:material-reference',
+                        'sourceMaterialSourceId': 'internal:material-source',
+                        'targetMaterialUuid': 'default-spine-material',
+                        'runtimeMaterialStrategy': 'Creator Spine runtime creates per-slot MaterialInstance over builtin-spine and selects blend factors from component PMA',
+                    } for row in component_plan['components']],
+                }},
+            }
+            prepared = prepare_spine_emission(source_manifest, 'c' * 64, normalized_ir, 'b' * 64,
+                                              receipts, component_plan, material_contract, 'a' * 64)
+            self.assertEqual(prepared['creatorMaterialProfile']['targetMaterialUuid'], 'default-spine-material')
+            self.assertEqual(len(prepared['creatorMaterialProfile']['contractSha256']), 64)
+            self.assertTrue(all(row['creatorStaticPose']['nativeEnabled'] for row in prepared['components']))
+            self.assertTrue(all(row['creatorStaticPose']['nativeTimeScale'] == 0 for row in prepared['components']))
+            self.assertEqual(prepared['components'][0]['creatorStaticPose']['sourceTimeScale']['value'], 0.5)
+            self.assertEqual(prepared['components'][2]['sourceDataAssetId'], None)
+            self.assertEqual(prepared['components'][2]['creatorMaterialBinding']['targetMaterialUuid'], 'default-spine-material')
+            broken_material = json.loads(json.dumps(material_contract))
+            broken_material['spec']['creator38']['perComponent'].pop()
+            with self.assertRaises(ValueError):
+                prepare_spine_emission(source_manifest, 'c' * 64, normalized_ir, 'b' * 64,
+                                       receipts, component_plan, broken_material, 'a' * 64)
+
     def test_pinned_emission_rejects_ir_component_denominator_drift(self):
         with tempfile.TemporaryDirectory() as temp:
             contract, readback, execution, verification, unity = make_plan_inputs(Path(temp))
-            component_plan = build_component_binding_plan(contract, readback, unity)
+            component_plan = build_component_binding_plan(contract, readback, unity,
+                                                          source_default_evidence=DEFAULT_EVIDENCE)
             source_manifest = {'sourceProfile': 'cocos-2.4.15-bundle', 'sourceVersion': '2.4.15', 'assets': []}
             normalized_ir = {'sourceManifestSha256': 'c' * 64, 'components': []}
             with self.assertRaises(ValueError):
@@ -308,6 +348,34 @@ const unbound={sourceComponentId:'source#2',creator:{fields:{skeletonData:{sourc
 const untouched={skeletonData:'keep'};
 const skipped=api.applyCreatorSpineBinding(unbound,()=>untouched,()=>{throw Error('fallback resource requested')});
 if(untouched.skeletonData!=='keep'||!skipped.unresolvedDynamicAssignment)throw Error('unbound source was overwritten');
+const staticBinding={sourceComponentId:'source#static',creator:{fields:{
+ skeletonData:{sourceAssetId:'asset:static'},
+ timeScale:{creator:{member:'timeScale',value:1,status:'explicit'}},
+ animation:{creator:{member:'defaultAnimation',value:'idle',status:'explicit'}}
+}},creatorStaticPose:{policy:'enabled_realtime_renderer_with_serialized_timeScale_zero',nativeEnabled:true,nativeTimeScale:0,
+ sourceTimeScale:{value:1,status:'explicit'},sourceFieldValueRetainedInEmission:true,
+ animationFrozenBySerializedTimeScale:true,businessCallbacksExecuted:false,
+ sourceMaterialRoute:'Creator sp.Skeleton updateMaterial -> builtinResMgr.get(default-spine-material)'},
+ creatorMaterialBinding:{sourceComponentId:'source#static',sourceMaterialReferenceSourceId:'material:source',sourceMaterialSourceId:'internal:material',targetMaterialUuid:'default-spine-material',contract:'cocos24-builtin-spine-material-v1',contractSha256:'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',evidenceStatus:'source_to_internal_to_creator_builtin_pinned'}};
+const staticComponent={timeScale:1,enabled:false,defaultAnimation:'',customMaterial:null,updateMaterial(){this.materialRouteUpdated=true;}};
+const staticApply=api.applyCreatorSpineBinding(staticBinding,()=>staticComponent,()=>({uuid:'asset-native'}));
+if(staticComponent.timeScale!==0||staticComponent.enabled!==true||!staticComponent.materialRouteUpdated||staticApply.sourceTimeScale!==1)
+ throw Error('static Creator Spine pose must remain visible at serialized t0 while preserving the source timescale');
+const staticRead=api.readCreatorSpineBinding(staticBinding,()=>({uuid:'native-component',enabled:true,timeScale:0,customMaterial:null,
+ skeletonData:{uuid:'asset-native',getRuntimeData:()=>({animations:[{name:'idle'}],skins:[]})},defaultAnimation:'idle',defaultSkin:'',animation:'idle',loop:true,
+ premultipliedAlpha:true,defaultCacheMode:0,findAnimation:name=>({name}),getCurrent:()=>({animation:{name:'idle'}}),isAnimationCached:()=>false}));
+if(!staticRead.checks.nativeTimeScaleFrozenAtT0||!staticRead.checks.nativeRendererEnabled||!staticRead.checks.sourceTimeScaleRetainedInPinnedSpec||!staticRead.checks.usesDefaultBuiltinMaterialRoute)
+ throw Error('Creator static pose/material route readback did not verify');
+const unboundStatic={...staticBinding,sourceComponentId:'source#unknown-data',creator:{fields:{
+ skeletonData:{sourceAssetId:null},timeScale:{creator:{member:'timeScale',value:1,status:'explicit'}}}},
+ creatorMaterialBinding:{...staticBinding.creatorMaterialBinding,sourceComponentId:'source#unknown-data'}};
+const emptyNative={timeScale:1,enabled:false,customMaterial:null};
+api.applyCreatorSpineBinding(unboundStatic,()=>emptyNative,()=>{throw Error('must not guess unknown SkeletonData')});
+if(emptyNative.skeletonData!==undefined||emptyNative.timeScale!==0||emptyNative.enabled!==true)
+ throw Error('unknown SkeletonData must leave an empty, visible native component without fallback');
+const unboundRead=api.readCreatorSpineBinding(unboundStatic,()=>({enabled:true,timeScale:0,customMaterial:null,skeletonData:null}));
+if(unboundRead.status!=='incomplete_dynamic_assignment'||!unboundRead.checks.nativeTimeScaleFrozenAtT0)
+ throw Error('unknown source data must remain explicitly incomplete despite native empty component preservation');
 const readSpec={sourceComponentId:'source#3',creator:{fields:{
  skeletonData:{sourceAssetId:'spineAsset:exact-source',creator:{nativeUuid:'native'}},
  skin:{creator:{member:'defaultSkin',value:'default',status:'explicit'}},

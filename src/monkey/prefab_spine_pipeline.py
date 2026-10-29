@@ -15,6 +15,16 @@ def load_binding(ir,ir_path,receipt_path,expected_sha,resources):
     root=safe(resources);manifest=stage_manifest(root)
     if sha(read(root/'manifest.json'))!=pins.get('creatorClosureReceiptSha256'):
         fail('SPINE_CLOSURE_CHANGED','spine','Frozen resource manifest differs')
+    material_profile=record.get('creatorMaterialProfile')
+    if material_profile is not None:
+        if (material_profile.get('contract')!='cocos24-builtin-spine-material-v1'
+                or material_profile.get('evidenceStatus')!='source_to_internal_to_creator_builtin_pinned'
+                or material_profile.get('targetMaterialUuid')!='default-spine-material'
+                or material_profile.get('targetEffect')!='builtin-spine'
+                or not isinstance(material_profile.get('contractSha256'),str)
+                or len(material_profile.get('contractSha256',''))!=64
+                or material_profile.get('contractSha256')!=pins.get('creatorMaterialContractSha256')):
+            fail('SPINE_CREATOR_MATERIAL_PROFILE','spine','Creator built-in material profile is not consistently pinned')
     files={x['path']:x for x in manifest['files']};components={x['sourceId']:x for x in ir['components']}
     seen=set()
     for row in record['components']:
@@ -25,6 +35,32 @@ def load_binding(ir,ir_path,receipt_path,expected_sha,resources):
         if sid in seen or not c or c['type']!='sp.Skeleton' or c['node']!=node_id:
             fail('SPINE_COMPONENT_IDENTITY',sid,'Source component or node differs')
         seen.add(sid)
+        pose=row.get('creatorStaticPose')
+        material=row.get('creatorMaterialBinding')
+        if material_profile is not None:
+            if (not pose or pose.get('policy')!='enabled_realtime_renderer_with_serialized_timeScale_zero'
+                    or pose.get('nativeEnabled') is not True or pose.get('nativeTimeScale')!=0
+                    or pose.get('animationFrozenBySerializedTimeScale') is not True
+                    or pose.get('businessCallbacksExecuted') is not False
+                    or pose.get('targetEngineSourceSha256')!='2e86383e7e7dfb93bc40ec1d7e44c6bb2b8ebe4e95c100ad16620bd24114329'
+                    or pose.get('sourceMaterialRoute')!='Creator sp.Skeleton updateMaterial -> builtinResMgr.get(default-spine-material)'):
+                fail('SPINE_CREATOR_STATIC_POSE','spine','Creator persistent t0 policy is absent or invalid')
+            if (not material or material.get('sourceComponentId')!=sid
+                    or material.get('targetMaterialUuid')!='default-spine-material'
+                    or material.get('contract')!='cocos24-builtin-spine-material-v1'
+                    or material.get('contractSha256')!=material_profile.get('contractSha256')
+                    or material.get('evidenceStatus')!='source_to_internal_to_creator_builtin_pinned'
+                    or material.get('sourceMaterialReferenceSourceId')!=material_profile.get('sourceMaterialReferenceSourceId')
+                    or material.get('sourceMaterialSourceId')!=material_profile.get('sourceMaterialSourceId')
+                    or not material.get('sourceMaterialReferenceSourceId')
+                    or not material.get('sourceMaterialSourceId')):
+                fail('SPINE_CREATOR_MATERIAL_BINDING',sid,'Exact source-to-built-in material mapping is absent')
+            source_scale=pose.get('sourceTimeScale')
+            if not isinstance(source_scale,dict) or source_scale.get('status') not in {'explicit','resolved_source_engine_default'}:
+                fail('SPINE_CREATOR_SOURCE_TIMESCALE',sid,'Source timeScale evidence is missing')
+            creator_scale=row.get('creator',{}).get('fields',{}).get('timeScale',{}).get('creator',{})
+            if creator_scale.get('status')!=source_scale.get('status') or creator_scale.get('value')!=source_scale.get('value'):
+                fail('SPINE_CREATOR_SOURCE_TIMESCALE',sid,'Frozen source timeScale differs from creator field evidence')
     if len(seen)!=record['sourceComponentCount']:fail('SPINE_COMPONENT_COUNT','spine','Component denominator differs')
     for row in record['copies']:
         if row['target']!='creator':continue
@@ -44,6 +80,7 @@ def prepare(binding,output):
         raw=read(inside(binding['root'],row['path']));dest=inside(output,source);dest.parent.mkdir(exist_ok=True);dest.write_bytes(raw)
         copies.append(dict(source=source,target=row['path'],sha256=row['sha256']))
     return dict(components=record['components'],assets=record['assets'],copies=copies,
+                creatorMaterialProfile=record.get('creatorMaterialProfile'),
                 emissionReceiptSha256=binding['receiptSha256'],sourceComponentCount=record['sourceComponentCount'])
 
 
