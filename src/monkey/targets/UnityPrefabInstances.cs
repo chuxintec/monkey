@@ -123,6 +123,7 @@ public static partial class MonkeyImporter
             case "cc.Label":return typeof(TMPro.TextMeshProUGUI);
             case "cc.Button":return typeof(UnityEngine.UI.Button);
             case "cc.ScrollView":return typeof(UnityEngine.UI.ScrollRect);
+            case "cc.BlockInputEvents":return typeof(NativeInputBlocker);
             case "cc.Mask":return typeof(UnityEngine.UI.RectMask2D);
             default:throw new InvalidOperationException("Mounted native component proof requires a typed adapter: "+sourceType);
         }

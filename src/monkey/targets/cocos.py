@@ -34,8 +34,11 @@ def bitmap_text(font,atlas_name,face="MonkeySourceBitmap"):
     return ('\n'.join(lines)+'\n').encode()
 
 
-def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None,layout=None):
+def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None,layout=None,spine_bindings=None,expected_spine_bindings=None,spine_resources=None):
     path,ir,bindings,receipt,resource,resolve=input_ir(ir_path,bindings_path)
+    from .. import prefab_spine_pipeline as spine_pipeline
+    spine_profile=spine_pipeline.load_binding(ir,path,spine_bindings,expected_spine_bindings,spine_resources)
+    spine_components={c['sourceComponentId']:c for c in spine_profile['record']['components']}if spine_profile else {}
     if ir.get('sourceProfile')in ('generic-image-resources-v1','egret-custom-resource-plist-v1'):fail('SOURCE_TARGET_UNSUPPORTED',str(ir_path),'Non-Cocos sources target Unity 6 only')
     from ..layout import LayoutPlanner
     overrides,overrides_sha=layout or ({},None)
@@ -71,11 +74,27 @@ def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None,la
         copies.append(dict(source=None,target=target,sha256=sha(raw),text=raw.decode()))
         font_by_id[f['sourceId']]=f
     asset_by_id={a['sourceId']:a for a in assets};components=[]
-    supported={'cc.Sprite','cc.Label','cc.Widget','cc.Mask','cc.ScrollView','cc.Layout','cc.Button','cc.LabelOutline'}
+    supported={'cc.Sprite','cc.Label','cc.Widget','cc.Mask','cc.ScrollView','cc.Layout','cc.Button','cc.BlockInputEvents','cc.LabelOutline','cc.ProgressBar'}
     materials={m['sourceId'] for m in ir.get('materials',[]) if m['nativeRole']=='standard-ugui'}
+    from .. import prefab_material_pipeline as material_pipeline
+    material_profile,material_gaps=material_pipeline.discover(ir,path)
+    diagnostics.extend(material_gaps)
     node_ids={n['sourceId'] for n in ir['nodes']};source_nodes={n['sourceId']:n for n in ir['nodes']}
     for src in ir['components']:
         c=dict(src);sid=c['sourceId'];c['convertible']=c['type'] in supported and c.get('node') in node_ids
+        if sid in spine_components:
+            c.update(spineBinding=spine_components[sid],nativeType='sp.Skeleton',convertible=c.get('node')in node_ids and not c.get('materials'))
+            if c.get('materials'):
+                diagnostics.append(diagnostic('SPINE_MATERIAL_HANDOFF',sid,'Exact source Spine material requires its own verified native profile',sid))
+            diagnostics.append(diagnostic('SPINE_RUNTIME_UNVERIFIED',sid,'Native component binding; exact animation, dynamic resource assignment and visual checks remain',sid))
+            components.append(c);continue
+        from ..prefab_target_behaviors import binding as behavior_binding
+        native_behavior=behavior_binding(c,'creator',namespace)
+        if native_behavior is not None:
+            c.update(behaviorBinding=native_behavior,nativeType=native_behavior['typeName'],
+                     convertible=c.get('node') in node_ids and not c.get('materials'))
+            diagnostics.append(diagnostic('BEHAVIOR_RUNTIME_UNVERIFIED',sid,'Source-bound native script/fields; behavioral gaps and runtime checks remain',sid))
+            components.append(c);continue
         if c.get('supported') is False:
             c['convertible']=False;c['nativeType']=None
             diagnostics.append(diagnostic('SOURCE_COMPONENT_PROFILE_HANDOFF',c['sourceId'],'Source component semantics are not implemented for this profile',c['sourceId']))
@@ -85,7 +104,9 @@ def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None,la
             if field in c:c[field]=resolve(c[field])
         def gap(code,message):
             c['convertible']=False;diagnostics.append(diagnostic(code,sid,message,sid))
-        if any(resolve(m) not in materials for m in c.get('materials',[])):gap('CUSTOM_MATERIAL_HANDOFF','Unrecognized source material')
+        if material_pipeline.supported_component(c,material_profile,resolve):
+            c['nativeMaterialSourceId']=material_profile['spec']['materialSourceId']
+        elif any(resolve(m) not in materials for m in c.get('materials',[])):gap('CUSTOM_MATERIAL_HANDOFF','Unrecognized source material')
         if c['type']=='cc.Sprite':
             if c['mode'] not in (0,1,2) or c['sizeMode'] not in (0,1,2):gap('SPRITE_SUBSET_UNSUPPORTED','Unknown mode')
             if c.get('spriteFrame') is not None and c['spriteFrame'] not in asset_by_id:gap('MISSING_SPRITE','SpriteFrame absent')
@@ -95,7 +116,11 @@ def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None,la
             if c['convertible']:c.update(nativeSizeMode=c['sizeMode'],sizingPolicy='native-sprite-sizing-v1')
         elif c['type']=='cc.Label':
             font=asset_by_id.get(c.get('font'))
-            if not font or font['kind'] not in ('ttf','bitmap'):gap('FONT_NOT_CONVERTIBLE','No matching original font; no system fallback')
+            source_system = c.get('systemFont') is True and c.get('font') is None and bool(c.get('fontFamily'))
+            if source_system:
+                c['nativeSystemFont']=True
+                diagnostics.append(diagnostic('SYSTEM_FONT_PLATFORM_UNVERIFIED',sid,'Preserved source font family; actual platform fallback and visual equivalence require native evidence',sid))
+            elif not font or font['kind'] not in ('ttf','bitmap'):gap('FONT_NOT_CONVERTIBLE','No matching original font; no system fallback')
             elif font['kind']=='ttf':
                 from ..assets.ttf import missing
                 if missing(font['fontCoverage'],c['text']):gap('SOURCE_FONT_GLYPHS_MISSING','Missing original font glyphs')
@@ -127,6 +152,10 @@ def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None,la
         if c['type']=='cc.LabelOutline' and c['convertible'] and not any(x['type']=='cc.Label' and x['node']==c['node'] and x['convertible'] for x in components):
             c['convertible']=False;c['nativeType']=None
             diagnostics.append(diagnostic('MISSING_OUTLINE_LABEL',c['sourceId'],'Label dependency could not be converted',c['sourceId']))
+    from .progress import configure_progress
+    diagnostics.extend(configure_progress(components,source_nodes))
+    for c in components:
+        if c['type']=='cc.ProgressBar' and not c['convertible']:c['nativeType']=None
     from .prefabs import plan_prefabs,native_relationships
     prefabs,prefab_gaps=plan_prefabs(ir,components)
     diagnostics.extend(prefab_gaps)
@@ -158,7 +187,14 @@ def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None,la
     from ..creator_geometry import renderer_budget
     render_budget,tile_gaps=renderer_budget(ir['nodes'],components,assets)
     diagnostics.extend(diagnostic('TILED_GEOMETRY_UNSUPPORTED',sid,message,sid) for sid,message in tile_gaps)
+    from ..prefab_target_behaviors import prepare as prepare_behaviors
+    behavior_scripts=prepare_behaviors(ir,path.parent,'creator',namespace,out)
+    material_binding=material_pipeline.prepare(material_profile,'creator',out)
+    spine_binding=spine_pipeline.prepare(spine_profile,out)
+    if material_binding:
+        material_binding['spec']['spriteBindings']=[dict(sourceId=c['sourceId'])for c in components if c.get('convertible')and c.get('nativeMaterialSourceId')]
     result=dict(schemaVersion=1,toolVersion=__version__,targetProfile=PROFILE,namespace=namespace,projectLayout=VERSION,layoutOverridesSha256=overrides_sha,
+        behaviorScripts=behavior_scripts,materialBinding=material_binding,spineBinding=spine_binding,
         scopeMode=ir.get('scopeMode','asset-selection'),
         sourceIrSha256=sha(stage_bytes(path)),sourceManifestSha256=ir['sourceManifestSha256'],sourceManifestPath=ir.get('sourceManifestPath'),
         sourceRoots=ir.get('sourceRoots',{}),sourceLocations=ir.get('sourceLocations',{}),bindings=receipt,
@@ -187,6 +223,12 @@ def export(plan_path,output):
         elif a['kind']=='audio':m=meta(a['uuid'],'audio-clip','1.0.0',dict(downloadMode=0))
         else:m=meta(a['uuid'],'bitmap-font','1.0.6',dict(fontSize=a['pointSize'],textureUuid=by_id[a['atlas']]['uuid']))
         write_json(Path(str(target)+'.meta'),m)
+    from ..prefab_target_behaviors import emit as emit_behaviors
+    emit_behaviors(p,path.parent,'creator',out)
+    from ..prefab_material_pipeline import emit as emit_material
+    emit_material(p.get('materialBinding'),path.parent,out)
+    from ..prefab_spine_pipeline import emit as emit_spine
+    emit_spine(p.get('spineBinding'),path.parent,out)
     project_id=identity(p['namespace'],'project')
     write_json(out/'package.json',dict(name='monkey-native-candidate',version='3.8.8',uuid=project_id,creator=dict(version='3.8.8')))
     if p.get('rendererBudget',{}).get('macroConfig',{}).get('BATCHER2D_MEM_INCREMENT',144)>144:
@@ -206,6 +248,7 @@ def export(plan_path,output):
     for name in ['main.js','scene.js']:(ext/name).write_bytes(files('monkey.targets').joinpath('Creator'+('Main.js' if name=='main.js' else 'Scene.js')).read_bytes())
     (ext/'execution.js').write_bytes(files('monkey.targets').joinpath('CreatorExecution.js').read_bytes())
     (ext/'numeric-code.js').write_bytes(files('monkey.targets').joinpath('CreatorNumericCode.js').read_bytes())
+    (ext/'behavior-bindings.js').write_bytes(files('monkey.targets').joinpath('CreatorBehaviorBindings.js').read_bytes())
     (ext/'prefab.js').write_bytes(files('monkey.targets').joinpath('CreatorPrefab.js').read_bytes())
     (ext/'prefab-instances.js').write_bytes(files('monkey.targets').joinpath('CreatorPrefabInstances.js').read_bytes())
     (ext/'dynamic-ui.js').write_bytes(files('monkey.targets').joinpath('CreatorDynamicUi.js').read_bytes())
@@ -214,12 +257,18 @@ def export(plan_path,output):
     (ext/'jobs.js').write_bytes(files('monkey.targets').joinpath('CreatorJobs.js').read_bytes())
     (ext/'animation.js').write_bytes(files('monkey.targets').joinpath('CreatorAnimation.js').read_bytes())
     (ext/'resources.js').write_bytes(files('monkey.targets').joinpath('CreatorResources.js').read_bytes())
+    (ext/'progress.js').write_bytes(files('monkey.targets').joinpath('CreatorProgress.js').read_bytes())
+    (ext/'material-bindings.js').write_bytes(files('monkey.targets').joinpath('materials/ui_color/CreatorMaterialBindings.js').read_bytes())
+    (ext/'spine-bindings.js').write_bytes(files('monkey.targets').joinpath('spine/creator_spine_binding.js').read_bytes())
     write_json(ext/'package.json',dict(package_version=2,version='0.2.0',name='monkey-import',main='./main.js',
         contributions=dict(scene=dict(script='./scene.js'),menu=[dict(path='Monkey',label='Import isolated candidate',message='import-candidate')],
                            messages={'import-candidate':dict(methods=['importCandidate'])})))
     write_json(ext/'import-plan.json',{k:p[k] for k in ['schemaVersion','targetProfile','designSize','assets','nodes','components'] }|dict(resourceProbes=p.get('resourceProbes'),rendererBudget=p.get('rendererBudget'),projectUuid=project_id,animations=p.get('animations',[]),sourcePrefabs=p.get('sourcePrefabs',[]),prefabInstances=p.get('prefabInstances',[]),prefabRelationshipReadback='creator-native-fileid-v1',uiGeometryReadback='native-ui-layout-roundtrip-v1',sceneGeometryReadback='full-local-v1',bitmapPageReadback='sprite-frame-v1',spriteMeshReadback='native-rect-mesh-v1',outputPaths=standard.creator_output_paths()))
     from .dynamic_ui import driven_fields
     instruction_path=ext/'import-plan.json';instruction=load(instruction_path.read_bytes())
+    instruction['behaviorBindingReadback']='persistent-source-fields-v1'
+    instruction['materialBinding']=(p.get('materialBinding')or {}).get('spec')
+    instruction['spineBinding']={k:v for k,v in (p.get('spineBinding')or {}).items()if k!='copies'}or None
     instruction['uiStateProbeVersion']=2
     from .dynamic_ui import probe_sources
     instruction['uiProbeSources']=probe_sources(instruction)
@@ -270,6 +319,12 @@ def verify(candidate,output,level='static'):
             audio_assets={a['sourceId']:a for a in rb.get('audioAssets',[])}
             good=rb.get('creatorVersion')=='3.8.8' and rb.get('projectUuid')==m['projectUuid'] and rb.get('manifestSha256')==fingerprint(root/'manifest.json')
             good=good and set(expected_assets)==set(actual_assets) and rb.get('nodeCount')==len(plan['nodes'])
+            from ..prefab_material_pipeline import verify as verify_material
+            material_gaps=verify_material(plan.get('materialBinding'),rb.get('materialBinding'),'creator')
+            if material_gaps:good=False;diagnostics.extend(material_gaps)
+            from ..prefab_spine_pipeline import verify as verify_spines
+            spine_gaps=verify_spines(plan['components'],rb.get('spineBindings'),'scene')
+            if spine_gaps:good=False;diagnostics.extend(spine_gaps)
             from ..creator_geometry import verify_tiled_readback
             if not verify_tiled_readback(plan,rb):
                 good=False;diagnostics.append(diagnostic('TILED_NATIVE_READBACK_MISMATCH','CreatorScene','Tiled mesh allocation/budget/topology/identity readback differs'))
@@ -297,7 +352,8 @@ def verify(candidate,output,level='static'):
             for c in plan['components']:
                 if c['convertible'] and c['type']=='cc.Label':
                     actual=labels.get(c['sourceId'],{})
-                    good=good and actual.get('text')==c['text'] and actual.get('fontUuid')==expected_assets[c['font']]['uuid']
+                    font_good = (actual.get('useSystemFont') is True and actual.get('fontUuid') is None and actual.get('fontFamily')==c['fontFamily']) if c.get('nativeSystemFont') else actual.get('fontUuid')==expected_assets[c['font']]['uuid']
+                    good=good and actual.get('text')==c['text'] and font_good
             expected_components={c['sourceId'] for c in plan['components'] if c['convertible']}
             good=good and {c['sourceId'] for c in rb.get('components',[])}==expected_components
             good=good and {n['sourceId'] for n in rb.get('nodes',[])}=={n['sourceId'] for n in plan['nodes']}
@@ -347,6 +403,12 @@ def verify(candidate,output,level='static'):
                 source_nodes=set(spec['nodes']);code_specs=[c for c in plan['components']if c.get('node')in source_nodes]
                 code_gaps=verify_numeric(code_specs,actual.get('numericCodeBindings'),'cocos',sid)
                 if code_gaps:good=False;diagnostics.extend(code_gaps)
+                spine_gaps=verify_spines(code_specs,actual.get('spineBindings'),sid)
+                if spine_gaps:good=False;diagnostics.extend(spine_gaps)
+                if plan.get('behaviorBindingReadback')=='persistent-source-fields-v1':
+                    from ..prefab_target_behaviors import verify_bindings
+                    behavior_gaps=verify_bindings(code_specs,actual.get('behaviorBindings'),actual.get('uuid'),'creator',sid)
+                    if behavior_gaps:good=False;diagnostics.extend(behavior_gaps)
                 if plan.get('uiGeometryReadback')=='native-ui-layout-roundtrip-v1':
                     from .dynamic_ui import expectations
                     _,ui_gaps=expectations(plan,actual.get('nativeInitialNodes'),sid,[n for n in plan['nodes']if n['sourceId']in source_nodes])

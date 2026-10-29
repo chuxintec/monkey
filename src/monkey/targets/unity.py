@@ -96,7 +96,7 @@ def untrimmed_frames(ir):
     return {resolve(c['spriteFrame']) for c in ir['components'] if c['type']=='cc.Sprite' and c.get('spriteFrame') and c.get('trim',True) is False}
 
 
-def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None,layout=None):
+def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None,layout=None,system_font_resolution=None,expected_system_font_resolution=None,static_font_generation=None,expected_static_font_generation=None):
     ir_path = safe(ir_path)
     ir = stage_document(ir_path)
     if ir.get('schemaVersion') != 1 or ir.get('sourceProfile') not in ('cocos-2.4.15-bundle','cocos-2.4.15-project','cocos-3.8.7-bundle','cocos-3.4.1-bundle','cocos-2.4.11-bundle','cocos-2.1.2-resource','generic-image-resources-v1','egret-custom-resource-plist-v1'):
@@ -168,6 +168,17 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
         item['fontPath']=naming.path(font['sourceId'],'font-asset','.asset')
         bitmap_fonts.append(item)
     resource_ids = {a['id'] for a in assets if a['kind']=='cc.TTFFont'}|{f['id'] for f in bitmap_fonts}
+    system_font_binding=None;system_label_bindings={}
+    if bool(system_font_resolution)!=bool(expected_system_font_resolution):
+        fail('SYSTEM_FONT_RECEIPT_PIN_REQUIRED',str(ir_path),'Resolution receipt and expected SHA must be supplied together')
+    if system_font_resolution:
+        from ..prefab_system_fonts import prepare as prepare_system_fonts
+        prepared=prepare_system_fonts(ir,sha(stage_bytes(ir_path)),system_font_resolution,expected_system_font_resolution)
+        if prepared.status!='prepared':fail('SYSTEM_FONT_BINDING_NOT_READY',str(system_font_resolution),prepared.record.get('reason','Invalid font receipt'))
+        system_font_binding=prepared.record
+        system_label_bindings={b['sourceLabelId']:b for b in prepared.record['labelBindings']}
+        if set(system_label_bindings)&set(label_bindings):fail('SYSTEM_FONT_BINDING_CONFLICT',str(ir_path),'Multiple font policies target the same Label')
+        resource_ids.update(f['assetId']for f in prepared.record['systemFonts']['fonts'])
     sprite_ids = {s['id'] for s in textures}
     nodes = ir['nodes']
     node_ids = {n['sourceId'] for n in nodes}
@@ -191,8 +202,11 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
             if cursor['sourceId'] in seen:
                 fail('NODE_CYCLE',n['sourceId'],'Parent cycle')
             seen.add(cursor['sourceId']);cursor=next(v for v in nodes if v['sourceId']==cursor['parent'])
-    native_types={'cc.Sprite','cc.Label','cc.Widget','cc.Mask','cc.ScrollView','cc.Layout','cc.Button','cc.LabelOutline','cc.ProgressBar'}
+    native_types={'cc.Sprite','cc.Label','cc.Widget','cc.Mask','cc.ScrollView','cc.Layout','cc.Button','cc.BlockInputEvents','cc.LabelOutline','cc.ProgressBar'}
     native_materials={f['sourceId'] for f in ir.get('materials',[]) if f['nativeRole']=='standard-ugui'}
+    from .. import prefab_material_pipeline as material_pipeline
+    material_profile,material_gaps=material_pipeline.discover(ir,ir_path)
+    diagnostics.extend(material_gaps)
     def resolve_id(value):
         seen=set()
         while value in ir.get('aliases',{}):
@@ -202,6 +216,10 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
     components=[]
     for c in ir['components']:
         entry=dict(c)
+        if c['sourceId'] in system_label_bindings:
+            bind=system_label_bindings[c['sourceId']]
+            entry.update(sourceFont=c.get('font'),font=bind['nativeFontAssetId'],nativeSystemFontBinding=bind)
+            diagnostics.append(diagnostic('SYSTEM_FONT_PLATFORM_UNVERIFIED',c['sourceId'],'Explicit macOS font resolution; source OS and visual equivalence remain unverified',c['sourceId']))
         if c['sourceId'] in label_bindings:
             bind=label_bindings[c['sourceId']]
             if c.get('font') is not None:fail('BINDING_REPLACES_EXPLICIT_FONT',c['sourceId'],'Only absent system-font references may be source-bound')
@@ -216,12 +234,21 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
         c=entry
         entry['convertible']=c['type'] in native_types and c['node'] in node_ids
         entry['nativeId']=guid(namespace,c['sourceId'])
+        from ..prefab_target_behaviors import binding as behavior_binding
+        native_behavior=behavior_binding(c,'unity',namespace)
+        if native_behavior is not None:
+            entry.update(behaviorBinding=native_behavior,nativeType=native_behavior['typeName'],
+                         convertible=c['node'] in node_ids and not c.get('materials'))
+            diagnostics.append(diagnostic('BEHAVIOR_RUNTIME_UNVERIFIED',c['sourceId'],'Source-bound native script/fields; behavioral gaps and runtime checks remain',c['sourceId']))
+            components.append(entry);continue
         if c.get('supported') is False:
             entry['convertible']=False
             diagnostics.append(diagnostic('SOURCE_COMPONENT_PROFILE_HANDOFF',c['sourceId'],'Source component semantics are not implemented for this profile',c['sourceId']))
             components.append(entry);continue
 
-        if any(resolve_id(mat) not in native_materials for mat in c.get('materials',[])):
+        if material_pipeline.supported_component(c,material_profile,resolve_id):
+            entry['nativeMaterialSourceId']=material_profile['spec']['materialSourceId']
+        elif any(resolve_id(mat) not in native_materials for mat in c.get('materials',[])):
             entry['convertible']=False
             diagnostics.append(diagnostic('CUSTOM_MATERIAL_HANDOFF',c['sourceId'],'Material is not recognized standard UI texture',c['sourceId']))
         if c['type']=='cc.Sprite':
@@ -348,6 +375,17 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
     for prefab in source_prefabs:prefab['path']=naming.path(prefab['sourceId'],'prefab','.prefab')
     diagnostics.extend(prefab_gaps)
     out = new_output(output,[ir_path.parent])
+    static_font_inputs=None
+    if bool(static_font_generation)!=bool(expected_static_font_generation):
+        fail('STATIC_FONT_INPUTS_PAIR','fonts','Generation receipt and expected SHA are required together')
+    if static_font_generation:
+        if not system_font_binding:fail('STATIC_FONT_RESOLUTION_REQUIRED','fonts','Static inputs require an explicit resolved font binding')
+        from ..prefab_system_fonts import prepare_static_inputs
+        staged=prepare_static_inputs(static_font_generation,expected_static_font_generation,system_font_binding,out)
+        if staged.status!='staged':fail('STATIC_FONT_INPUTS_INVALID','fonts',staged.record.get('reason','Staging failed'))
+        static_font_inputs=staged.record
+    elif system_font_binding and any(f.get('populationMode')=='StaticSDFRequired'for f in system_font_binding['systemFonts']['fonts']):
+        fail('STATIC_FONT_INPUTS_REQUIRED','fonts','Resolved static face requires an explicit pinned generation receipt')
     (out/'resources').mkdir()
     for copy in copies:
         target = out/'resources'/(sha(copy['target'].encode())[:24]+Path(copy['target']).suffix)
@@ -358,7 +396,13 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
     for node in nodes:
         if node.get('sourceGeometryProfile'):
             diagnostics.append(diagnostic('COCOS3_UNITY_LAYER_HANDOFF',node['sourceId'],'Original layer bits retained as provenance; native uGUI uses target UI layer 5, source camera visibility is pending',node['sourceId']))
+    from ..prefab_target_behaviors import prepare as prepare_behaviors
+    behavior_scripts=prepare_behaviors(ir,ir_path.parent,'unity',namespace,out)
+    material_binding=material_pipeline.prepare(material_profile,'unity',out)
+    if material_binding:
+        material_binding['spec']['spriteBindings']=[dict(sourceId=c['sourceId'])for c in components if c.get('convertible')and c.get('nativeMaterialSourceId')]
     result=dict(schemaVersion=1,toolVersion=__version__,targetProfile=PROFILE,namespace=namespace,projectLayout=VERSION,layoutOverridesSha256=overrides_sha,
+                behaviorScripts=behavior_scripts,systemFontBinding=system_font_binding,staticFontInputs=static_font_inputs,materialBinding=material_binding,
                 sourcePrefabs=source_prefabs,prefabInstances=prefab_instances,naming=naming.report(),
                 scopeMode=ir.get('scopeMode','asset-selection'),
                 sourceIrSha256=sha(stage_bytes(ir_path)),sourceManifestPath=ir.get('sourceManifestPath'),sourceManifestSha256=ir['sourceManifestSha256'],
@@ -389,6 +433,12 @@ def export(plan_path, output):
         if not c['target'].startswith(standard.ROOTS['unity']['content']+'/'):
             fail('UNSAFE_TARGET',c['target'],'Unexpected target root')
     out=new_output(output,[plan_path.parent])
+    static_fonts=p.get('staticFontInputs')
+    for item in (static_fonts or {}).get('copies',[]):
+        raw=read(inside(plan_path.parent,item['relativePath']))
+        if sha(raw)!=item['sha256'] or len(raw)!=item['sizeBytes']:fail('STATIC_FONT_INPUT_CHANGED',item['relativePath'],'Plan-owned font input differs')
+        dest=inside(out,item['relativePath'])
+        dest.parent.mkdir(parents=True,exist_ok=True);dest.write_bytes(raw)
     for folder in [standard.ROOTS['unity']['conversion'],'Packages','ProjectSettings','Analysis']:
         (out/folder).mkdir(parents=True,exist_ok=True)
     ownership=[]
@@ -403,19 +453,31 @@ def export(plan_path, output):
     for template,relative,key in [('ContentPreviewView.cs',standard.unity('previewView'),'native-view-script'),
             ('IntrinsicGridLayoutGroup.cs',standard.UNITY_LAYOUT_DIR+'/IntrinsicGridLayoutGroup.cs','intrinsic-grid-script'),
             ('UnityNumericCode.cs',standard.unity('numericCode'),'numeric-code-editor'),
+            ('UnityBehaviorBindings.cs',str(Path(standard.unity('importer')).with_name('UnityBehaviorBindings.cs')),'behavior-bindings-editor'),
+            ('materials/ui_color/UnityMaterialBindings.cs',str(Path(standard.unity('importer')).with_name('UnityMaterialBindings.cs')),'material-bindings-editor'),
+            ('UnitySystemFonts.cs',str(Path(standard.unity('importer')).with_name('UnitySystemFonts.cs')),'system-fonts-editor'),
             ('UnityPrefabInstances.cs',standard.unity('prefabInstances'),'prefab-instances-editor'),
-            *[(name,standard.UNITY_LAYOUT_DIR+'/'+name,'native-ui/'+name) for name in ('NativeLinearLayoutGroup.cs','NativeRectConstraints.cs','NativeTextLineBox.cs','NativeHorizontalProgressFill.cs')],
+            *[(name,standard.UNITY_LAYOUT_DIR+'/'+name,'native-ui/'+name) for name in ('NativeLinearLayoutGroup.cs','NativeRectConstraints.cs','NativeTextLineBox.cs','NativeHorizontalProgressFill.cs','NativeInputBlocker.cs','NativeInputBlockerSurface.cs')],
             ('UnityDynamicUi.cs',standard.unity('dynamicUi'),'native-ui/UnityDynamicUi.cs'),
             ('UnityButtonAnimations.cs',Path(standard.unity('importer')).with_name('NativeButtonAnimations.cs').as_posix(),'button-animations-editor'),
             ('UnityImporter.cs',standard.unity('importer'),'editor-adapter')]:
         dest=out/relative;dest.parent.mkdir(parents=True,exist_ok=True);dest.write_bytes(files('monkey.targets').joinpath(template).read_bytes())
         Path(str(dest)+'.meta').write_text('fileFormatVersion: 2\nguid: '+guid(p['namespace'],key)+'\n')
+    from ..prefab_target_behaviors import emit as emit_behaviors
+    emit_behaviors(p,plan_path.parent,'unity',out)
+    from ..prefab_material_pipeline import emit as emit_material
+    emit_material(p.get('materialBinding'),plan_path.parent,out)
     # Only the typed, finite import instruction subset is sent to the Editor.
     instruction={key:p.get(key,[]) for key in ('designSize','pixelsPerUnit','textures','assets','bitmapFonts','nodes','components','galleryOnly','animations','sourcePrefabs','prefabInstances')}
+    instruction['systemFontBinding']=p.get('systemFontBinding')
+    instruction['staticFontReceiptPath']=(static_fonts or {}).get('portableReceiptRelativePath')
+    instruction['staticFontReceiptSha256']=(static_fonts or {}).get('portableReceiptSha256')
+    instruction['materialBinding']=(p.get('materialBinding')or {}).get('spec')
     instruction['tmpResources']=dict(packageName='com.unity.ugui',packageVersion='2.6.0',resource='Package Resources/TMP Essential Resources.unitypackage',importMode='package-completion-callback')
     instruction['glyphReadback']='native-quad-padding-v1'
     instruction['sceneRoundtrip']=True
     instruction['sourcePrefabReadback']='native-layout-settled-v1'
+    instruction['behaviorBindingReadback']='persistent-source-fields-v1'
     instruction['transformReadback']='full-local-v1'
     instruction['sourceDiagnosticCount']=len(p['diagnostics'])
     instruction['prefabGuid']=guid(p['namespace'],'native-prefab')
@@ -566,6 +628,8 @@ def verify(candidate, output, level='static'):
             instruction=load(read(root/standard.locate(m,'importPlan'),max_bytes=128*1024*1024),max_nodes=8_000_000)
             diagnostics.extend(gallery_readback(instruction,rb))
             from ..code_validation import numeric as verify_numeric
+            from ..prefab_material_pipeline import verify as verify_material
+            diagnostics.extend(verify_material(instruction.get('materialBinding'),rb.get('materialBinding'),'unity'))
             diagnostics.extend(verify_numeric(instruction['components'],rb.get('numericCodeBindings'),'unity','scene',rb.get('numericCodeExercise',[])))
             if instruction.get('bitmapFonts') or any(a['path'].lower().endswith('.ttf') for a in instruction['assets']):
                 resources=rb.get('tmpResources') or {}
@@ -610,6 +674,10 @@ def verify(candidate, output, level='static'):
             for prefab in instruction.get('sourcePrefabs',[]):
                 source_nodes=set(prefab['nodes']);specs=[c for c in instruction['components']if c.get('node')in source_nodes]
                 diagnostics.extend(verify_numeric(specs,actual_prefabs.get(prefab['sourceId'],{}).get('numericCodeBindings'),'unity',prefab['sourceId']))
+                if instruction.get('behaviorBindingReadback')=='persistent-source-fields-v1':
+                    from ..prefab_target_behaviors import verify_bindings
+                    observed=actual_prefabs.get(prefab['sourceId'],{})
+                    diagnostics.extend(verify_bindings(specs,observed.get('behaviorBindings'),observed.get('guid'),'unity',prefab['sourceId']))
             for spec in instruction['assets']:
                 if spec['kind']=='cc.JsonAsset':
                     actual=json_assets.get(spec['id'],{})

@@ -55,14 +55,30 @@ function read(prefab,spec,plan,info,templates) {
             mapped.set(sid,node);src.children.forEach((child,i)=>match(child,node.children[i]));
         }
         match(spec.root,root);
+        const persistent=new Map();
+        function savedMap(sid,node){
+            if(!node)throw Error('Saved behavior owner absent: '+sid);
+            persistent.set(sid,node);sources.get(sid).children.forEach((child,i)=>savedMap(child,node.children[i]));
+        }
+        savedMap(spec.root,prefab.data);
         if(mapped.size!==spec.nodeCount||spec.nodes.some(id=>!mapped.has(id)))throw Error('Prefab node boundary differs');
-        const assets=new Map(plan.assets.map(a=>[a.sourceId,a]));const components=[];const numericCodeBindings=[];
+        const assets=new Map(plan.assets.map(a=>[a.sourceId,a]));const components=[];const numericCodeBindings=[],behaviorBindings=[];
         for(const c of plan.components.filter(c=>c.convertible&&mapped.has(c.node))) {
-            const node=mapped.get(c.node),comp=node.getComponent(cc[c.type==='cc.LabelOutline'?'Label':c.type.slice(3)]);
+            const node=mapped.get(c.node),comp=c.behaviorBinding?
+                require('./behavior-bindings.js').read(node,c.behaviorBinding,c.enabled):node.getComponent(c.spineBinding?cc.sp.Skeleton:cc[c.type==='cc.LabelOutline'?'Label':c.type.slice(3)]);
             if(!comp)throw Error('Prefab component missing: '+c.sourceId);
+            if(c.type==='cc.ProgressBar')require('./progress.js').read(comp,c,mapped);
+            if(c.behaviorBinding)behaviorBindings.push(require('./behavior-bindings.js').readPersistent(persistent.get(c.node),c.behaviorBinding,c.enabled,c.sourceId,info.uuid));
             if(c.codeClassName)numericCodeBindings.push(require('./numeric-code.js').read(comp,c));
             if(c.type==='cc.Sprite'&&c.spriteFrame&&(!comp.spriteFrame||comp.spriteFrame._uuid!==assets.get(c.spriteFrame).spriteFrameUuid))throw Error('Prefab sprite reference differs');
-            if(c.type==='cc.Label'&&(!comp.font||comp.font._uuid!==assets.get(c.font).uuid||comp.string!==c.text))throw Error('Prefab font/text reference differs');
+            if(c.nativeMaterialSourceId&&(!plan.materialBinding||!comp.customMaterial||comp.customMaterial._uuid!==plan.materialBinding.creator.materialUuid||
+               !require('./material-bindings.js').readBound(plan.materialBinding,comp.customMaterial,comp)))throw Error('Prefab custom material differs: '+c.sourceId);
+            if(c.type==='cc.Label') {
+                const fontMatches=c.nativeSystemFont?
+                    comp.useSystemFont&&comp.font===null&&comp.fontFamily===c.fontFamily:
+                    comp.font&&assets.get(c.font)&&comp.font._uuid===assets.get(c.font).uuid;
+                if(!fontMatches||comp.string!==c.text)throw Error('Prefab font/text reference differs');
+            }
             if(c.type==='cc.Label'&&comp.overflow!==(c.nativeOverflow??c.overflow))throw Error('Prefab Label overflow policy differs');
             if(c.type==='cc.Sprite'&&comp.sizeMode!==(c.nativeSizeMode??c.sizeMode))throw Error('Prefab Sprite sizing policy differs');
             if(c.type==='cc.ScrollView'&&comp.content!==mapped.get(c.content))throw Error('Prefab scroll reference escapes graph');
@@ -70,8 +86,12 @@ function read(prefab,spec,plan,info,templates) {
             if(c.type==='cc.Widget'&&comp.target!==(c.target?mapped.get(c.target):null))throw Error('Prefab widget reference differs');
             components.push(c.sourceId);
         }
-        return {...info,prefabInstances:require('./prefab-instances.js').read(plan,mapped,templates,plan.savedPrefabs||[],spec.sourceId),nodeCount:mapped.size,savedReloaded:true,geometryVerified:geometryMismatches.length===0,geometryMismatches,referencesVerified:true,components,
-            numericCodeBindings,rootNamePolicy:spec.rootNamePolicy||'source-name-v1',sourceRootName:sources.get(spec.root).name,nativeRootName:root.name};
+        const spineSpecs=plan.components.filter(c=>c.convertible&&c.spineBinding&&mapped.has(c.node));
+        const spineBindings=require('./spine-bindings.js').readCreatorSpineBindings(spineSpecs.map(c=>c.spineBinding),id=> {
+            const c=spineSpecs.find(c=>c.sourceId===id);return c?persistent.get(c.node).getComponents(cc.sp.Skeleton):[];
+        });
+        return {...info,spineBindings,prefabInstances:require('./prefab-instances.js').read(plan,mapped,templates,plan.savedPrefabs||[],spec.sourceId),nodeCount:mapped.size,savedReloaded:true,geometryVerified:geometryMismatches.length===0,geometryMismatches,referencesVerified:true,components,
+            numericCodeBindings,behaviorBindings,rootNamePolicy:spec.rootNamePolicy||'source-name-v1',sourceRootName:sources.get(spec.root).name,nativeRootName:root.name};
     } finally {root.destroy();}
 }
 module.exports={serialize,read,uiState};

@@ -1,3 +1,7 @@
+# Active v0.7 priority: complete core Prefab recovery
+
+The active scope is [PLAN](PLAN.md): at least ten distinct core Prefabs independently accepted in Creator 3.8.8 and Unity 6000.6.2f1. Source identity, complete component/field/event accounting, assets, local behavior, dynamic layout, native persistence and observable equivalence are required. Broader source-profile/CDN expansion below is retained as historical backlog and does not compete with this version.
+
 > 2026-10-26最新用户裁定：默认全量C#初稿导出，允许类型/语法/API缺口；本文的严格typed/profile子集为可选增强，不再作为其他有源方法导出的门槛。现行进度和完整候选链见 [PLAN](PLAN.md)。
 ## 2026-10-27 当前出口：五层架构、功能类、归入源码与跨层集成
 

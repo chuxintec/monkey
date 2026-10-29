@@ -165,6 +165,24 @@ module.exports = {
                     }
                 }
             }
+            let materialReadback=null;
+            if(plan.materialBinding) {
+                const spec=plan.materialBinding,materialPath=within(root,spec.creator.materialPath);
+                const metaPath=within(root,spec.creator.materialMetaPath);
+                if(fs.existsSync(materialPath))throw Error('Native material output already exists');
+                const serialized=await sceneJob('prepareMaterial',[{...spec,nativeDeadlineMs}],'materials');
+                fs.mkdirSync(path.dirname(materialPath),{recursive:true});
+                if(fs.existsSync(metaPath)) {
+                    if(JSON.parse(fs.readFileSync(metaPath,'utf8')).uuid!==spec.creator.materialUuid)throw Error('Native material metadata UUID conflict');
+                } else fs.writeFileSync(metaPath,JSON.stringify({ver:'1.0.5',importer:'material',imported:false,uuid:spec.creator.materialUuid,files:[],subMetas:{},userData:{}},null,2),{flag:'wx'});
+                fs.writeFileSync(materialPath,serialized,{flag:'wx'});
+                await timedReq('refresh-asset','db://'+path.dirname(spec.creator.materialPath));
+                const info=await timedReq('query-asset-info','db://'+spec.creator.materialPath);
+                const meta=JSON.parse(fs.readFileSync(metaPath,'utf8'));
+                if(!info||info.invalid||info.uuid!==spec.creator.materialUuid||meta.uuid!==spec.creator.materialUuid)throw Error('Native material import UUID differs');
+                materialReadback=await sceneJob('readMaterial',[{...spec,nativeDeadlineMs}],'materials');
+                materialReadback.metaUuid=meta.uuid;materialReadback.metaUuidVerified=true;
+            }
             const nativePlan={...plan,resourceProbes,assets,nativeDeadlineMs,components:plan.components.filter(c=>c.convertible),animations:(plan.animations||[]).filter(a=>a.convertible)};
             let result = await sceneJob('assemble',[nativePlan],'hierarchy');
             if (!result || (typeof result.serialized !== 'string'&&!result.assemblyId)) throw Error('No native scene serialization');
@@ -216,6 +234,7 @@ module.exports = {
             // Re-load saved/imported scene through the engine asset manager, not the in-memory tree.
             execution.checkpoint('native-readback');
             const saved = await sceneJob('readSaved',[scene.uuid,{...nativePlan,animationAssets,savedPrefabs,nativeInitialNodes:result.nativeInitialNodes}],'native-readback');
+            saved.materialBinding=materialReadback;
             for(const p of savedPrefabs)if(p.sha256&&hash(fs.readFileSync(within(root,p.path)))!==p.sha256)throw Error('Shared native template changed: '+p.sourceId);
             const nativeFiles = [];
             function collect(relative) {

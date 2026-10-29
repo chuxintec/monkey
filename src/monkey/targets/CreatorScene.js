@@ -8,6 +8,7 @@ const dynamic=require('./dynamic-ui.js');
 const batch=require('./batch.js');
 const jobs=require('./jobs.js');
 const numeric=require('./numeric-code.js');
+const behaviors=require('./behavior-bindings.js');
 const resources=require('./resources.js');
 const color = a => new cc.Color(...a);
 function tiledReadback(plan,nodes) {
@@ -38,6 +39,16 @@ function describe(root, plan) {
 module.exports = {
     load() {}, unload() {},
     methods: {
+        async prepareMaterial(spec) {
+            const helper=require('./material-bindings.js');
+            const effect=await loadAsset(spec.creator.effectUuid,cc.EffectAsset);
+            const material=helper.create(spec,effect);
+            try{return helper.serialize(spec,material);}finally{material.destroy();}
+        },
+        async readMaterial(spec) {
+            return require('./material-bindings.js').readback(spec,
+                await loadAsset(spec.creator.materialUuid,cc.Material),await loadAsset(spec.creator.effectUuid,cc.EffectAsset));
+        },
         beginJob(method,args){return jobs.begin(method,args,module.exports.methods);},
         jobStatus(id){return jobs.status(id);},
         takeJob(id){return jobs.take(id);},
@@ -67,6 +78,9 @@ module.exports = {
                 const native=new Map();
                 let loaded=0;
                 await batch.map(plan.assets,16,async a=>{checkTime(plan);native.set(a.sourceId,await loadAsset(a.kind==='sprite'?a.spriteFrameUuid:a.uuid,a.kind==='sprite'?cc.SpriteFrame:a.kind==='json'?cc.JsonAsset:a.kind==='audio'?cc.AudioClip:cc.Font));jobs.progress('textures',++loaded,plan.assets.length);});
+                const spineAssets=new Map();
+                for(const asset of (plan.spineBinding&&plan.spineBinding.assets)||[])
+                    spineAssets.set(asset.sourceId,await loadAsset(asset.creator.nativeUuid,cc.sp.SkeletonData));
                 let nodeProgress=0;
                 for(const n of plan.nodes) {
                     if(nodeProgress%256===0){jobs.progress('hierarchy',nodeProgress,plan.nodes.length);await new Promise(resolve=>setTimeout(resolve,0));}nodeProgress++;
@@ -89,19 +103,30 @@ module.exports = {
                     checkTime(plan);
                     if(!c.convertible || c.type==='cc.LabelOutline')continue;
                     const node=nodes.get(c.node);const source=sourceNodes.get(c.node);let comp;
-                    if(c.type==='cc.Sprite') {
+                    if(c.spineBinding) {
+                        comp=node.addComponent(cc.sp.Skeleton);
+                        require('./spine-bindings.js').applyCreatorSpineBinding(c.spineBinding,
+                            id=>id===c.sourceId?comp:null,id=>spineAssets.get(id));
+                    } else if(c.behaviorBinding) {
+                        comp=behaviors.bind(node,c.behaviorBinding,c.enabled);
+                    } else if(c.type==='cc.Sprite') {
                         comp=node.addComponent(cc.Sprite);comp.type=c.mode;comp.sizeMode=c.nativeSizeMode??c.sizeMode;comp.trim=c.trim;
                         comp.spriteFrame=c.spriteFrame?native.get(c.spriteFrame):null;comp.color=color(source.color);
                         comp.enabled=c.enabled&&!c.needsSpriteBinding;
                     } else if(c.type==='cc.Label') {
-                        comp=node.addComponent(c.codeClassName?numeric.type(c):cc.Label);if(c.codeClassName)codeEntries.push({component:comp,spec:c});comp.overflow=c.nativeOverflow??c.overflow;comp.useSystemFont=false;comp.font=native.get(c.font);
+                        comp=node.addComponent(c.codeClassName?numeric.type(c):cc.Label);if(c.codeClassName)codeEntries.push({component:comp,spec:c});comp.overflow=c.nativeOverflow??c.overflow;
+                        if(c.nativeSystemFont){comp.font=null;comp.useSystemFont=true;comp.fontFamily=c.fontFamily;}
+                        else {comp.useSystemFont=false;comp.font=native.get(c.font);}
                         comp.string=c.text;comp.fontSize=c.fontSize;comp.lineHeight=c.lineHeight;comp.spacingX=c.spacing;
                         comp.horizontalAlign=c.horizontalAlign;comp.verticalAlign=c.verticalAlign;
                         comp.enableWrapText=c.wrap;comp.isBold=!!c.bold;comp.isItalic=!!c.italic;comp.isUnderline=!!c.underline;comp.color=color(source.color);
                     } else if(c.type==='cc.Button') {
                         comp=node.addComponent(cc.Button);comp.target=node;comp.transition=c.transition;comp.duration=c.duration;
                         comp.zoomScale=c.zoomScale;comp.interactable=c.interactable;comp.clickEvents=[];
+                    } else if(c.type==='cc.BlockInputEvents') {comp=node.addComponent(cc.BlockInputEvents);
                     } else if(c.type==='cc.Mask') {comp=node.addComponent(cc.Mask);comp.type=cc.Mask.Type.GRAPHICS_RECT;
+                    } else if(c.type==='cc.ProgressBar') {
+                        comp=node.addComponent(cc.ProgressBar);
                     } else if(c.type==='cc.ScrollView') {
                         comp=node.addComponent(cc.ScrollView);comp.enabled=c.enabled;comp.horizontal=c.horizontal;comp.vertical=c.vertical;comp.content=nodes.get(c.content);
                     } else if(c.type==='cc.Widget') {
@@ -123,6 +148,17 @@ module.exports = {
                     if(c.type!=='cc.Sprite')comp.enabled=c.enabled;
                     nativeRefs.push({sourceId:c.sourceId,nodeUuid:node.uuid,componentUuid:comp.uuid,type:c.type});
                 }
+                if(plan.materialBinding) {
+                    const material=await loadAsset(plan.materialBinding.creator.materialUuid,cc.Material);
+                    const sprites=new Map(plan.materialBinding.spriteBindings.map(binding=> {
+                        const c=plan.components.find(c=>c.sourceId===binding.sourceId&&c.convertible);
+                        if(!c)throw Error('Planned material component absent');
+                        return [c.sourceId,nodes.get(c.node).getComponent(cc.Sprite)];
+                    }));
+                    require('./material-bindings.js').bind(plan.materialBinding,material,sprites);
+                }
+                for(const c of plan.components.filter(c=>c.convertible&&c.type==='cc.ProgressBar'))
+                    require('./progress.js').bind(nodes.get(c.node).getComponent(cc.ProgressBar),c,nodes);
                 for(const c of plan.components.filter(c=>c.convertible&&c.type==='cc.LabelOutline')) {
                     const label=nodes.get(c.node).getComponent(cc.Label);
                     if(!label)throw Error('Outline requires mapped Label');
@@ -177,13 +213,16 @@ module.exports = {
             for(const n of plan.nodes)if(n.sourceUITransformEnabled===false&&mapped.get(n.sourceId).getComponent(cc.UITransform).enabled!==false)throw Error('Saved UITransform enabled state differs');
             const labels=[];const refs=[];const numericCodeBindings=[];
             for(const c of plan.components.filter(c=>c.convertible)) {
-                const n=mapped.get(c.node);const type=c.type==='cc.LabelOutline'?'Label':c.type.slice(3);const comp=n.getComponent(cc[type]);
+                const n=mapped.get(c.node);const type=c.type==='cc.LabelOutline'?'Label':c.type.slice(3);const comp=c.behaviorBinding?behaviors.read(n,c.behaviorBinding,c.enabled):n.getComponent(c.spineBinding?cc.sp.Skeleton:cc[type]);
                 if(!comp)throw Error('Saved component missing: '+c.type);
+                if(c.nativeMaterialSourceId&&(!plan.materialBinding||!comp.customMaterial||comp.customMaterial._uuid!==plan.materialBinding.creator.materialUuid||
+                   !require('./material-bindings.js').readBound(plan.materialBinding,comp.customMaterial,comp)))throw Error('Saved custom material differs: '+c.sourceId);
+                if(c.type==='cc.ProgressBar')require('./progress.js').read(comp,c,mapped);
                 if(c.codeClassName)numericCodeBindings.push(numeric.read(comp,c));
                 if(c.type==='cc.Label'&&comp.overflow!==(c.nativeOverflow??c.overflow))throw Error('Saved Label overflow policy differs: '+c.sourceId);
                 if(c.type==='cc.Sprite'&&comp.sizeMode!==(c.nativeSizeMode??c.sizeMode))throw Error('Saved Sprite sizing policy differs: '+c.sourceId);
                 refs.push({sourceId:c.sourceId,nodeUuid:n.uuid,componentUuid:comp.uuid,type:c.type});
-                if(c.type==='cc.Label')labels.push({sourceId:c.sourceId,text:comp.string,fontUuid:comp.font&&comp.font._uuid});
+                if(c.type==='cc.Label')labels.push({sourceId:c.sourceId,text:comp.string,fontUuid:comp.font&&comp.font._uuid,useSystemFont:comp.useSystemFont,fontFamily:comp.fontFamily});
             }
             const frames=[];
             const savedFrames=new Map(saved.flatMap(n=>n.getComponents(cc.Sprite)).map(s=>s.spriteFrame).filter(Boolean).map(sf=>[sf._uuid,sf]));
@@ -235,7 +274,11 @@ module.exports = {
                 sourcePrefabs.push(prefabs.read(templates.get(spec.sourceId),spec,plan,info,templates));
             }
             const dynamicUiProbes=await dynamic.probe(plan,design,(done,total)=>jobs.progress('native-readback',sourcePrefabs.length+done,sourcePrefabs.length+total));
-            return {resourceProbes:await resources.read(plan,scene),tiledRenderer:tiledReadback(plan,mapped),dynamicUiProbes,nativeInitialNodes:plan.nativeInitialNodes,sourcePrefabs,prefabInstances,jsonAssets,audioAssets,fontPages,animations,numericCodeBindings,nodeCount:saved.length,nodes:[...mapped].map(([sourceId,n])=>({sourceId,nodeUuid:n.uuid,name:n.name,
+            const spineSpecs=plan.components.filter(c=>c.convertible&&c.spineBinding);
+            const spineBindings=require('./spine-bindings.js').readCreatorSpineBindings(spineSpecs.map(c=>c.spineBinding),id=> {
+                const c=spineSpecs.find(c=>c.sourceId===id);return c?mapped.get(c.node).getComponents(cc.sp.Skeleton):[];
+            });
+            return {spineBindings,resourceProbes:await resources.read(plan,scene),tiledRenderer:tiledReadback(plan,mapped),dynamicUiProbes,nativeInitialNodes:plan.nativeInitialNodes,sourcePrefabs,prefabInstances,jsonAssets,audioAssets,fontPages,animations,numericCodeBindings,nodeCount:saved.length,nodes:[...mapped].map(([sourceId,n])=>({sourceId,nodeUuid:n.uuid,name:n.name,
                 position:[n.position.x,n.position.y,n.position.z],size:[n.getComponent(cc.UITransform).width,n.getComponent(cc.UITransform).height],
                 pivot:[n.getComponent(cc.UITransform).anchorX,n.getComponent(cc.UITransform).anchorY],scale:[n.scale.x,n.scale.y,n.scale.z],
                 rotation:[n.rotation.x,n.rotation.y,n.rotation.z,n.rotation.w],active:n.active,...prefabs.uiState(n,sourceNodes.get(sourceId))})),components:refs,labels,frames};

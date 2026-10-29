@@ -12,7 +12,7 @@ async function attach(plan,canvas,loadAsset) {
     }
 }
 function pose(skeleton,bones) {
-    return bones.slice(0,128).map(data=>{
+    return bones.map(data=>{
         const b=skeleton.findBone(data.name);if(!b)throw Error('Native Spine bone missing');
         const values=[b.worldX,b.worldY,b.a,b.b,b.c,b.d];
         if(!values.every(Number.isFinite))throw Error('Native Spine bone pose is nonfinite');
@@ -42,6 +42,8 @@ async function read(plan,scene) {
             return {name:p.name,imageUuid:p.imageUuid,textureUuid:p.textureUuid,nativeUuid:data.textures[i]._uuid};
         });
         const runtime=data.getRuntimeData();if(!runtime||!runtime.bones.length||runtime.bones.length>4096)throw Error('Native Spine runtime data unavailable');
+        const nameCatalog=require('./spine-bindings.js').readCreatorSpineDataCatalog(spec.sourceId,data,{nativeUuid:spec.skeletonUuid});
+        if(nameCatalog.status!=='verified')throw Error('Native Spine animation/skin name catalog unavailable');
         const animation=runtime.animations.find(a=>Number.isFinite(a.duration)&&a.duration>0);
         if(!animation)throw Error('No finite sourced animation for native playback probe');
         // Inactive Scene deserialization does not run component lifecycle. Initialize
@@ -49,14 +51,23 @@ async function read(plan,scene) {
         skeleton.skeletonData=null;skeleton.skeletonData=data;
         const entry=skeleton.setAnimation(0,animation.name,true);if(!entry)throw Error('Native Spine animation did not start');
         skeleton.updateAnimation(0);const before=entry.trackTime,first=applyPose(skeleton,runtime.bones);
-        skeleton.updateAnimation(Math.min(.125,animation.duration/4));
-        const after=entry.trackTime,last=applyPose(skeleton,runtime.bones);
+        let after=before,last=first;const samples=[];
+        const times=[...new Set([Math.min(.125,animation.duration/4),Math.min(.5,animation.duration/2),Math.min(1,animation.duration*.75)])].sort((a,b)=>a-b);
+        for(const time of times) {
+            skeleton.updateAnimation(time-(after-before));
+            after=entry.trackTime;last=applyPose(skeleton,runtime.bones);
+            samples.push({trackTime:after,poseChanged:JSON.stringify(first)!==JSON.stringify(last)});
+            if(samples[samples.length-1].poseChanged)break;
+        }
         if(!(Number.isFinite(before)&&Number.isFinite(after)&&after>before))throw Error('Native Spine animation state did not advance');
-        if(JSON.stringify(first)===JSON.stringify(last))throw Error('Selected native Spine pose did not change');
+        const poseChanged=JSON.stringify(first)!==JSON.stringify(last);
         rows.push({sourceId:spec.sourceId,skeletonUuid:data._uuid,sourceSkeletonSha256:spec.sourceSkeletonSha256,
+            animationNames:nameCatalog.animationNames,skinNames:nameCatalog.skinNames,
             version:spec.version,savedReferenceVerified:true,textures,bones:runtime.bones.length,slots:runtime.slots.length,
             animation:animation.name,duration:animation.duration,trackTimeBefore:before,trackTimeAfter:after,
-            nativeStateAdvanced:true,poseChanged:true,sampledBones:first.length});
+            nativeStateAdvanced:true,poseChanged,sampledBones:first.length,samples,
+            diagnostics:poseChanged?[]:[{code:'NO_OBSERVED_BONE_MOTION',sourceId:spec.sourceId,
+                message:'Native time advanced; bone pose did not change at these sample times. Slot/attachment/colour channels and static animation remain unverified.'}]});
     }
     return {profile:plan.resourceProbes.profile,spines:rows};
 }

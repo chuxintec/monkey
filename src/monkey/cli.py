@@ -339,6 +339,7 @@ def main(argv=None):
     p.add_argument('--editor-path',required=True);p.add_argument('--expected-manifest',required=True)
     p.add_argument('--budget-seconds',type=int,default=600);p.add_argument('--deadline-utc',required=True)
     p.add_argument('--window-end-utc',required=True);p.add_argument('--execute',action='store_true')
+    p.add_argument('--render-preview',action='store_true',help='Unity: use a real graphics device for diagnostic previews')
     p = sub.add_parser('preflight',help='Check frozen candidate and classify startup logs without launching an Editor')
     p.add_argument('--candidate',required=True);p.add_argument('--out',required=True);p.add_argument('--log');p.add_argument('--progress')
     p = sub.add_parser('inspect')
@@ -355,8 +356,21 @@ def main(argv=None):
     p = sub.add_parser('normalize')
     p.add_argument('--manifest', required=True)
     p.add_argument('--out', required=True)
+    p = sub.add_parser('prefab-behavior-ir', help='Generate source-bound native behavior scripts in an independent IR stage')
+    p.add_argument('--manifest', required=True)
+    p.add_argument('--ir', required=True)
+    p.add_argument('--source-bundle', required=True)
+    p.add_argument('--expected-source-bundle', required=True)
+    p.add_argument('--out', required=True)
     p = sub.add_parser('plan')
     p.add_argument('--ir',required=True)
+    p.add_argument('--system-font-resolution',help='Explicit macOS CoreText resolution receipt for source system-font Labels')
+    p.add_argument('--expected-system-font-resolution',help='Expected resolution receipt SHA-256')
+    p.add_argument('--static-font-generation',help='Pinned generated CoreText SDF receipt for an explicitly resolved static face')
+    p.add_argument('--expected-static-font-generation',help='Expected generated SDF receipt SHA-256')
+    p.add_argument('--spine-bindings',help='Pinned source component and resource emission receipt for Creator')
+    p.add_argument('--expected-spine-bindings',help='Expected Spine emission receipt SHA-256')
+    p.add_argument('--spine-resources',help='Frozen monkey Creator Spine resource candidate')
     p.add_argument('--namespace',required=True)
     p.add_argument('--bindings')
     p.add_argument('--animation',action='append',help='Select a source AnimationClip ID; default all normalized clips')
@@ -439,7 +453,7 @@ def main(argv=None):
                 outputPolicy=dict(wholeInput=policy({'scopeMode':'whole-input'}),selection=policy({}),hashChunkBytes=1048576,sourceDecoderBudgets='independent'),
                 additionalPackageProfiles={'cocos-3.4.1-bundle':dict(scope='version-proven-node-ui-prefab-and-resource-subset',graphs='856-of-857-source-graphs;22503-nodes;52-instances;one-null-quaternion-rejected',native='5-source-frames-plus-6-prefabs-331-nodes-8-instances-7-mounted-nodes-1-mounted-widget-both-targets-verified',operations=['package-convert']), 'egret-custom-resource-plist-v1':dict(scope='reviewed-custom-resource-manifest-plist-binjson-v2',targets=['unity6'],sourceSkins='typed-data-only-native-layout-pending',remoteAcquisition='explicit-manifest-cache-and-bounded-fetch',native='132-source-frames-verified; expanded-atlas-set-pending',operations=['package-convert']), 'cocos-2.1.2-resource':dict(scope='version-proven-resource-subset',native='211-source-frames-both-targets-verified',graphs='pending',operations=['package-convert']), 'generic-image-resources-v1':dict(scope='derived-original-image-gallery-only',families=['laya','layaair','egret','eraget','custom','other'],targets=['unity6'],native='Egret-16-derived-images-verified',sourceGraphs='not-restored',operations=['package-convert']), 'cocos-2.4.11-bundle':dict(scope='version-proven-published-bundle-subset',native='91-source-graphs-both-targets-verified',operations=['package-convert']), 'cocos-3.8.7-bundle':dict(scope='version-proven-node-ui-template-and-resource-subset',native='83-static-graphs-plus-4-prefab-5-native-relations-and-16-node-dynamic-ui-representatives-both-targets-verified',graphs='114-root-closures-static;5-graphs-missing-6-exact-templates;not-all-native-validated',operations=['package-convert'])},
                 toolkit=dict(contract='grea-toolkit/1',runner='monkey tool <id>',tools=list(__import__('monkey.toolkit',fromlist=['TOOLS']).TOOLS)),
-                 schemaVersion=1, dynamicUi=dict(probeVersion=2,verifiedLayoutGroups=6,verifiedLayoutStates=54,native='historical-v02-grid-scale-constraints-child-resize-and-linear-scale-representatives',timing='Editor-native-forced-update;Player-not_run',unityFlowReplacement=dict(status='verified-subset',sourcePrefabs=48,sourceComponents=63,aggregateAssets=50,representatives=6,scope='horizontal-flexible-unscaled-uniform-grid-or-proven-single-row',otherLayouts='review-required;no-source-flow-runtime-fallback',sourceText='questionnaire-Label-not-recovered;Rect-resize-only')), formatting=dict(implemented=['unity-creator-unimported-owned-grea-v1','fresh-package-convert-none-grea'],pending=['unity-general-scene-native-format','unity-source-positive-native-move-sample'],rejected=['materialized-native-assets-require-a-future-native-move-adapter']), unitySourceProfile=dict(inspectionPolicy=dict(defaultObjectValues=250000,defaultContainerValues=8000000,maxObjectValues=1000000,maxContainerValues=16000000,maxDepth=96,streamedFields=['Font.m_FontData','AssetBundle.m_PreloadTable'],chunkElements=8192,maxPayloadBytes=268435456),name='unityfs-unitypy-1.25.3-assetripper-2.0.0',status='partial',inputs='explicit-unity-bundle-or-webdata-files-and-exact-local-texture-cache',additionalContainers=['UnityWebData1.0'],invalidTexturePolicy='block-default-explicit-quarantine-retains-original',dependencyClosure='explicit-frozen-pool-exact-serialized-file-closure',editor='one-prefab-schema-reference-save-reload-verified',publicNative=True,nativeProfile='unity-leaf-prefab-sprite-array-v1',textureHydration=dict(selectionManifest='unity-texture-selection/1',scopes=['container','selected-texture-set'],cachePaths='exact-frozen-literal-bucket-and-token-filename',partialDerivative=True,partialExitCode=1,selectedPngExport='unity-selected-texture-export/1'),shaderHandoff='monkey-shader-handoff/1',nativeFormatting='typed-resource-moves-with-dynamic-path-pins; real sample pinned all 134 assets',methodsRecovered=0), implemented=['code-draft','code-types','freeze-resource-candidate','acquire-resources','diagnose','doctor','space-preview','resource-probe','query-methods','query-tables','inspect-aliases','adopt','adopt-recover','unity-field-plan','convert','catalog','inspect','normalize','plan','export','verify','handoff','diff','register','apply','preflight','native-import','research-matrix','code-model','code-emit','code-select','wasm-code-source','wasm-code-candidate','unity-code-source','unity-code-candidate','code-native-probe','format-project','project-model','inspect-unity','export-unity','unity-code-model','index-unity','hydrate-unity','export-unity-textures','classify-unity-shaders','code-handoff','native-finish-plan','native-finish','acquire-unity-textures','prepare-unity-bulk','export-unity-bulk','freeze-handoff','freeze-unity-handoff','native-layout-audit','native-layout-prepare','native-layout-patch','native-layout-finish','native-layout-bundle'], planned=[],
+                 schemaVersion=1, dynamicUi=dict(probeVersion=2,verifiedLayoutGroups=6,verifiedLayoutStates=54,native='historical-v02-grid-scale-constraints-child-resize-and-linear-scale-representatives',timing='Editor-native-forced-update;Player-not_run',unityFlowReplacement=dict(status='verified-subset',sourcePrefabs=48,sourceComponents=63,aggregateAssets=50,representatives=6,scope='horizontal-flexible-unscaled-uniform-grid-or-proven-single-row',otherLayouts='review-required;no-source-flow-runtime-fallback',sourceText='questionnaire-Label-not-recovered;Rect-resize-only')), formatting=dict(implemented=['unity-creator-unimported-owned-grea-v1','fresh-package-convert-none-grea'],pending=['unity-general-scene-native-format','unity-source-positive-native-move-sample'],rejected=['materialized-native-assets-require-a-future-native-move-adapter']), unitySourceProfile=dict(inspectionPolicy=dict(defaultObjectValues=250000,defaultContainerValues=8000000,maxObjectValues=1000000,maxContainerValues=16000000,maxDepth=96,streamedFields=['Font.m_FontData','AssetBundle.m_PreloadTable'],chunkElements=8192,maxPayloadBytes=268435456),name='unityfs-unitypy-1.25.3-assetripper-2.0.0',status='partial',inputs='explicit-unity-bundle-or-webdata-files-and-exact-local-texture-cache',additionalContainers=['UnityWebData1.0'],invalidTexturePolicy='block-default-explicit-quarantine-retains-original',dependencyClosure='explicit-frozen-pool-exact-serialized-file-closure',editor='one-prefab-schema-reference-save-reload-verified',publicNative=True,nativeProfile='unity-leaf-prefab-sprite-array-v1',textureHydration=dict(selectionManifest='unity-texture-selection/1',scopes=['container','selected-texture-set'],cachePaths='exact-frozen-literal-bucket-and-token-filename',partialDerivative=True,partialExitCode=1,selectedPngExport='unity-selected-texture-export/1'),shaderHandoff='monkey-shader-handoff/1',nativeFormatting='typed-resource-moves-with-dynamic-path-pins; real sample pinned all 134 assets',methodsRecovered=0), implemented=['prefab-behavior-ir','code-draft','code-types','freeze-resource-candidate','acquire-resources','diagnose','doctor','space-preview','resource-probe','query-methods','query-tables','inspect-aliases','adopt','adopt-recover','unity-field-plan','convert','catalog','inspect','normalize','plan','export','verify','handoff','diff','register','apply','preflight','native-import','research-matrix','code-model','code-emit','code-select','wasm-code-source','wasm-code-candidate','unity-code-source','unity-code-candidate','code-native-probe','format-project','project-model','inspect-unity','export-unity','unity-code-model','index-unity','hydrate-unity','export-unity-textures','classify-unity-shaders','code-handoff','native-finish-plan','native-finish','acquire-unity-textures','prepare-unity-bulk','export-unity-bulk','freeze-handoff','freeze-unity-handoff','native-layout-audit','native-layout-prepare','native-layout-patch','native-layout-finish','native-layout-bundle'], planned=[],
                 targetValidation={UNITY_PROFILE:dict(static='implemented',editor='representative-subset-verified',visual='not_run'),cocos.PROFILE:dict(static='implemented',editor='representative-subset-verified',visual='not_run')},
                 compiledFormats=['compiled-v1','pack-v1','texture-pack-v1'],
                 containerFormats=['plain-wxapkg','APK-ZIP','Cocos-resource-directory'],
@@ -619,8 +633,8 @@ def main(argv=None):
             print(json.dumps(result,ensure_ascii=False))
             return 0 if result['status']=='hydrated' else 1
         if args.command == 'export-unity-textures':
-            from .unity_texture_export import export
-            result=export(args.source,args.derivative,args.hydration_report,args.expected_hydration_sha256,args.selection_manifest,args.provider_python,args.out,args.budget_seconds)
+            from .unity_texture_export import export as export_textures
+            result=export_textures(args.source,args.derivative,args.hydration_report,args.expected_hydration_sha256,args.selection_manifest,args.provider_python,args.out,args.budget_seconds)
             print(json.dumps(result,ensure_ascii=False));return 0 if result['status']=='exported'else 1
         if args.command == 'classify-unity-shaders':
             from .shader_handoff import classify_project
@@ -954,8 +968,16 @@ def main(argv=None):
             result=catalog(args.source,args.out)
         elif args.command == 'normalize':
             result = normalize(args.manifest, args.out)
+        elif args.command == 'prefab-behavior-ir':
+            from .prefab_behavior_pipeline import project_ir as prefab_behavior_ir
+            result=prefab_behavior_ir(args.manifest,args.ir,args.source_bundle,args.expected_source_bundle,args.out)['manifest']
         elif args.command == 'plan':
-            result = (cocos.plan if args.target_profile==cocos.PROFILE else plan)(args.ir,args.namespace,args.out,args.bindings,args.animation)
+            if args.target_profile==cocos.PROFILE:
+                if args.system_font_resolution or args.expected_system_font_resolution or args.static_font_generation or args.expected_static_font_generation:parser.error('Explicit TMP system-font resolution applies only to Unity')
+                result=cocos.plan(args.ir,args.namespace,args.out,args.bindings,args.animation,spine_bindings=args.spine_bindings,expected_spine_bindings=args.expected_spine_bindings,spine_resources=args.spine_resources)
+            else:
+                if args.spine_bindings or args.expected_spine_bindings or args.spine_resources:parser.error('Spine component receipt currently requires Creator; Unity runtime binding is pending')
+                result=plan(args.ir,args.namespace,args.out,args.bindings,args.animation,system_font_resolution=args.system_font_resolution,expected_system_font_resolution=args.expected_system_font_resolution,static_font_generation=args.static_font_generation,expected_static_font_generation=args.expected_static_font_generation)
         elif args.command == 'diff':
             result=incremental.diff(args.before,args.after,args.out)
         elif args.command == 'apply':
@@ -974,7 +996,7 @@ def main(argv=None):
                 incremental.register(output_path,Path.cwd())
         elif args.command == 'native-import':
             from .native import native_import
-            result=native_import(args.candidate,args.out,args.editor_path,args.expected_manifest,args.budget_seconds,args.deadline_utc,args.window_end_utc,args.execute)
+            result=native_import(args.candidate,args.out,args.editor_path,args.expected_manifest,args.budget_seconds,args.deadline_utc,args.window_end_utc,args.execute,render_preview=args.render_preview)
             print(json.dumps({k:result.get(k) for k in ('status','processStarted','processExited','pid','reason','report')},ensure_ascii=False))
             return 0 if result['status'] in ('planned','candidate') else 1
         elif args.command == 'preflight':

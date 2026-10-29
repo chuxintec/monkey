@@ -9,7 +9,7 @@ const api=()=>{
     if(!u||!p||!u.generateTargetMap||!p.addPrefabInfo||!p.checkAndStripNode)throw Error('Native Prefab SDK unavailable');
     return {u,p};
 };
-const nativeClass=name=>typeof name==='string'&&name.startsWith('cc.')?cc[name.slice(3)]:undefined;
+const nativeClass=name=>name==='sp.Skeleton'?cc.sp.Skeleton:typeof name==='string'&&name.startsWith('cc.')?cc[name.slice(3)]:undefined;
 function markMounted(object,root){
     // Match the native SDK's applyMountedChildren/applyMountedComponents editor
     // bookkeeping so checkAndStripNode retains additions to an instance.

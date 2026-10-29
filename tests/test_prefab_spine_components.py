@@ -1,0 +1,338 @@
+import json
+import subprocess
+import tempfile
+import unittest
+from pathlib import Path
+
+from monkey.prefab_spine_components import build_component_binding_plan, emit_spine_emission, prepare_spine_emission
+
+CACHE_MODE_EVIDENCE = {'values': {'0': 'REALTIME', '1': 'SHARED_CACHE', '2': 'PRIVATE_CACHE'}}
+DEFAULT_EVIDENCE = {
+    'status': 'verified_source_and_target_defaults', 'valuesMatch': True,
+    'sourceValues': {'skeletonData': None, 'defaultSkin': '', 'defaultAnimation': '', 'loop': True, 'playTimes': 0,
+                     'timeScale': 1, 'premultipliedAlpha': True, 'useTint': False,
+                     'debugBones': False, 'debugSlots': False, 'debugMesh': False,
+                     'enableBatch': False, 'cacheMode': 0},
+}
+
+
+def source_component(component_id, data_id, *, fields=None, sample='P01'):
+    fields = fields or {}
+    properties = {
+        'skeletonData': {'status': 'explicit' if data_id else 'not_serialized_default_unresolved',
+                         'sourceFields': {'_N$skeletonData': {'__uuid__': data_id.split(':', 1)[1]}} if data_id else {}},
+        'skin': {'status': 'explicit' if 'defaultSkin' in fields else 'not_serialized_default_unresolved',
+                 'sourceFields': {'defaultSkin': fields['defaultSkin']} if 'defaultSkin' in fields else {}},
+        'animation': {'status': 'explicit' if 'defaultAnimation' in fields else 'not_serialized_default_unresolved',
+                      'sourceFields': {key: fields[key] for key in ('defaultAnimation', '_animationName') if key in fields}},
+        'loop': {'status': 'explicit' if 'loop' in fields else 'not_serialized_default_unresolved',
+                 'sourceFields': {'loop': fields['loop']} if 'loop' in fields else {}},
+        'playTimes': {'status': 'explicit' if '_playTimes' in fields else 'not_serialized_default_unresolved',
+                      'sourceFields': {'_playTimes': fields['_playTimes']} if '_playTimes' in fields else {}},
+        'timeScale': {'status': 'explicit' if 'timeScale' in fields else 'not_serialized_default_unresolved',
+                      'sourceFields': {'timeScale': fields['timeScale']} if 'timeScale' in fields else {}},
+        'premultipliedAlpha': {'status': 'explicit' if 'premultipliedAlpha' in fields else 'not_serialized_default_unresolved',
+                               'sourceFields': {'premultipliedAlpha': fields['premultipliedAlpha']} if 'premultipliedAlpha' in fields else {}},
+        'caching': {'status': 'explicit' if '_preCacheMode' in fields else 'not_serialized_default_unresolved',
+                    'sourceFields': {'_preCacheMode': fields['_preCacheMode']} if '_preCacheMode' in fields else {}},
+    }
+    return {
+        'sampleId': sample, 'prefabSourceId': 'gameAsset:prefab-uuid', 'prefabLogicalPath': 'Prefab/Test',
+        'sourceComponentId': component_id, 'sourceComponentType': 'sp.Skeleton',
+        'sourceOrigin': 'inline-node-component', 'nodeInstanceIndex': '4', 'nodePath': 'Root/Spine',
+        'serializedFields': fields, 'properties': properties,
+        'skeletonDataUuid': data_id.split(':', 1)[1] if data_id else None,
+        'status': 'source_data_uuid_bound' if data_id else 'skeleton_data_uuid_not_serialized',
+        'dataAssetSourceId': data_id, 'closureStatus': 'complete' if data_id else 'unbound',
+    }
+
+
+def make_plan_inputs(root):
+    assets = [
+        {'sourceId': 'spineAsset:asset-a', 'logicalPath': 'Spine/A', 'skeletonBinarySha256': 'a' * 64, 'spineVersion': '3.8.99'},
+        {'sourceId': 'spineAsset:asset-b', 'logicalPath': 'Spine/B', 'skeletonBinarySha256': 'b' * 64, 'spineVersion': '3.8.99'},
+    ]
+    components = [
+        source_component('gameAsset:prefab-uuid#1', assets[0]['sourceId'], fields={
+            '_N$skeletonData': {'__uuid__': 'asset-a'}, 'defaultSkin': 'default',
+            'defaultAnimation': 'idle', '_animationName': 'idle', 'loop': False,
+            '_playTimes': 1, 'timeScale': 0.5, 'premultipliedAlpha': False, '_preCacheMode': 0,
+            '_materials': [{'__uuid__': 'mat-uuid'}],
+        }),
+        source_component('gameAsset:prefab-uuid#2', assets[1]['sourceId'], fields={'defaultSkin': 'base'}, sample='P02'),
+        source_component('gameAsset:prefab-uuid#3', None, fields={'defaultAnimation': 'runtime-later'}, sample='P03'),
+    ]
+    contract = {
+        'contractSchema': 'prefab-spine-binding/1', 'sourceProfile': 'cocos-2.4.15-bundle',
+        'sourceManifestFileSha256': 'c' * 64, 'skeletonComponentCount': 3,
+        'bindings': components[:2], 'unbound': [components[2]], 'skeletonData': assets,
+    }
+    creator_rows = []
+    for index, data in enumerate(assets):
+        char = 'a' if index == 0 else 'b'
+        creator_rows.append({
+            'sourceId': data['sourceId'], 'skeletonUuid': f'native-{char}',
+            'sourceSkeletonSha256': data['skeletonBinarySha256'], 'version': '3.8.99',
+            'savedReferenceVerified': True, 'bones': 12, 'slots': 5,
+            'animation': 'idle', 'duration': 1.25, 'nativeStateAdvanced': True,
+            'poseChanged': True, 'diagnostics': [],
+        })
+    readback = {'resourceProbes': {'profile': 'creator-spine-3.8-v1', 'spines': creator_rows}}
+    execution = {'status': 'candidate', 'verification': {'editor': 'pass', 'diagnostics': 0},
+                 'nativeProgress': {'status': 'completed', 'phase': 'complete'}, 'importPlanSha256': 'd' * 64}
+    verification = {'editorValidation': 'pass', 'staticValidation': 'pass', 'diagnostics': []}
+
+    unity = root / 'UnityClosureCandidate'
+    (unity / 'Analysis/Evidence').mkdir(parents=True)
+    closure_rows = []
+    for data, guid, char in zip(assets, ('1' * 32, '2' * 32), ('a', 'b')):
+        relative = f'Assets/Game/Content/Spine/{char}/{char}.skel.bytes'
+        path = unity / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(char.encode())
+        Path(str(path) + '.meta').write_text(f'fileFormatVersion: 2\nguid: {guid}\n')
+        closure_rows.append({'sourceId': data['sourceId'], 'status': 'closure_recovered',
+                             'skeletonPath': relative, 'sourceSkeletonSha256': data['skeletonBinarySha256'],
+                             'skeletonVersion': '3.8.99'})
+    (unity / 'manifest.json').write_text('{}')
+    (unity / 'Analysis/Evidence/spine-closures.json').write_text(json.dumps({'skeletons': closure_rows}))
+    return contract, readback, execution, verification, unity
+
+
+class PrefabSpineComponentBindingTests(unittest.TestCase):
+    def test_exact_source_denominator_dual_target_refs_and_unbound_dynamic_gap(self):
+        with tempfile.TemporaryDirectory() as temp:
+            contract, readback, execution, verification, unity = make_plan_inputs(Path(temp))
+            plan = build_component_binding_plan(contract, readback, unity,
+                                                creator_execution_result=execution,
+                                                creator_verification=verification,
+                                                creator_import_plan_sha256='d' * 64,
+                                                creator_candidate_manifest_sha256='e' * 64,
+                                                creator_cache_mode_evidence=CACHE_MODE_EVIDENCE)
+        self.assertEqual(plan['componentCount'], 3)
+        self.assertEqual(plan['staticAssetBoundComponents'], 2)
+        self.assertEqual(plan['staticAssetUnboundComponents'], 1)
+        self.assertEqual(plan['uniqueStaticDataAssets'], 2)
+        first, second, unbound = plan['components']
+        self.assertEqual(first['creator']['fields']['skeletonData']['creator']['nativeUuid'], 'native-a')
+        self.assertEqual(first['unity']['fields']['skeletonData']['unity']['candidateInputMetaGuid'], '1' * 32)
+        self.assertIsNone(first['unity']['fields']['skeletonData']['unity']['nativeSkeletonDataAssetGuid'])
+        self.assertEqual(first['unity']['fields']['loop']['unity']['member'], 'startingLoop')
+        self.assertEqual(first['unity']['fields']['premultipliedAlpha']['unity']['member'], 'pmaVertexColors')
+        self.assertFalse(first['unity']['fields']['loop']['unity']['value'])
+        self.assertEqual(first['creator']['fields']['timeScale']['creator']['value'], 0.5)
+        self.assertEqual(first['creator']['fields']['caching']['creator']['member'], 'defaultCacheMode')
+        self.assertEqual(first['creator']['fields']['animation']['nativeProbeComparison'], 'same_name_observed_in_native_probe')
+        self.assertEqual(second['unity']['fields']['skin']['unity']['value'], 'base')
+        self.assertIn('_materials', first['unsupportedSourceFields'])
+        self.assertEqual(unbound['runtimeDynamicAssignment']['status'], 'source_static_uuid_absent_runtime_assignment_unverified')
+        self.assertFalse(unbound['runtimeDynamicAssignment']['targetDefaultAssetFallback'])
+        self.assertIsNone(unbound['unity']['fields']['skeletonData']['unity']['candidateInputMetaGuid'])
+        self.assertEqual(plan['creatorNativeReadback']['resourceReadbackCount'], 2)
+        self.assertTrue(plan['creatorNativeReadback']['verified'])
+        self.assertFalse(plan['unityRuntimeEvidence']['unityNativeAssetIdsReadBack'])
+
+    def test_source_current_animation_field_is_preserved_separately(self):
+        with tempfile.TemporaryDirectory() as temp:
+            contract, readback, execution, verification, unity = make_plan_inputs(Path(temp))
+            row = contract['bindings'][0]
+            row['serializedFields']['defaultAnimation'] = 'idle'
+            row['serializedFields']['_animationName'] = 'walk'
+            row['properties']['animation']['sourceFields'] = {'defaultAnimation': 'idle', '_animationName': 'walk'}
+            plan = build_component_binding_plan(contract, readback, unity,
+                                                creator_execution_result=execution,
+                                                creator_verification=verification,
+                                                creator_import_plan_sha256='d' * 64)
+        anim = plan['components'][0]['creator']['fields']['animation']
+        self.assertEqual(anim['status'], 'explicit')
+        self.assertEqual(anim['sourceValue'], 'idle')
+        self.assertEqual(anim['creatorCurrentAnimationSourceField']['value'], 'walk')
+
+    def test_creator_resource_hash_mismatch_does_not_claim_native_binding(self):
+        with tempfile.TemporaryDirectory() as temp:
+            contract, readback, execution, verification, unity = make_plan_inputs(Path(temp))
+            readback['resourceProbes']['spines'][0]['sourceSkeletonSha256'] = 'f' * 64
+            plan = build_component_binding_plan(contract, readback, unity,
+                                                creator_execution_result=execution,
+                                                creator_verification=verification,
+                                                creator_import_plan_sha256='d' * 64)
+        self.assertEqual(plan['dataAssets'][0]['creator']['status'], 'readback_present_but_proof_incomplete')
+
+    def test_cache_enum_assignment_requires_explicit_verified_mapping(self):
+        with tempfile.TemporaryDirectory() as temp:
+            contract, readback, execution, verification, unity = make_plan_inputs(Path(temp))
+            blocked = build_component_binding_plan(contract, readback, unity,
+                                                   creator_execution_result=execution,
+                                                   creator_verification=verification,
+                                                   creator_import_plan_sha256='d' * 64)
+            allowed = build_component_binding_plan(contract, readback, unity,
+                                                   creator_execution_result=execution,
+                                                   creator_verification=verification,
+                                                   creator_import_plan_sha256='d' * 64,
+                                                   creator_cache_mode_evidence=CACHE_MODE_EVIDENCE)
+        blocked_row = blocked['components'][0]['creator']['fields']['caching']['creator']
+        allowed_row = allowed['components'][0]['creator']['fields']['caching']['creator']
+        self.assertEqual(blocked_row['status'], 'enum_translation_unverified_blocked_no_assignment')
+        self.assertNotIn('member', blocked_row)
+        self.assertEqual(allowed_row['member'], 'defaultCacheMode')
+
+    def test_proven_creator_24_defaults_resolve_omitted_fields_and_keep_playtimes_gap(self):
+        with tempfile.TemporaryDirectory() as temp:
+            contract, readback, execution, verification, unity = make_plan_inputs(Path(temp))
+            plan = build_component_binding_plan(contract, readback, unity,
+                                                creator_execution_result=execution,
+                                                creator_verification=verification,
+                                                creator_import_plan_sha256='d' * 64,
+                                                creator_cache_mode_evidence=CACHE_MODE_EVIDENCE,
+                                                source_default_evidence=DEFAULT_EVIDENCE)
+        second = plan['components'][1]['creator']['fields']
+        self.assertEqual(second['animation']['status'], 'resolved_source_engine_default')
+        self.assertEqual(second['animation']['creator']['value'], '')
+        self.assertEqual(second['loop']['sourceValue'], True)
+        self.assertEqual(second['loop']['creator']['status'], 'resolved_source_engine_default')
+        self.assertEqual(second['timeScale']['sourceValue'], 1)
+        self.assertEqual(second['premultipliedAlpha']['sourceValue'], True)
+        self.assertEqual(second['tint']['sourceValue'], False)
+        self.assertEqual(second['debugBones']['sourceValue'], False)
+        self.assertEqual(second['caching']['creator']['member'], 'defaultCacheMode')
+        self.assertEqual(second['playTimes']['sourceValue'], 0)
+        self.assertEqual(second['playTimes']['creator']['status'], 'source_only_no_same_component_field')
+        self.assertIsNone(plan['components'][2]['creator']['fields']['skeletonData']['sourceDefault'])
+        self.assertEqual(plan['components'][2]['runtimeDynamicAssignment']['status'],
+                         'source_static_uuid_absent_runtime_assignment_unverified')
+
+    def test_pinned_emission_prepares_relative_assets_copies_and_all_components(self):
+        with tempfile.TemporaryDirectory() as temp:
+            contract, readback, execution, verification, unity = make_plan_inputs(Path(temp))
+            component_plan = build_component_binding_plan(contract, readback, unity,
+                                                          creator_execution_result=execution,
+                                                          creator_verification=verification,
+                                                          creator_import_plan_sha256='d' * 64,
+                                                          creator_cache_mode_evidence=CACHE_MODE_EVIDENCE)
+            source_ids = ['gameAsset:prefab-uuid#1', 'gameAsset:prefab-uuid#2', 'gameAsset:prefab-uuid#3']
+            source_manifest = {'sourceProfile': 'cocos-2.4.15-bundle', 'sourceVersion': '2.4.15',
+                               'assets': [{'sourceId': 'gameAsset:prefab-uuid'},
+                                          {'sourceId': 'spineAsset:asset-a'}, {'sourceId': 'spineAsset:asset-b'}]}
+            normalized_ir = {'sourceManifestSha256': 'c' * 64,
+                             'components': [{'type': 'sp.Skeleton', 'sourceId': sid} for sid in source_ids]}
+            receipts = {}
+            for engine, target_prefix, receipt_hash in (
+                ('creator', 'assets/resources/Spine', 'd' * 64),
+                ('unity', 'Assets/Game/Content/Spine', 'e' * 64),
+            ):
+                skeletons = []
+                files = []
+                for data, char in zip(contract['skeletonData'], ('a', 'b')):
+                    stem = f'{target_prefix}/{char}/{char}'
+                    paths = [(stem + ('.skel.bytes' if engine == 'unity' else '.skel'), data['skeletonBinarySha256'], 1),
+                             (stem + ('.atlas.txt' if engine == 'unity' else '.atlas'), 'f' * 64, 2),
+                             (stem + '.png', 'e' * 64, 3)]
+                    for path, digest, size in paths:
+                        files.append({'path': path, 'sha256': digest, 'bytes': size})
+                        files.append({'path': path + '.meta', 'sha256': '9' * 64, 'bytes': 32})
+                    skeletons.append({'sourceId': data['sourceId'], 'status': 'closure_recovered',
+                                      'sourceSkeletonSha256': data['skeletonBinarySha256'],
+                                      'skeletonVersion': '3.8.99', 'skeletonPath': paths[0][0],
+                                      'atlasPath': paths[1][0], 'files': [
+                                          {'path': path, 'sha256': digest, 'bytes': size} for path, digest, size in paths]})
+                receipts[engine] = {'sourceManifestSha256': 'c' * 64, 'receiptSha256': receipt_hash,
+                                    'skeletons': skeletons, 'files': files}
+                if engine == 'creator':
+                    receipts[engine]['nativeAssetUuids'] = {'spineAsset:asset-a': 'native-a',
+                                                            'spineAsset:asset-b': 'native-b'}
+            prepared = prepare_spine_emission(source_manifest, 'c' * 64, normalized_ir, 'b' * 64,
+                                              receipts, component_plan)
+            self.assertEqual(prepared['sourcePrefabCount'], 1)
+            self.assertEqual(prepared['sourceComponentCount'], 3)
+            self.assertEqual(prepared['staticAssetUnboundComponents'], 1)
+            self.assertEqual(len(prepared['assets']), 2)
+            self.assertEqual(len(prepared['copies']), 24)
+            self.assertEqual(prepared['components'][2]['sourceDataAssetId'], None)
+            self.assertFalse(prepared['components'][2]['runtimeDynamicAssignment']['targetDefaultAssetFallback'])
+            self.assertTrue(all(not Path(row['path']).is_absolute() for row in prepared['copies']))
+            out = Path(temp) / 'emission.json'
+            emission_hash = emit_spine_emission(prepared, out)
+            self.assertEqual(len(emission_hash), 64)
+            self.assertEqual(json.loads(out.read_text())['contract'], 'monkey-spine-emission/1')
+
+    def test_pinned_emission_rejects_ir_component_denominator_drift(self):
+        with tempfile.TemporaryDirectory() as temp:
+            contract, readback, execution, verification, unity = make_plan_inputs(Path(temp))
+            component_plan = build_component_binding_plan(contract, readback, unity)
+            source_manifest = {'sourceProfile': 'cocos-2.4.15-bundle', 'sourceVersion': '2.4.15', 'assets': []}
+            normalized_ir = {'sourceManifestSha256': 'c' * 64, 'components': []}
+            with self.assertRaises(ValueError):
+                prepare_spine_emission(source_manifest, 'c' * 64, normalized_ir, 'b' * 64, {}, component_plan)
+
+    def test_animation_name_falls_back_only_when_default_animation_is_absent(self):
+        with tempfile.TemporaryDirectory() as temp:
+            contract, readback, execution, verification, unity = make_plan_inputs(Path(temp))
+            row = contract['bindings'][0]
+            row['serializedFields'].pop('defaultAnimation')
+            row['properties']['animation']['sourceFields'].pop('defaultAnimation')
+            row['serializedFields']['_animationName'] = 'walk'
+            row['properties']['animation']['sourceFields']['_animationName'] = 'walk'
+            plan = build_component_binding_plan(contract, readback, unity,
+                                                creator_execution_result=execution,
+                                                creator_verification=verification,
+                                                creator_import_plan_sha256='d' * 64)
+        animation = plan['components'][0]['creator']['fields']['animation']
+        self.assertEqual(animation['sourceValue'], 'walk')
+        self.assertEqual(animation['sourceFallback'], '_animationName')
+        self.assertEqual(animation['creator']['member'], 'defaultAnimation')
+
+    def test_creator_helper_binds_exact_data_and_leaves_unbound_data_unset(self):
+        helper = Path(__file__).resolve().parents[1] / 'src/monkey/targets/spine/creator_spine_binding.js'
+        js = r"""
+const api=require(process.argv[1]);
+const bound={sourceComponentId:'source#1',creator:{fields:{
+ skeletonData:{sourceAssetId:'asset:a'}, skin:{creator:{member:'defaultSkin',value:'default',status:'explicit'}},
+ animation:{creator:{member:'defaultAnimation',value:'idle',status:'explicit'}},
+ loop:{creator:{member:'loop',value:false,status:'explicit'}},
+ timeScale:{creator:{member:'timeScale',value:0.5,status:'explicit'}},
+ premultipliedAlpha:{creator:{member:'premultipliedAlpha',value:false,status:'explicit'}},
+ caching:{creator:{member:'defaultCacheMode',value:0,status:'explicit'}}
+}}};
+const component={defaultSkin:'',defaultAnimation:'',loop:true,timeScale:1,premultipliedAlpha:true,defaultCacheMode:1};
+const result=api.applyCreatorSpineBinding(bound,()=>component,id=>id==='asset:a'?{uuid:'native'}:null);
+if(component.skeletonData.uuid!=='native'||component.loop!==false||component.timeScale!==0.5||component.defaultCacheMode!==0)throw Error('explicit fields were not applied');
+const defaulted={sourceComponentId:'source#defaults',creator:{fields:{
+ skeletonData:{sourceAssetId:'asset:a'},
+ animation:{creator:{member:'defaultAnimation',value:'',status:'resolved_source_engine_default'}},
+ loop:{creator:{member:'loop',value:true,status:'resolved_source_engine_default'}}
+}}};
+const defaultsComponent={defaultAnimation:'left',loop:false};
+api.applyCreatorSpineBinding(defaulted,()=>defaultsComponent,()=>({uuid:'native'}));
+if(defaultsComponent.defaultAnimation!==''||defaultsComponent.loop!==true)throw Error('verified source defaults were omitted');
+const unbound={sourceComponentId:'source#2',creator:{fields:{skeletonData:{sourceAssetId:null}}}};
+const untouched={skeletonData:'keep'};
+const skipped=api.applyCreatorSpineBinding(unbound,()=>untouched,()=>{throw Error('fallback resource requested')});
+if(untouched.skeletonData!=='keep'||!skipped.unresolvedDynamicAssignment)throw Error('unbound source was overwritten');
+const readSpec={sourceComponentId:'source#3',creator:{fields:{
+ skeletonData:{sourceAssetId:'spineAsset:exact-source',creator:{nativeUuid:'native'}},
+ skin:{creator:{member:'defaultSkin',value:'default',status:'explicit'}},
+ animation:{creator:{member:'defaultAnimation',value:'z_idle',status:'explicit'}},
+ loop:{creator:{member:'loop',value:false,status:'explicit'}},
+ timeScale:{creator:{member:'timeScale',value:1,status:'explicit'}},
+ premultipliedAlpha:{creator:{member:'premultipliedAlpha',value:false,status:'explicit'}},
+ caching:{creator:{member:'defaultCacheMode',value:0,status:'explicit'}}
+}}};
+const native={uuid:'component-native',skeletonData:{uuid:'native',getRuntimeData:()=>({animations:[{name:'b_idle'}],skins:[{name:'default'}]})},
+ defaultSkin:'default',defaultAnimation:'z_idle',animation:'b_idle',loop:false,timeScale:1,premultipliedAlpha:false,defaultCacheMode:0,
+ findAnimation:name=>name==='b_idle'?{name}:null,getCurrent:()=>({animation:{name:'b_idle'}}),isAnimationCached:()=>false,
+ _skeleton:{skin:{name:'default'}}};
+const read=api.readCreatorSpineBinding(readSpec,()=>native);
+if(read.status!=='mismatch'||read.checks.requestedAnimationExists!==false||read.checks.requestedAnimationActive!==false)throw Error('a different current animation cannot satisfy the requested source animation');
+if(read.actual.runtimeAnimationNames.join(',')!=='b_idle')throw Error('readback must expose the actual runtime animation list');
+const catalog=api.readCreatorSpineDataCatalog('spineAsset:source',{uuid:'native',getRuntimeData:()=>({animations:[{name:'b_idle'},{name:'z_idle'}],skins:[{name:'default'}],bones:[{},{}],slots:[{}]})},
+ {nativeUuid:'native',animationName:'z_idle',skinName:'default'});
+if(catalog.status!=='verified'||!catalog.animationNames.includes('z_idle')||catalog.boneCount!==2)throw Error('complete native SkeletonData names/counts were not read');
+const unresolved=api.readCreatorSpineBinding({sourceComponentId:'source#4',creator:{fields:{skeletonData:{creator:{nativeUuid:null}}}}},
+ ()=>({uuid:'component-empty',skeletonData:null,loop:true,timeScale:1,premultipliedAlpha:true}));
+if(unresolved.status!=='incomplete_dynamic_assignment'||unresolved.checks.exactSkeletonDataUuid!==null)throw Error('unbound source data was treated as a passing static binding');
+"""
+        subprocess.run(['node', '-e', js, str(helper)], check=True, capture_output=True, text=True)
+
+
+if __name__ == '__main__':
+    unittest.main()

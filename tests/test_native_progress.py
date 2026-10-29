@@ -37,6 +37,18 @@ class NativeProgressTests(unittest.TestCase):
         self.assertIsNone(row['progressMode']);self.assertIsNone(row['progressReverse'])
         self.assertTrue(gaps)
 
+    def test_exact_engine_profile_restores_omitted_serialized_defaults(self):
+        source={'__type__':'cc.ProgressBar','_N$barSprite':{'__id__':2}}
+        row,gaps=component_ir('a',0,source,source_profile='cocos-2.4.15-bundle')
+        self.assertEqual(gaps,[])
+        self.assertEqual([row['progress'],row['totalLength'],row['progressMode'],row['progressReverse']],[1,1,0,False])
+        self.assertEqual(row['engineDefaults']['version'],'2.4.15')
+        other,_=component_ir('a',0,source,source_profile='cocos-2.4.11-bundle')
+        self.assertIsNone(other['progress']);self.assertNotIn('engineDefaults',other)
+        explicit,_=component_ir('a',0,dict(source,**{'_N$progress':0}),source_profile='cocos-2.4.15-bundle')
+        self.assertEqual(explicit['progress'],0)
+        self.assertNotIn('progress',explicit['engineDefaults']['fields'])
+
     def test_invalid_or_unproven_cases_preserve_geometry_and_handoff(self):
         mutations=[
             lambda r,n:r[0].update(progress=None),
@@ -104,6 +116,15 @@ class NativeProgressTests(unittest.TestCase):
             self.assertTrue(progress['convertible']);self.assertEqual(progress['totalLength'],360)
             self.assertEqual(progress['barNode'],'synthetic:'+PREFAB+'#2')
             self.assertTrue((root/'Candidate/Assets/Game/Presentation/Common/Layout/NativeHorizontalProgressFill.cs').is_file())
+            for command in [
+                ['plan','--ir',str(root/'IR/ir.json'),'--namespace','progress-test','--target-profile','cocos-3.8.8','--out',str(root/'CreatorPlan')],
+                ['export','--plan',str(root/'CreatorPlan/plan.json'),'--out',str(root/'CreatorCandidate')]]:
+                with contextlib.redirect_stdout(io.StringIO()):self.assertEqual(main(command),0)
+            creator=json.loads((root/'CreatorPlan/plan.json').read_text())
+            progress=next(c for c in creator['components']if c['type']=='cc.ProgressBar')
+            self.assertTrue(progress['convertible']);self.assertEqual(progress['nativeType'],'cc.ProgressBar')
+            self.assertEqual(progress['barNode'],'synthetic:'+PREFAB+'#2')
+            self.assertTrue((root/'CreatorCandidate/extensions/monkey-import/progress.js').is_file())
 
 
 if __name__=='__main__':unittest.main()

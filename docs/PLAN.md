@@ -1,3 +1,37 @@
+# monkey v0.7.0 — complete core Prefab recovery
+
+Development version: **0.7.0.dev1**. Formal 0.6.0 and fixed local consumer packages remain unchanged. This is the active plan; the prior status below is historical.
+
+## Acceptance and current work
+
+Freeze all 13 proposed core Prefabs against original source identities, resources and code. At least 10 distinct core Prefabs must pass both Creator 3.8.8 and Unity 6000.6.2f1: source-to-IR completeness, target native hierarchy/components/fields/references, static images/text/materials/layout in a source-evidenced fixed state, save/reopen and deterministic regeneration. Business scripts may be disabled, not run or partial, with all source fields and references retained. Dynamic behavior and physical input are a separate second phase. Unknown components remain in the source denominator. No acceptance by file counts or zero MissingScript alone.
+
+A is original source/version evidence; B is the frozen pre-v0.7 pure monkey output; C is v0.7 pure output; D is the manually repaired game, used only for locating differences. Game repair scripts must not participate in B/C. Original server gaps remain explicit in the dynamic phase; they do not block independently proven static acceptance. Private source and sample receipts stay outside public artifacts.
+
+Execution order: freeze source identities and baseline; implement independent component/field/reference/event accounting; fix shared source and target semantics; close static component/field/resource bindings; run isolated native/static-render/save-reopen/regeneration checks for each sample. Then extend dynamic scripts/events and input independently. Shared IR and targets have one primary writer. Reuse beaver for applicable native operations; coordinate Editor ownership before execution.
+
+Current: all 13 source anchors are mapped; one instance variant retains an explicit base/override distinction. Original package bytes independently confirm the recovered code bundle and its version literal. Independent node/component/field accounting is integrated into normalization. The initial eleven-core baseline contains 627 nodes, 935 components and 181 custom occurrences (51 classes); these are not the larger dependency-closure totals.
+
+Native subset import/save/reopen has run in both editors. Eleven Creator and four Unity source-bound local behavior components are emitted with unresolved semantics retained. Sixteen selected Spine resources pass Creator resource-reference and observed bone-motion probes; this is not yet Prefab component or visual acceptance. Unity native save/reopen now verifies 928 source nodes across 22 closure Prefabs, separately accounting for 68 TMP-generated nonpersistent submeshes. Source-pinned static fallback and DynamicOS fonts survive Editor exit with zero file-hash diagnostics; this is native subset evidence, not full core acceptance. Exact UI-color material references pass Creator native readback. User-provided visual references cover order states, shop scroll positions, avatar, handbook, goose details and construction; the user explicitly permits cross-version references, with versions recorded separately. Static component/field/resource binding and visual comparison remain incomplete. Static accepted samples: 0/13 on each target; dynamic accepted samples: 0/13; versionComplete=false. Source-family/CDN expansion including 3.8.5 is deferred. Only the explicitly authorized development-branch push is permitted; no formal release, global install or game writes.
+
+## Static-first convergence
+
+First-phase exit: at least ten of the existing thirteen core Prefabs pass on both targets. Record source_identity, hierarchy, components_fields, asset_references, static_render, save_reopen and regenerate independently for every sample and target. All seven must pass; dynamic_behavior and physical_input remain separate. Never replace the core denominator with dependency closure counts.
+
+Preserve all source components through native mappings or generated typed serializable field/reference carriers with business behavior disabled. Empty fieldless shells and zero MissingScript counts do not prove completeness. Carriers must be derived from source declarations, not game-specific templates. Distinguish serialized defaults from source-evidenced display states; missing display evidence remains unverified for the affected sample.
+
+Reuse unchanged source freeze, font/material and 928-node native evidence. GuideTalk asynchronous typing, animation and close lifecycle no longer block the first static result. Select representative cores by available static evidence and close their real graphics render, save/reopen and regeneration gaps in bounded groups.
+
+Visual collection previously used Unity Null graphics, producing invalid gray PNGs. Native import has an explicit `--render-preview` option; capture rejects Null devices. Isolated previews activate only the root on a disposable clone and disclose that scope. Actual rendering is evidence to compare, not automatic visual acceptance. Reference versions remain explicit; cross-version screenshots are not same-version pixel proof.
+
+## Generality requirement
+
+The production recovery path must derive business behavior from source parsing and AST/IR lowering, not select handwritten game-specific templates by source hash, UUID or class name. Source hashes bind evidence and reuse; they are not business implementation selectors. Project-specific WeekTask and Goose WIP has been preserved privately and removed from the production package and public test suite. It is reference analysis only and contributes no complete acceptance.
+
+The same production entry point must be tested with renamed symbols/UUIDs/paths, changed sorting and thresholds, and an independent neutral source example. Generated behavior must follow the changed source. Unsupported semantics remain partial. Existing finite known-behavior adapters require a separate scope audit and must not be reported as general JavaScript conversion. Native font/layout/material/resource fixes continue independently; the ten-core dual-target goal is unchanged.
+
+## Historical pre-v0.7 status
+
 # monkey release and implementation status
 
 Current version: **0.6.0**. This release consolidates the native recovery branch and the source-toolkit branch on `main`; older implementation branches are preserved in history. Retired formatting/engine-emulation code is not revived by consolidation.

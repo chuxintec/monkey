@@ -11,6 +11,9 @@ using UnityEngine.SceneManagement;
 public static partial class MonkeyImporter
 {
     [Serializable] public class Plan {
+        public MonkeyUnityMaterialBindings.Spec materialBinding;
+        public UnitySystemFonts.BindingSet systemFontBinding;
+        public string staticFontReceiptPath,staticFontReceiptSha256;
         public int uiStateProbeVersion; public string[] uiProbeSources;
         public float[] designSize; public float pixelsPerUnit; public string uiGeometryReadback;
         public TextureSpec[] textures; public AssetSpec[] assets; public BitmapSpec[] bitmapFonts; public int sourceDiagnosticCount;
@@ -27,7 +30,8 @@ public static partial class MonkeyImporter
     [Serializable] public class SourcePrefabResult {
         public PrefabInstanceResult[] prefabInstances;
         public MonkeyNumericCode.Result[] numericCodeBindings;
-        public string sourceId,path,guid,geometryPhase,nativePrefabType; public int nodeCount,missingScripts,layoutSettlePasses;
+        public MonkeyBehaviorBindings.Result[] behaviorBindings;
+        public string sourceId,path,guid,geometryPhase,nativePrefabType,isolatedPreviewPath,isolatedPreviewSha256,isolatedPreviewError,isolatedPreviewScope; public int nodeCount,generatedTextSubmeshCount,missingScripts,layoutSettlePasses;
         public bool savedReloaded,referencesVerified; public NodeResult[] nodes,nativeInitialNodes; public string[] referenceFailures;
     }
     [Serializable] public class MotionKey { public float time,value; public string interpolation; }
@@ -47,6 +51,7 @@ public static partial class MonkeyImporter
     }
     [Serializable] public class NumericMethodsSpec { public string setter,getter; }
     [Serializable] public class ComponentSpec {
+        public MonkeyBehaviorBindings.Spec behaviorBinding;
         public string codeClassName,codeNamespace,codeScriptGuid,sourceScriptIdentity; public NumericMethodsSpec numericMethods;
         public string sourceId, type, node, spriteFrame, font, text, nativeLayoutMode;
         public string barNode; public float progress,totalLength;
@@ -69,6 +74,7 @@ public static partial class MonkeyImporter
     [Serializable] public class LabelResult { public string sourceId, text, fontGuid, geometryProbe; public bool autoSizeReadback,autoSizing; public float fontSizeMin,fontSizeMax; public float fontSize,lineBoxHeight,lineBoxLineHeight,lineBoxExtra; public int characterCount,lineCount; public bool lineBoxPresent,lineBoxActive; public bool allCharactersPresent; public GlyphBounds[] glyphBounds; }
     [Serializable] public class GlyphBounds { public uint unicode; public float left,top,width,height,quadPadding; }
     [Serializable] public class Readback {
+        public MonkeyUnityMaterialBindings.Readback materialBinding;
         public PrefabInstanceResult[] prefabInstances;
         public PrefabInstanceResult[] candidatePrefabInstances;
         public string nativeScope,sourceGraphVerification; public GalleryResult[] gallery;
@@ -411,8 +417,20 @@ public static partial class MonkeyImporter
         if (plan.sourceDiagnosticCount > 0) diagnostics.Add("SOURCE_GAPS: " + plan.sourceDiagnosticCount);
         if(NeedsTmp(plan))EnsureTmpResources(plan.tmpResources);
         var spriteMap = ImportTextures(plan);
+        MonkeyUnityMaterialBindings.CreatedMaterial recoveredMaterial=null;
+        if(plan.materialBinding!=null&&!string.IsNullOrEmpty(plan.materialBinding.profile))
+            recoveredMaterial=MonkeyUnityMaterialBindings.CreateSaveReadback(plan.materialBinding);
         NativeCheckpoint("fonts",0,plan.bitmapFonts.Length+plan.assets.Count(a=>a.path.EndsWith(".ttf",StringComparison.OrdinalIgnoreCase)));
         var fonts = new Dictionary<string, TMPro.TMP_FontAsset>();
+        if(plan.systemFontBinding!=null&&plan.systemFontBinding.status=="prepared") {
+            var systemFontReadback=UnitySystemFonts.Import(plan.systemFontBinding,plan.staticFontReceiptPath,plan.staticFontReceiptSha256);
+            File.WriteAllText("Analysis/Readback/system-fonts.json",JsonUtility.ToJson(systemFontReadback,true));
+            foreach(var fontSpec in plan.systemFontBinding.systemFonts.fonts) {
+                var font=AssetDatabase.LoadAssetAtPath<TMPro.TMP_FontAsset>(fontSpec.assetPath);
+                if(font==null)throw new InvalidOperationException("SYSTEM_FONT_NATIVE_ASSET_MISSING: "+fontSpec.assetId);
+                fonts.Add(fontSpec.assetId,font);
+            }
+        }
         int fontProgress=0;int fontTotal=plan.bitmapFonts.Length+plan.assets.Count(a=>a.path.EndsWith(".ttf",StringComparison.OrdinalIgnoreCase));
         foreach (var item in plan.assets.Where(a => a.path.EndsWith(".ttf", StringComparison.OrdinalIgnoreCase)))
         {
@@ -611,9 +629,21 @@ public static partial class MonkeyImporter
                 diagnostics.Add("LABEL_LINE_METRICS_REQUIRE_REFERENCE: " + spec.sourceId);
             }
         }
+        if(recoveredMaterial!=null) {
+            var materialComponents=plan.materialBinding.spriteBindings.ToDictionary(b=>b.sourceId,b=> {
+                var c=plan.components.Single(x=>x.sourceId==b.sourceId&&x.convertible);
+                return (Component)nodeMap[c.node].GetComponent<UnityEngine.UI.Image>();
+            });
+            MonkeyUnityMaterialBindings.Bind(plan.materialBinding,recoveredMaterial.asset,materialComponents);
+        }
         foreach(var spec in plan.components.Where(c=>c.convertible)) {
             var go=nodeMap[spec.node];var rect=(RectTransform)go.transform;
-            if(spec.type=="cc.Widget")ConfigureWidget(go,spec);
+            if(spec.behaviorBinding!=null&&!string.IsNullOrEmpty(spec.behaviorBinding.typeName))MonkeyBehaviorBindings.Bind(spec.behaviorBinding,go,spec.enabled);
+            else if(spec.type=="cc.Widget")ConfigureWidget(go,spec);
+            else if(spec.type=="cc.BlockInputEvents") {
+                var blocker=go.AddComponent<NativeInputBlocker>();
+                blocker.Configure(go.GetComponent<UnityEngine.UI.Graphic>());blocker.enabled=spec.enabled;
+            }
             else if(spec.type=="cc.Mask") {
                 var mask=go.AddComponent<UnityEngine.UI.RectMask2D>();mask.enabled=spec.enabled;
             }
@@ -720,14 +750,18 @@ public static partial class MonkeyImporter
                 int passes=SettleNativeLayout(contents);
                 var transforms=contents.GetComponentsInChildren<Transform>(true);
                 int missing=transforms.Sum(t=>GameObjectUtility.GetMonoBehavioursWithMissingScriptCount(t.gameObject));
-                if(transforms.Length!=spec.nodeCount || missing!=0)throw new InvalidOperationException("Source prefab reopen mismatch: "+spec.sourceId);
+                int generatedTextSubmeshCount=transforms.Count(IsGeneratedTextSubmesh);
+                if(transforms.Length-generatedTextSubmeshCount!=spec.nodeCount || missing!=0)throw new InvalidOperationException("Source prefab reopen mismatch: "+spec.sourceId);
                 var mapped=SavedNodeMap(plan.nodes,contents,spec,nodeSpecs);
                 var referenceFailures=new List<string>();
                 foreach(var c in plan.components.Where(c=>c.convertible&&mapped.ContainsKey(c.node))) {
                     var go=mapped[c.node].gameObject;bool valid=true;
-                    if(c.type=="cc.Sprite") {
+                    if(c.behaviorBinding!=null&&!string.IsNullOrEmpty(c.behaviorBinding.typeName))valid=MonkeyBehaviorBindings.Read(c.behaviorBinding,go,c.enabled);
+                    else if(c.type=="cc.Sprite") {
                         var image=go.GetComponent<UnityEngine.UI.Image>();
                         valid=image!=null && (string.IsNullOrEmpty(c.spriteFrame)?image.sprite==null:image.sprite==spriteMap[c.spriteFrame+(c.trim?"":"@original")]);
+                        if(recoveredMaterial!=null&&plan.materialBinding.spriteBindings.Any(b=>b.sourceId==c.sourceId))
+                            valid=valid&&MonkeyUnityMaterialBindings.ReadBound(plan.materialBinding,recoveredMaterial.asset,image);
                     } else if(c.type=="cc.Label" || c.type=="cc.LabelOutline") {
                         var label=go.GetComponent<TMPro.TextMeshProUGUI>();
                         valid=label!=null && (c.type=="cc.LabelOutline" || (label.font==fonts[c.font]&&label.text==c.text));
@@ -741,18 +775,21 @@ public static partial class MonkeyImporter
                         valid=slider!=null&&driver!=null&&driver.Progress==slider&&mapped.ContainsKey(c.barNode)&&
                             driver.Fill==mapped[c.barNode]&&Mathf.Abs(driver.FullLength-c.totalLength)<.001f&&
                             Mathf.Abs(slider.normalizedValue-c.progress)<.0001f&&slider.fillRect==null&&slider.handleRect==null&&!slider.interactable;
-                    } else if(c.type=="cc.Mask")valid=go.GetComponent<UnityEngine.UI.RectMask2D>()!=null;
+                    } else if(c.type=="cc.BlockInputEvents")valid=go.GetComponent<NativeInputBlocker>()!=null && go.GetComponent<NativeInputBlocker>().Surface!=null;
+                    else if(c.type=="cc.Mask")valid=go.GetComponent<UnityEngine.UI.RectMask2D>()!=null;
                     else if(c.type=="cc.Layout")valid=go.GetComponent<UnityEngine.UI.LayoutGroup>()!=null;
                     if(!valid)referenceFailures.Add(c.sourceId);
                 }
                 var persistentMap=SavedNodeMap(plan.nodes,sourcePrefab,spec,nodeSpecs);
                 var numericBindings=plan.components.Where(c=>c.convertible&&!string.IsNullOrEmpty(c.codeClassName)&&persistentMap.ContainsKey(c.node)).Select(c=>MonkeyNumericCode.Read(c,persistentMap[c.node].gameObject)).ToArray();
-                sourcePrefabResults.Add(new SourcePrefabResult {prefabInstances=ReadNativeInstances(plan,mapped,spec.sourceId),numericCodeBindings=numericBindings,sourceId=spec.sourceId,path=spec.path,
+                var behaviorBindings=plan.components.Where(c=>c.convertible&&c.behaviorBinding!=null&&!string.IsNullOrEmpty(c.behaviorBinding.typeName)&&persistentMap.ContainsKey(c.node)).Select(c=>MonkeyBehaviorBindings.ReadPersistent(c.behaviorBinding,persistentMap[c.node].gameObject,c.sourceId,c.enabled)).ToArray();
+                sourcePrefabResults.Add(new SourcePrefabResult {prefabInstances=ReadNativeInstances(plan,mapped,spec.sourceId),numericCodeBindings=numericBindings,behaviorBindings=behaviorBindings,sourceId=spec.sourceId,path=spec.path,
                     nativePrefabType=nativePrefabType.ToString(),nativeInitialNodes=initialPrefabNodes,
-                    guid=AssetDatabase.AssetPathToGUID(spec.path),nodeCount=transforms.Length,missingScripts=missing,
+                    guid=AssetDatabase.AssetPathToGUID(spec.path),nodeCount=transforms.Length-generatedTextSubmeshCount,generatedTextSubmeshCount=generatedTextSubmeshCount,missingScripts=missing,
                     savedReloaded=true,geometryPhase="native-layout-settled-v1",layoutSettlePasses=passes,
                     nodes=spec.nodes.Select(id=>DescribeNode(nodeSpecs[id],mapped[id])).ToArray(),
                     referencesVerified=referenceFailures.Count==0,referenceFailures=referenceFailures.ToArray()});
+                CaptureSourcePrefabPreview(sourcePrefab,spec,plan,sourcePrefabResults[sourcePrefabResults.Count-1]);
             } finally {
                 if(uiContext!=null){contents.transform.SetParent(null,false);UnityEngine.Object.DestroyImmediate(uiContext);}
                 PrefabUtility.UnloadPrefabContents(contents);
@@ -797,6 +834,7 @@ public static partial class MonkeyImporter
         var gallery=plan.galleryOnly?ReadSavedGallery(plan,instance):new GalleryResult[0];
         var savedNodeMap=plan.galleryOnly?new Dictionary<string,RectTransform>():SavedNodeMap(plan.nodes,instance);
         var readback = new Readback {
+            materialBinding=recoveredMaterial==null?null:recoveredMaterial.readback,
             prefabInstances=ReadNativeInstances(plan,savedNodeMap,null,PrefabPath),candidatePrefabInstances=candidatePrefabProofs,
             nativeScope=plan.galleryOnly?"resources-and-gallery-only":"source-node-subset",sourceGraphVerification=plan.galleryOnly?"not_run":"saved-source-node-subset",gallery=gallery,
             numericCodeExercise=numericCodeExercise,numericCodeBindings=plan.components.Where(c=>c.convertible&&!string.IsNullOrEmpty(c.codeClassName)).Select(c=>MonkeyNumericCode.Read(c,savedNodeMap[c.node].gameObject)).ToArray(),
@@ -881,7 +919,29 @@ public static partial class MonkeyImporter
         }
         finally {PrefabUtility.UnloadPrefabContents(contents);}
     }
+    static void CaptureSourcePrefabPreview(GameObject prefab,SourcePrefabSpec spec,Plan plan,SourcePrefabResult result) {
+        // A separate throwaway scene prevents other windows from covering this
+        // diagnostic image. Only root visibility is overridden and disclosed;
+        // no source child state, transform, script or asset is repaired here.
+        Scene probe=default(Scene);
+        result.isolatedPreviewScope="isolated-clone-root-active-source-child-state-no-business-execution";
+        try {
+            probe=EditorSceneManager.NewScene(NewSceneSetup.EmptyScene,NewSceneMode.Additive);
+            var context=new GameObject("OwnedIsolatedPrefabPreview",typeof(RectTransform),typeof(Canvas));
+            SceneManager.MoveGameObjectToScene(context,probe);
+            var canvas=context.GetComponent<Canvas>();canvas.renderMode=RenderMode.WorldSpace;
+            ((RectTransform)context.transform).sizeDelta=new Vector2(plan.designSize[0],plan.designSize[1]);
+            var clone=UnityEngine.Object.Instantiate(prefab,context.transform,false);
+            clone.SetActive(true);SettleNativeLayout(context);
+            var path="Analysis/Readback/Prefabs/"+AssetDatabase.AssetPathToGUID(spec.path)+".png";
+            Capture(canvas,probe,(int)plan.designSize[0],(int)plan.designSize[1],path);
+            result.isolatedPreviewPath=path;result.isolatedPreviewSha256=Hash(path);
+        } catch(Exception error) {result.isolatedPreviewError=error.Message;}
+        finally {if(probe.IsValid())EditorSceneManager.CloseScene(probe,true);}
+    }
     static void Capture(Canvas canvas,Scene scene,int width,int height,string output) {
+        if(SystemInfo.graphicsDeviceType==UnityEngine.Rendering.GraphicsDeviceType.Null)
+            throw new InvalidOperationException("Native preview unavailable: Null graphics device; rerun native-import with --render-preview");
         var cameraObject=new GameObject("MonkeyPreviewCamera",typeof(Camera));SceneManager.MoveGameObjectToScene(cameraObject,scene);
         var camera=cameraObject.GetComponent<Camera>();camera.enabled=false;camera.orthographic=true;camera.orthographicSize=height*.5f;
         camera.cullingMask=1<<5;camera.clearFlags=CameraClearFlags.SolidColor;camera.backgroundColor=new Color(.1f,.11f,.13f,1);
@@ -973,6 +1033,23 @@ public static partial class MonkeyImporter
         }
         return result;
     }
+    // TMP adds nonpersistent fallback-font renderers as first siblings during
+    // mesh generation. Exclude only verified native render children from the
+    // source hierarchy; arbitrary additional nodes still fail the boundary.
+    static bool IsGeneratedTextSubmesh(Transform child) {
+        if(child==null || child.parent==null || child.childCount!=0)return false;
+        var sub=child.GetComponent<TMPro.TMP_SubMeshUI>();
+        var owner=child.parent.GetComponent<TMPro.TextMeshProUGUI>();
+        var layout=child.GetComponent<UnityEngine.UI.LayoutElement>();
+        if(sub==null || owner==null || sub.textComponent!=owner || sub.fontAsset==null ||
+           layout==null || !layout.ignoreLayout ||
+           (child.gameObject.hideFlags&HideFlags.DontSave)!=HideFlags.DontSave)return false;
+        return child.GetComponents<Component>().All(c=>c is RectTransform || c is CanvasRenderer ||
+            c is TMPro.TMP_SubMeshUI || c is UnityEngine.UI.LayoutElement);
+    }
+    static Transform[] SourceChildren(Transform parent) {
+        return Enumerable.Range(0,parent.childCount).Select(parent.GetChild).Where(c=>!IsGeneratedTextSubmesh(c)).ToArray();
+    }
     static Dictionary<string,RectTransform> SavedNodeMap(NodeSpec[] nodes,GameObject instance,SourcePrefabSpec prefab=null,Dictionary<string,NodeSpec> byId=null) {
         byId=byId??nodes.ToDictionary(n=>n.sourceId);
         var mapped=new Dictionary<string,RectTransform>();
@@ -986,9 +1063,10 @@ public static partial class MonkeyImporter
         }
         while(pending.Count>0) {
             var pair=pending.Pop();var source=pair.Key;var target=pair.Value as RectTransform;
-            if(target==null || target.childCount<source.children.Length)throw new InvalidOperationException("Saved source node boundary differs: "+source.sourceId);
+            var children=target==null?new Transform[0]:SourceChildren(target);
+            if(target==null || children.Length!=source.children.Length)throw new InvalidOperationException("Saved source node boundary differs: "+source.sourceId);
             mapped.Add(source.sourceId,target);
-            for(int i=source.children.Length-1;i>=0;i--)pending.Push(new KeyValuePair<NodeSpec,Transform>(byId[source.children[i]],target.GetChild(i)));
+            for(int i=source.children.Length-1;i>=0;i--)pending.Push(new KeyValuePair<NodeSpec,Transform>(byId[source.children[i]],children[i]));
         }
         if(mapped.Count!=(prefab==null?nodes.Length:prefab.nodeCount))throw new InvalidOperationException("Saved source node count differs");
         return mapped;
