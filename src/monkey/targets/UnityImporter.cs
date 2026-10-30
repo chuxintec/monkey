@@ -914,7 +914,15 @@ public static partial class MonkeyImporter
                 int generatedSortNodeCount=transforms.Count(IsWithinGeneratedSortProxy);
                 int generatedTextSubmeshCount=transforms.Count(t=>!IsWithinGeneratedSortProxy(t)&&IsGeneratedTextSubmesh(t));
                 int generatedSpineSubmeshCount=transforms.Count(t=>!IsWithinGeneratedSortProxy(t)&&IsGeneratedSpineSubmesh(t));
-                if(transforms.Length-generatedTextSubmeshCount-generatedSpineSubmeshCount-generatedSortNodeCount!=spec.nodeCount || missing!=0)throw new InvalidOperationException("Source prefab reopen mismatch: "+spec.sourceId);
+                int reopenedSourceNodeCount=transforms.Length-generatedTextSubmeshCount-generatedSpineSubmeshCount-generatedSortNodeCount;
+                if(reopenedSourceNodeCount!=spec.nodeCount || missing!=0) {
+                    var treeDiagnostic=DescribeSourcePrefabReopenMismatch(spec,nodeSpecs,contents.transform,transforms);
+                    throw new InvalidOperationException("Source prefab reopen mismatch: "+spec.sourceId+
+                        ";transforms="+transforms.Length+";expectedSourceNodes="+spec.nodeCount+
+                        ";observedSourceNodes="+reopenedSourceNodeCount+";generatedTextSubmesh="+generatedTextSubmeshCount+
+                        ";generatedSpineSubmesh="+generatedSpineSubmeshCount+";generatedSort="+generatedSortNodeCount+
+                        ";missingScripts="+missing+";unclassifiedOrMissing="+treeDiagnostic);
+                }
                 var mapped=SavedNodeMap(plan.nodes,contents,spec,nodeSpecs);
                 var persistentMap=SavedNodeMap(plan.nodes,sourcePrefab,spec,nodeSpecs);
                 var referenceFailures=new List<string>();
@@ -1281,6 +1289,48 @@ public static partial class MonkeyImporter
     }
     static bool IsWithinGeneratedSortProxy(Transform child) { for(var current=child;current!=null;current=current.parent)if(Monkey.StaticSortQueueProxy.UnityStaticSortQueueProxy.IsGeneratedSortProxyRoot(current))return true;return false; }
     public static bool IsGeneratedNativePresentationChild(Transform child) => IsGeneratedTextSubmesh(child)||IsGeneratedSpineSubmesh(child)||Monkey.StaticSortQueueProxy.UnityStaticSortQueueProxy.IsGeneratedSortProxyRoot(child);
+    static string SourcePrefabTransformPath(Transform node,Transform root) {
+        if(node==null||root==null)return "<null>";
+        var names=new Stack<string>();var current=node;
+        while(current!=null) { names.Push(current.name);if(current==root)break;current=current.parent; }
+        if(current!=root)return "<outside-source-root>/"+string.Join("/",names.ToArray());
+        return string.Join("/",names.ToArray());
+    }
+    static string DescribeSourcePrefabReopenMismatch(SourcePrefabSpec spec,Dictionary<string,NodeSpec> nodeSpecs,
+        Transform sourceRoot,Transform[] transforms) {
+        var expectedPathCounts=new Dictionary<string,int>(StringComparer.Ordinal);var planIssues=new List<string>();
+        foreach(var id in spec.nodes??Array.Empty<string>()) {
+            if(!nodeSpecs.TryGetValue(id,out var row)||row==null) {planIssues.Add("missing-plan-node:"+id);continue;}
+            var segments=new Stack<string>();var current=row;var visited=new HashSet<string>(StringComparer.Ordinal);var reachedRoot=false;
+            while(current!=null) {
+                if(!visited.Add(current.sourceId)) {planIssues.Add("plan-parent-cycle:"+id);break;}
+                segments.Push(current.name??"<null-name>");
+                if(current.sourceId==spec.root) {reachedRoot=true;break;}
+                if(string.IsNullOrEmpty(current.parent)||!nodeSpecs.TryGetValue(current.parent,out current))break;
+            }
+            if(!reachedRoot) {planIssues.Add("plan-path-does-not-reach-root:"+id);continue;}
+            var path=string.Join("/",segments.ToArray());
+            expectedPathCounts[path]=expectedPathCounts.TryGetValue(path,out var count)?count+1:1;
+        }
+        var unknown=new List<string>();
+        foreach(var transform in transforms??Array.Empty<Transform>()) {
+            if(transform==null||IsWithinGeneratedSortProxy(transform)||IsGeneratedTextSubmesh(transform)||IsGeneratedSpineSubmesh(transform))continue;
+            var path=SourcePrefabTransformPath(transform,sourceRoot);
+            if(expectedPathCounts.TryGetValue(path,out var remaining)&&remaining>0) {expectedPathCounts[path]=remaining-1;continue;}
+            var kinds=transform.GetComponents<Component>().Select(component=>component==null?"<missing-script>":component.GetType().FullName).ToArray();
+            unknown.Add(path+" ["+string.Join(",",kinds)+"]");
+        }
+        var missingPlanPaths=expectedPathCounts.Where(pair=>pair.Value>0).Select(pair=>pair.Key+" x"+pair.Value).ToArray();
+        var missingScriptRows=(transforms??Array.Empty<Transform>()).Where(transform=>transform!=null)
+            .Select(transform=>new {transform,count=GameObjectUtility.GetMonoBehavioursWithMissingScriptCount(transform.gameObject)})
+            .Where(row=>row.count>0).Select(row=>SourcePrefabTransformPath(row.transform,sourceRoot)+" [missingScripts="+row.count+"]").ToArray();
+        string Bounded(IEnumerable<string> values,int limit) {
+            var rows=values.Take(limit).ToArray();var suffix=values.Skip(limit).Any()?";more=true":"";
+            return string.Join(" | ",rows)+suffix;
+        }
+        return "unknown="+Bounded(unknown,12)+";missingPlanPaths="+Bounded(missingPlanPaths,12)+
+            ";missingScriptNodes="+Bounded(missingScriptRows,12)+";planIssues="+Bounded(planIssues,8);
+    }
     static Transform[] SourceChildren(Transform parent) {
         return Enumerable.Range(0,parent.childCount).Select(parent.GetChild).Where(c=>!IsGeneratedNativePresentationChild(c)).ToArray();
     }

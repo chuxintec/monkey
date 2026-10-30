@@ -4,6 +4,7 @@
 // registered native API class and verify its real script UUID; no source-module
 // path guessing or source-graphics interpretation is involved.
 const cc = require('cc');
+const ownedUndo = require('./owned-import-undo.js');
 const API_CLASS_NAME = 'MonkeyStaticSortQueueProxyApi';
 const API_MODULE_UUID = 'f82a1331-6407-5dbc-9833-b421ddbbfc68';
 let registeredApi = null;
@@ -61,8 +62,9 @@ function registerApiClass(ctor) {
     return { uuid: API_MODULE_UUID, className: API_CLASS_NAME, registered: true };
 }
 function validatePlan(plan) {
-    if (!plan || !Array.isArray(plan.sourcePrefabs)) fail('sourcePrefabs list missing');
+    if (!plan || typeof plan !== 'object') fail('plan missing');
     if (plan.staticSortQueue === undefined && !plan.staticCompletion) return { applicable: false, status: 'not_applicable' };
+    if (!Array.isArray(plan.sourcePrefabs)) fail('sourcePrefabs list missing');
     if (!Array.isArray(plan.staticSortQueue)) fail('staticCompletion requires a staticSortQueue array');
     const expected = new Map(plan.sourcePrefabs.map(prefab => [prefab.root, prefab]));
     const rows = plan.staticSortQueue;
@@ -167,6 +169,11 @@ function createForPrefab(plan, rootScope, nodes) {
     for (const nodeId of row.sourceNodeIds) if (!nodes.has(nodeId)) fail('source node missing before proxy creation: ' + nodeId);
     const result = api().create(row, nodes, uuid => resolveSprite(row, nodes, uuid, true));
     const refs = rootPresenter(sourceRoot, rootScope);
+    // The generated subtree can record UUIDs during construction, before this
+    // bridge returns to the Prefab serializer. Register its exact root while
+    // it remains attached to the source tree so the import-owned Undo scope can
+    // suppress later records and safely clean constructor residue on destroy.
+    ownedUndo.registerRoot(refs.proxyRoot);
     if (!result || !result.verified || result.presentationMode !== 'initialized')
         failWithReadback('create did not verify the active native proxy tree: ' + rootScope, result, plan, 'construction', rootScope);
     return { spec: row, sourceRoot, proxyRoot: refs.proxyRoot, presenter: refs.presenter, createReadback: result };

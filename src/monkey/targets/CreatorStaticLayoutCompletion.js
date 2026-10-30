@@ -2,6 +2,7 @@
 // Attach real Creator 2.4 cc.Layout / cc.Widget components. The typed marker only
 // records source identity/order and owns references; it is not a JSON carrier.
 const cc = require('cc');
+const ownedUndo = require('./owned-import-undo.js');
 
 function markerClass() {
     const type = cc.js && cc.js.getClassByName && cc.js.getClassByName('MonkeyStaticLayoutCompletion');
@@ -220,16 +221,18 @@ function probe(plan, nodes) {
         };
     };
     const scene = new cc.Scene('StaticLayoutProbeScene');
+    ownedUndo.registerRoot(scene);
     let initialized = false;
     const roots = [...nodes].filter(([id]) => {
         const source=sourceById.get(id);return !source || !source.parent || !nodes.has(source.parent);
     }).map(([,node])=>node);
     try {
         const canvasNode=new cc.Node('StaticLayoutProbeCanvas');
+        ownedUndo.registerRoot(canvasNode);
         canvasNode.layer=cc.Layers.Enum.UI_2D;canvasNode.parent=scene;
         canvasNode.addComponent(cc.UITransform).setContentSize(...plan.designSize);
         const canvas=canvasNode.addComponent(cc.Canvas);canvas.alignCanvasWithScreen=false;
-        const design=new cc.Node('StaticLayoutProbeDesignRoot');design.layer=cc.Layers.Enum.UI_2D;design.parent=canvasNode;
+        const design=new cc.Node('StaticLayoutProbeDesignRoot');ownedUndo.registerRoot(design);design.layer=cc.Layers.Enum.UI_2D;design.parent=canvasNode;
         design.addComponent(cc.UITransform).setContentSize(...plan.designSize);
         design.getComponent(cc.UITransform).setAnchorPoint(0,0);
         design.setPosition(-plan.designSize[0]/2,-plan.designSize[1]/2,0);
@@ -253,6 +256,9 @@ function probe(plan, nodes) {
             for(let current=node;current&&reverse.has(current);current=current.parent)current.active=true;
         }
         scene._load();scene._activate(true);initialized=true;
+        // Re-register after attachment/activation so the owned scope adopts the
+        // complete disposable tree, including imported clone descendants.
+        ownedUndo.registerRoot(scene);
         for(const spec of owners){
             const node=nodes.get(spec.sourceNodeId);
             if(node.activeInHierarchy!==true)throw new Error(`STATIC_LAYOUT_PROBE_OWNER_NOT_ACTIVE_IN_HIERARCHY:${spec.sourceNodeId}`);

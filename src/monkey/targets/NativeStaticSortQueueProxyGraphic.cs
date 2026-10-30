@@ -23,6 +23,7 @@ namespace Monkey.StaticSortQueueProxy
         public Material proxyBaseMaterial;
         public Texture sourceBaseTexture;
         public string sourceMaterialFingerprint;
+        public string transformCaptureDiagnosticJson;
         public string meshAssetGuid, sourceMaterialGuid, sourceTextureGuid;
 
         public override Texture mainTexture => proxyTexture == null ? Texture2D.whiteTexture : proxyTexture;

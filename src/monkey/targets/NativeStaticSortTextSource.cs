@@ -26,6 +26,8 @@ namespace Monkey.StaticSortQueueProxy
         public string textInfoMaterialFingerprint;
         public string sourceGraphicMaterialFingerprint;
         public string characterEvidenceSha256;
+        public string characterAssetEvidenceSha256;
+        public string sourceMeshSha256;
         public string evidenceSha256;
     }
 
@@ -38,6 +40,82 @@ namespace Monkey.StaticSortQueueProxy
         public bool verified;
         public string evidenceSha256;
         public NativeStaticSortTextSlotEvidence[] rows;
+    }
+
+    [Serializable]
+    public sealed class NativeStaticSortTextScaleCharacter
+    {
+        public int characterIndex;
+        public int materialSlot;
+        public int vertexIndex;
+        public int unicode;
+        public float scale;
+        public bool visible;
+        public int textElementType;
+        public int fontStyle;
+        public bool usingAlternateTypeface;
+        public string fontAssetGuid;
+        public long fontAssetLocalFileId;
+    }
+
+    /// <summary>
+    /// The exact TMP UV0.w equation inputs at source capture. This permits a
+    /// loaded prefab's mesh to be checked against each Canvas context without
+    /// weakening positions, topology, or the saved proxy-mesh hash.
+    /// </summary>
+    [Serializable]
+    public sealed class NativeStaticSortTextScaleContext
+    {
+        public string sourceComponentId;
+        public string sourceTextSha256;
+        public int materialSlot;
+        public string formula;
+        public int canvasRenderMode;
+        public float canvasScaleFactor;
+        public bool worldCameraAssigned;
+        public float ownerLossyScaleY;
+        public float graphicLossyScaleY;
+        public float ownerFontSize;
+        public float ownerFontSizeMin;
+        public float ownerFontSizeMax;
+        public int ownerFontStyle;
+        public bool ownerAutoSizing;
+        public float charWidthAdjustmentDelta;
+        public float characterHorizontalScale;
+        public NativeStaticSortTextLayoutEvidence textLayoutInputs;
+        public NativeStaticSortTextScaleCharacter[] characters;
+        public float[] meshUv0W;
+        public string operandEvidenceSha256;
+        public string textLayoutEvidenceSha256;
+        public string evidenceSha256;
+    }
+
+    /// <summary>Serializable TMP mesh-generation operands, excluding parent/global transforms.</summary>
+    [Serializable]
+    public sealed class NativeStaticSortTextLayoutEvidence
+    {
+        public Vector2 rectSize;
+        public Vector2 pivot;
+        public Vector4 margin;
+        public bool textLineBoxPresent;
+        public bool textLineBoxActive;
+        public float textLineBoxLineHeight;
+        public float textLineBoxExtraLineFraction;
+        public int textLineBoxLineCount;
+        public bool contentSizeFitterPresent;
+        public bool contentSizeFitterActive;
+        public int contentSizeFitterHorizontalFit;
+        public int contentSizeFitterVerticalFit;
+        public float textLineBoxNativePreferredHeight;
+        public string textLineBoxAuthoredPreferredHeight;
+        public bool textLineBoxHeightProvenanceVerified;
+        public float fontSize, fontSizeMin, fontSizeMax;
+        public bool autoSizing;
+        public int fontStyle, fontWeight, alignment, wrappingMode, overflowMode;
+        public int maxVisibleCharacters, maxVisibleWords, maxVisibleLines, pageToDisplay;
+        public float characterSpacing, wordSpacing, lineSpacing, lineSpacingAdjustment, paragraphSpacing;
+        public bool extraPadding, richText, parseControlCharacters, rightToLeft, useMaxVisibleDescender;
+        public int[] fontFeatures;
     }
 
     /// <summary>
@@ -56,6 +134,7 @@ namespace Monkey.StaticSortQueueProxy
         public bool sourceGraphicEnabled;
         public bool sourceGraphicActiveSelf;
         public NativeStaticSortTextSlotEnumeration textSlotEnumeration;
+        public NativeStaticSortTextScaleContext textScaleContext;
         public bool textInfoMaterialMissing;
         public bool textInfoCharacterSlotVerified;
         public bool textInfoCharacterMaterialVerified;
@@ -65,6 +144,7 @@ namespace Monkey.StaticSortQueueProxy
         public int textInfoVisibleCharacterCount;
         public string sourceTextSha256;
         public string textInfoCharacterEvidenceSha256;
+        public string textInfoCharacterAssetEvidenceSha256;
         public string textInfoCharacterMaterialFingerprint;
 
         public TMP_FontAsset fontAsset;
@@ -119,18 +199,13 @@ namespace Monkey.StaticSortQueueProxy
         public long sourceTextureLocalFileId;
 
         public string sourceMeshSha256;
+        public Mesh sourceSlotMesh;
+        public string sourceSlotMeshGuid;
+        public long sourceSlotMeshLocalFileId;
+        public string sourceSlotMeshSha256;
         public string proxyMeshGuid;
         public long proxyMeshLocalFileId;
         public string proxyMeshSha256;
     }
 
-    /// <summary>Typed owner-level TMP slot evidence for text whose complete material-slot set draws no proxy geometry.</summary>
-    [AddComponentMenu("")]
-    [DisallowMultipleComponent]
-    public sealed class NativeStaticSortTextSlotEnumerationIdentity : MonoBehaviour
-    {
-        public TMP_Text sourceOwner;
-        public string sourceComponentId;
-        public NativeStaticSortTextSlotEnumeration slotEnumeration;
-    }
 }

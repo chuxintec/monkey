@@ -2,6 +2,8 @@
 const assert = require('assert');
 const Module = require('module');
 const load = Module._load;
+const ownedRegistrations=[];
+const ownedUndoStub={registerRoot(node){const descendants=[];const visit=current=>{for(const child of current.children||[]){descendants.push(child.name);visit(child);}};visit(node);ownedRegistrations.push({node,parent:node.parent||null,children:(node.children||[]).map(child=>child.name),descendants});return {registered:true};}};
 
 class BitmapFont { constructor(dict){this.fntConfig={fontDefDictionary:dict};this._uuid='font-uuid';} }
 class Label {
@@ -31,7 +33,7 @@ class CtxNode extends Node { constructor(name){super(name);} addComponent(Type){
 const classNames={MonkeyStaticBitmapMissingGlyphs:Marker};
 const cc={BitmapFont,Label,UITransform,Scene,Node:CtxNode,
     js:{getClassByName(name){return classNames[name];}}};
-Module._load=function(request,parent,isMain){if(request==='cc')return cc;return load.call(this,request,parent,isMain);};
+Module._load=function(request,parent,isMain){if(request==='cc')return cc;if(request==='./owned-import-undo.js'&&/CreatorStaticBitmapMissingGlyphs\.js$/.test(parent.filename))return ownedUndoStub;return load.call(this,request,parent,isMain);};
 const helper=require('../src/monkey/targets/CreatorStaticBitmapMissingGlyphs.js');
 const empty={schema:'monkey-prefab-bitmap-missing-glyphs/1',status:'not_applicable',
     policy:'cocos24-bitmap-missing-glyph-skip-v1',sourceCodeEvidence:'cocos2d/core/renderer/utils/label/bmfont.js:235',
@@ -55,7 +57,14 @@ assert.throws(()=>helper.read(contract,persistent,persistent,fonts,cc),/REQUIRES
 
 const loadedNode=new Node('txt-clone');loadedNode.active=false;const loadedLabel=loadedNode.addComponent(Label);loadedLabel.font=font;loadedLabel.string='跳过';
 const marker=loadedNode.addComponent(Marker);Object.assign(marker,savedNode.getComponent(Marker));marker.node=loadedNode;marker.targetLabel=loadedLabel;
+const ownedStart=ownedRegistrations.length;
 const rows=helper.read(contract,persistent,new Map([[nodeId,loadedNode]]),fonts,cc);
+const probeOwnership=ownedRegistrations.slice(ownedStart);
+assert.deepEqual(probeOwnership.slice(0,2).map(row=>row.node.name),['BitmapMissingGlyphProbeScene','BitmapMissingGlyphProbeRoot']);
+assert.ok(probeOwnership.slice(0,2).every(row=>row.parent===null),'new probe scene and context are registered immediately before parenting');
+assert.equal(probeOwnership[2].node.name,'BitmapMissingGlyphProbeScene');
+assert.ok(probeOwnership[2].children.includes('BitmapMissingGlyphProbeRoot'),'scene is re-registered after activation to adopt its context');
+assert.ok(probeOwnership[2].descendants.includes('txt-clone'),'scene is re-registered after activation to adopt the full clone tree');
 assert.equal(rows.length,1);assert.equal(rows[0].sourceText,'跳过');assert.equal(rows[0].targetText,'跳过');
 assert.equal(rows[0].displayText,'');assert.equal(rows[0].vertexCount,0);assert.equal(rows[0].indexCount,0);
 assert.equal(rows[0].bitmapRenderDataInitialized,true);assert.equal(rows[0].missingGlyphsAreVisibleTextRecovered,false);

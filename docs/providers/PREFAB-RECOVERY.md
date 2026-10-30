@@ -39,3 +39,16 @@ For every core Prefab and target, independently record source identity, hierarch
 ## Native diagnostic rendering
 
 `native-import --render-preview` enables a real Unity graphics device in the bounded independent copy. Default headless import keeps graphics disabled; screenshot capture explicitly reports unavailable on a Null device. Per-source Prefab diagnostic images use disposable isolated clones with only root visibility enabled. Source child states and business behavior are not repaired or executed by this preview, so rendering is separate from runtime and visual acceptance.
+
+## Ordinary Creator saves
+
+Ordinary Prefab-stage Save/Close/reopen is checked separately from importer serialization. Static queue helpers temporarily hide original renderers in the live Editor, but saving must retain the authored source layers, including nested Prefab instance overrides. The serialization hook restores only bound helper-owned values for the synchronous native serializer and restores the live state in `finally`.
+
+The importer isolates undo records only for objects whose identity and ownership it can establish. It preserves pre-existing records and never clears the user's undo history. This scope also covers explicit saved-asset readback; it is not a general suppression of Editor undo.
+
+After ordinary saves, close the Prefab stage and invoke **Monkey → Revalidate saved candidate**. This reloads saved assets through Creator and writes an additive `Analysis/Readback/reopened-N.json` receipt. The original receipt stays unchanged. `verify --level editor` validates the current revision's hash chain, candidate identity, native fields and current file hashes. Updating hashes alone does not establish a new native readback, and a receipt does not imply visual or gameplay acceptance.
+
+Saved Scene/Prefab reload is local to the requested asset; it does not replace shared dependency objects on every load. Offscreen saved-scene readback has a bounded lifetime. Cleanup checks both the Editor's current scene and native object identities before destroying only that readback scene; it does not release shared assets or clear user undo records.
+
+
+Independent Unity sort verification resolves the complete Spine component/data map from the candidate binding-plan file, checks its frozen SHA-256 and source pins, and joins each native owner to that map. A stage summary or self-reported readback identity cannot substitute for those bytes. Source-null, disabled and fixed-empty-pose renderers retain distinct typed no-draw proofs; target SDK fallback geometry is not promoted into source rendering. Captured source mesh, current TMP mesh and persistent proxy mesh have separate measured identities. Ordinary Editor save/reopen evidence remains required independently of generation.

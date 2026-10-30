@@ -11,7 +11,7 @@ function begin(method,args,handlers) {
     const job=current={id:String(++sequence)+'-'+Date.now(),method,deadline,status:'running',phase:method==='assemble'?'hierarchy':'native-readback',processed:0,total:1};
     Promise.resolve().then(()=>handlers[method](...args)).then(result=>{
         if(job.status==='running'){job.result=result;job.status='completed';}
-    },error=>{if(job.status==='running'){job.status='failed';job.error=String(error&&error.message||error).split('\n')[0].slice(0,1024);}});
+    },error=>{if(job.status==='running'){job.status='failed';job.error=String(error&&error.message||error).split('\n')[0].slice(0,16*1024);}});
     return {jobId:job.id};
 }
 function checked(id) {

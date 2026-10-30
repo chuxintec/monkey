@@ -248,7 +248,7 @@ function bind(plan, nodes, animationAssets, sourceEvidenceAssets, componentOrigi
             return found ? found.asset : null;
         };
         const readback = bindings.attach(node, spec, resolveClip, resolveSourceEvidence, types);
-        if (readback.status === 'mismatch') throw new Error(`STATIC_ANIMATION_ATTACH_READBACK_FAILED:${component.sourceId}`);
+        if (readback.status === 'mismatch') throw new Error(`STATIC_ANIMATION_ATTACH_READBACK_FAILED:${component.sourceId}:${JSON.stringify(readback.diagnostics)}`);
         readbacks.push({ sourceComponentId: component.sourceId, targetComponentId: component.sourceId, targetNodeId: component.node,
             staticReferenceStatus: readback.status, curveCompleteness: spec.curveCompleteness,
             playbackExecuted: false, binding: readback });
@@ -274,7 +274,7 @@ function readSaved(plan, nodes, animationAssets, sourceEvidenceAssets, component
                 && (row.value.uuid || row.value.guid) === uuid
                 && (!sha || (row.value.sha256 || row.value.assetSha256) === sha))?.asset || null;
         const readback = bindings.read(node, spec, resolveClip, resolveSourceEvidence, types);
-        if (readback.status === 'mismatch') throw new Error(`STATIC_ANIMATION_SAVED_READBACK_FAILED:${component.sourceId}`);
+        if (readback.status === 'mismatch') throw new Error(`STATIC_ANIMATION_SAVED_READBACK_FAILED:${component.sourceId}:${JSON.stringify(readback.diagnostics)}`);
         readbacks.push({ sourceComponentId: component.sourceId, targetComponentId: component.sourceId, targetNodeId: component.node,
             staticReferenceStatus: readback.status, curveCompleteness: spec.curveCompleteness,
             playbackExecuted: readback.playbackExecuted, binding: readback });

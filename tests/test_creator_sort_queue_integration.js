@@ -4,8 +4,12 @@ const assert = require('node:assert/strict');
 const Module = require('node:module');
 const load = Module._load;
 const classes = new Map();
+const ownedRegistrations = [];
+const ccMock = { Canvas: function Canvas() {}, Layers:{Enum:{UI_2D:33554432}}, js: { getClassByName: name => classes.get(name) || null } };
 Module._load = function (request, parent, isMain) {
-    if (request === 'cc') return { Layers:{Enum:{UI_2D:33554432}}, js: { getClassByName: name => classes.get(name) || null } };
+    if (request === 'cc') return ccMock;
+    if (request === './owned-import-undo.js' && /CreatorStaticSortQueueIntegration\.js$/.test(parent && parent.filename || ''))
+        return {registerRoot: root => { ownedRegistrations.push(root); return {registered: true}; }};
     return load.call(this, request, parent, isMain);
 };
 globalThis.EditorExtends = { UuidUtils: { decompressUuid: uuid => uuid } };
@@ -67,3 +71,38 @@ const defaultLayerPlan={...resolvedPlan,nodes:[{sourceId:'r'}],staticSortQueue:[
 assert.equal(bridge.spec(defaultLayerPlan,'r').sourceNodeLayers.r,33554432);
 assert.equal(bridge.spec({...defaultLayerPlan,nodes:[{sourceId:'r',sourceLayer:0}]},'r').sourceNodeLayers.r,0);
 assert.throws(()=>bridge.spec({...defaultLayerPlan,nodes:[{sourceId:'r',sourceLayer:'wrong'}]},'r'),/target layer is invalid/);
+
+testProxyRegistration();
+
+function testProxyRegistration() {
+    const sourcePrefab = { root: 'owned-root', sourceId: 'owned-prefab', path: 'owned.prefab' };
+    const row = { rootScope: 'owned-root', sourcePrefabId: 'owned-prefab', prefabPath: 'owned.prefab',
+        sourceManifestSha256: 'manifest-hash', sourceDrawEvents: [], renderers: [], nonDrawRenderers: [], masks: [],
+        sourceChildOrder: {}, sourceNodeActive: {}, sourceNodeIds: ['owned-root'] };
+    const plan = { sourcePrefabs: [sourcePrefab], sourceManifestSha256: 'manifest-hash',
+        staticSortQueue: [row], nodes: [{sourceId:'owned-root'}], assets: [] };
+    const proxyRoot = {parent:null, children:[], getComponent: ctor => ctor === Presenter ? presenter : null};
+    const presenter = {sourceRoot:null, sourceRootId:'owned-root', proxyRoot};
+    function Presenter() {}
+    classes.set('MonkeyStaticSortQueueProxyPresenter', Presenter);
+    const sourceRoot = {parent:{}, children:[], activeInHierarchy:true,
+        getComponent: ctor => ctor === ccMock.Canvas ? {enabledInHierarchy:true,node:{activeInHierarchy:true}} : null};
+    presenter.sourceRoot = sourceRoot;
+    sourceRoot.children.push(proxyRoot);
+    proxyRoot.parent = sourceRoot;
+    function RegisteredApi() {}
+    RegisteredApi.moduleUuid = bridge.API_MODULE_UUID;
+    RegisteredApi.prototype.__scriptUuid = bridge.API_MODULE_UUID;
+    Object.assign(RegisteredApi, {
+        create: () => ({verified:true,presentationMode:'initialized'}),
+        attachSourceIdentities() {}, readPersistent() {}, readInitialized() {},
+        isGeneratedProxyRoot: node => node === proxyRoot,
+    });
+    classes.set(bridge.API_CLASS_NAME, RegisteredApi);
+    bridge.registerApiClass(RegisteredApi);
+    ownedRegistrations.length = 0;
+    const result = bridge.createForPrefab(plan, 'owned-root', new Map([['owned-root',sourceRoot]]));
+    assert.equal(result.proxyRoot, proxyRoot);
+    assert.deepEqual(ownedRegistrations, [proxyRoot],
+        'register the exact generated proxy root after create returns while it is attached');
+}

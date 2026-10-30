@@ -2,6 +2,17 @@ import copy,unittest,shutil,subprocess
 from pathlib import Path
 from monkey.targets.dynamic_ui import POLICY,driven_fields,expectations,verify_probes,probe_sources
 
+def creator_script(script):
+    # Use the real Editor helpers under their generated extension filenames.
+    return r'''
+const targetModule=require('module'),targetLoad=targetModule._load,targetPath=require('path');
+const targetAliases={'./static-sort-serialization.js':'CreatorStaticSortSerialization.js',
+ './owned-import-undo.js':'CreatorOwnedImportUndo.js','./editor-undo-diagnostics.js':'CreatorEditorUndoDiagnostics.js',
+ './creator-saved-scene-scope.js':'CreatorSavedSceneScope.js'};
+targetModule._load=function(name,...args){return targetLoad.call(this,targetAliases[name]?
+ targetPath.join(targetPath.dirname(process.argv[1]),targetAliases[name]):name,...args);};
+''' + script
+
 class DynamicUiEvidenceTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which('node'),'Node unavailable')
     def test_creator_recursive_alignment_keeps_disabled_ancestor_and_restores_lookup(self):
@@ -17,7 +28,7 @@ childWidget.updateAlignment=()=>{throw Error('alignment failed');};assert.throws
 assert.deepStrictEqual(Object.getOwnPropertyDescriptor(parent,'getComponent'),original);assert.strictEqual(parent.getComponent(Widget),parentWidget);
 '''
         path=Path(__file__).resolve().parents[1]/'src/monkey/targets/CreatorDynamicUi.js'
-        result=subprocess.run(['node','-e',script,str(path)],capture_output=True,text=True)
+        result=subprocess.run(['node','-e',creator_script(script),str(path)],capture_output=True,text=True)
         self.assertEqual(result.returncode,0,result.stderr[:2000])
 
     @unittest.skipUnless(shutil.which('node'),'Node unavailable')
@@ -25,27 +36,31 @@ assert.deepStrictEqual(Object.getOwnPropertyDescriptor(parent,'getComponent'),or
         script=r'''
 const Module=require('module'),load=Module._load,assert=require('assert');
 class SceneAsset{}class AudioClip{getDuration(){return this.seconds;}get duration(){throw Error('No duration property in Creator 3.8');}}
-const asset=new SceneAsset();asset.scene={name:'Scene',children:[{name:'DesignRoot',children:[]}]};
+let cleanupCount=0,flushCount=0,sceneDestroyed=false;const sceneRequests=[];
+const asset=new SceneAsset();asset._uuid='scene-id';asset.scene={name:'Scene',uuid:'scene-node-id',children:[{name:'DesignRoot',children:[]}],destroy(){cleanupCount++;sceneDestroyed=true;return true;}};
 const clip=new AudioClip();clip._uuid='audio-id';clip.seconds=3.25;
-const cc={SceneAsset,AudioClip,assetManager:{loadAny(request,options,callback){callback(null,request.uuid==='scene-id'?asset:clip);}}};
+const cc={SceneAsset,AudioClip,isValid:()=>!sceneDestroyed,director:{getScene:()=>null},CCObject:{_deferredDestroy(){flushCount++;}},assetManager:{loadAny(request,options,callback){if(request.uuid==='scene-id'){sceneRequests.push({request,options});sceneDestroyed=false;}callback(null,request.uuid==='scene-id'?asset:clip);}}};
+globalThis.cce={Node:{query:()=>null},Component:{query:()=>null},SceneFacadeManager:{_facadeFSM:{currentState:{modeName:'general'},generalSceneFacade:{queryCurrentSceneUuid:()=> 'user-scene'}}}};
 Module._load=function(name,...args){
  if(name==='cc')return cc;
  if(name==='./static-richtext.js')return {sourceChildren:n=>n.children||[],apply(){}};
  if(name==='./prefab-instances.js')return {read:()=>[]};
- if(name==='./dynamic-ui.js')return {probe:async()=>[]};
+ if(name==='./dynamic-ui.js')return {probe:async()=>[],release(){}};
  if(['./animation.js','./prefab.js','./batch.js','./jobs.js','./numeric-code.js','./behavior-bindings.js'].includes(name))return {};
  if(name==='./resources.js')return {read:async()=>[]};
  if(name==='./spine-bindings.js')return {readCreatorSpineBindings:()=>[]};
  return load.call(this,name,...args);
 };
 (async()=>{
- const api=require(process.argv[1]),plan={nodes:[],components:[],assets:[{kind:'audio',uuid:'audio-id',sourceId:'source-audio'}]};
+ const api=require(process.argv[1]),plan={readbackReloadSavedAssets:true,nodes:[],components:[],assets:[{kind:'audio',uuid:'audio-id',sourceId:'source-audio'}]};
  const result=await api.methods.readSaved('scene-id',plan);assert.deepStrictEqual(result.audioAssets,[{sourceId:'source-audio',uuid:'audio-id',duration:3.25}]);
  clip.seconds=NaN;await assert.rejects(api.methods.readSaved('scene-id',plan),/duration unavailable/);
+ assert.strictEqual(cleanupCount,2);assert.strictEqual(flushCount,2);
+ assert(sceneRequests.every(({request,options})=>request.reloadAsset===true&&options.reloadAsset===false));
 })().catch(e=>{console.error(e);process.exitCode=1;});
 '''
         path=Path(__file__).resolve().parents[1]/'src/monkey/targets/CreatorScene.js'
-        result=subprocess.run(['node','-e',script,str(path)],capture_output=True,text=True)
+        result=subprocess.run(['node','-e',creator_script(script),str(path)],capture_output=True,text=True)
         self.assertEqual(result.returncode,0,result.stderr[:2000])
 
     @unittest.skipUnless(shutil.which('node'),'Node unavailable')
@@ -60,7 +75,7 @@ class Node{
  set parent(n){this._parent=n;if(n)n.children.push(this);}get parent(){return this._parent;}destroy(){this.destroyed=true;}
 }
 const cloned=[];function instantiate(n){cloned.push(n.name);const out=new Node(n.name);for(const child of n.children)instantiate(child).parent=out;return out;}
-Module._load=function(name,...args){return name==='cc'?{Node,UITransform,instantiate}:load.call(this,name,...args);};
+Module._load=function(name,...args){if(name==='./static-richtext.js')return require(require('path').join(require('path').dirname(process.argv[1]),'CreatorStaticRichText.js'));return name==='cc'?{Node,UITransform,instantiate}:load.call(this,name,...args);};
 const api=require(process.argv[1]),design=new Node('DesignRoot');design.ui.setContentSize(750,1334);design.ui.setAnchorPoint(0,0);design.position.x=-375;
 const owner=new Node('SourceA'),sibling=new Node('Sibling'),selected=new Node('Label'),unrelated=new Node('SourceB');
 owner.parent=design;unrelated.parent=design;selected.parent=owner;sibling.parent=owner;
@@ -75,7 +90,7 @@ assert.throws(()=>api.probeRoot(plan,design,{node:'label'}),/crosses source root
 assert.strictEqual(cloned.length,3);assert.strictEqual(design.children.length,2);
 '''
         path=Path(__file__).resolve().parents[1]/'src/monkey/targets/CreatorDynamicUi.js'
-        result=subprocess.run(['node','-e',script,str(path)],capture_output=True,text=True)
+        result=subprocess.run(['node','-e',creator_script(script),str(path)],capture_output=True,text=True)
         self.assertEqual(result.returncode,0,result.stderr[:2000])
 
     def test_v2_grid_and_child_resize_cannot_pass_with_only_container_snapshots(self):
@@ -107,7 +122,7 @@ assert.throws(()=>api.settle(scene,new Map([['node',node]]),plan),/owned activat
 manager.isAligning=true;assert.throws(()=>api.settle(scene,new Map([['node',node]]),plan),/owned activation failed/);assert.strictEqual(manager.isAligning,true);
 '''
         path=Path(__file__).resolve().parents[1]/'src/monkey/targets/CreatorDynamicUi.js'
-        result=subprocess.run(['node','-e',script,str(path)],capture_output=True,text=True)
+        result=subprocess.run(['node','-e',creator_script(script),str(path)],capture_output=True,text=True)
         self.assertEqual(result.returncode,0,result.stderr[:2000])
 
     def test_driven_geometry_does_not_hide_other_axes_or_mutate_source(self):
@@ -169,7 +184,7 @@ assert.deepStrictEqual([ui.width,ui.height],[86.4,30.24]);assert.deepStrictEqual
 assert(calls.length>=1);assert.strictEqual(rich.maxWidth,0);assert.strictEqual(rich.lineHeight,24);assert.strictEqual(rich.string,'<color=#cb945a>建造</color><color=#de551f>5</color><color=#cb945a>次</color>');
 '''
         path=Path(__file__).resolve().parents[1]/'src/monkey/targets/CreatorDynamicUi.js'
-        result=subprocess.run(['node','-e',script,str(path)],capture_output=True,text=True)
+        result=subprocess.run(['node','-e',creator_script(script),str(path)],capture_output=True,text=True)
         self.assertEqual(result.returncode,0,result.stderr[:2000])
 
     def test_creator_scrollview_content_setter_drives_only_content_position(self):
@@ -216,7 +231,7 @@ api.settle(scene,nodes,plan,null,saved);
 assert.strictEqual(ui.width,300);assert.strictEqual(ui.height,200);assert.strictEqual(node.position.x,42);
 '''
         path=Path(__file__).resolve().parents[1]/'src/monkey/targets/CreatorDynamicUi.js'
-        result=subprocess.run(['node','-e',script,str(path)],capture_output=True,text=True)
+        result=subprocess.run(['node','-e',creator_script(script),str(path)],capture_output=True,text=True)
         self.assertEqual(result.returncode,0,result.stderr[:2000])
 
     def test_layout_allows_only_declared_main_axis_and_probe_identity_is_required(self):
@@ -263,7 +278,7 @@ assert.deepStrictEqual([ui.width,ui.height],[198,18]);
 assert.strictEqual(manager.isAligning,false);
 '''
         path=Path(__file__).resolve().parents[1]/'src/monkey/targets/CreatorDynamicUi.js'
-        result=subprocess.run(['node','-e',script,str(path)],capture_output=True,text=True)
+        result=subprocess.run(['node','-e',creator_script(script),str(path)],capture_output=True,text=True)
         self.assertEqual(result.returncode,0,result.stderr[:2000])
 
 if __name__=='__main__':unittest.main()

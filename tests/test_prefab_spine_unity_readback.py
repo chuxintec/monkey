@@ -370,6 +370,7 @@ class UnitySpineReadbackTests(unittest.TestCase):
                                   sourceDataIdentityVerified=False, dataVersion='', boneCount=0, slotCount=0,
                                   activeDrawableAttachmentCount=0, nonNullAttachmentCount=0,
                                   sourceSkin='', actualSkin='', sourceSkinVerified=False,
+                                  runtimeDefaultSkinName='', defaultSkinRuntimeNull=False,
                                   sourceAnimation='', actualAnimation='', trackTime=0.0,
                                   sourceAnimationVerified=False, allSlotsHaveNoDrawableAttachment=False,
                                   emptyRendererStateVerified=False, emptyPoseVerified=False,
@@ -393,6 +394,8 @@ class UnitySpineReadbackTests(unittest.TestCase):
         mutations = [
             lambda row: row['rendererPresentation'].update(nativeMaterialVerified=True),
             lambda row: row['rendererPresentation']['renderers'].append({'index': 0}),
+            lambda row: row['rendererPresentation']['pose'].update(runtimeDefaultSkinName='default'),
+            lambda row: row['rendererPresentation']['pose'].update(defaultSkinRuntimeNull=True),
             lambda row: row.update(sourceDataAssetId='unexpected-asset'),
         ]
         for mutate in mutations:
@@ -418,7 +421,8 @@ class UnitySpineReadbackTests(unittest.TestCase):
                                       sourceDataIdentityVerified=True, dataVersion='3.8.99',
                                       boneCount=5, slotCount=1, activeDrawableAttachmentCount=0,
                                       nonNullAttachmentCount=0, sourceSkin='default', actualSkin='default',
-                                      sourceSkinVerified=True, sourceAnimation='idle', actualAnimation='idle',
+                                      sourceSkinVerified=True, runtimeDefaultSkinName='default',
+                                      defaultSkinRuntimeNull=False, sourceAnimation='idle', actualAnimation='idle',
                                       trackTime=0.0, sourceAnimationVerified=True,
                                       allSlotsHaveNoDrawableAttachment=True, emptyRendererStateVerified=True,
                                       emptyPoseVerified=True, gaps=[], activeDrawableAttachments=[]))
@@ -427,6 +431,18 @@ class UnitySpineReadbackTests(unittest.TestCase):
         path.write_text(json.dumps(saved), encoding='utf-8')
         diagnostics = verify(plan, root, editor_readback)
         self.assertEqual([row for row in diagnostics if row['severity'] == 'error'], [])
+
+        default_alias = json.loads(json.dumps(saved))
+        alias_pose = default_alias['components'][0]['rendererPresentation']['pose']
+        alias_pose.update(actualSkin='', runtimeDefaultSkinName='default', defaultSkinRuntimeNull=True)
+        path.write_text(json.dumps(default_alias), encoding='utf-8')
+        diagnostics = verify(plan, root, editor_readback)
+        self.assertEqual([row for row in diagnostics if row['severity'] == 'error'], [])
+        alias_pose['runtimeDefaultSkinName'] = 'other'
+        path.write_text(json.dumps(default_alias), encoding='utf-8')
+        diagnostics = verify(plan, root, editor_readback)
+        self.assertTrue(any(row['severity'] == 'error' and 'skin representation differs' in row['message']
+                            for row in diagnostics))
 
         bad_poses = [
             ('initialized', False), ('animationStateInitialized', False),

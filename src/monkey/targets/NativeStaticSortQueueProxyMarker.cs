@@ -16,5 +16,6 @@ namespace Monkey.StaticSortQueueProxy
         public string sourceText, nativeTextExpectation, noDrawReason, sourceFieldsJson, sourceFieldsSha256, sourceDrawingCommands;
         public string[] sourceMaterialGuids;
         public bool sourceCommandsEmpty;
+        public ProxySpineEmptyPoseOwner spineEmptyPoseOwnerProof;
     }
 }

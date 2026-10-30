@@ -19,7 +19,7 @@ function within(root, relative) {
     if (!dest.startsWith(root + path.sep)) throw Error('Path escapes candidate');
     return dest;
 }
-async function sceneJob(method,args,phase) {
+async function sceneJob(method,args,phase,trackExecution=true) {
     const call=async(name,values)=>{
         try{return await Editor.Message.request('scene','execute-scene-script',{name:'monkey-import',method:name,args:values});}
         catch(error){throw Error('NATIVE_SCENE_RPC_FAILED '+name+': '+String(error&&error.message||error).split('\n')[0].slice(0,512));}
@@ -29,7 +29,7 @@ async function sceneJob(method,args,phase) {
     while(true) {
         const state=await call('jobStatus',[started.jobId]);
         if(!state||state.jobId!==started.jobId)throw Error('NATIVE_JOB_STATUS_INVALID');
-        execution.checkpoint(state.phase||phase,state.processed,state.total);
+        if(trackExecution)execution.checkpoint(state.phase||phase,state.processed,state.total);
         if(state.status==='failed')throw Error('Native '+method+' failed: '+state.error);
         if(state.status==='completed')return call('takeJob',[started.jobId]);
         if(state.status!=='running')throw Error('NATIVE_JOB_STATUS_INVALID');
@@ -39,7 +39,72 @@ async function sceneJob(method,args,phase) {
 module.exports = {
     load() {execution.start(()=>module.exports.methods.importCandidate()).catch(error=>console.error('MONKEY_NATIVE_BOOTSTRAP_FAILED: '+String(error.message||error).slice(0,1024)));}, unload() {execution.stop();},
     methods: {
+        async revalidateSavedCandidate() {
+            const root=path.resolve(Editor.Project.path);
+            const manifestRaw=fs.readFileSync(within(root,'manifest.json'));
+            const planRaw=fs.readFileSync(path.join(__dirname,'import-plan.json'));
+            const manifest=JSON.parse(manifestRaw),plan=JSON.parse(planRaw);
+            const contextRaw=fs.readFileSync(within(root,'Analysis/Readback/native-readback-context.json'));
+            const context=JSON.parse(contextRaw);
+            const original=JSON.parse(fs.readFileSync(within(root,'Analysis/Readback/editor-readback.json'),'utf8'));
+            if(hash(contextRaw)!==original.nativeReadbackContextSha256||context.manifestSha256!==hash(manifestRaw)||context.sourcePlanSha256!==hash(planRaw)||
+                context.projectUuid!==manifest.projectUuid||context.projectUuid!==plan.projectUuid||
+                context.sceneUuid!==original.sceneUuid||context.nativePlan.nativeProjectRoot!==root)
+                throw Error('CREATOR_REOPEN_NATIVE_CONTEXT_IDENTITY_MISMATCH');
+            const savedPrefabs=context.nativePlan.savedPrefabs.map(info=>({...info,
+                sha256:hash(fs.readFileSync(within(root,info.path)))}));
+            const nativePlan={...context.nativePlan,savedPrefabs,nativeDeadlineMs:Date.now()+1200000,readbackReloadSavedAssets:true};
+            await Editor.Message.request('scene','execute-scene-script',
+                {name:'monkey-import',method:'beginOwnedImportUndo',args:[]});
+            try {
+                const revision=await require('./reopen-verification.js').createRevision({
+                    projectRoot:root,projectUuid:context.projectUuid,sceneUuid:context.sceneUuid,
+                    creatorVersion:Editor.App.version,nativeRoots:plan.outputPaths.nativeRoots,
+                    readbackContext:{...original,sourcePlanSha256:hash(planRaw)},
+                    runReadSaved:()=>sceneJob('readSaved',[context.sceneUuid,nativePlan],'native-readback',false)});
+                console.info('MONKEY_EDITOR_REOPEN_READBACK '+JSON.stringify(revision));
+                return revision;
+            } finally {
+                await Editor.Message.request('scene','execute-scene-script',
+                    {name:'monkey-import',method:'finishOwnedImportUndo',args:[]});
+            }
+        },
+        async inspectOrdinarySaveApi() {
+            const root=path.resolve(Editor.Project.path);
+            const planRaw=fs.readFileSync(path.join(__dirname,'import-plan.json'));
+            const result=await Editor.Message.request('scene','execute-scene-script',
+                {name:'monkey-import',method:'inspectOrdinarySaveApi',args:[]});
+            const directory=within(root,'Analysis/Readback/EditorSerialization');
+            fs.mkdirSync(directory,{recursive:true});
+            let sequence=1;
+            while(fs.existsSync(path.join(directory,'save-api-'+sequence+'.json')))sequence++;
+            const file=path.join(directory,'save-api-'+sequence+'.json');
+            fs.writeFileSync(file,JSON.stringify({schemaVersion:1,planSha256:hash(planRaw),
+                capturedAtUtc:new Date().toISOString(),...result},null,2)+'\n',{flag:'wx'});
+            console.info('MONKEY_EDITOR_SAVE_API_RECEIPT '+file);
+            return file;
+        },
+        async stopOrdinarySaveProbe() {
+            return Editor.Message.request('scene','execute-scene-script',
+                {name:'monkey-import',method:'stopOrdinarySaveProbe',args:[]});
+        },
         async importCandidate() {
+            await Editor.Message.request('scene','execute-scene-script',
+                {name:'monkey-import',method:'beginOwnedImportUndo',args:[]});
+            try { return await module.exports.methods.importCandidateOwned(); }
+            finally {
+                const evidence=await Editor.Message.request('scene','execute-scene-script',
+                    {name:'monkey-import',method:'finishOwnedImportUndo',args:[]});
+                const root=path.resolve(Editor.Project.path);
+                const directory=within(root,'Analysis/Readback');
+                fs.mkdirSync(directory,{recursive:true});
+                let sequence=1;
+                while(fs.existsSync(path.join(directory,'owned-import-undo-'+sequence+'.json')))sequence++;
+                fs.writeFileSync(path.join(directory,'owned-import-undo-'+sequence+'.json'),
+                    JSON.stringify(evidence,null,2)+'\n',{flag:'wx'});
+            }
+        },
+        async importCandidateOwned() {
             const root = path.resolve(Editor.Project.path);
             const manifestRaw = fs.readFileSync(within(root, 'manifest.json'));
             const manifest = JSON.parse(manifestRaw);
@@ -288,7 +353,13 @@ module.exports = {
             if (!scene || scene.invalid) throw Error('Native scene save failed');
             // Re-load saved/imported scene through the engine asset manager, not the in-memory tree.
             execution.checkpoint('native-readback');
-            const saved = await sceneJob('readSaved',[scene.uuid,{...nativePlan,animationAssets,savedPrefabs,nativeInitialNodes:result.nativeInitialNodes}],'native-readback');
+            const readbackPlan={...nativePlan,animationAssets,savedPrefabs,nativeInitialNodes:result.nativeInitialNodes};
+            fs.mkdirSync(within(root,'Analysis/Readback'),{recursive:true});
+            fs.writeFileSync(within(root,'Analysis/Readback/native-readback-context.json'),JSON.stringify({
+                schemaVersion:1,sceneUuid:scene.uuid,projectUuid:project.uuid,
+                sourcePlanSha256:hash(planRaw),manifestSha256:hash(manifestRaw),nativePlan:readbackPlan},null,2)+'\n',{flag:'wx'});
+            const nativeReadbackContextSha256=hash(fs.readFileSync(within(root,'Analysis/Readback/native-readback-context.json')));
+            const saved = await sceneJob('readSaved',[scene.uuid,readbackPlan],'native-readback');
             saved.materialBinding=materialReadback;
             saved.spriteOutlineBinding=spriteOutlineReadback;
             fs.mkdirSync(within(root,'Analysis/Readback'),{recursive:true});
@@ -325,7 +396,7 @@ module.exports = {
             }
             for(const folder of outputPaths.nativeRoots)if(fs.existsSync(within(root,folder)))collect(folder);
             const rb = {...saved, assets, sceneUuid:scene.uuid, creatorVersion:Editor.App.version, projectUuid:project.uuid,
-                manifestSha256:hash(manifestRaw), nativeFiles,apiTiming,codeEmission,numericCodeExercise:result.numericCodeExercise||[]};
+                manifestSha256:hash(manifestRaw),nativeReadbackContextSha256, nativeFiles,apiTiming,codeEmission,numericCodeExercise:result.numericCodeExercise||[]};
             fs.mkdirSync(within(root,'Analysis/Readback'),{recursive:true});fs.writeFileSync(within(root,'Analysis/Readback/editor-readback.json'),JSON.stringify(rb,null,2)+'\n',{flag:'wx'});
             return {sceneUuid:scene.uuid,nodeCount:rb.nodeCount,editorValidation:'readback-recorded'};
         }

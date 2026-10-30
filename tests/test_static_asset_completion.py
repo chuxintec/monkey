@@ -167,6 +167,8 @@ class StaticAssetCompletionTests(unittest.TestCase):
                              next(row["sourceId"] for row in prepared["plan"]["assets"] if row["sourceId"].endswith("@original")))
             texture_asset = prepared["plan"]["sourceResourceCompletion"]["targetAssets"]["creatorTexture2D"][0]
             self.assertEqual("cc.Texture2D", texture_asset["kind"])
+            from monkey.layout.verify import scan
+            self.assertEqual([], scan([texture_asset["path"]]))
             self.assertEqual(identity(prepared["plan"]["namespace"], texture_asset["sourceId"]), texture_asset["uuid"])
             texture_meta_path = Path(prepared["output"]) / next(row["source"] for row in prepared["contract"]["payloads"]
                 if row["kind"] == "creator-texture-meta")

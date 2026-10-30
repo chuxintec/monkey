@@ -120,6 +120,17 @@ function attach(node, spec, resolveClip, resolveSourceEvidence, types = {}) {
     return read(node, spec, resolveClip, resolveSourceEvidence, types);
 }
 
+function assetReferenceEvidence(value, ExpectedType) {
+    let typeMatches = false, persistent = false;
+    try { typeMatches = !!(ExpectedType && value instanceof ExpectedType); } catch (_) {}
+    if (typeMatches) {
+        try { persistent = typeof cc.isValid === 'function' ? cc.isValid(value, true) : true; } catch (_) {}
+    }
+    let uuid = null;
+    try { if (value && typeof value._uuid === 'string') uuid = value._uuid; } catch (_) {}
+    return {typeMatches, persistent, uuid};
+}
+
 function read(node, spec, resolveClip, resolveSourceEvidence, types = {}) {
     if (!node || !spec) throw new Error('STATIC_ANIMATION_BINDING_INPUT_INVALID');
     const animation = node.getComponent(cc.Animation);
@@ -143,8 +154,10 @@ function read(node, spec, resolveClip, resolveSourceEvidence, types = {}) {
         gapCodes: slot.gapCodes || [],
     })) : JSON.parse(marker.clipBindingsJson || '[]');
     const clips = [...(animation.clips || [])];
-    const clipRefsMatch = rows.filter(row => row.status === 'native_clip_reference_resolved').length === clips.length
-        && clips.every((clip, index) => marker.nativeClips[index] === clip);
+    const expectedNative = rows.filter(row => row.status === 'native_clip_reference_resolved');
+    const markerNativeClips = [...(marker.nativeClips || [])];
+    const clipRefsMatch = expectedNative.length === clips.length && markerNativeClips.length === clips.length
+        && clips.every((clip, index) => markerNativeClips[index] === clip);
     const fieldsMatch = marker.sourceComponentId === spec.sourceComponentId
         && marker.sourceNodeId === spec.sourceNodeId
         && marker.sourceEnabled === !!spec.sourceEnabled
@@ -191,11 +204,64 @@ function read(node, spec, resolveClip, resolveSourceEvidence, types = {}) {
     }))) && marker.sourceEvidenceAssets.length === expectedEvidenceRows.length
         && expectedEvidenceRows.every((row, index) => typeof resolveSourceEvidence === 'function'
             && marker.sourceEvidenceAssets[index] === resolveSourceEvidence(row.sourceEvidencePath, row.sourceEvidenceGuid, row.sourceEvidenceSha256)));
-    const expectedNative = (spec.clips || []).filter(row => row.status === 'native_clip_reference_resolved');
     const nativeRefsMatch = clips.length === expectedNative.length && expectedNative.every((row, index) =>
         typeof resolveClip === 'function'
             && clips[index] === resolveClip(row.nativeClipPath, row.nativeClipGuid, row.assetSha256));
     const matches = fieldsMatch && clipRefsMatch && sourceEvidenceMatches && nativeRefsMatch;
+    const clipReferenceEvidence = expectedNative.map((row, index) => {
+        const specRow = (spec.clips || []).find(candidate => candidate.order === row.order
+            && candidate.sourceClipId === row.sourceClipId) || row;
+        const expected = typeof resolveClip === 'function'
+            ? resolveClip(specRow.nativeClipPath, specRow.nativeClipGuid,
+                specRow.assetSha256 || specRow.nativeClipSha256) : null;
+        const animationClip = clips[index] || null;
+        const markerClip = markerNativeClips[index] || null;
+        return {order: row.order, sourceClipId: row.sourceClipId,
+            expectedGuid: row.nativeClipGuid || null,
+            expectedResolved: assetReferenceEvidence(expected, cc.AnimationClip),
+            animationClip: assetReferenceEvidence(animationClip, cc.AnimationClip),
+            markerNativeClip: assetReferenceEvidence(markerClip, cc.AnimationClip),
+            animationIsResolvedObject: animationClip === expected,
+            markerIsAnimationObject: markerClip === animationClip,
+            animationUuidMatchesExpected: !!expected && animationClip && animationClip._uuid === expected._uuid,
+            markerUuidMatchesExpected: !!expected && markerClip && markerClip._uuid === expected._uuid};
+    });
+    const sourceEvidenceEvidence = expectedEvidenceRows.map(row => {
+        const expected = typeof resolveSourceEvidence === 'function'
+            ? resolveSourceEvidence(row.sourceEvidencePath, row.sourceEvidenceGuid, row.sourceEvidenceSha256) : null;
+        const markerAsset = typedMarker
+            ? (marker.sourceClips || []).find(slot => slot.order === row.order)?.sourceEvidence
+            : marker.sourceEvidenceAssets[expectedEvidenceRows.indexOf(row)];
+        return {order: row.order, sourceClipId: row.sourceClipId,
+            expectedGuid: row.sourceEvidenceGuid || null,
+            expectedResolved: assetReferenceEvidence(expected, cc.JsonAsset),
+            markerAsset: assetReferenceEvidence(markerAsset, cc.JsonAsset),
+            sameObject: markerAsset === expected,
+            uuidMatchesExpected: !!expected && markerAsset && markerAsset._uuid === expected._uuid};
+    });
+    const fieldChecks = {
+        sourceComponentId: marker.sourceComponentId === spec.sourceComponentId,
+        sourceNodeId: marker.sourceNodeId === spec.sourceNodeId,
+        sourceEnabled: marker.sourceEnabled === !!spec.sourceEnabled,
+        sourceEnabledKnown: marker.sourceEnabledKnown === !!spec.sourceEnabledKnown,
+        sourcePlayOnLoad: marker.sourcePlayOnLoad === !!spec.sourcePlayOnLoad,
+        sourcePlayOnLoadKnown: marker.sourcePlayOnLoadKnown === !!spec.sourcePlayOnLoadKnown,
+        sourceDefaultClipId: marker.sourceDefaultClipId === (spec.sourceDefaultClipId || ''),
+        sourceDefaultClipKnown: marker.sourceDefaultClipKnown === !!spec.sourceDefaultClipKnown,
+        hasSourceDefaultClip: marker.hasSourceDefaultClip === !!spec.hasSourceDefaultClip,
+        sourceClipOrder: typedMarker
+            ? JSON.stringify(marker.sourceClipOrder || []) === JSON.stringify(spec.sourceClipOrder || [])
+            : marker.sourceClipOrderJson === JSON.stringify(spec.sourceClipOrder || []),
+        animationDisabled: animation.enabled === false,
+        markerDisabled: marker.enabled === false,
+        defaultClipMirrored: animation.defaultClip === marker.nativeDefaultClip,
+        clipOrder: clips.length === expectedNative.length,
+        nativeClipMarkerCount: markerNativeClips.length === expectedNative.length,
+    };
+    const comparison = matches ? null : {checks: {fieldsMatch, clipRefsMatch, sourceEvidenceMatches, nativeRefsMatch},
+        fieldChecks, animationClipCount: clips.length, expectedNativeClipCount: expectedNative.length,
+        markerNativeClipCount: markerNativeClips.length,
+        clipReferences: clipReferenceEvidence, sourceEvidenceReferences: sourceEvidenceEvidence};
     return {
         status: matches ? (spec.status === 'resolved' ? 'reference_fields_verified' : 'partial') : 'mismatch',
         sourceComponentId: marker.sourceComponentId,
@@ -211,7 +277,7 @@ function read(node, spec, resolveClip, resolveSourceEvidence, types = {}) {
         animationDisabled: !animation.enabled,
         markerDisabled: !marker.enabled,
         playbackExecuted: false,
-        diagnostics: matches ? [] : ['serialized source animation fields or native clip references differ'],
+        diagnostics: matches ? [] : [{code: 'STATIC_ANIMATION_REFERENCE_COMPARISON', comparison}],
     };
 }
 

@@ -670,6 +670,59 @@ def attach_unity_stage(target_plan: dict, stage: dict) -> dict:
     return target_plan
 
 
+def refresh_unity_stage_helpers(plan_file: str | Path, output: str | Path) -> dict:
+    """Freeze current owned helper implementations in a new, verified plan.
+
+    Source closure, runtime binaries, identities and binding plans are copied
+    byte-for-byte. Existing plans and exported candidates remain immutable.
+    """
+    from copy import deepcopy
+    from . import io
+    from .output_limits import copy_verified
+
+    source = Path(plan_file).resolve(strict=True)
+    plan = io.stage_document(source)
+    stage = plan.get('spineNativeStage')
+    if (plan.get('targetProfile') != 'unity-6000.6.2f1-ugui' or
+            not isinstance(stage, dict) or stage.get('contract') != CONTRACT or
+            stage.get('target') != 'unity' or
+            stage.get('sourceManifestSha256') != plan.get('sourceManifestSha256') or
+            stage.get('sourceIrSha256') != plan.get('sourceIrSha256')):
+        raise SpineNativeStageError('helper refresh requires a source-bound Unity Spine stage')
+    helpers = {target: Path(__file__).resolve().parent / relative for relative, target in _HELPERS}
+    copies = stage.get('copies', [])
+    seen = set()
+    for row in copies:
+        if row['target'] in seen:
+            raise SpineNativeStageError('duplicate staged helper refresh target')
+        seen.add(row['target'])
+        raw = read(inside(source.parent, row['source']), max_bytes=128 * 1024 * 1024)
+        if sha(raw) != row['sha256'] or len(raw) != row['bytes']:
+            raise SpineNativeStageError('helper refresh input payload changed')
+        if (row['target'] in helpers) != (row.get('role') == 'unity-native-spine-helper'):
+            raise SpineNativeStageError('helper refresh ownership differs')
+    if not set(helpers).issubset(seen):
+        raise SpineNativeStageError('helper refresh target set incomplete')
+    out = io.new_output(output, [source.parent])
+    for row in io.stage_manifest(source.parent)['files']:
+        if row['path'] not in (source.name, 'spine-native-stage.json'):
+            copy_verified(inside(source.parent, row['path']), inside(out, row['path']), row['sha256'], row['bytes'])
+    stage = deepcopy(stage)
+    changes = []
+    for index, row in enumerate(stage['copies']):
+        if row['target'] not in helpers:
+            continue
+        updated = _record(out, helpers[row['target']], row['target'], row['role'])
+        stage['copies'][index] = updated
+        changes.append({'target': row['target'], 'previousSha256': row['sha256'], 'sha256': updated['sha256']})
+    plan['spineNativeStage'] = stage
+    plan['nativeHelperRefresh'] = {'parentPlanSha256': sha(source.read_bytes()), 'helpers': changes,
+                                  'sourceAssetsChanged': False, 'nativeImport': 'not_run'}
+    write_json(out / 'spine-native-stage.json', stage)
+    write_json(out / 'plan.json', plan)
+    return io.finish(out, plan)
+
+
 def emit_unity_stage(stage: dict, plan_root: str | Path, output: str | Path) -> dict:
     """Emit verified payload files into a fresh or partially assembled Unity candidate."""
     if not isinstance(stage, dict) or stage.get("contract") != CONTRACT or stage.get("target") != "unity":

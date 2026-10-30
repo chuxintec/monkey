@@ -61,6 +61,9 @@ class PersistentTextOutlineVariantTests(unittest.TestCase):
         self.assertIn("if (!hasPersistentFallback) requiresPaddingUpdate |= ConfigureMaterial", apply)
         self.assertIn("if (!hasPersistentFallback) material = GetVariant", apply)
         self.assertIn("public bool ConfigureCaptureCandidate(", self.source)
+        selected = _body(self.source, "public bool IsPersistentMaterialVariantSelected(")
+        self.assertIn("TryGetPersistentVariant(font, parentFontMaterial, atlas, out var selected)", selected)
+        self.assertIn("selected == candidate", selected)
 
     def test_readonly_runtime_selection_cannot_create_or_destroy_persistent_assets(self):
         self.assertNotIn("using UnityEditor", self.source)

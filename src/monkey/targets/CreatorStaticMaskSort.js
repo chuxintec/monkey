@@ -8,6 +8,85 @@ function resolveSprite(plan, assets, uuid) {
     if(!(asset instanceof cc.SpriteFrame))throw Error('STATIC_MASK_FRAME_NATIVE_TYPE_DIFFERS:'+uuid);
     return asset;
 }
+function objectUuid(value) { return value && (value._uuid || value.uuid) || null; }
+function vectorEvidence(value, keys) {
+    if (!value || typeof value !== 'object') return null;
+    const result = {};
+    for (const key of keys) {
+        const item = value[key];
+        if (typeof item !== 'number' || !Number.isFinite(item)) return null;
+        result[key] = item;
+    }
+    return result;
+}
+function numericArrayEvidence(value) {
+    return Array.isArray(value) && value.every(item => typeof item === 'number' && Number.isFinite(item)) ? value.slice() : null;
+}
+function vectorArrayEvidence(value) {
+    if (!Array.isArray(value)) return null;
+    const rows = value.map(item => vectorEvidence(item, ['x', 'y', 'z']));
+    return rows.every(Boolean) ? rows : null;
+}
+function spriteFrameEvidence(frame) {
+    if (!(frame instanceof cc.SpriteFrame) || frame.constructor !== cc.SpriteFrame) return null;
+    const texture = frame.texture || frame._texture || null;
+    const rect = vectorEvidence(frame.rect, ['x', 'y', 'width', 'height']);
+    const originalSize = vectorEvidence(frame.originalSize, ['width', 'height']);
+    const offset = vectorEvidence(frame.offset, ['x', 'y']);
+    const pivot = vectorEvidence(frame.pivot, ['x', 'y']);
+    const vertices = frame.vertices;
+    let vertexData = null;
+    if (vertices === null) vertexData = null;
+    else if (vertices && typeof vertices === 'object') {
+        const rawPosition = vectorArrayEvidence(vertices.rawPosition);
+        const positions = numericArrayEvidence(vertices.positions);
+        const indexes = numericArrayEvidence(vertices.indexes);
+        const uv = numericArrayEvidence(vertices.uv);
+        const nuv = numericArrayEvidence(vertices.nuv);
+        const minPos = vectorEvidence(vertices.minPos, ['x', 'y', 'z']);
+        const maxPos = vectorEvidence(vertices.maxPos, ['x', 'y', 'z']);
+        if ([rawPosition, positions, indexes, uv, nuv, minPos, maxPos].some(value => value === null)) return null;
+        vertexData = {rawPosition, positions, indexes, uv, nuv, minPos, maxPos};
+    } else return null;
+    const textureEvidence = texture && objectUuid(texture) &&
+        typeof texture.width === 'number' && Number.isFinite(texture.width) &&
+        typeof texture.height === 'number' && Number.isFinite(texture.height) ? {
+            type: texture.constructor && texture.constructor.name || null,
+            uuid: objectUuid(texture), width: texture.width, height: texture.height,
+        } : null;
+    const insets = [frame.insetTop, frame.insetBottom, frame.insetLeft, frame.insetRight];
+    const frameUuid = objectUuid(frame);
+    if (!frameUuid || !textureEvidence || !rect || !originalSize || !offset || !pivot ||
+        typeof frame.rotated !== 'boolean' || insets.some(value => typeof value !== 'number' || !Number.isFinite(value)) ||
+        typeof frame.flipUVX !== 'boolean' || typeof frame.flipUVY !== 'boolean' ||
+        typeof frame.packable !== 'boolean' || typeof frame.pixelsToUnit !== 'number' || !Number.isFinite(frame.pixelsToUnit) ||
+        typeof frame._meshType !== 'number' || !Number.isFinite(frame._meshType)) return null;
+    return {
+        type: frame.constructor && frame.constructor.name || null, uuid: frameUuid, texture: textureEvidence,
+        atlasUuid: typeof frame.atlasUuid === 'string' ? frame.atlasUuid : null,
+        rect, originalSize, offset, rotated: frame.rotated, insets, flipUVX: frame.flipUVX, flipUVY: frame.flipUVY,
+        packable: frame.packable, pixelsToUnit: frame.pixelsToUnit, pivot,
+        meshType: frame._meshType, vertices: vertexData,
+    };
+}
+function sameSpriteFrameResource(expected, actual) {
+    const expectedEvidence = spriteFrameEvidence(expected);
+    const actualEvidence = spriteFrameEvidence(actual);
+    return {verified: !!expectedEvidence && !!actualEvidence &&
+        JSON.stringify(expectedEvidence) === JSON.stringify(actualEvidence), expected: expectedEvidence, actual: actualEvidence};
+}
+function maskRendererEvidence(renderer) {
+    if (!renderer) return null;
+    const material = renderer.customMaterial || null, effect = material && material.effectAsset;
+    let sharedMaterialUuids = null, material0Uuid = null, materialReadbackError = null;
+    try { sharedMaterialUuids = Array.isArray(renderer.sharedMaterials) ? renderer.sharedMaterials.map(objectUuid) : null; }
+    catch (error) { materialReadbackError = String(error && error.message || error); }
+    try { material0Uuid = typeof renderer.getMaterial === 'function' ? objectUuid(renderer.getMaterial(0)) : null; }
+    catch (error) { materialReadbackError = String(error && error.message || error); }
+    return {type: renderer.constructor && renderer.constructor.name || null, componentUuid: renderer.uuid || null,
+        customMaterialUuid: objectUuid(material), customEffectUuid: objectUuid(effect),
+        sharedMaterialUuids, material0Uuid, materialReadbackError};
+}
 
 function createStaticMasks(specs, nodes, resolveSprite) {
     if (!Array.isArray(specs)) throw Error('STATIC_MASK_PLAN_INVALID');
@@ -94,20 +173,52 @@ function readStaticMasks(specs, nodes, resolveSprite, options = {}) {
         const expectedSpriteFrame = spec.maskType === 2 && resolveSprite ? resolveSprite(spec.spriteFrameUuid) : null;
         const sprite = spec.maskType === 2 ? node.getComponent(cc.Sprite) : null;
         const nativeSpriteFrame = sprite ? sprite.spriteFrame : null;
-        const spriteOK = spec.maskType !== 2 || (sprite && expectedSpriteFrame &&
-            nativeSpriteFrame === expectedSpriteFrame && identity.sourceSpriteFrame === expectedSpriteFrame);
+        const frameResource = spec.maskType === 2 ? sameSpriteFrameResource(expectedSpriteFrame, nativeSpriteFrame) : null;
+        const identitySpriteFrameSameDomain = spec.maskType !== 2 || identity.sourceSpriteFrame === nativeSpriteFrame;
+        const spriteOK = spec.maskType !== 2 || (sprite && expectedSpriteFrame && frameResource.verified && identitySpriteFrameSameDomain);
         const initializedBackingOK = !initialized || spec.maskType !== 2 || (mask.subComp === sprite && mask.spriteFrame === nativeSpriteFrame);
         const dependencyOK = spec.maskType === 2 ? !!node.getComponent(cc.Sprite) :
             !!node.getComponent(cc.Graphics) && !node.getComponent(cc.Sprite);
         const sourceFieldsJson = typeof spec.sourceFieldsJson === 'string' ? spec.sourceFieldsJson : JSON.stringify(spec.sourceFields);
         let sourceFields = null;
         try { sourceFields = JSON.parse(identity.sourceFieldsJson); } catch (_) { /* validation below fails closed */ }
+        const expectedFrameUuid = objectUuid(expectedSpriteFrame);
+        const nativeFrameUuid = objectUuid(nativeSpriteFrame);
+        const backingRenderer = spec.maskType === 2 ? sprite : node.getComponent(cc.Graphics);
+        const expectedSourceMaterials = spec.sourceFields && Array.isArray(spec.sourceFields._materials) ?
+            spec.sourceFields._materials.map(value => value && typeof value === 'object' ? value.__uuid__ || null : value) : [];
+        const checks = {
+            nodeFound: !!node,
+            maskComponentCount: components.length === 1,
+            identityComponentCount: identities.length === 1,
+            maskNodeIdentity: mask.node === node,
+            maskUuidPresent: typeof mask.uuid === 'string' && mask.uuid.length > 0,
+            nativeMaskType: mask.type === expectedType,
+            enabled: mask.enabled === spec.enabled,
+            inverted: mask.inverted === spec.inverted,
+            alphaThreshold: mask.alphaThreshold === spec.alphaThreshold,
+            spriteReferenceAndFrame: spriteOK,
+            backingDependency: dependencyOK,
+            initializedBacking: initializedBackingOK,
+            identityDisabled: identity.enabled === false,
+            identitySourceId: identity.sourceId === spec.sourceId,
+            identityNativeId: identity.nativeId === spec.nativeId,
+            identityNativeMaskReference: identity.nativeMask === mask,
+            identityMaskType: identity.sourceMaskType === spec.maskType,
+            identityInverted: identity.sourceInverted === spec.inverted,
+            identityAlphaThreshold: identity.sourceAlphaThreshold === spec.alphaThreshold,
+            identitySourceFieldsJson: identity.sourceFieldsJson === sourceFieldsJson,
+            identitySourceSpriteFrameUuid: identity.sourceSpriteFrameUuid === (spec.spriteFrameUuid || ''),
+            identitySpriteFrameReference: spec.maskType === 2 ? identitySpriteFrameSameDomain : identity.sourceSpriteFrame === null,
+            spriteFrameResourceIdentity: spec.maskType === 2 ? !!frameResource.verified : true,
+            sourceFieldsParsed: !!sourceFields,
+        };
         const identityOK = identity.enabled === false && identity.sourceId === spec.sourceId &&
             identity.nativeMask === mask &&
             identity.nativeId === spec.nativeId && identity.sourceMaskType === spec.maskType &&
             identity.sourceInverted === spec.inverted && identity.sourceAlphaThreshold === spec.alphaThreshold &&
             identity.sourceFieldsJson === sourceFieldsJson && identity.sourceSpriteFrameUuid === (spec.spriteFrameUuid || '') &&
-            (spec.maskType === 2 ? identity.sourceSpriteFrame === expectedSpriteFrame : identity.sourceSpriteFrame === null) &&
+            (spec.maskType === 2 ? identitySpriteFrameSameDomain : identity.sourceSpriteFrame === null) &&
             initializedBackingOK;
         const verified = mask.node === node && mask.type === expectedType && mask.enabled === spec.enabled &&
             mask.inverted === spec.inverted && mask.alphaThreshold === spec.alphaThreshold && spriteOK && dependencyOK &&
@@ -117,6 +228,26 @@ function readStaticMasks(specs, nodes, resolveSprite, options = {}) {
         return {sourceId: spec.sourceId, node: spec.node, nativeType: mask.constructor.name,
             componentUuid: mask.uuid, enabled: mask.enabled, maskType: spec.maskType,
             nativeMaskType: mask.type, inverted: mask.inverted, alphaThreshold: mask.alphaThreshold,
+            expected: {sourceId: spec.sourceId, nativeId: spec.nativeId, node: spec.node, nodeUuid: node.uuid || null,
+                nativeType: spec.nativeType || 'cc.Mask', maskType: spec.maskType, expectedMaskType: expectedType,
+                enabled: spec.enabled, inverted: spec.inverted, alphaThreshold: spec.alphaThreshold,
+                sourceSpriteFrameUuid: spec.spriteFrameUuid || null, resolvedSpriteFrameUuid: expectedFrameUuid,
+                sourceMaterials: expectedSourceMaterials, sourceFieldsJson},
+            actual: {nodeUuid: node.uuid || null, componentUuid: mask.uuid || null, componentType: mask.constructor.name,
+                maskNodeMatches: mask.node === node, maskType: mask.type, enabled: mask.enabled, inverted: mask.inverted,
+                alphaThreshold: mask.alphaThreshold, maskSpriteFrameUuid: objectUuid(mask.spriteFrame),
+                spriteComponentUuid: sprite && sprite.uuid || null, spriteFrameUuid: nativeFrameUuid,
+                spriteFrameResourceEvidence: frameResource,
+                identitySpriteFrameIsNodeFrame: spec.maskType === 2 ? identitySpriteFrameSameDomain : null,
+                initializedMaskFrameIsNodeFrame: initialized && spec.maskType === 2 ? mask.spriteFrame === nativeSpriteFrame : null,
+                backingCacheType: mask.subComp && mask.subComp.constructor && mask.subComp.constructor.name || null,
+                backingRenderer: maskRendererEvidence(backingRenderer), sourceFieldsJson: identity.sourceFieldsJson,
+                identity: {sourceId: identity.sourceId, nativeId: identity.nativeId, enabled: identity.enabled,
+                    sourceMaskType: identity.sourceMaskType, sourceInverted: identity.sourceInverted,
+                    sourceAlphaThreshold: identity.sourceAlphaThreshold, sourceSpriteFrameUuid: identity.sourceSpriteFrameUuid,
+                    sourceSpriteFrameUuidActual: objectUuid(identity.sourceSpriteFrame),
+                    nativeMaskUuid: objectUuid(identity.nativeMask)}},
+            checks, failedChecks: Object.keys(checks).filter(key => !checks[key]),
             sourceSpriteFrameUuid: spec.maskType === 2 ? spec.spriteFrameUuid : null,
             nativeSpriteFrameUuid, maskSpriteFrameUuid: initialized && mask.spriteFrame ?
                 (mask.spriteFrame._uuid || mask.spriteFrame.uuid || null) : null,

@@ -3,6 +3,7 @@
 // by the installed SDK; no source graph or interpreter is included in Player.
 const cc=require('cc');
 const dynamic=require('./dynamic-ui.js');
+const ownedUndo=require('./owned-import-undo.js');
 const sourceChildren=require('./static-richtext.js').sourceChildren;
 const sortQueue=require('./CreatorStaticSortQueueIntegration.js');
 let current=null,sequence=0;
@@ -44,7 +45,7 @@ function serializeNative(root,asset){
             snapshots.push({stage,node:n.name,component:cc.js.getClassName(c),flags:c._objFlags,nodeFlags:c.node._objFlags,prefab:c.__prefab,target:group.targetInfo.localID});
         }n.children.forEach(visit);}visit(root);return snapshots;
     }
-    try{const before=checkMounted('before strip');api().p.checkAndStripNode(root,true);const after=checkMounted('after strip');
+    try{recordNativeInstanceReferences(root);const before=checkMounted('before strip');api().p.checkAndStripNode(root,true);const after=checkMounted('after strip');
         // The default SDK parser discards components under a syncable instance
         // root even when the native mountedComponents table references them.
         // Use its explicit native retention option for those additions; linked
@@ -104,6 +105,75 @@ function delta(instance,obj,key,v,ids) {
     patch.targetInfo=target;patch.propertyPath=[key];patch.value=value(v);instance.propertyOverrides.push(patch);obj[key]=value(v);
 }
 function instanceRoots(root){const result=[];function walk(n){if(n!==root&&n._prefab&&n._prefab.instance){result.push(n);return;}sourceChildren(n).forEach(walk);}walk(root);return result;}
+function recordNativeInstanceReferences(root) {
+    const roots=instanceRoots(root);if(!roots.length)return;
+    const {u}=api();
+    if(!u.TargetOverrideInfo||!u.TargetInfo||!u.PropertyOverrideInfo||!root._prefab)
+        throw Error('Native Prefab reference override SDK unavailable');
+    const scoped=new Map();
+    for(const instanceRoot of roots) {
+      const templateRoot=instanceRoot._prefab.asset?.data;
+      if(!(templateRoot instanceof cc.Node))throw Error('Native instance template unavailable for state comparison');
+      const templateByPath=new Map([...targetIds(templateRoot)].map(([object,path])=>[JSON.stringify(path),object]));
+      for(const [object,localID]of targetIds(instanceRoot)) {
+        if(scoped.has(object))throw Error('Ambiguous native instance reference scope');
+        scoped.set(object,{root:instanceRoot,localID});
+        // Runtime changes made while composing an outer Prefab must survive
+        // template expansion. In particular, nested presentation roots remain
+        // disabled and authored source layers are restored before serialization.
+        if(object instanceof cc.Node)for(const key of ['_active','_layer']) {
+            const instance=instanceRoot._prefab.instance;
+            const template=templateByPath.get(JSON.stringify(localID));
+            // Mounted children retain their own native serialization. Existing
+            // template nodes only need an override when their value differs.
+            if(!template)continue;
+            if(!(template instanceof cc.Node))throw Error('Native node state template type mismatch');
+            instance.propertyOverrides??=[];
+            const matches=instance.propertyOverrides.filter(p=>equal(p.targetInfo?.localID,localID)&&equal(p.propertyPath,[key]));
+            if(matches.length>1)throw Error('Duplicate native node-state override');
+            if(equal(template[key],object[key])){
+                if(matches.length)instance.propertyOverrides.splice(instance.propertyOverrides.indexOf(matches[0]),1);
+                continue;
+            }
+            const patch=matches[0]||new u.PropertyOverrideInfo();
+            if(!matches.length){patch.targetInfo=new u.TargetInfo();patch.targetInfo.localID=[...localID];patch.propertyPath=[key];instance.propertyOverrides.push(patch);}
+            patch.value=value(object[key]);
+        }
+      }
+    }
+    root._prefab.targetOverrides??=[];
+    function reference(source,path,target) {
+        const destination=scoped.get(target);if(!destination)return;
+        const origin=scoped.get(source);
+        if(origin?.root===destination.root)return; // template-local native refs
+        const sourceObject=origin?.root||source,sourceID=origin?.localID||null;
+        const matches=root._prefab.targetOverrides.filter(p=>p.source===sourceObject&&
+            equal(p.sourceInfo?.localID||null,sourceID)&&equal(p.propertyPath,path));
+        if(matches.length>1)throw Error('Duplicate native cross-instance reference override');
+        if(matches.length&&(matches[0].target!==destination.root||!equal(matches[0].targetInfo?.localID,destination.localID)))
+            throw Error('Conflicting native cross-instance reference override');
+        const patch=matches[0]||new u.TargetOverrideInfo();
+        patch.source=sourceObject;patch.sourceInfo=null;
+        if(origin){patch.sourceInfo=new u.TargetInfo();patch.sourceInfo.localID=[...sourceID];}
+        patch.propertyPath=[...path];patch.target=destination.root;
+        patch.targetInfo=new u.TargetInfo();patch.targetInfo.localID=[...destination.localID];
+        if(!matches.length)root._prefab.targetOverrides.push(patch);
+    }
+    function inspect(source,item,path,ancestors) {
+        if(item==null||typeof item!=='object')return;
+        if(item instanceof cc.Node||item instanceof cc.Component){reference(source,path,item);return;}
+        if(item instanceof cc.Asset||item instanceof cc.ValueType)return;
+        if(ancestors.has(item))throw Error('Cyclic native serialized reference value');
+        const next=new Set(ancestors);next.add(item);
+        const keys=Array.isArray(item)?item.map((_,i)=>String(i)):
+            Object.getPrototypeOf(item)===Object.prototype?Object.keys(item):item.constructor?.__values__;
+        if(!Array.isArray(keys))throw Error('Native reference override value schema absent');
+        for(const key of keys)inspect(source,item[key],[...path,key],next);
+    }
+    function visit(node){for(const component of node.components)for(const key of componentFields(component))
+        inspect(component,component[key],[key],new Set());node.children.forEach(visit);}
+    visit(root);
+}
 async function prepare(state,owner,saved,load) {
     if(state.prepared.has(owner))return;
     const {plan,nodes}=state,specs=new Map(plan.sourcePrefabs.map(p=>[p.sourceId,p]));
@@ -111,6 +181,7 @@ async function prepare(state,owner,saved,load) {
         const info=saved.find(x=>x.sourceId===link.template),spec=specs.get(link.template);
         if(!info||!info.sha256)throw Error('Native template must be saved first');
         const asset=await load(info.uuid,cc.Prefab),root=cc.instantiate(asset),previous=nodes.get(link.root),parent=previous.parent,index=previous.getSiblingIndex();
+        ownedUndo.registerRoot(root);
         if(!root._prefab||!root._prefab.instance||root._prefab.asset._uuid!==info.uuid)throw Error('SDK did not create a native Prefab instance');
         const template=mapTree(root,spec,plan),replacements=new Map(),components=[],added=[];
         const ids=targetIds(root),instance=root._prefab.instance,{u}=api();
@@ -181,6 +252,7 @@ async function serializePrefab(id,sid,saved,plan,load) {
     if(!sourceRoot||!renderContextParent||!renderCanvas||!renderCanvas.enabledInHierarchy||!renderCanvas.node.activeInHierarchy)
         throw Error('Static sort proxy requires the actual active nested Prefab Canvas context: '+spec.root);
     const root=cc.instantiate(sourceRoot);
+    ownedUndo.registerRoot(root);
     try {
         root.parent=renderContextParent;root.setSiblingIndex(renderContextParent.children.length-1);root.name=spec.nativeRootName;
         const mapped=mapTree(root,spec,plan);
@@ -249,4 +321,4 @@ function read(plan,mapped,templates,saved,owner=null){
     }
     return rows;
 }
-module.exports={sourceTemplateNode,keep,release,serializePrefab,finish,read};
+module.exports={sourceTemplateNode,keep,release,serializePrefab,finish,read,recordNativeInstanceReferences};

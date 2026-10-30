@@ -1,5 +1,7 @@
 'use strict';
 
+const ownedUndo=require('./owned-import-undo.js');
+
 const POLICY = 'cocos24-bitmap-missing-glyph-skip-v1';
 const SOURCE_EVIDENCE = 'cocos2d/core/renderer/utils/label/bmfont.js:235';
 const NON_GLYPH_CONTROLS = new Set([10]);
@@ -133,7 +135,8 @@ function read(contract, persistentNodes, loadedCloneNodes, fonts, cc) {
 }
 
 function renderProbe(rows,nodes,cc) {
-    const scene=new cc.Scene('BitmapMissingGlyphProbeScene'), context=new cc.Node('BitmapMissingGlyphProbeRoot');
+    const scene=new cc.Scene('BitmapMissingGlyphProbeScene');ownedUndo.registerRoot(scene);
+    const context=new cc.Node('BitmapMissingGlyphProbeRoot');ownedUndo.registerRoot(context);
     scene.active=true;context.active=true;
     let activated=false;
     const mapped=new Set(nodes.values());
@@ -147,6 +150,8 @@ function renderProbe(rows,nodes,cc) {
             for(let current=row.loadedNode;current&&mapped.has(current);current=current.parent)current.active=true;
         }
         scene._load();scene._activate(true);activated=true;
+        // Claim the attached disposable tree, including all supplied clone roots.
+        ownedUndo.registerRoot(scene);
         for(const row of rows){
             const {spec,loadedNode,loadedLabel,loadedFontInfo}=row;
             if(loadedNode.activeInHierarchy!==true)throw new Error(`BITMAP_MISSING_GLYPH_PROBE_NODE_NOT_ACTIVE:${spec.sourceNodeId}`);

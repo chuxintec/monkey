@@ -397,7 +397,7 @@ def apply(plan: dict, source_manifest: str | Path, out: str | Path) -> dict:
         texture_stem = logical
         unity_frame_path = _unique_target(PurePosixPath("Assets/Game/Content/Textures") / frame_stem.with_suffix(".png"), frame_id, occupied)
         unity_original_path = _unique_target(PurePosixPath("Assets/Game/Content/Textures/@original/Frames") / frame_stem.with_suffix(".png"), frame_id + "@original", occupied)
-        unity_source_texture_path = _unique_target(PurePosixPath("Assets/Game/Content/Textures/@original/Source") / texture_stem.with_suffix(".png"), texture_id, occupied)
+        unity_source_texture_path = _unique_target(PurePosixPath("Assets/Game/Content/Textures/@original/Textures") / texture_stem.with_suffix(".png"), texture_id, occupied)
         creator_frame_path = unity_frame_path.replace("Assets/Game/Content/", "assets/resources/")
         creator_original_path = unity_original_path.replace("Assets/Game/Content/", "assets/resources/")
         creator_texture_path = unity_source_texture_path.replace("Assets/Game/Content/", "assets/resources/")

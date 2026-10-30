@@ -164,6 +164,14 @@ public sealed class NativeStaticTextOutline : MonoBehaviour
         return true;
     }
 
+    /// <summary>Read-only check that the exact capture-registered variant is selected for this TMP slot.</summary>
+    public bool IsPersistentMaterialVariantSelected(TMP_FontAsset font, Material parentFontMaterial,
+        Texture atlas, Material candidate)
+    {
+        return candidate != null && TryGetPersistentVariant(font, parentFontMaterial, atlas, out var selected) &&
+            selected == candidate;
+    }
+
     bool HasConfiguredStyle(Material material, TMP_FontAsset font, float labelFontSize)
     {
         if (material == null || font == null || font.material == null ||

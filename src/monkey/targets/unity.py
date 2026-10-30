@@ -525,7 +525,9 @@ def export(plan_path, output):
             ('UnityStaticSortQueueProxy.cs',str(Path(standard.unity('importer')).with_name('UnityStaticSortQueueProxy.cs')),'static-sort-editor/UnityStaticSortQueueProxy.cs'),
             ('UnityStaticSortQueueIntegration.cs',str(Path(standard.unity('importer')).with_name('UnityStaticSortQueueIntegration.cs')),'static-sort-editor/UnityStaticSortQueueIntegration.cs'),
             ('UnityStaticSortTextSource.cs',str(Path(standard.unity('importer')).with_name('UnityStaticSortTextSource.cs')),'static-sort-editor/UnityStaticSortTextSource.cs'),
+            ('UnityStaticSortVertexPrecision.cs',str(Path(standard.unity('importer')).with_name('UnityStaticSortVertexPrecision.cs')),'static-sort-editor/UnityStaticSortVertexPrecision.cs'),
             ('NativeStaticSortTextSource.cs','Assets/Game/Scripts/Presentation/StaticSort/NativeStaticSortTextSource.cs','static-sort-runtime/NativeStaticSortTextSource.cs'),
+            ('NativeStaticSortTextSlotEnumerationIdentity.cs','Assets/Game/Scripts/Presentation/StaticSort/NativeStaticSortTextSlotEnumerationIdentity.cs','static-sort-runtime/NativeStaticSortTextSlotEnumerationIdentity.cs'),
             ('NativeStaticSortQueueProxyGraphic.cs','Assets/Game/Scripts/Presentation/StaticSort/NativeStaticSortQueueProxyGraphic.cs','static-sort-runtime/NativeStaticSortQueueProxyGraphic.cs'),
             ('NativeStaticSortQueueProxyPresenter.cs','Assets/Game/Scripts/Presentation/StaticSort/NativeStaticSortQueueProxyPresenter.cs','static-sort-runtime/NativeStaticSortQueueProxyPresenter.cs'),
             ('NativeStaticSortQueueProxyMarker.cs','Assets/Game/Scripts/Presentation/StaticSort/NativeStaticSortQueueProxyMarker.cs','static-sort-runtime/NativeStaticSortQueueProxyMarker.cs'),
@@ -749,6 +751,18 @@ def gallery_readback(instruction,readback):
     return []if valid else[diagnostic('NATIVE_GALLERY_READBACK','Analysis/Readback/editor-readback.json','Resource-only preview must prove exact sprite identities/rects without claiming source graph restoration')]
 
 
+def _static_sort_spine_bindings(plan, root):
+    """Load measured-map input only from the frozen candidate binding-plan pin."""
+    from ..prefab_spine_unity_readback import _relative_file, _sha
+    stage = plan.get('spineNativeStage')
+    if not isinstance(stage, dict):
+        return None
+    path = _relative_file(Path(root).resolve(), stage.get('nativeBindingPlanPath'))
+    if path is None or _sha(path) != stage.get('nativeBindingPlanSha256'):
+        return None
+    return read(path, max_bytes=128 * 1024 * 1024)
+
+
 def verify(candidate, output, level='static'):
     root=safe(candidate);m=stage_manifest(root);diagnostics=[]
     from ..sources.containers import fingerprint
@@ -773,7 +787,8 @@ def verify(candidate, output, level='static'):
             from ..prefab_static_completion_readback import verify_assets as verify_retained
             diagnostics.extend(verify_retained(instruction,rb.get('staticRetainedAssetReadback'),'unity'))
             from ..prefab_static_sort_readback import verify as verify_static_sort
-            diagnostics.extend(verify_static_sort(instruction,rb))
+            diagnostics.extend(verify_static_sort(instruction,rb,
+                spine_native_bindings=_static_sort_spine_bindings(instruction, root)))
             from ..prefab_sprite_outline_unity_readback import verify as verify_outline_saved
             diagnostics.extend(verify_outline_saved(instruction,root,rb))
             if instruction.get('staticTimeMaterialsJson'):

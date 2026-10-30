@@ -12,10 +12,32 @@ public sealed class NativeInputBlocker : MonoBehaviour,
     [SerializeField] private Graphic surface;
     [SerializeField] private bool previousRaycast;
     [SerializeField] private bool ownsSurface;
+    [SerializeField] private bool sourceActivityOverrideConfigured;
+    [SerializeField] private bool sourceEnabledAtCapture;
+    [SerializeField] private bool sourceActiveAtCapture;
     public Graphic Surface => surface;
+    public bool OwnsSurface => ownsSurface;
+    public bool PreviousRaycast => previousRaycast;
+
+    // Import can create a hierarchy while its eventual source parents are
+    // still active, then restore authored parent activity before saving.
+    // Reapply source-effective input state at that boundary instead of relying
+    // on an OnEnable/OnDisable callback to follow the final hierarchy.
+    public bool SynchronizeSourceActivity(bool sourceEnabled, bool sourceActive)
+    {
+        if (surface == null || enabled != sourceEnabled) return false;
+        sourceActivityOverrideConfigured = true;
+        sourceEnabledAtCapture = sourceEnabled;
+        sourceActiveAtCapture = sourceActive;
+        Apply(sourceEnabled && sourceActive);
+        var sourceEffectiveActive = sourceEnabled && sourceActive;
+        return surface.raycastTarget == (sourceEffectiveActive || (!ownsSurface && previousRaycast)) &&
+            (!ownsSurface || surface.enabled == sourceEffectiveActive);
+    }
 
     public void Configure(Graphic existing)
     {
+        sourceActivityOverrideConfigured = false;
         surface = existing;
         if (surface == null) {
             surface = gameObject.AddComponent<NativeInputBlockerSurface>();
@@ -28,6 +50,8 @@ public sealed class NativeInputBlocker : MonoBehaviour,
     void OnDisable() { Apply(false); }
     void Apply(bool active) {
         if (surface == null) return;
+        if (sourceActivityOverrideConfigured && !Application.isPlaying)
+            active = enabled && sourceEnabledAtCapture && sourceActiveAtCapture;
         surface.raycastTarget = active || (!ownsSurface && previousRaycast);
         if (ownsSurface) surface.enabled = active;
     }

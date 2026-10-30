@@ -1,9 +1,9 @@
 import {
     _decorator, Camera, Canvas, Color, Component, Graphics, Label, Layout, Mask, Mat4, Node, RichText, Sorting2D, Sprite,
-    SortingLayers, UITransform, UIOpacity, UIRenderer,
+    SortingLayers, SpriteFrame, UITransform, UIOpacity, UIRenderer,
 } from 'cc';
 import { CreatorStaticSortQueueProxyMarker } from './CreatorStaticSortQueueProxyMarker';
-import { CreatorStaticSortQueueProxyPresenter } from './CreatorStaticSortQueueProxyPresenter';
+import { CreatorStaticSortQueueProxyPresenter, syncGeneratedRichTextSegments } from './CreatorStaticSortQueueProxyPresenter';
 import { MonkeyStaticSortOrderField } from './CreatorStaticSortQueue';
 import { CreatorStaticSortRootField } from './CreatorStaticSortRootField';
 import { MonkeyStaticMaskIdentity } from '../StaticMasks/CreatorStaticMaskIdentity';
@@ -79,6 +79,19 @@ export interface CreatorProxyMaskReadback {
     sourceId: string; sourceNode: string; sourceMaskType: number; nativeMaskType: number;
     inverted: boolean; enabled: boolean; alphaThreshold: number; spriteFrameUuid: string | null;
     transformVerified: boolean; opacityVerified: boolean; verified: boolean;
+    checks: Record<string, boolean>;
+    sourceMaskEnabled: boolean | null; sourceMaskInverted: boolean | null; sourceAlphaThreshold: number | null;
+    expectedMaskEnabled: boolean | null; expectedMaskType: number | null; expectedInverted: boolean | null;
+    expectedAlphaThreshold: number | null; expectedSpriteFrameUuid: string | null;
+    sourceSpriteType: string | null; sourceSpriteEnabled: boolean | null; sourceSpriteFrameUuid: string | null;
+    nativeSpriteType: string | null; nativeSpriteEnabled: boolean | null; nativeSpriteFrameExpectedUuid: string | null;
+    sourceSpriteFingerprint: string | null; nativeSpriteFingerprint: string | null;
+    identitySourceId: string | null; identityNativeId: string | null; identityNativeMaskRefMatches: boolean;
+    sourceLocalTransform: number[] | null; nativeLocalTransform: number[];
+    sourceWorldMatrix: number[] | null; nativeWorldMatrix: number[];
+    sourceSizeAnchor: number[] | null; nativeSizeAnchor: number[] | null;
+    sourceOpacityFactor: number | null; nativeOpacityFactor: number | null;
+    sourceLayer: number | null; nativeLayer: number;
 }
 export interface CreatorProxyReadback {
     rootScope: string; sourceTreePreserved: boolean; sourceFieldsPreserved: boolean;
@@ -119,15 +132,30 @@ export interface CreatorProxyReadback {
 function fail(code: string, id = ''): never { throw new Error(code + (id ? ':' + id : '')); }
 const CREATOR_BUILTIN_GRAPHICS_MATERIAL_UUID = 'f0416e68-0200-4b77-a926-4f9d16e494da';
 const CREATOR_BUILTIN_GRAPHICS_EFFECT_UUID = '1c02ae6f-4492-4915-b8f8-7492a3b1e4cd';
+export function creatorStaticEmptyGraphicsEvidence(componentEnabled: boolean, pathCount: number,
+    materialUuid: string | null, effectUuid: string | null, rendererMaterialPresent: boolean,
+    rendererMaterialMatchesCustom: boolean): boolean {
+    return componentEnabled === false && pathCount === 0 &&
+        materialUuid === CREATOR_BUILTIN_GRAPHICS_MATERIAL_UUID && effectUuid === CREATOR_BUILTIN_GRAPHICS_EFFECT_UUID &&
+        (!rendererMaterialPresent || rendererMaterialMatchesCustom);
+}
 function refId(value: any): string | null {
     if (!value) return null;
     return typeof value._uuid === 'string' ? value._uuid : null;
 }
-function creatorStaticGraphicsMaterialVerified(component: Graphics): {verified: boolean; materialUuid: string | null; effectUuid: string | null} {
-    const material: any = (component as any).customMaterial, effect = material && material.effectAsset;
-    const materialUuid = refId(material), effectUuid = refId(effect);
-    return {verified: !!material && component.getMaterial(0) === material && materialUuid === CREATOR_BUILTIN_GRAPHICS_MATERIAL_UUID &&
-        effectUuid === CREATOR_BUILTIN_GRAPHICS_EFFECT_UUID, materialUuid, effectUuid};
+function creatorStaticGraphicsMaterialVerified(component: Graphics): {verified: boolean; materialUuid: string | null;
+    effectUuid: string | null; rendererMaterialUuid: string | null; rendererMaterialMatchesCustom: boolean} {
+    const material: any = (component as any).customMaterial, rendererMaterial: any = component.getMaterial(0);
+    const effect = material && material.effectAsset;
+    const materialUuid = refId(material), effectUuid = refId(effect), rendererMaterialUuid = refId(rendererMaterial);
+    const rendererMaterialMatchesCustom = !!material && rendererMaterial === material;
+    // A disabled, empty Graphics is a static carrier and may have no active
+    // renderer material instance. If one exists, it still must be the exact
+    // persistent customMaterial reference.
+    const paths = (component as any).impl?.paths;
+    const pathCount = Array.isArray(paths) ? paths.length : -1;
+    return {verified: creatorStaticEmptyGraphicsEvidence(component.enabled, pathCount, materialUuid, effectUuid,
+        !!rendererMaterial, rendererMaterialMatchesCustom), materialUuid, effectUuid, rendererMaterialUuid, rendererMaterialMatchesCustom};
 }
 function colorValue(color: Color): number[] { return [color.r, color.g, color.b, color.a]; }
 function equalValue(a: unknown, b: unknown): boolean { return JSON.stringify(a) === JSON.stringify(b); }
@@ -215,17 +243,29 @@ function nestedPresenter(layerNode: Node, authoredLayer: number, nestedRoots: No
     }
     return null;
 }
-function isMaskBacking(node: Node, renderer: UIRenderer): boolean {
-    return node.getComponents(Mask).some(mask => {
-        if (mask.subComp === renderer) return true;
-        const identity = node.getComponents(MonkeyStaticMaskIdentity).find(item => item.nativeMask === mask);
-        if (!identity) return false;
-        if (mask.type === Mask.Type.SPRITE_STENCIL && renderer instanceof Sprite)
-            return node.getComponents(Sprite).length === 1 && renderer === node.getComponent(Sprite);
+function maskBackingMatches(node: Node, mask: Mask, renderer: UIRenderer, requireResolvedCache: boolean): boolean {
+    if (mask.subComp === renderer) return true;
+    if (requireResolvedCache) return false;
+    // A persistent Prefab read can observe Mask's serialized backing component
+    // before its transient `_graphics`/`_sprite` cache is rebuilt by onLoad.
+    // Creator's _createGraphics/_createSprite adopts the sole typed renderer
+    // on the same node. Ambiguous/mixed renderer sets fail closed.
+    if (!mask.subComp && node.getComponents(Mask).length === 1) {
         if ((mask.type === Mask.Type.GRAPHICS_RECT || mask.type === Mask.Type.GRAPHICS_ELLIPSE) && renderer instanceof Graphics)
-            return node.getComponents(Graphics).length === 1 && renderer === node.getComponent(Graphics);
-        return false;
-    });
+            return node.getComponents(Graphics).length === 1 && node.getComponents(Sprite).length === 0 && renderer === node.getComponent(Graphics);
+        if (mask.type === Mask.Type.SPRITE_STENCIL && renderer instanceof Sprite)
+            return node.getComponents(Sprite).length === 1 && node.getComponents(Graphics).length === 0 && renderer === node.getComponent(Sprite);
+    }
+    const identity = node.getComponents(MonkeyStaticMaskIdentity).find(item => item.nativeMask === mask);
+    if (!identity) return false;
+    if (mask.type === Mask.Type.SPRITE_STENCIL && renderer instanceof Sprite)
+        return node.getComponents(Sprite).length === 1 && renderer === node.getComponent(Sprite);
+    if ((mask.type === Mask.Type.GRAPHICS_RECT || mask.type === Mask.Type.GRAPHICS_ELLIPSE) && renderer instanceof Graphics)
+        return node.getComponents(Graphics).length === 1 && renderer === node.getComponent(Graphics);
+    return false;
+}
+function isMaskBacking(node: Node, renderer: UIRenderer): boolean {
+    return node.getComponents(Mask).some(mask => maskBackingMatches(node, mask, renderer, false));
 }
 function canonicalJson(value: any): string {
     if (Array.isArray(value)) return '[' + value.map(canonicalJson).join(',') + ']';
@@ -297,6 +337,20 @@ function assertSourceRendererCoverage(spec: CreatorProxySpec, nodes: Map<string,
         const graphicsPaths: unknown = component instanceof Graphics ? (component as any).impl?.paths : null;
         const actualGraphicsPaths = component instanceof Graphics ? (Array.isArray(graphicsPaths) ? graphicsPaths.length : -1) : null;
         const graphicsMaterial = component instanceof Graphics ? creatorStaticGraphicsMaterialVerified(component) : null;
+        const graphicsSourceMaterialRefs = component instanceof Graphics && Array.isArray(row.sourceFields?._materials) ?
+            row.sourceFields._materials.map((value: any) => refId(value && typeof value === 'object' ? value.__uuid__ : value)) : [];
+        const graphicsNoDrawChecks = {
+            sourceEnabled: row.sourceEnabled === true,
+            sourceActive: row.sourceActive === true,
+            nativeDisabled: row.nativeEnabledExpected === false && component.enabled === false,
+            emptyInitialStream: row.initialCommandStreamEmpty === true,
+            fixedEmptySentinel: row.sourceDrawingCommands === 'not-serialized-empty-in-fixed-state',
+            sourceMaterialIdsPresent: Array.isArray(row.sourceMaterialIds) && row.sourceMaterialIds.length > 0,
+            actualPathsEmpty: actualGraphicsPaths === 0,
+            sourceRawGraphicsType: row.sourceFields?.__type__ === 'cc.Graphics',
+            sourceRawMaterialFieldsPresent: Array.isArray(row.sourceFields?._materials) && row.sourceFields._materials.length > 0,
+            builtinMaterialIdentity: graphicsMaterial?.verified === true,
+        };
         const nativeEnabledExpected = row.nativeEnabledExpected;
         const spriteBindingProofOK = row.sourceType !== 'cc.Sprite' ||
             (typeof row.sourceNeedsSpriteBinding === 'boolean' &&
@@ -336,16 +390,40 @@ function assertSourceRendererCoverage(spec: CreatorProxySpec, nodes: Map<string,
             spriteBindingProofOK && row.nativeEnabledExpected === nativeEnabledPolicyExpected &&
             noDrawReasonVerified && sourceFieldsOK && richTextActualOK && textIdentityOK &&
             (component instanceof Sprite ? actualSpriteFrame === row.nativeSpriteFrameUuidExpected : row.sourceSpriteFrameUuid === null);
-        if (!verified) fail('CREATOR_PROXY_NONDRAW_SOURCE_FIELD_OR_ACTIVITY_MISMATCH', row.sourceId +
-            ':expected=' + JSON.stringify({nativeType: row.expectedNativeType, enabled: nativeEnabledPolicyExpected,
-                contractNativeEnabledExpected: row.nativeEnabledExpected, sourceEnabled: row.sourceEnabled,
-                sourceActive: row.sourceActive, sourceNeedsSpriteBinding: row.sourceNeedsSpriteBinding,
-                sourceSpriteFrameUuid: row.sourceSpriteFrameUuid,
-                sourceSpriteFrameAssetId: row.sourceSpriteFrameAssetId,
-                nativeSpriteImageUuidExpected: row.nativeSpriteImageUuidExpected,
-                nativeSpriteFrameUuidExpected: row.nativeSpriteFrameUuidExpected, noDrawReason: row.noDrawReason}) +
-            ':actual=' + JSON.stringify({nativeType: actualNativeType, enabled: component.enabled, nodeActive: node.active,
-                spriteFrameUuid: actualSpriteFrame}));
+        if (!verified) {
+            const checks: Record<string, boolean> = {
+                nativeType: actualNativeType === row.expectedNativeType,
+                nativeEnabled: nativeEnabledOK,
+                nodeActive: node.active === spec.sourceNodeActive[row.node],
+                effectiveSourceActive: sourceActive === row.sourceActive,
+                nativeEnabledPolicy: row.nativeEnabledExpected === nativeEnabledPolicyExpected,
+                spriteBinding: spriteBindingProofOK,
+                noDrawReason: noDrawReasonVerified,
+                sourceFieldsIdentity: sourceFieldsOK,
+                richTextIdentity: richTextActualOK,
+                textIdentity: textIdentityOK,
+                nonSpriteFrameContract: component instanceof Sprite || row.sourceSpriteFrameUuid === null,
+            };
+            if (row.noDrawReason === 'empty-command-stream') Object.assign(checks, graphicsNoDrawChecks);
+            const sourceMaterialRows = row.sourceFields && Array.isArray(row.sourceFields._materials) ? row.sourceFields._materials : [];
+            fail('CREATOR_PROXY_NONDRAW_SOURCE_FIELD_OR_ACTIVITY_MISMATCH', row.sourceId + ':' + JSON.stringify({
+                failedChecks: Object.keys(checks).filter(key => !checks[key]),
+                expected: {nativeType: row.expectedNativeType, enabled: nativeEnabledPolicyExpected,
+                    sourceEnabled: row.sourceEnabled, sourceActive: row.sourceActive,
+                    sourceSpriteFrameUuid: row.sourceSpriteFrameUuid, nativeSpriteFrameUuidExpected: row.nativeSpriteFrameUuidExpected,
+                    noDrawReason: row.noDrawReason, initialCommandStreamEmpty: row.initialCommandStreamEmpty,
+                    sourceDrawingCommands: row.sourceDrawingCommands, sourceMaterialIds: row.sourceMaterialIds,
+                    sourceFieldsSha256: row.sourceFieldsSha256},
+                actual: {nativeType: actualNativeType, enabled: component.enabled, nodeActive: node.active,
+                    spriteFrameUuid: actualSpriteFrame, sourceFieldsJsonMatches: sourceFieldsOK,
+                    sourceRawType: row.sourceFields?.__type__ ?? null,
+                    sourceRawMaterials: sourceMaterialRows.map((value: any) => value && typeof value === 'object' ? value.__uuid__ ?? null : value),
+                    graphicsPathCount: actualGraphicsPaths,
+                    graphicsMaterial: graphicsMaterial && {verified: graphicsMaterial.verified, materialUuid: graphicsMaterial.materialUuid,
+                        effectUuid: graphicsMaterial.effectUuid, rendererMaterialUuid: graphicsMaterial.rendererMaterialUuid,
+                        rendererMaterialMatchesCustom: graphicsMaterial.rendererMaterialMatchesCustom},
+                    sourceFieldsJsonLength: row.sourceFieldsJson?.length ?? null}}));
+        }
         nonDrawById.set(row.sourceId, row); nonDrawComponents.set(component, row);
         nonDrawReadback.push({sourceId: row.sourceId, nativeId: row.nativeId, node: row.node, sourceType: row.sourceType,
             expectedNativeType: row.expectedNativeType, actualNativeType, componentUuid: component.uuid,
@@ -492,12 +570,23 @@ function boundedFingerprintDiff(sourceFingerprint: string, proxyFingerprint: str
     try { source = JSON.parse(sourceFingerprint); proxy = JSON.parse(proxyFingerprint); }
     catch (_) { return [{field: '$', source: sourceFingerprint.slice(0, 160), proxy: proxyFingerprint.slice(0, 160)}]; }
     const differences: Array<{field: string; source: unknown; proxy: unknown}> = [];
+    const parseEmbeddedObject = (value: unknown): any | null => {
+        if (typeof value !== 'string' || value.length < 2 || value[0] !== '{') return null;
+        try {
+            const parsed = JSON.parse(value);
+            return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+        } catch (_) { return null; }
+    };
     const preview = (value: any): unknown => {
         const serialized = JSON.stringify(value);
         return serialized.length <= 160 ? value : serialized.slice(0, 157) + '...';
     };
     const visit = (path: string, left: any, right: any): void => {
         if (differences.length >= maxDifferences || equalValue(left, right)) return;
+        if (typeof left === 'string' && typeof right === 'string') {
+            const parsedLeft = parseEmbeddedObject(left), parsedRight = parseEmbeddedObject(right);
+            if (parsedLeft && parsedRight) { visit(path, parsedLeft, parsedRight); return; }
+        }
         if (Array.isArray(left) && Array.isArray(right)) {
             if (left.length !== right.length) differences.push({field: path + '.length', source: left.length, proxy: right.length});
             const count = Math.min(left.length, right.length);
@@ -520,7 +609,50 @@ function boundedFingerprintDiff(sourceFingerprint: string, proxyFingerprint: str
     visit('', source, proxy);
     return differences;
 }
-function copyRenderer(source: Component, proxyNode: Node, type: string, sourceComponentId = ''): Component {
+function boundedMaskFailureSummary(row: CreatorProxyMaskReadback, maxChars = 900): string {
+    const failedChecks = Object.keys(row.checks).filter(key => !row.checks[key]);
+    const summary: any = {sourceId: row.sourceId, failedChecks};
+    const maskOrSpriteChecks = failedChecks.some(key => ['maskPresent','expectedSourceMaskPresent','sourceAndProxyMaskRefs',
+        'markerSourceComponentId','markerMaskType','maskType','enabled','inverted','alphaThreshold','backingType','spriteFrame',
+        'sourceAndNativeSpriteFields'].includes(key));
+    if (maskOrSpriteChecks) {
+        summary.mask = {expectedType: row.expectedMaskType, nativeType: row.nativeMaskType,
+            expectedEnabled: row.expectedMaskEnabled, nativeEnabled: row.enabled,
+            expectedInverted: row.expectedInverted, nativeInverted: row.inverted,
+            expectedAlpha: row.expectedAlphaThreshold, sourceAlpha: row.sourceAlphaThreshold, nativeAlpha: row.alphaThreshold};
+        summary.sprite = {expectedFrame: row.expectedSpriteFrameUuid, sourceFrame: row.sourceSpriteFrameUuid,
+            nativeFrame: row.spriteFrameUuid, expectedNativeFrame: row.nativeSpriteFrameExpectedUuid,
+            sourceType: row.sourceSpriteType, nativeType: row.nativeSpriteType,
+            sourceEnabled: row.sourceSpriteEnabled, nativeEnabled: row.nativeSpriteEnabled};
+    }
+    if (failedChecks.some(key => key.startsWith('identity'))) summary.identity = {
+        sourceId: row.identitySourceId, nativeId: row.identityNativeId, maskReference: row.identityNativeMaskRefMatches};
+    if (failedChecks.includes('sourceAndNativeSpriteFields') && row.sourceSpriteFingerprint && row.nativeSpriteFingerprint)
+        summary.spriteRendererDiff = boundedFingerprintDiff(row.sourceSpriteFingerprint, row.nativeSpriteFingerprint, 3);
+    if (failedChecks.some(key => ['transform','worldMatrix','uiContentSize','uiAnchor'].includes(key))) summary.transform = {
+        worldMatrixVerified: row.checks.worldMatrix, uiContentSizeVerified: row.checks.uiContentSize,
+        uiAnchorVerified: row.checks.uiAnchor, sourceWorld: row.sourceWorldMatrix, nativeWorld: row.nativeWorldMatrix,
+        sourceSizeAnchor: row.sourceSizeAnchor, nativeSizeAnchor: row.nativeSizeAnchor,
+        sourceLocal: row.sourceLocalTransform, nativeLocal: row.nativeLocalTransform};
+    if (failedChecks.includes('opacity')) summary.opacity = {source: row.sourceOpacityFactor, native: row.nativeOpacityFactor};
+    if (failedChecks.includes('layer')) summary.layer = {source: row.sourceLayer, native: row.nativeLayer};
+    const serialized = JSON.stringify(summary);
+    return serialized.length <= maxChars ? serialized : serialized.slice(0, maxChars - 3) + '...';
+}
+function copyRenderer(source: Component, proxyNode: Node, type: string, sourceComponentId = '', existingTarget?: Component): Component {
+    // RichText regenerates its label segments synchronously from onEnable and
+    // from each serialized field setter. Keep the node inactive until every
+    // field is copied so the proxy is laid out once from its final state. This
+    // avoids cycling half-configured segments through Creator's shared Label
+    // pool, whose outline defaults and cached layout state otherwise depend on
+    // which RichText happened to initialize first.
+    const deferRichTextActivation = type === 'cc.RichText';
+    if (deferRichTextActivation) {
+        if (!proxyNode.activeInHierarchy) fail('CREATOR_PROXY_RICHTEXT_NODE_NOT_ACTIVE_AT_CREATE', sourceComponentId);
+        proxyNode.active = false;
+    }
+    let restoreRichTextActivation = deferRichTextActivation;
+    try {
     const uiSource = source.node.getComponent(UITransform);
     const uiProxy = proxyNode.getComponent(UITransform) || proxyNode.addComponent(UITransform);
     if (uiSource) {
@@ -529,7 +661,10 @@ function copyRenderer(source: Component, proxyNode: Node, type: string, sourceCo
     }
     const renderer: any = source;
     let proxy: any;
-    if (type === 'cc.Sprite') proxy = proxyNode.addComponent(Sprite);
+    if (existingTarget) {
+        if (existingTarget.node !== proxyNode) fail('CREATOR_PROXY_RENDERER_EXISTING_TARGET_NODE_MISMATCH', sourceComponentId);
+        proxy = existingTarget;
+    } else if (type === 'cc.Sprite') proxy = proxyNode.addComponent(Sprite);
     else if (type === 'cc.Label') proxy = proxyNode.addComponent(Label);
     else if (type === 'sp.Skeleton') proxy = proxyNode.addComponent('sp.Skeleton');
     else if (type === 'cc.Graphics') proxy = proxyNode.addComponent(Graphics);
@@ -588,11 +723,27 @@ function copyRenderer(source: Component, proxyNode: Node, type: string, sourceCo
         if (src.defaultSkin) clone.setSkin(src.defaultSkin);
         if (src.defaultAnimation) clone.setAnimation(0, src.defaultAnimation, src.loop);
     }
+    // Sprite.spriteFrame/sizeMode may call Sprite._applySpriteSize and mutate
+    // the owning UITransform. The source node's authored size and anchor are
+    // independent source evidence; restore them after all renderer setters.
+    if (uiSource) {
+        uiProxy.setContentSize(uiSource.contentSize);
+        uiProxy.setAnchorPoint(uiSource.anchorPoint);
+    }
+    if (restoreRichTextActivation) {
+        proxyNode.active = true;
+        restoreRichTextActivation = false;
+    }
+    if (type === 'cc.RichText')
+        syncGeneratedRichTextSegments(source as RichText, proxy as RichText, sourceComponentId);
     const sourceFingerprint = rendererFingerprint(source, type), proxyFingerprint = rendererFingerprint(proxy, type);
     if (!equalValue(sourceFingerprint, proxyFingerprint))
         fail('CREATOR_PROXY_TYPED_RENDERER_FIELDS_DIVERGED', type + ':' + sourceComponentId + ':' +
             JSON.stringify({differences: boundedFingerprintDiff(sourceFingerprint, proxyFingerprint)}));
     return proxy as Component;
+    } finally {
+        if (restoreRichTextActivation && proxyNode.isValid) proxyNode.active = true;
+    }
 }
 function addRendererSortRank(component: Component, sourceType: string, order: number): UIRenderer[] {
     const targets = sourceType === 'cc.RichText' ? richTextSegments(component as RichText).map(segmentRenderer) :
@@ -944,27 +1095,41 @@ export function createStaticSortQueueProxy(spec: CreatorProxySpec, nodes: Map<st
             if (!maskSpec || !sourceMaskNode) fail('CREATOR_PROXY_MASK_SOURCE_MISSING', event.node);
             const maskNode = new Node('__sort_mask_' + queueIndex++);
             copyWorldNode(sourceMaskNode, maskNode, containerStack[containerStack.length - 1], sourceLayers.get(event.node)!);
+            // A newly-added Mask immediately creates the renderer required by
+            // its current type in onLoad. Configure its intended type before
+            // activation so a SpriteStencil mask never creates a transient
+            // Graphics beside the existing Sprite backing.
+            maskNode.active = false;
             const maskParent = containerStack[containerStack.length - 1];
             const maskParentOpacity = proxyOpacity.get(maskParent);
             if (maskParentOpacity === undefined) fail('CREATOR_PROXY_PARENT_OPACITY_MISSING', event.node);
             proxyOpacity.set(maskNode, setOpacityProjection(sourceMaskNode, maskNode, maskParentOpacity, sourceRoot, proxyRoot));
-            let sprite: Sprite | null = null;
-            if (maskSpec.maskType === 2) {
-                const frame = resolveSprite(maskSpec.spriteFrameUuid || '');
-                if (!frame) fail('CREATOR_PROXY_MASK_SPRITE_MISSING', maskSpec.sourceId);
-                const sourceSprite = sourceMaskNode.getComponent(Sprite);
-                if (!sourceSprite || sourceSprite.spriteFrame !== frame)
-                    fail('CREATOR_PROXY_MASK_SOURCE_SPRITE_IDENTITY_MISMATCH', maskSpec.sourceId);
-                sprite = copyRenderer(sourceSprite, maskNode, 'cc.Sprite', maskSpec.sourceId) as Sprite;
-                if (sprite.spriteFrame !== frame) fail('CREATOR_PROXY_MASK_PROXY_SPRITE_MISMATCH', maskSpec.sourceId);
-            }
-            const mask = maskNode.addComponent(Mask);
-            if (!mask.subComp && typeof (mask as any).onLoad === 'function') (mask as any).onLoad();
-            if (!mask.subComp) fail('CREATOR_PROXY_MASK_NATIVE_BACKING_MISSING', maskSpec.sourceId);
             const nativeType = maskSpec.maskType === 0 ? Mask.Type.GRAPHICS_RECT :
                 maskSpec.maskType === 1 ? Mask.Type.GRAPHICS_ELLIPSE : Mask.Type.SPRITE_STENCIL;
+            let frame: SpriteFrame | null = null;
+            let sourceSprite: Sprite | null = null;
+            if (maskSpec.maskType === 2) {
+                frame = resolveSprite(maskSpec.spriteFrameUuid || '');
+                if (!frame) fail('CREATOR_PROXY_MASK_SPRITE_MISSING', maskSpec.sourceId);
+                sourceSprite = sourceMaskNode.getComponent(Sprite);
+                if (!sourceSprite || sourceSprite.spriteFrame !== frame)
+                    fail('CREATOR_PROXY_MASK_SOURCE_SPRITE_IDENTITY_MISMATCH', maskSpec.sourceId);
+            }
+            const mask = maskNode.addComponent(Mask);
             mask.type = nativeType;
-            if (maskSpec.maskType === 2 && sprite) mask.spriteFrame = sprite.spriteFrame;
+            if (!mask.subComp && typeof (mask as any).onLoad === 'function') (mask as any).onLoad();
+            if (!mask.subComp) fail('CREATOR_PROXY_MASK_NATIVE_BACKING_MISSING', maskSpec.sourceId);
+            if (maskSpec.maskType === 2) {
+                const sprite = mask.subComp;
+                if (!(sprite instanceof Sprite) || !sourceSprite || !frame)
+                    fail('CREATOR_PROXY_MASK_NATIVE_SPRITE_BACKING_MISSING', maskSpec.sourceId);
+                copyRenderer(sourceSprite, maskNode, 'cc.Sprite', maskSpec.sourceId, sprite);
+                if (sprite.spriteFrame !== frame) fail('CREATOR_PROXY_MASK_PROXY_SPRITE_MISMATCH', maskSpec.sourceId);
+                mask.spriteFrame = frame;
+            } else if (!(mask.subComp instanceof Graphics)) {
+                fail('CREATOR_PROXY_MASK_NATIVE_GRAPHICS_BACKING_MISSING', maskSpec.sourceId);
+            }
+            maskNode.active = true;
             mask.inverted = maskSpec.inverted; mask.alphaThreshold = maskSpec.alphaThreshold;
             mask.enabled = maskSpec.enabled;
             const maskIdentity = maskNode.addComponent(MonkeyStaticMaskIdentity);
@@ -1028,7 +1193,8 @@ export function createStaticSortQueueProxy(spec: CreatorProxySpec, nodes: Map<st
     presenter.initializeEditorInstance();
     const readback = readStaticSortQueueProxy(spec, nodes, proxyRoot, presenter, resolveSprite, true);
     if (!readback.verified) fail('CREATOR_PROXY_CREATE_READBACK_FAILED:' + JSON.stringify({
-        falseChecks: readback.failedChecks, badSourceIds: readback.failedSourceIds}));
+        falseChecks: readback.failedChecks, badSourceIds: readback.failedSourceIds,
+        badMaskRows: readback.masks.filter(row => !row.verified).slice(0, 4).map(row => boundedMaskFailureSummary(row))}));
     completed = true;
     return readback;
     } finally {
@@ -1062,8 +1228,10 @@ export function readStaticSortQueueProxy(spec: CreatorProxySpec, nodes: Map<stri
             observed.push(['maskEnter', marker.sourceNode, null]);
             const mask = node.getComponent(Mask); const source = nodes.get(marker.sourceNode);
             const sourceUI = source?.getComponent(UITransform), proxyUI = node.getComponent(UITransform);
-            const transformVerified = !!source && matricesMatch(source, node) && !!sourceUI && !!proxyUI &&
-                equalValue(sourceUI.contentSize, proxyUI.contentSize) && equalValue(sourceUI.anchorPoint, proxyUI.anchorPoint);
+            const worldMatrixVerified = !!source && matricesMatch(source, node);
+            const uiSizeVerified = !!sourceUI && !!proxyUI && equalValue(sourceUI.contentSize, proxyUI.contentSize);
+            const uiAnchorVerified = !!sourceUI && !!proxyUI && equalValue(sourceUI.anchorPoint, proxyUI.anchorPoint);
+            const transformVerified = worldMatrixVerified && uiSizeVerified && uiAnchorVerified;
             const opacityVerified = !!source &&
                 Math.abs(authoredOpacityWithin(source, nodes.get(spec.rootScope)!) - authoredOpacityWithin(node, proxyRoot)) <= 1 / 255 + 1e-6;
             const sprite = node.getComponent(Sprite);
@@ -1073,25 +1241,81 @@ export function readStaticSortQueueProxy(spec: CreatorProxySpec, nodes: Map<stri
             const expectedNativeType = expected?.maskType === 0 ? Mask.Type.GRAPHICS_RECT :
                 expected?.maskType === 1 ? Mask.Type.GRAPHICS_ELLIPSE : Mask.Type.SPRITE_STENCIL;
             const expectedSprite = expected?.maskType === 2 && expected.spriteFrameUuid ? resolveSprite(expected.spriteFrameUuid) : null;
-            const verified = !!mask && !!expected && marker.sourceComponentId === expected.sourceId &&
-                mask.enabled === expected.enabled && marker.maskType === expected.maskType &&
-                mask.type === expectedNativeType && mask.inverted === expected.inverted &&
-                Math.abs(mask.alphaThreshold - expected.alphaThreshold) < 1e-6 &&
-                (expected.maskType !== 2 || (!!sprite && sprite.spriteFrame === expectedSprite &&
-                    !!source?.getComponent(Sprite) && rendererFingerprint(source.getComponent(Sprite)!, 'cc.Sprite') === rendererFingerprint(sprite, 'cc.Sprite'))) &&
-                (() => { const identity = node.getComponent(MonkeyStaticMaskIdentity); return !!identity && !identity.enabled &&
-                    identity.sourceId === expected.sourceId && identity.nativeId === expected.nativeId &&
-                    identity.sourceMaskType === expected.maskType && identity.sourceInverted === expected.inverted &&
-                    identity.sourceAlphaThreshold === expected.alphaThreshold && identity.sourceFieldsJson === expected.sourceFieldsJson &&
-                    identity.sourceSpriteFrameUuid === (expected.spriteFrameUuid || '') && identity.nativeMask === mask &&
-                    (expected.maskType === 2 ? identity.sourceSpriteFrame === expectedSprite : identity.sourceSpriteFrame === null); })() &&
-                maskIndex >= 0 && presenter.sourceMasks[maskIndex] === sourceMaskRef && presenter.proxyMasks[maskIndex] === mask &&
-                transformVerified && opacityVerified && node.layer === (sourceLayerById.get(marker.sourceNode) ?? -1);
+            const sourceSprite = source?.getComponent(Sprite) || null;
+            const identity = node.getComponent(MonkeyStaticMaskIdentity);
+            const sourceOpacityFactor = source ? authoredOpacityWithin(source, nodes.get(spec.rootScope)!) : null;
+            const nativeOpacityFactor = authoredOpacityWithin(node, proxyRoot);
+            const expectedLayer = sourceLayerById.get(marker.sourceNode) ?? -1;
+            const sourceSpriteFingerprint = sourceSprite ? rendererFingerprint(sourceSprite, 'cc.Sprite') : null;
+            const nativeSpriteFingerprint = sprite ? rendererFingerprint(sprite, 'cc.Sprite') : null;
+            const spriteFrameMatches = expected?.maskType !== 2 || (!!sprite && !!expectedSprite && sprite.spriteFrame === expectedSprite);
+            const spriteRendererMatches = expected?.maskType !== 2 || (!!sourceSprite && !!sprite && sourceSpriteFingerprint === nativeSpriteFingerprint);
+            const expectedBackingRenderer = expected?.maskType === 2 ? sprite : node.getComponent(Graphics);
+            const backingTypeMatches = !!mask && !!expectedBackingRenderer &&
+                maskBackingMatches(node, mask, expectedBackingRenderer, runtimeSuppressionExpected) &&
+                (expected?.maskType === 2 ? node.getComponents(Sprite).length === 1 && node.getComponents(Graphics).length === 0 :
+                    node.getComponents(Graphics).length === 1 && node.getComponents(Sprite).length === 0);
+            const checks: Record<string, boolean> = {
+                maskPresent: !!mask,
+                expectedSourceMaskPresent: !!sourceMaskRef,
+                sourceAndProxyMaskRefs: maskIndex >= 0 && presenter.sourceMasks[maskIndex] === sourceMaskRef && presenter.proxyMasks[maskIndex] === mask,
+                markerSourceComponentId: !!expected && marker.sourceComponentId === expected.sourceId,
+                markerMaskType: !!expected && marker.maskType === expected.maskType,
+                maskType: !!expected && mask?.type === expectedNativeType,
+                enabled: !!expected && mask?.enabled === expected.enabled,
+                inverted: !!expected && mask?.inverted === expected.inverted,
+                alphaThreshold: !!expected && Math.abs((mask?.alphaThreshold ?? NaN) - expected.alphaThreshold) < 1e-6,
+                backingType: backingTypeMatches,
+                spriteFrame: spriteFrameMatches,
+                sourceAndNativeSpriteFields: spriteRendererMatches,
+                identityPresent: !!identity,
+                identityDisabled: !!identity && !identity.enabled,
+                identitySourceId: !!expected && identity?.sourceId === expected.sourceId,
+                identityNativeId: !!expected && identity?.nativeId === expected.nativeId,
+                identitySourceMaskType: !!expected && identity?.sourceMaskType === expected.maskType,
+                identityInverted: !!expected && identity?.sourceInverted === expected.inverted,
+                identityAlphaThreshold: !!expected && identity?.sourceAlphaThreshold === expected.alphaThreshold,
+                identityFieldsJson: !!expected && identity?.sourceFieldsJson === expected.sourceFieldsJson,
+                identitySpriteFrameUuid: !!expected && identity?.sourceSpriteFrameUuid === (expected.spriteFrameUuid || ''),
+                identityNativeMaskReference: !!identity && identity.nativeMask === mask,
+                identitySpriteFrameReference: !!expected && (expected.maskType === 2 ? identity?.sourceSpriteFrame === expectedSprite : identity?.sourceSpriteFrame === null),
+                transform: transformVerified,
+                worldMatrix: worldMatrixVerified,
+                uiContentSize: uiSizeVerified,
+                uiAnchor: uiAnchorVerified,
+                opacity: opacityVerified,
+                layer: node.layer === expectedLayer,
+            };
+            const verified = Object.values(checks).every(Boolean);
+            const sourcePosition = source?.position, sourceRotation = source?.rotation, sourceScale = source?.scale;
+            const nativePosition = node.position, nativeRotation = node.rotation, nativeScale = node.scale;
             masks.push({ sourceId: marker.sourceComponentId, sourceNode: marker.sourceNode,
                 sourceMaskType: expected?.maskType ?? -1, nativeMaskType: mask?.type ?? -1,
                 inverted: mask?.inverted ?? false, enabled: mask?.enabled ?? false,
                 alphaThreshold: mask?.alphaThreshold ?? -1, spriteFrameUuid: sprite ? refId(sprite.spriteFrame) : null,
-                transformVerified, opacityVerified, verified });
+                transformVerified, opacityVerified, verified, checks,
+                sourceMaskEnabled: sourceMaskRef?.enabled ?? null, sourceMaskInverted: sourceMaskRef?.inverted ?? null,
+                sourceAlphaThreshold: sourceMaskRef?.alphaThreshold ?? null,
+                expectedMaskEnabled: expected?.enabled ?? null, expectedMaskType: expected?.maskType ?? null,
+                expectedInverted: expected?.inverted ?? null, expectedAlphaThreshold: expected?.alphaThreshold ?? null,
+                expectedSpriteFrameUuid: expected?.spriteFrameUuid || null,
+                sourceSpriteType: sourceSprite?.constructor.name ?? null, sourceSpriteEnabled: sourceSprite?.enabled ?? null,
+                sourceSpriteFrameUuid: sourceSprite ? refId(sourceSprite.spriteFrame) : null,
+                nativeSpriteType: sprite?.constructor.name ?? null, nativeSpriteEnabled: sprite?.enabled ?? null,
+                nativeSpriteFrameExpectedUuid: expectedSprite ? refId(expectedSprite) : null,
+                sourceSpriteFingerprint, nativeSpriteFingerprint,
+                identitySourceId: identity?.sourceId ?? null, identityNativeId: identity?.nativeId ?? null,
+                identityNativeMaskRefMatches: !!identity && identity.nativeMask === mask,
+                sourceLocalTransform: sourcePosition && sourceRotation && sourceScale ? [sourcePosition.x, sourcePosition.y, sourcePosition.z,
+                    sourceRotation.x, sourceRotation.y, sourceRotation.z, sourceRotation.w, sourceScale.x, sourceScale.y, sourceScale.z] : null,
+                nativeLocalTransform: [nativePosition.x, nativePosition.y, nativePosition.z, nativeRotation.x, nativeRotation.y,
+                    nativeRotation.z, nativeRotation.w, nativeScale.x, nativeScale.y, nativeScale.z],
+                sourceWorldMatrix: source ? matrixValues(source) : null, nativeWorldMatrix: matrixValues(node),
+                sourceSizeAnchor: sourceUI ? [sourceUI.contentSize.width, sourceUI.contentSize.height,
+                    sourceUI.anchorPoint.x, sourceUI.anchorPoint.y] : null,
+                nativeSizeAnchor: proxyUI ? [proxyUI.contentSize.width, proxyUI.contentSize.height,
+                    proxyUI.anchorPoint.x, proxyUI.anchorPoint.y] : null,
+                sourceOpacityFactor, nativeOpacityFactor, sourceLayer: source ? source.layer : null, nativeLayer: node.layer });
             for (const child of node.children) visit(child);
             observed.push(['maskExit', marker.sourceNode, null]); return;
         }

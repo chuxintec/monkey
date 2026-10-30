@@ -1,7 +1,7 @@
 """Creator 3.8.8 candidate asset emitter; native objects are saved only by its Editor."""
 from importlib.resources import files
 from pathlib import Path
-import uuid
+import uuid,re
 from .. import __version__
 from ..io import safe, inside, read, load, sha, write_json, new_output, finish, diagnostic, stage_document, stage_bytes,stage_manifest
 from ..sources.compiled import fail
@@ -11,6 +11,30 @@ from ..layout.standard import VERSION
 from ..layout.standard import find_analysis
 
 PROFILE='cocos-3.8.8'
+
+
+def _validate_extension_dependencies(extension, static_time_materials=False, sprite_outline=False):
+    """Check emitted relative module names before starting the native Editor."""
+    extension=Path(extension).resolve()
+    for script in extension.glob('*.js'):
+        for name in re.findall(r'''\brequire\(\s*['"](\.[^'"]+)['"]\s*\)''',script.read_text(encoding='utf-8')):
+            dependency=(script.parent/name).resolve()
+            if not dependency.is_relative_to(extension):
+                fail('CREATOR_EXTENSION_DEPENDENCY_ESCAPE',str(script),name)
+            if dependency.is_file() or (not dependency.suffix and any(
+                    candidate.is_file() for candidate in (dependency.with_suffix('.js'),dependency.with_suffix('.json'),dependency/'index.js'))):
+                continue
+            # The broker has a source-tree-only fallback for direct Node tests.
+            if (script.name=='owned-import-undo.js' and name=='./CreatorEditorUndoDiagnostics.js' and
+                    (extension/'editor-undo-diagnostics.js').is_file()):
+                continue
+            # These imports are invoked only for a declared static-time material plan.
+            if (not static_time_materials and script.name in ('main.js','scene.js','prefab.js') and name=='./static-time-materials.js'):
+                continue
+            if (not sprite_outline and script.name in ('scene.js','prefab.js') and
+                    name in ('./sprite-outline-material-bindings.js','./sprite-outline-importer.js')):
+                continue
+            fail('CREATOR_EXTENSION_DEPENDENCY_MISSING',str(script),name)
 
 
 def identity(namespace,sid):
@@ -357,6 +381,11 @@ def export(plan_path,output):
     (ext/'bitmap-missing-glyphs.js').write_bytes(files('monkey.targets').joinpath('CreatorStaticBitmapMissingGlyphs.js').read_bytes())
     (ext/'static-masks.js').write_bytes(files('monkey.targets').joinpath('CreatorStaticMaskSort.js').read_bytes())
     (ext/'CreatorStaticSortQueueIntegration.js').write_bytes(files('monkey.targets').joinpath('CreatorStaticSortQueueIntegration.js').read_bytes())
+    (ext/'static-sort-serialization.js').write_bytes(files('monkey.targets').joinpath('CreatorStaticSortSerialization.js').read_bytes())
+    (ext/'editor-undo-diagnostics.js').write_bytes(files('monkey.targets').joinpath('CreatorEditorUndoDiagnostics.js').read_bytes())
+    (ext/'owned-import-undo.js').write_bytes(files('monkey.targets').joinpath('CreatorOwnedImportUndo.js').read_bytes())
+    (ext/'reopen-verification.js').write_bytes(files('monkey.targets').joinpath('CreatorReopenVerification.js').read_bytes())
+    (ext/'creator-saved-scene-scope.js').write_bytes(files('monkey.targets').joinpath('CreatorSavedSceneScope.js').read_bytes())
     (ext/'static-layout-completion.js').write_bytes(files('monkey.targets').joinpath('CreatorStaticLayoutCompletion.js').read_bytes())
     (ext/'static-controls.js').write_bytes(files('monkey.targets').joinpath('CreatorStaticControls.js').read_bytes())
     (ext/'static-progress.js').write_bytes(files('monkey.targets').joinpath('CreatorStaticProgress.js').read_bytes())
@@ -377,8 +406,14 @@ def export(plan_path,output):
     (ext/'spine-bindings.js').write_bytes(files('monkey.targets').joinpath('spine/creator_spine_binding.js').read_bytes())
     (ext/'spine-ui-transform.js').write_bytes(files('monkey.targets').joinpath('spine/CreatorSpineUITransformBindings.js').read_bytes())
     write_json(ext/'package.json',dict(package_version=2,version='0.2.0',name='monkey-import',main='./main.js',
-        contributions=dict(scene=dict(script='./scene.js'),menu=[dict(path='Monkey',label='Import isolated candidate',message='import-candidate')],
-                           messages={'import-candidate':dict(methods=['importCandidate'])})))
+        contributions=dict(scene=dict(script='./scene.js'),menu=[dict(path='Monkey',label='Import isolated candidate',message='import-candidate'),
+                           dict(path='Monkey',label='Inspect ordinary save',message='inspect-ordinary-save'),
+                           dict(path='Monkey',label='Revalidate saved candidate',message='revalidate-saved-candidate'),
+                           dict(path='Monkey',label='Stop save diagnostics',message='stop-save-diagnostics')],
+                           messages={'import-candidate':dict(methods=['importCandidate']),
+                                     'inspect-ordinary-save':dict(methods=['inspectOrdinarySaveApi']),
+                                     'revalidate-saved-candidate':dict(methods=['revalidateSavedCandidate']),
+                                     'stop-save-diagnostics':dict(methods=['stopOrdinarySaveProbe'])})))
     write_json(ext/'import-plan.json',{k:p[k] for k in ['schemaVersion','targetProfile','designSize','assets','nodes','components'] }|dict(resourceProbes=p.get('resourceProbes'),rendererBudget=p.get('rendererBudget'),projectUuid=project_id,animations=p.get('animations',[]),sourcePrefabs=p.get('sourcePrefabs',[]),prefabInstances=p.get('prefabInstances',[]),prefabRelationshipReadback='creator-native-fileid-v1',uiGeometryReadback='native-ui-layout-roundtrip-v1',sceneGeometryReadback='full-local-v1',bitmapPageReadback='sprite-frame-v1',spriteMeshReadback='native-rect-mesh-v1',outputPaths=standard.creator_output_paths()))
     from .dynamic_ui import driven_fields
     instruction_path=ext/'import-plan.json';instruction=load(instruction_path.read_bytes())
@@ -401,6 +436,7 @@ def export(plan_path,output):
     instruction['uiProbeSources']=probe_sources(instruction)
     instruction['uiDrivenFields']={sid:{key:sorted(axes)for key,axes in fields.items()}for sid,fields in driven_fields(instruction).items()}
     write_json(instruction_path,instruction)
+    _validate_extension_dependencies(ext,bool(p.get('staticTimeMaterials')),bool(p.get('spriteOutlineBinding')))
     from ..assets.animation import module_report
     write_json(find_analysis(out,'animation-module.json'),module_report(p.get('animations',[])))
     write_json(find_analysis(out,'source-map.json'),dict(assets=p['assets'],sourcePrefabs=p.get('sourcePrefabs',[]),nodes=[dict(sourceId=n['sourceId'],target=standard.creator('previewScene')) for n in p['nodes']],
@@ -489,6 +525,13 @@ def verify(candidate,output,level='static'):
         rb_path=find_analysis(root,'editor-readback.json')
         if not rb_path.exists():diagnostics.append(diagnostic('EDITOR_NOT_RUN',str(rb_path),'Run native importer in declared Creator first'))
         else:
+            from ..creator_readback_revision import select_current_revision, RevisionError
+            try:
+                revision=select_current_revision(root,fingerprint(root/'manifest.json'),m['projectUuid'],
+                    fingerprint(root/'extensions/monkey-import/import-plan.json'),rb_path.relative_to(root).as_posix())
+            except RevisionError as error:
+                fail('CREATOR_READBACK_REVISION_INVALID',str(root/'Analysis/Readback/current-revision.json'),str(error))
+            if revision is not None:rb_path=revision['path']
             rb=load(read(rb_path,max_bytes=128*1024*1024),max_nodes=8_000_000);native={f['path']:f['sha256'] for f in rb.get('nativeFiles',[])}
             plan=load(read(root/'extensions/monkey-import/import-plan.json',max_bytes=128*1024*1024),max_nodes=8_000_000)
             expected_assets={a['sourceId']:a for a in plan['assets']}

@@ -9,6 +9,25 @@ from monkey.targets import unity, cocos
 
 
 class InputBlockerTests(unittest.TestCase):
+    def test_source_activity_sync_restores_reused_raycast_state(self):
+        source = (Path(__file__).parents[1] / 'src/monkey/targets/NativeInputBlocker.cs').read_text()
+        self.assertIn('SynchronizeSourceActivity(bool sourceEnabled, bool sourceActive)', source)
+        self.assertIn('var sourceEffectiveActive = sourceEnabled && sourceActive;', source)
+        self.assertIn('sourceActivityOverrideConfigured = true;', source)
+        self.assertIn('sourceActivityOverrideConfigured && !Application.isPlaying', source)
+        self.assertIn('active = enabled && sourceEnabledAtCapture && sourceActiveAtCapture;', source)
+        self.assertIn('surface.raycastTarget = active || (!ownsSurface && previousRaycast);', source)
+        self.assertIn('if (ownsSurface) surface.enabled = active;', source)
+
+    def test_capture_activity_override_does_not_replace_player_lifecycle_callbacks(self):
+        source = (Path(__file__).parents[1] / 'src/monkey/targets/NativeInputBlocker.cs').read_text()
+        apply = source[source.index('void Apply(bool active)'):source.index('public void OnPointerDown')]
+        self.assertIn('if (sourceActivityOverrideConfigured && !Application.isPlaying)', apply)
+        self.assertIn('active = enabled && sourceEnabledAtCapture && sourceActiveAtCapture;', apply)
+        self.assertIn('surface.raycastTarget = active || (!ownsSurface && previousRaycast);', apply)
+        self.assertIn('void OnEnable() { Apply(true); }', source)
+        self.assertIn('void OnDisable() { Apply(false); }', source)
+
     def test_source_blocker_survives_both_native_plans_and_exports(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()

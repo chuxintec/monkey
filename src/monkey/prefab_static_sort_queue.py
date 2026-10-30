@@ -125,9 +125,9 @@ def build_queue(plan: Mapping) -> dict:
                                        "convertible": mask_row.get("convertible", False), "rootScope": root_scope})
             return
 
-        # RenderFlow records a normal renderer after visiting its children.
-        for child in node.get("children", []):
-            traverse(child, queue, root_scope)
+        # Cocos 2.4 RenderFlow runs RENDER before CHILDREN: _render submits
+        # fillBuffers before invoking its next flow. Equal sort keys must
+        # therefore keep the parent's renderer before its descendants.
         for renderer in source_renderers(node_id):
             entry = {"kind": "leaf", "node": node_id, "sourceComponentId": renderer.get("sourceId"),
                      "sourceType": renderer.get("type"), "sortOrder": order_value(node_id),
@@ -135,6 +135,8 @@ def build_queue(plan: Mapping) -> dict:
                      "visit": visit, "rootScope": root_scope}
             visit += 1
             queue.append(entry)
+        for child in node.get("children", []):
+            traverse(child, queue, root_scope)
 
     def sort_and_flatten(entries: list[dict], output: list[dict]):
         # Cocos RenderFlow uses an ascending sortOrder comparator. Preserve

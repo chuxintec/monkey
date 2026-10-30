@@ -69,6 +69,27 @@ def _hash_bound_fixture(directory):
 
 
 class StaticSortQueueTests(unittest.TestCase):
+    def test_parent_background_precedes_descendant_content_with_equal_sort_keys(self):
+        # Normal Cocos RenderFlow submits a parent's Sprite before descending
+        # into its Label/Sprite children; postorder would cover all content.
+        nodes = [node("root", children=["panel", "overlay"]),
+                 node("panel", "root", ["title", "button"]),
+                 node("title", "panel", ["text"]), node("text", "title"),
+                 node("button", "panel"), node("overlay", "root")]
+        rows = [component("panel-sprite", "panel", "cc.Sprite"),
+                component("title-sprite", "title", "cc.Sprite"),
+                component("title-label", "text", "cc.Label"),
+                component("button-sprite", "button", "cc.Sprite"),
+                component("overlay-sprite", "overlay", "cc.Sprite")]
+        result = build_queue({"nodes": nodes, "components": rows})
+        self.assertEqual(["panel", "title", "text", "button", "overlay"],
+                         [row["node"] for row in result["queueByRoot"]["root"]])
+        # Explicit source sort values remain authoritative over equal-key DFS.
+        rows.append(component("panel-order", "panel", "cc.SortOrder", sourceSortOrder=2))
+        sorted_result = build_queue({"nodes": nodes, "components": rows})
+        self.assertEqual(["title", "text", "button", "overlay", "panel"],
+                         [row["node"] for row in sorted_result["queueByRoot"]["root"]])
+
     def test_creator_empty_graphics_retains_original_event_and_typed_no_draw_mapping(self):
         with tempfile.TemporaryDirectory(dir="/private/tmp") as temp:
             plan, manifest, manifest_path = _hash_bound_fixture(temp)

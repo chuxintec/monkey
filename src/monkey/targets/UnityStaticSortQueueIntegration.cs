@@ -97,9 +97,82 @@ public static partial class MonkeyImporter
             { if (row == null || String.IsNullOrWhiteSpace(row.node)) throw new InvalidOperationException("STATIC_SORT_QUEUE_SORT_FIELD_INVALID: " + queue.rootScope); referencedNodes.Add(row.node); }
             foreach (var row in queue.sourceSortRoots ?? Array.Empty<ProxySortRootFieldSpec>())
             { if (row == null || String.IsNullOrWhiteSpace(row.node)) throw new InvalidOperationException("STATIC_SORT_QUEUE_SORTROOT_INVALID: " + queue.rootScope); referencedNodes.Add(row.node); }
+            foreach (var row in queue.sourceBlockInputEvents ?? Array.Empty<ProxyBlockInputSpec>())
+            { if (row == null || String.IsNullOrWhiteSpace(row.node)) throw new InvalidOperationException("STATIC_SORT_QUEUE_BLOCK_INPUT_INVALID: " + queue.rootScope); referencedNodes.Add(row.node); }
             var outside = referencedNodes.Where(node => !scopeNodes.Contains(node)).ToArray();
             if (outside.Length != 0)
                 throw new InvalidOperationException("STATIC_SORT_QUEUE_NODE_OUTSIDE_PREFAB_SCOPE: " + outside[0]);
+
+            var queueNodeIds = new HashSet<string>((queue.sourceChildOrder ?? Array.Empty<ProxySourceChildrenSpec>())
+                .Where(row => row != null && !String.IsNullOrWhiteSpace(row.node)).Select(row => row.node), StringComparer.Ordinal);
+            queueNodeIds.Add(queue.rootScope);
+            var activeSelf = (queue.sourceNodeActive ?? Array.Empty<ProxySourceActiveSpec>())
+                .Where(row => row != null && !String.IsNullOrWhiteSpace(row.node))
+                .GroupBy(row => row.node, StringComparer.Ordinal).ToDictionary(group => group.Key, group => group.Single().active, StringComparer.Ordinal);
+            var parentByNode = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var parent in queue.sourceChildOrder ?? Array.Empty<ProxySourceChildrenSpec>())
+                if (parent != null)
+                    foreach (var child in parent.children ?? Array.Empty<string>())
+                        if (parentByNode.ContainsKey(child))
+                            throw new InvalidOperationException("STATIC_SORT_QUEUE_PARENT_DUPLICATE: " + child);
+                        else parentByNode.Add(child, parent.node);
+            bool EffectiveActive(string node)
+            {
+                var cursor = node; var seen = new HashSet<string>(StringComparer.Ordinal);
+                while (!String.IsNullOrWhiteSpace(cursor))
+                {
+                    if (!seen.Add(cursor) || !activeSelf.TryGetValue(cursor, out var active) || !active) return false;
+                    if (cursor == queue.rootScope) return true;
+                    if (!parentByNode.TryGetValue(cursor, out var parent)) return false;
+                    cursor = parent;
+                }
+                return false;
+            }
+            var blockInputRows = (plan.components ?? Array.Empty<ComponentSpec>())
+                .Where(component => component != null && component.type == "cc.BlockInputEvents" &&
+                    queueNodeIds.Contains(component.node))
+                .Select(component =>
+                {
+                    var graphicCandidates = (plan.components ?? Array.Empty<ComponentSpec>())
+                        .Where(candidate => candidate != null && candidate.convertible && candidate.node == component.node &&
+                            (candidate.type == "cc.Sprite" || candidate.type == "cc.Label" ||
+                             candidate.type == "cc.RichText" || candidate.type == "sp.Skeleton"))
+                        .ToArray();
+                    if (graphicCandidates.Length > 1)
+                        throw new InvalidOperationException("STATIC_SORT_BLOCK_INPUT_SOURCE_GRAPHIC_AMBIGUOUS: " + component.sourceId);
+                    var graphic = graphicCandidates.SingleOrDefault();
+                    var nativeGraphicType = graphic == null ? null : graphic.type == "cc.Sprite" ? "UnityEngine.UI.Image" :
+                        graphic.type == "sp.Skeleton" ? "Spine.Unity.SkeletonGraphic" : "TMPro.TextMeshProUGUI";
+                    return new ProxyBlockInputSpec { sourceComponentId = component.sourceId, node = component.node,
+                        sourceType = component.type, sourceEnabled = component.enabled,
+                        sourceActive = EffectiveActive(component.node),
+                        expectedSourceGraphicComponentId = graphic == null ? null : graphic.sourceId,
+                        expectedSourceGraphicType = nativeGraphicType };
+                }).ToArray();
+            if (blockInputRows.Any(row => row == null || String.IsNullOrWhiteSpace(row.sourceComponentId) ||
+                String.IsNullOrWhiteSpace(row.node) || row.sourceType != "cc.BlockInputEvents"))
+                throw new InvalidOperationException("STATIC_SORT_BLOCK_INPUT_SOURCE_CONTRACT_INVALID: " + queue.rootScope);
+            queue.sourceBlockInputEvents = blockInputRows;
+            var sourceMaskRows = (plan.staticMasks == null ? Array.Empty<MaskSpec>() :
+                    plan.staticMasks.masks ?? Array.Empty<MaskSpec>())
+                .Where(mask => mask != null && queueNodeIds.Contains(mask.node))
+                .Select(mask =>
+                {
+                    if (!activeSelf.TryGetValue(mask.node, out var activeSelfValue))
+                        throw new InvalidOperationException("STATIC_SORT_SOURCE_MASK_ACTIVE_STATE_MISSING: " + mask.sourceId);
+                    return new ProxySourceMaskIdentitySpec { sourceId = mask.sourceId, nativeId = mask.nativeId,
+                        node = mask.node, maskType = mask.maskType, enabled = mask.enabled, inverted = mask.inverted,
+                        alphaThreshold = mask.alphaThreshold, spriteFrameUuid = mask.spriteFrameUuid,
+                        sourceFieldsJson = mask.sourceFieldsJson, sourceMaterialId = mask.sourceMaterialId,
+                        resolvedSourceMaterialId = mask.resolvedSourceMaterialId, sourceEffectId = mask.sourceEffectId,
+                        sourceEffectName = mask.sourceEffectName, sourceEffectDocumentSha256 = mask.sourceEffectDocumentSha256,
+                        unityMaskShaderPath = mask.unityMaskShaderPath, unityMaskShaderSha256 = mask.unityMaskShaderSha256,
+                        unityMaskMaterialGuid = mask.unityMaskMaterialGuid, unityMaskMaterialPath = mask.unityMaskMaterialPath,
+                        sourceActiveSelf = activeSelfValue, sourceActive = EffectiveActive(mask.node) };
+                }).ToArray();
+            if (sourceMaskRows.Select(row => row.sourceId).Distinct(StringComparer.Ordinal).Count() != sourceMaskRows.Length)
+                throw new InvalidOperationException("STATIC_SORT_SOURCE_MASK_IDENTITY_DUPLICATE: " + queue.rootScope);
+            queue.sourceMaskIdentities = sourceMaskRows;
         }
         return queues.OrderBy(queue => queue.rootScope, StringComparer.Ordinal).ToArray();
     }
@@ -179,7 +252,11 @@ public static partial class MonkeyImporter
         var frameIds = (queues ?? Array.Empty<ProxyQueueSpec>())
             .SelectMany(queue => queue.masks ?? Array.Empty<ProxyMaskSpec>())
             .Where(mask => mask.maskType == 2)
-            .Select(mask => mask.spriteFrameUuid).Distinct(StringComparer.Ordinal).ToArray();
+            .Select(mask => mask.spriteFrameUuid)
+            .Concat((queues ?? Array.Empty<ProxyQueueSpec>()).SelectMany(queue =>
+                queue.sourceMaskIdentities ?? Array.Empty<ProxySourceMaskIdentitySpec>())
+                .Where(mask => mask.maskType == 2).Select(mask => mask.spriteFrameUuid))
+            .Distinct(StringComparer.Ordinal).ToArray();
         var result = new Dictionary<string, Sprite>(StringComparer.Ordinal);
         foreach (var frameId in frameIds)
         {
@@ -279,10 +356,14 @@ public static partial class MonkeyImporter
             }
             var resolver = new Func<string, Sprite>(id => ResolveStaticMaskSprite(id, plan, sprites));
             var materialResolver = new Func<MaskSpec, Material>(ResolveStaticSortMaskMaterialReadOnly);
+            var scopeProvenance = new ProxyPrefabScopeProvenance { sourcePrefabId = prefab.sourceId,
+                prefabPath = prefab.path, rootScope = queue.rootScope,
+                persistentAssetRoot = persistentNodes[queue.rootScope],
+                loadedScopeRoot = loadedNodes[queue.rootScope] };
             var persistent = UnityStaticSortQueueProxy.ReadPersistentSortQueueProxy(queue, persistentNodes,
-                persistentRoots[0].gameObject, persistentPresenter, resolver, materialResolver);
+                persistentRoots[0].gameObject, persistentPresenter, resolver, materialResolver, scopeProvenance);
             var loaded = UnityStaticSortQueueProxy.ReadStaticSortQueueProxy(queue, loadedNodes,
-                loadedRoots[0].gameObject, loadedPresenter, resolver, materialResolver);
+                loadedRoots[0].gameObject, loadedPresenter, resolver, materialResolver, scopeProvenance);
             persistentRows.Add(persistent);
             loadedRows.Add(loaded);
             if (persistent == null || !persistent.verified)

@@ -2,6 +2,8 @@
 const assert = require('node:assert/strict');
 const Module = require('node:module');
 const load = Module._load;
+const ownedRegistrations=[];
+const ownedUndoStub={registerRoot(node){const descendants=[];const visit=current=>{for(const child of current.children||[]){descendants.push(child.name);visit(child);}};visit(node);ownedRegistrations.push({node,parent:node.parent||null,children:(node.children||[]).map(child=>child.name),descendants});return {registered:true};}};
 
 class Vec2 { constructor(x = 0, y = 0) { if (typeof x === 'object') { this.x = x.x; this.y = x.y; } else { this.x = x; this.y = y; } } }
 class Vec3 { constructor(x = 0, y = 0, z = 0) { if (typeof x === 'object') { this.x=x.x;this.y=x.y;this.z=x.z; } else { this.x=x;this.y=y;this.z=z; } } }
@@ -46,7 +48,7 @@ class Scene extends Node {
 const classNames = { MonkeyStaticLayoutCompletion: Marker, MonkeyStaticLayoutSlot: LayoutSlot, MonkeyStaticWidgetSlot: WidgetSlot };
 const cc = { UITransform, Layout, Widget, Canvas, Scene, Node, Layers:{Enum:{UI_2D:1}}, Vec2, Vec3, Size,
     js: { getClassByName(name) { return classNames[name]; } } };
-Module._load = function (request, parent, isMain) { if (request === 'cc') return cc; return load.call(this, request, parent, isMain); };
+Module._load = function (request, parent, isMain) { if (request === 'cc') return cc; if (request === './owned-import-undo.js' && /CreatorStaticLayoutCompletion\.js$/.test(parent.filename)) return ownedUndoStub; return load.call(this, request, parent, isMain); };
 
 const helper = require('../src/monkey/targets/CreatorStaticLayoutCompletion.js');
 const node = new Node('layout-owner');
@@ -80,7 +82,14 @@ assert.deepEqual(result.staticLayoutFields[0].layouts.map(x => x.sourceComponent
 assert.equal(result.staticLayoutFields[0].widgets[0].fieldValues.margins[1], -6);
 assert.equal(result.staticLayoutFields[0].layouts[0].sourceEnabled, true);
 const probePlan={designSize:[640,960],nodes:[{sourceId:'node:0',parent:null,children:[]}],layoutCompletion:{nodes:[{sourceNodeId:'node:0',layouts:[plan.nodes[0].layouts[1],plan.nodes[0].layouts[0]],widgets:plan.nodes[0].widgets}]}};
+const ownedStart=ownedRegistrations.length;
 const probe=helper.probe(probePlan,nodes);
+const probeOwnership=ownedRegistrations.slice(ownedStart);
+assert.deepEqual(probeOwnership.slice(0,3).map(row=>row.node.name),['StaticLayoutProbeScene','StaticLayoutProbeCanvas','StaticLayoutProbeDesignRoot']);
+assert.ok(probeOwnership.slice(0,3).every(row=>row.parent===null),'each generated root is registered immediately before parenting');
+assert.equal(probeOwnership[3].node.name,'StaticLayoutProbeScene');
+assert.ok(probeOwnership[3].children.includes('StaticLayoutProbeCanvas'),'scene is re-registered after activation to adopt its context');
+assert.ok(probeOwnership[3].descendants.includes('layout-owner'),'scene is re-registered after activation to adopt the full clone tree');
 assert.equal(probe.status,'probe_captured');
 assert.equal(probe.baselineInitialized,true);
 assert.equal(probe.baselineIsConstraintProof,false);

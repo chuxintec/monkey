@@ -6,6 +6,10 @@ const motion=require('./animation.js');
 const prefabs=require('./prefab.js');
 const relations=require('./prefab-instances.js');
 const staticSortQueue=require('./CreatorStaticSortQueueIntegration.js');
+const staticSortSerialization=require('./static-sort-serialization.js');
+const ownedUndo=require('./owned-import-undo.js');
+let saveCallProbe=null;
+let undoSnapshotProbe=null;
 const dynamic=require('./dynamic-ui.js');
 const batch=require('./batch.js');
 const jobs=require('./jobs.js');
@@ -30,7 +34,9 @@ function tiledReadback(plan,nodes) {
     return {profile:plan.rendererBudget.profile,macroKiB:cc.macro.BATCHER2D_MEM_INCREMENT,sprites:rows};
 }
 const checkTime=plan=>{if(plan.nativeDeadlineMs&&Date.now()>=plan.nativeDeadlineMs)throw Error('NATIVE_BUDGET_EXHAUSTED');};
-const loadAsset = (uuid, type) => new Promise((resolve,reject) => cc.assetManager.loadAny({uuid}, {reloadAsset:type===cc.SpriteFrame}, (e,a) => {
+// Reload only the requested saved root. A global reload also replaces every
+// dependency, breaking shared native Asset identity across loaded Prefabs.
+const loadAsset = (uuid, type, forceReload=false) => new Promise((resolve,reject) => cc.assetManager.loadAny(forceReload?{uuid,reloadAsset:true}:{uuid}, {reloadAsset:type===cc.SpriteFrame}, (e,a) => {
     if (e) reject(e); else if (!(a instanceof type)) reject(Error('Unexpected native asset type: '+uuid)); else resolve(a);
 }));
 function describe(root, plan) {
@@ -39,8 +45,23 @@ function describe(root, plan) {
     return {nodeCount:plan.nodes.length, treeNodeCount:nodes.length};
 }
 module.exports = {
-    load() {}, unload() {},
+    load() { staticSortSerialization.install(cc, EditorExtends, globalThis, require); },
+    unload() { ownedUndo.finish(); if(saveCallProbe){saveCallProbe.uninstall();saveCallProbe=null;} if(undoSnapshotProbe){undoSnapshotProbe.uninstall();undoSnapshotProbe=null;} staticSortSerialization.uninstall(); },
     methods: {
+        beginOwnedImportUndo() { return ownedUndo.start(globalThis.cce,globalThis,require); },
+        finishOwnedImportUndo() { return ownedUndo.finish(); },
+        inspectOrdinarySaveApi() {
+            staticSortSerialization.install(cc,EditorExtends,globalThis,require);
+            if(!saveCallProbe)saveCallProbe=staticSortSerialization.installRuntimeCallProbe(cc,EditorExtends,globalThis,require);
+            if(!undoSnapshotProbe)undoSnapshotProbe=require('./editor-undo-diagnostics.js').install({realm:globalThis,requireFn:require});
+            return {runtime:staticSortSerialization.probeRuntimeApi(cc,EditorExtends,globalThis,require),calls:saveCallProbe.summary(),undo:undoSnapshotProbe.summary()};
+        },
+        stopOrdinarySaveProbe() {
+            const result=saveCallProbe?saveCallProbe.summary():{patched:[],callCounts:{},callRows:[]};
+            if(saveCallProbe){saveCallProbe.uninstall();saveCallProbe=null;}
+            if(undoSnapshotProbe){result.undo=undoSnapshotProbe.summary();undoSnapshotProbe.uninstall();undoSnapshotProbe=null;}
+            return result;
+        },
         async prepareRetainedBuiltin(entry) {
             const helper=require('./static-retained-assets.js'),material=helper.createBuiltin(entry,await loadAsset('60f7195c-ec2a-45eb-ba94-8955f60e81d0',cc.EffectAsset));
             try{return helper.serializeBuiltin(material);}finally{material.destroy();}
@@ -103,15 +124,16 @@ module.exports = {
                 cc.macro.BATCHER2D_MEM_INCREMENT=kib;
             }
             const scene = new cc.Scene('Candidate');
+            ownedUndo.registerRoot(scene);
             let retained=false;
             try {
-                const canvasNode = new cc.Node('Canvas');canvasNode.layer=cc.Layers.Enum.UI_2D;canvasNode.parent=scene;
+                const canvasNode = new cc.Node('Canvas');ownedUndo.registerRoot(canvasNode);canvasNode.layer=cc.Layers.Enum.UI_2D;canvasNode.parent=scene;
                 canvasNode.addComponent(cc.UITransform).setContentSize(...plan.designSize);
                 const canvas=canvasNode.addComponent(cc.Canvas);
-                const cameraNode=new cc.Node('Camera');cameraNode.parent=scene;cameraNode.setPosition(0,0,1000);
+                const cameraNode=new cc.Node('Camera');ownedUndo.registerRoot(cameraNode);cameraNode.parent=scene;cameraNode.setPosition(0,0,1000);
                 const camera=cameraNode.addComponent(cc.Camera);camera.projection=cc.Camera.ProjectionType.ORTHO;
                 camera.orthoHeight=plan.designSize[1]/2;camera.near=1;camera.far=2000;camera.visibility=cc.Layers.Enum.UI_2D;canvas.cameraComponent=camera;
-                const design = new cc.Node('DesignRoot');design.parent=canvasNode;design.layer=cc.Layers.Enum.UI_2D;
+                const design = new cc.Node('DesignRoot');ownedUndo.registerRoot(design);design.parent=canvasNode;design.layer=cc.Layers.Enum.UI_2D;
                 design.addComponent(cc.UITransform).setContentSize(...plan.designSize);design.getComponent(cc.UITransform).setAnchorPoint(0,0);
                 design.setPosition(-plan.designSize[0]/2,-plan.designSize[1]/2,0);
                 const nodes=new Map();const sourceNodes=new Map(plan.nodes.map(n=>[n.sourceId,n]));const assets=new Map(plan.assets.map(a=>[a.sourceId,a]));
@@ -128,7 +150,7 @@ module.exports = {
                 for(const n of plan.nodes) {
                     if(nodeProgress%256===0){jobs.progress('hierarchy',nodeProgress,plan.nodes.length);await new Promise(resolve=>setTimeout(resolve,0));}nodeProgress++;
                     checkTime(plan);
-                    const node=new cc.Node(n.name);node.layer=n.sourceLayer??cc.Layers.Enum.UI_2D;nodes.set(n.sourceId,node);
+                    const node=new cc.Node(n.name);ownedUndo.registerRoot(node);node.layer=n.sourceLayer??cc.Layers.Enum.UI_2D;nodes.set(n.sourceId,node);
                     node.setPosition(...n.position);node.setRotation(new cc.Quat(...n.rotation));node.setScale(...n.scale);
                     const ui=node.addComponent(cc.UITransform);ui.setContentSize(...n.size);ui.setAnchorPoint(...n.anchor);
                     if(n.sourceUITransformEnabled===false)ui.enabled=false;
@@ -284,11 +306,18 @@ module.exports = {
         },
         async readSaved(uuid,plan) {
             staticSortQueue.validatePlan(plan);
-            const asset=await loadAsset(uuid,cc.SceneAsset);const scene=asset.scene;
+            const asset=await loadAsset(uuid,cc.SceneAsset,plan.readbackReloadSavedAssets===true);const scene=asset.scene;
+            const sceneScopeModule=require('./creator-saved-scene-scope.js');
+            const sceneScope=sceneScopeModule.begin({asset,requestedUuid:uuid,scene,cc,cce:globalThis.cce,editorExtends:globalThis.EditorExtends,
+                dynamicRelease:ownedScene=>dynamic.release(ownedScene)});
+            let readbackError=null;
+            try {
+            ownedUndo.registerRoot(scene);
             // Loading a SceneAsset alone does not perform Scene._load, which is
             // where Creator expands native instance placeholders. Initialize
             // this owned, inactive Scene without running/activating it.
             if((plan.prefabInstances||[]).length)scene._load();
+            ownedUndo.registerRoot(scene);
             const nodes=[];const visit=n=>{nodes.push(n);for(const child of sourceChildren(n))visit(child);};visit(scene);
             const design=nodes.find(n=>n.name==='DesignRoot');if(!design)throw Error('Saved scene missing DesignRoot');
             const saved=[];const walk=n=>{saved.push(n);for(const child of sourceChildren(n))walk(child);};for(const n of design.children)walk(n);
@@ -360,7 +389,7 @@ module.exports = {
                     rect:[sf.rect.x,sf.rect.y,sf.rect.width,sf.rect.height]});
             }
             const templates=new Map();
-            for(const info of plan.savedPrefabs||[])templates.set(info.sourceId,await loadAsset(info.uuid,cc.Prefab));
+            for(const info of plan.savedPrefabs||[])templates.set(info.sourceId,await loadAsset(info.uuid,cc.Prefab,plan.readbackReloadSavedAssets===true));
             const staticAssets=new Map(templates);
             const retainedAssets=plan.staticRetainedAssets?await require('./static-retained-assets.js').load(plan.staticRetainedAssets):new Map();
             for(const [sid,asset]of retainedAssets)staticAssets.set(sid,asset);
@@ -406,6 +435,17 @@ module.exports = {
                 position:[n.position.x,n.position.y,n.position.z],size:[n.getComponent(cc.UITransform).width,n.getComponent(cc.UITransform).height],
                 pivot:[n.getComponent(cc.UITransform).anchorX,n.getComponent(cc.UITransform).anchorY],scale:[n.scale.x,n.scale.y,n.scale.z],
                 rotation:[n.rotation.x,n.rotation.y,n.rotation.z,n.rotation.w],active:n.active,...prefabs.uiState(n,sourceNodes.get(sourceId))})),components:refs,labels,frames};
+            } catch(error) { readbackError=error; throw error; }
+            finally {
+                const cleanup=await sceneScope.cleanup();
+                console.info('CREATOR_SAVED_SCENE_CLEANUP '+JSON.stringify({cleaned:cleanup.cleaned,
+                    postCleanup:cleanup.postCleanup||null,error:cleanup.error?String(cleanup.error.message):null}));
+                if(cleanup.error) {
+                    if(!readbackError)throw cleanup.error;
+                    sceneScopeModule.preservePrimaryError(readbackError,cleanup.error);
+                    console.error('CREATOR_SAVED_SCENE_CLEANUP_AFTER_FAILURE: '+String(cleanup.error.message));
+                }
+            }
         }
     }
 };

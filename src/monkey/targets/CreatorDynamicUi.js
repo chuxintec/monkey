@@ -1,5 +1,6 @@
 'use strict';
 const cc=require('cc');
+const ownedUndo=require('./owned-import-undo.js');
 const enabled=plan=>plan.uiGeometryReadback==='native-ui-layout-roundtrip-v1';
 function capture(nodes){return [...nodes].map(([sourceId,n])=>({sourceId,position:[n.position.x,n.position.y,n.position.z],size:[n.getComponent(cc.UITransform).width,n.getComponent(cc.UITransform).height]}));}
 function drivenFields(plan,sourceId){
@@ -71,6 +72,7 @@ function settleOwned(scene,nodes,plan,root=null,initialize=false){
 function settleRoot(root,nodes,plan,initialize=true){
     if(!enabled(plan))return capture(nodes);
     const scene=new cc.Scene('OwnedPrefabLayoutProbe'),context=new cc.Node('OwnedPrefabUiContext');
+    ownedUndo.registerRoot(scene);ownedUndo.registerRoot(context);
     const ui=context.addComponent(cc.UITransform);ui.setContentSize(...plan.designSize);ui.setAnchorPoint(0,0);context.parent=scene;root.parent=context;
     try{settle(scene,nodes,plan,root,initialize?capture(nodes):false);return capture(nodes);}
     finally{root.parent=null;scene._activate(false);scene.destroy();}
@@ -107,12 +109,14 @@ function probeRoot(plan,design,spec){
     const roots=plan.nodes.filter(n=>n.parent===null),index=roots.indexOf(owner),original=design.children[index];
     if(!original||original.name!==owner.name)throw Error('Native UI probe root differs');
     const root=new cc.Node('OwnedDynamicUiContext'),ui=root.addComponent(cc.UITransform),designUi=design.getComponent(cc.UITransform);
+    ownedUndo.registerRoot(root);
     root.layer=design.layer;root.setPosition(design.position);root.setRotation(design.rotation);root.setScale(design.scale);
     ui.setContentSize(designUi.width,designUi.height);ui.setAnchorPoint(designUi.anchorX,designUi.anchorY);
     const nodes=new Map();
     try{
-        const branch=cc.instantiate(original);branch.parent=root;
-        function walk(sid,n){const src=source.get(sid);if(!n||src.name!==n.name||src.children.length!==n.children.length)throw Error('Native UI probe hierarchy differs');nodes.set(sid,n);src.children.forEach((child,i)=>walk(child,n.children[i]));}
+        const branch=cc.instantiate(original);ownedUndo.registerRoot(branch);branch.parent=root;
+        const sourceChildren=require('./static-richtext.js').sourceChildren;
+        function walk(sid,n){const src=source.get(sid),children=n&&sourceChildren(n);if(!n||src.name!==n.name||src.children.length!==children.length)throw Error('Native UI probe hierarchy differs:'+sid+':'+JSON.stringify({expected:src.children,actual:children&&children.map(child=>child.name)}));nodes.set(sid,n);src.children.forEach((child,i)=>walk(child,children[i]));}
         walk(owner.sourceId,branch);return {root,nodes};
     }catch(error){root.destroy();throw error;}
 }
@@ -127,6 +131,7 @@ async function probe(plan,design,onProgress=()=>{}){
         if(plan.nativeDeadlineMs&&Date.now()>=plan.nativeDeadlineMs)throw Error('NATIVE_BUDGET_EXHAUSTED');
         if(!spec)throw Error('Native UI probe component missing');
         const {root,nodes}=probeRoot(plan,design,spec),scene=new cc.Scene('OwnedDynamicUiProbe');root.parent=scene;
+        ownedUndo.registerRoot(scene);
         try{
             const node=nodes.get(spec.node);for(let p=node;p;p=p.parent)p.active=true;
             settle(scene,nodes,plan,root);const states=[state('baseline',node)],ui=node.getComponent(cc.UITransform);
@@ -142,7 +147,7 @@ async function probe(plan,design,onProgress=()=>{}){
                 node.active=false;parent.width=size[0]+80;node.active=true;settle(scene,nodes,plan,root);states.push(state('show-after-resize',node));
             }else if(plan.uiStateProbeVersion>=2){
                 const first=node.children.find(n=>n.active),firstUi=first&&first.getComponent(cc.UITransform);
-                const child=new cc.Node('OwnedDynamicChild');child.addComponent(cc.UITransform).setContentSize(firstUi?firstUi.width:40,firstUi?firstUi.height:20);if(first)child.setScale(first.scale);child.parent=node;
+                const child=new cc.Node('OwnedDynamicChild');ownedUndo.registerRoot(child);child.addComponent(cc.UITransform).setContentSize(firstUi?firstUi.width:40,firstUi?firstUi.height:20);if(first)child.setScale(first.scale);child.parent=node;
                 settle(scene,nodes,plan,root);states.push(state('add-child',node));
                 child.active=false;settle(scene,nodes,plan,root);states.push(state('hide-child',node));
                 child.active=true;settle(scene,nodes,plan,root);states.push(state('show-child',node));
@@ -154,7 +159,7 @@ async function probe(plan,design,onProgress=()=>{}){
                 settle(scene,nodes,plan,root);states.push(state('resize-child',node));
                 node.active=false;node.active=true;settle(scene,nodes,plan,root);states.push(state('hide-show-container',node));
             }else{
-                const child=new cc.Node('OwnedDynamicChild');child.addComponent(cc.UITransform).setContentSize(40,20);child.parent=node;
+                const child=new cc.Node('OwnedDynamicChild');ownedUndo.registerRoot(child);child.addComponent(cc.UITransform).setContentSize(40,20);child.parent=node;
                 settle(scene,nodes,plan,root);states.push(state('add-child',node));const axis=spec.layoutType-1;
                 const extent=states[0].size[axis]+(axis===0?40:20)+spec.spacingXY[axis];
                 if(Math.abs(states[1].size[axis]-extent)>.01)throw Error('Dynamic child layout extent differs');

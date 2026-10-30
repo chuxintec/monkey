@@ -101,6 +101,8 @@ namespace Monkey.Targets.Spine
             public string sourceSkin;
             public string actualSkin;
             public bool sourceSkinVerified;
+            public string runtimeDefaultSkinName;
+            public bool defaultSkinRuntimeNull;
             public string sourceAnimation;
             public string actualAnimation;
             public float trackTime;
@@ -305,8 +307,12 @@ namespace Monkey.Targets.Spine
             }
             lastGaps = gaps.Distinct(StringComparer.Ordinal).ToArray();
             bool rowsVerified = instructions != null && instructions.Length > 0 && rows.Count == instructions.Length;
-            nativeMaterialVerified = (rowsVerified || emptyVerified) && pairsVerified && lastGaps.Length == 0;
-            return BuildReadback(instructionType, instructions == null ? 0 : instructions.Length, rows, lastGaps, pose, pairsVerified);
+            bool verified = (rowsVerified || emptyVerified) && pairsVerified && lastGaps.Length == 0;
+            nativeMaterialVerified = verified;
+            string status = emptyVerified ? "verified_empty_pose_with_persistent_material_pairs" :
+                rowsVerified && lastGaps.Length == 0 ? "verified_active_submesh_materials" : "unverified";
+            return BuildReadback(instructionType, instructions == null ? 0 : instructions.Length, rows,
+                lastGaps, pose, pairsVerified, status, verified);
         }
 
         /// <summary>Strict, read-only saved-prefab material verification. It never repairs component state.</summary>
@@ -414,14 +420,25 @@ namespace Monkey.Targets.Spine
             string actualSkin = skeleton == null || skeleton.Skin == null ? null : skeleton.Skin.Name;
             string actualAnimation = current == null || current.Animation == null ? null : current.Animation.Name;
             float trackTime = current == null ? 0f : current.TrackTime;
+            // Spine 3.8 represents the authored default skin as Skeleton.Skin == null
+            // in the Editor validation path while still resolving attachments through
+            // SkeletonData.DefaultSkin. Preserve the serialized request and prove this
+            // exact runtime alias; do not accept a missing or different named skin.
+            string runtimeDefaultSkinName = data == null || data.DefaultSkin == null ? null : data.DefaultSkin.Name;
+            bool defaultSkinRuntimeNull = expectedSkinKnown && !String.IsNullOrEmpty(expectedSkin) &&
+                expectedSkin == runtimeDefaultSkinName && String.IsNullOrEmpty(actualSkin);
             bool skinVerified = !expectedSkinKnown ||
                 ((graphic != null && graphic.initialSkinName == expectedSkin) &&
-                 (String.IsNullOrEmpty(expectedSkin) ? String.IsNullOrEmpty(actualSkin) : actualSkin == expectedSkin));
+                 (String.IsNullOrEmpty(expectedSkin) ? String.IsNullOrEmpty(actualSkin) :
+                    actualSkin == expectedSkin || defaultSkinRuntimeNull));
             bool animationVerified = !expectedAnimationKnown ||
                 ((graphic != null && graphic.startingAnimation == expectedAnimation) &&
                  (String.IsNullOrEmpty(expectedAnimation) ? String.IsNullOrEmpty(actualAnimation) : actualAnimation == expectedAnimation) &&
                  Math.Abs(trackTime) <= 0.000001f);
-            if (!skinVerified) gaps.Add("spine_requested_skin_runtime_mismatch");
+            if (!skinVerified) gaps.Add("spine_requested_skin_runtime_mismatch:requested=" + (expectedSkin ?? "<null>") +
+                ";component=" + (graphic == null ? "<null>" : graphic.initialSkinName ?? "<null>") +
+                ";runtime=" + (actualSkin ?? "<null>") + ";dataDefault=" + (runtimeDefaultSkinName ?? "<null>") +
+                ";defaultNullAlias=" + defaultSkinRuntimeNull);
             if (!animationVerified) gaps.Add("spine_requested_animation_runtime_mismatch");
             bool noDrawable = activeDrawable.Count == 0;
             bool emptyRendererState = graphic != null && graphic.canvasRenderer != null &&
@@ -434,7 +451,8 @@ namespace Monkey.Targets.Spine
                 sourceDataIdentityVerified = dataIdentity, dataVersion = data == null ? null : data.Version,
                 boneCount = bones, slotCount = slots, activeDrawableAttachmentCount = activeDrawable.Count,
                 nonNullAttachmentCount = nonNull, sourceSkin = expectedSkin, actualSkin = actualSkin,
-                sourceSkinVerified = skinVerified, sourceAnimation = expectedAnimation,
+                sourceSkinVerified = skinVerified, runtimeDefaultSkinName = runtimeDefaultSkinName,
+                defaultSkinRuntimeNull = defaultSkinRuntimeNull, sourceAnimation = expectedAnimation,
                 actualAnimation = actualAnimation, trackTime = trackTime,
                 sourceAnimationVerified = animationVerified, allSlotsHaveNoDrawableAttachment = noDrawable,
                 emptyRendererStateVerified = emptyRendererState, emptyPoseVerified = empty,

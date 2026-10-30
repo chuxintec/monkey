@@ -5,7 +5,17 @@ const Module = require('node:module');
 const load = Module._load;
 
 class Component { constructor(node) { this.node = node; this.enabled = true; } }
-class SpriteFrame { constructor(uuid, width = 676, height = 916) { this._uuid = uuid; this.uuid = uuid; this.rect = {width, height}; } }
+class Texture { constructor(uuid, width = 2048, height = 2048) { this._uuid = uuid; this.uuid = uuid; this.width = width; this.height = height; } }
+class SpriteFrame {
+    constructor(uuid, width = 676, height = 916, overrides = {}) {
+        this._uuid = uuid; this.uuid = uuid; this.texture = new Texture('native-texture-uuid');
+        this.rect = {x: 0, y: 0, width, height}; this.originalSize = {width, height}; this.offset = {x: 0, y: 0};
+        this.rotated = false; this.insetTop = 0; this.insetBottom = 0; this.insetLeft = 0; this.insetRight = 0;
+        this.flipUVX = false; this.flipUVY = false; this.packable = true; this.pixelsToUnit = 100;
+        this.pivot = {x: 0.5, y: 0.5}; this._meshType = 0; this.atlasUuid = ''; this.vertices = null;
+        Object.assign(this, overrides);
+    }
+}
 class Sprite extends Component {
     constructor(node) { super(node); this._spriteFrame = null; this._sizeMode = Sprite.SizeMode.TRIMMED; }
     get sizeMode() { return this._sizeMode; }
@@ -75,6 +85,12 @@ assert.equal(created[0].alphaThreshold, 1, 'source alpha threshold 1 is retained
 assert.equal(created[0].sourceSpriteFrameUuid, sourceSpriteId);
 assert.equal(created[0].nativeSpriteFrameUuid, nativeSpriteUuid,
     'source UUID and Creator imported SpriteFrame UUID are distinct fields');
+assert.deepEqual(created[0].failedChecks, [], 'successful rows carry an empty field-specific failure list');
+assert.equal(created[0].checks.identityNativeMaskReference, true);
+assert.equal(created[0].expected.nativeId, spec.nativeId);
+assert.equal(created[0].actual.identity.nativeMaskUuid, node.getComponent(Mask).uuid);
+assert.equal(created[0].actual.backingRenderer.type, 'Sprite');
+assert.equal(created[0].expected.resolvedSpriteFrameUuid, nativeSpriteUuid);
 assert.equal(created[0].initialized, true);
 assert.equal(created[0].initializedBackingVerified, true);
 assert.equal(sprite.sizeMode, Sprite.SizeMode.CUSTOM);
@@ -89,28 +105,85 @@ const mask = node.getComponent(Mask);
 mask.subComp = null; // _sprite is a nonserialized Mask cache after persistent Prefab reload.
 const persistent = helper.readStaticMasks([spec], nodes, resolveSprite)[0];
 assert.equal(persistent.verified, true, 'persistent readback follows the saved node Sprite reference');
+assert.deepEqual(persistent.failedChecks, []);
+assert.equal(persistent.actual.backingCacheType, null);
 assert.equal(persistent.initialized, false);
 assert.equal(persistent.maskSpriteFrameUuid, null);
 assert.equal(persistent.nativeSpriteFrameUuid, nativeSpriteUuid);
 mask.subComp = sprite;
 
-sprite.spriteFrame = new SpriteFrame(sourceSpriteId); // same source-looking UUID, wrong native asset object
-assert.equal(helper.readStaticMasks([spec], nodes, resolveSprite)[0].verified, false,
-    'persistent readback compares the actual saved node SpriteFrame reference');
-sprite.spriteFrame = frame;
-
+sprite.spriteFrame = new SpriteFrame(nativeSpriteUuid); // same imported asset represented by a distinct loaded object
 const identity = node.getComponent(Identity);
-identity.sourceFieldsJson = JSON.stringify({ ...spec.sourceFields, _N$alphaThreshold: 0 });
+identity.sourceSpriteFrame = sprite.spriteFrame;
+const duplicateAssetInstance = helper.readStaticMasks([spec], nodes, resolveSprite)[0];
+assert.equal(duplicateAssetInstance.verified, true,
+    'equivalent typed SpriteFrame instances pass across load domains by full immutable resource identity');
+assert.equal(duplicateAssetInstance.checks.identitySpriteFrameReference, true,
+    'identity marker still points to the exact SpriteFrame on its node');
+assert.equal(duplicateAssetInstance.checks.spriteFrameResourceIdentity, true);
+assert.equal(helper.readStaticMasks([spec], nodes, resolveSprite, {initialized: true})[0].verified, true,
+    'initialized Mask cache must point to the same node SpriteFrame instance');
+identity.sourceSpriteFrame = frame;
+const wrongLoadDomainIdentityRef = helper.readStaticMasks([spec], nodes, resolveSprite)[0];
+assert.equal(wrongLoadDomainIdentityRef.verified, false,
+    'a structurally equivalent frame from another load domain cannot replace the node identity reference');
+assert.ok(wrongLoadDomainIdentityRef.failedChecks.includes('identitySpriteFrameReference'));
+identity.sourceSpriteFrame = sprite.spriteFrame;
+
+sprite.spriteFrame = new SpriteFrame(nativeSpriteUuid, 676, 916, {texture: new Texture('other-texture-uuid')});
+identity.sourceSpriteFrame = sprite.spriteFrame;
+const wrongTexture = helper.readStaticMasks([spec], nodes, resolveSprite)[0];
+assert.equal(wrongTexture.verified, false, 'matching SpriteFrame UUID cannot hide a different bound texture');
+assert.ok(wrongTexture.failedChecks.includes('spriteFrameResourceIdentity'));
+
+sprite.spriteFrame = new SpriteFrame(nativeSpriteUuid, 676, 916, {rect: {x: 1, y: 0, width: 676, height: 916}});
+identity.sourceSpriteFrame = sprite.spriteFrame;
+const wrongRect = helper.readStaticMasks([spec], nodes, resolveSprite)[0];
+assert.equal(wrongRect.verified, false, 'matching UUID and texture cannot hide a different frame rectangle');
+assert.ok(wrongRect.failedChecks.includes('spriteFrameResourceIdentity'));
+
+sprite.spriteFrame = new SpriteFrame(nativeSpriteUuid, 676, 916, {insetTop: 2});
+identity.sourceSpriteFrame = sprite.spriteFrame;
 assert.equal(helper.readStaticMasks([spec], nodes, resolveSprite)[0].verified, false,
+    'matching UUID cannot hide changed slice border values');
+
+sprite.spriteFrame = new SpriteFrame(nativeSpriteUuid, 676, 916, {originalSize: {width: 680, height: 916}});
+identity.sourceSpriteFrame = sprite.spriteFrame;
+assert.equal(helper.readStaticMasks([spec], nodes, resolveSprite)[0].verified, false,
+    'matching UUID cannot hide changed untrimmed dimensions');
+
+sprite.spriteFrame = new SpriteFrame(nativeSpriteUuid, 676, 916, {vertices: {
+    rawPosition: [], positions: [], indexes: [0, 1, 2], uv: [], nuv: [],
+    minPos: {x: 0, y: 0, z: 0}, maxPos: {x: 1, y: 1, z: 0},
+}});
+identity.sourceSpriteFrame = sprite.spriteFrame;
+assert.equal(helper.readStaticMasks([spec], nodes, resolveSprite)[0].verified, false,
+    'matching UUID cannot hide changed mesh geometry');
+
+sprite.spriteFrame = new SpriteFrame(sourceSpriteId); // same source-looking UUID, wrong native asset identity
+identity.sourceSpriteFrame = sprite.spriteFrame;
+const wrongNativeFrame = helper.readStaticMasks([spec], nodes, resolveSprite)[0];
+assert.equal(wrongNativeFrame.verified, false,
+    'readback still requires the resolved imported native SpriteFrame identity');
+assert.ok(wrongNativeFrame.failedChecks.includes('spriteReferenceAndFrame'));
+sprite.spriteFrame = frame;
+identity.sourceSpriteFrame = frame;
+
+identity.sourceFieldsJson = JSON.stringify({ ...spec.sourceFields, _N$alphaThreshold: 0 });
+const wrongSourceFields = helper.readStaticMasks([spec], nodes, resolveSprite)[0];
+assert.equal(wrongSourceFields.verified, false,
     'tampered saved source fields fail readback');
+assert.ok(wrongSourceFields.failedChecks.includes('identitySourceFieldsJson'));
 identity.sourceFieldsJson = JSON.stringify(spec.sourceFields);
 identity.sourceSpriteFrame = new SpriteFrame(nativeSpriteUuid);
 assert.equal(helper.readStaticMasks([spec], nodes, resolveSprite)[0].verified, false,
     'marker must retain the same typed SpriteFrame reference as the native mask');
 identity.sourceSpriteFrame = frame;
 identity.nativeMask = new Mask(node);
-assert.equal(helper.readStaticMasks([spec], nodes, resolveSprite)[0].verified, false,
+const wrongMaskReference = helper.readStaticMasks([spec], nodes, resolveSprite)[0];
+assert.equal(wrongMaskReference.verified, false,
     'marker must retain an actual typed reference to the rendered native Mask');
+assert.ok(wrongMaskReference.failedChecks.includes('identityNativeMaskReference'));
 identity.nativeMask = mask;
 mask.subComp = new Sprite(node);
 assert.equal(helper.readStaticMasks([spec], nodes, resolveSprite, {initialized: true})[0].verified, false,

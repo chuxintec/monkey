@@ -440,6 +440,8 @@ def _empty_unbound_graphic_presentation(value):
             'sourceSkin': '',
             'actualSkin': '',
             'sourceSkinVerified': False,
+            'runtimeDefaultSkinName': '',
+            'defaultSkinRuntimeNull': False,
             'sourceAnimation': '',
             'actualAnimation': '',
             'trackTime': 0.0,
@@ -624,6 +626,16 @@ def _verify_empty_pose(stage_component: dict, pose: dict, data_asset: dict, owne
                 'emptyRendererStateVerified', 'emptyPoseVerified'):
         if pose.get(key) is not True:
             failures.append(f'{owner}: zero drawable pose {key} is not verified {source_id}')
+    expected_skin = pose.get('sourceSkin')
+    actual_skin = pose.get('actualSkin')
+    default_skin = pose.get('runtimeDefaultSkinName')
+    default_skin_null = pose.get('defaultSkinRuntimeNull')
+    exact_skin_representation = (actual_skin == expected_skin or
+        actual_skin in (None, '') and default_skin_null is True and isinstance(expected_skin, str) and
+        bool(expected_skin) and default_skin == expected_skin)
+    if (not exact_skin_representation or type(default_skin_null) is not bool or
+            default_skin_null and (actual_skin not in (None, '') or default_skin != expected_skin)):
+        failures.append(f'{owner}: zero drawable pose source/default/runtime skin representation differs {source_id}')
     if pose.get('dataVersion') != data_asset.get('spineVersion'):
         failures.append(f'{owner}: zero drawable pose data version differs {source_id}')
     for key, asset_key in (('boneCount', 'boneCount'), ('slotCount', 'slotCount')):
@@ -646,8 +658,10 @@ def _verify_empty_pose(stage_component: dict, pose: dict, data_asset: dict, owne
     if expected_animation is None or pose.get('sourceAnimation') != expected_animation:
         failures.append(f'{owner}: zero drawable pose source animation is unpinned {source_id}')
     actual_skin = pose.get('actualSkin')
-    if (expected_skin is not None and
-            (actual_skin not in (None, '') if expected_skin == '' else actual_skin != expected_skin)):
+    exact_runtime_skin = (actual_skin in (None, '') if expected_skin == '' else
+        actual_skin == expected_skin or actual_skin in (None, '') and pose.get('defaultSkinRuntimeNull') is True and
+        pose.get('runtimeDefaultSkinName') == expected_skin)
+    if expected_skin is not None and not exact_runtime_skin:
         failures.append(f'{owner}: zero drawable pose actual skin differs {source_id}')
     actual_animation = pose.get('actualAnimation')
     if (expected_animation is not None and

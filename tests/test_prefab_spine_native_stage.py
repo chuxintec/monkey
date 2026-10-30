@@ -538,6 +538,9 @@ class SpineNativeStageTests(unittest.TestCase):
         self.assertIn("sourceDataIdentityVerified", helper)
         self.assertIn("activeDrawableAttachmentCount", helper)
         self.assertIn("expectedSkinKnown && expectedAnimationKnown", helper)
+        self.assertIn("runtimeDefaultSkinName", helper)
+        self.assertIn("defaultSkinRuntimeNull", helper)
+        self.assertIn("defaultNullAlias=", helper)
         self.assertIn("allSlotsHaveNoDrawableAttachment", helper)
         self.assertIn("emptyRendererStateVerified", helper)
         self.assertIn("verified_empty_pose_with_persistent_material_pairs", helper)
@@ -567,6 +570,21 @@ class SpineNativeStageTests(unittest.TestCase):
         self.assertIn("rawImages/currentInstructions/meshes are protected", integration)
         self.assertIn("or private and lack [SerializeField]", integration)
         self.assertIn("component.GetType() != typeof(SkeletonGraphic)", integration)
+
+    def test_static_sort_finalizer_accepts_only_proven_zero_instruction_empty_pose(self):
+        root = Path(__file__).resolve().parents[1]
+        integration = (root / "src/monkey/targets/spine/UnitySpineImporterIntegration.cs").read_text()
+        finalize = integration.split("static void FinalizeSavedStaticSortSpineMeshes(Graphic[] sourceOwners)", 1)[1].split(
+            "static bool IsSpineStaticSortGeneratedChild", 1)[0]
+        self.assertIn("if (bindingReadback.instructionCount == 0)", finalize)
+        self.assertIn('bindingReadback.nativeMaterialStatus == "verified_empty_pose_with_persistent_material_pairs"', finalize)
+        for proof in ("pose.emptyPoseVerified", "pose.sourceDataIdentityVerified", "pose.sourceSkinVerified",
+                      "pose.sourceAnimationVerified", "pose.allSlotsHaveNoDrawableAttachment",
+                      "pose.emptyRendererStateVerified", "pose.activeDrawableAttachmentCount == 0",
+                      "graphic.canvasRenderers.Count == 0", "rootMesh == null"):
+            self.assertIn(proof, finalize)
+        self.assertIn("SPINE_STATIC_SORT_FINALIZE_ZERO_RENDERER_POSE_NOT_PROVEN_EMPTY", finalize)
+        self.assertIn("SPINE_STATIC_SORT_FINALIZE_RENDERER_LIST_EMPTY_WITH_DRAW_INSTRUCTIONS", finalize)
 
     def test_saved_prefab_instance_markers_are_verified_only_through_exact_template_origin(self):
         integration = (Path(__file__).resolve().parents[1] /

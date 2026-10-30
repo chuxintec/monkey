@@ -56,7 +56,51 @@ namespace Monkey.StaticSortQueueProxy
         public UnityEngine.Object sourceDataAssetReference;
         public bool sourceOwnerEnabled, sourceNodeActive, sourceChildEnabled, sourceChildActiveSelf,
             sourceChildActiveInHierarchy, targetChildEnabled, targetChildActiveInHierarchy;
+        public bool ownerOnlyNoRegisteredChildren, ownerRendererListReadable, ownerRendererListEmpty, ownerRootMeshEmpty;
         public int sourceChildMeshVertexCount, sourceChildMeshSubmeshCount, sourceChildMaterialCount;
+        public int ownerRootMeshVertexCount, ownerRootMeshSubmeshCount, ownerRootMeshIndexCount, ownerRootCanvasMaterialCount;
+        public string ownerRootMeshSha256;
+    }
+
+    /// <summary>Typed evidence for a Spine owner whose pinned source has no SkeletonData reference.</summary>
+    [Serializable] public sealed class ProxySpineNullDataOwner
+    {
+        public string sourceComponentId, sourceNode, sourceStaticDataState, sourceBindingPlanPath,
+            sourceBindingPlanSha256, sourceManifestSha256, sourceMaterialClosureStatus,
+            sourceTargetFieldsJson, expectedFieldsJson, actualFieldsJson, rootMaterialEvidence, rootMeshSha256,
+            rootMeshGeometryEvidence;
+        public Graphic sourceOwnerGraphic;
+        public bool sourceHasStaticDataReference, sourceDataAssetIdNull, sourcePlanVerified,
+            sourceIdentityVerified, sourceNodeInactive, sourceNodeActive, sourceOwnerEnabled,
+            sourceSerializedActive, sourceSerializedActiveVerified,
+            nativeDataReferenceNull, nativeRootMeshEmpty, nativeRootMeshDefaultGraphicQuad, rootCanvasDefaultMaterialOnly,
+            rootSourceBaseDefaultMaterial, rootMaterialSlotMatchesGraphicRendering,
+            registeredRendererListEmpty, mappedStaticFieldsVerified, sourceBehaviorBoundaryVerified,
+            dynamicAssignmentUnverified, sourceTimeScaleVerified, sourceIdentityTimeScaleVerified,
+            persistentVisiblePose, verified;
+        public float sourceTimeScale, nativeTimeScale;
+        public int rootMeshVertexCount, rootMeshSubmeshCount, rootMeshIndexCount, rootCanvasMaterialCount,
+            rootExtraMaterialModifierCount, registeredRendererCount;
+    }
+
+    /// <summary>Typed proof for a pinned Spine asset whose fixed pose has no drawable attachments.</summary>
+    [Serializable] public sealed class ProxySpineEmptyPoseOwner
+    {
+        public string sourceComponentId, sourceNode, sourceDataAssetId, sourceDataAssetPath, sourceDataAssetGuid,
+            sourceBindingPlanPath, sourceBindingPlanSha256, sourceManifestSha256, sourceSkin, sourceAnimation,
+            actualSkin, runtimeDefaultSkinName, actualAnimation, sourceTargetFieldsJson, expectedFieldsJson, actualFieldsJson;
+        public Graphic sourceOwnerGraphic;
+        public UnityEngine.Object sourceDataAssetReference;
+        public int fixedPoseSlotCount, fixedPoseAttachmentCount, fixedPoseDrawableAttachmentCount,
+            presentationInstructionCount, presentationCanvasRendererCount, rootMeshVertexCount,
+            rootMeshSubmeshCount, rootCanvasMaterialCount, registeredRendererCount;
+        public float sourceTimeScale, nativeTimeScale, actualTrackTime;
+        public bool sourceHasStaticDataReference, sourcePlanVerified, sourceIdentityVerified,
+            sourceDataReferenceVerified, sourceTimeScaleVerified, sourceIdentityTimeScaleVerified,
+            persistentVisiblePose, sourceBusinessBehaviorDisabled, sourceCallbacksExecuted,
+            mappedStaticFieldsVerified, sdkPoseInitialized, sdkDataIdentityVerified,
+            sourceSkinRuntimeVerified, defaultSkinRuntimeNull, fixedPoseVerified, noDrawableAttachmentPoseVerified, rootMeshEmpty,
+            registeredRendererListEmpty, helperReadbackVerified, verified;
     }
 
     /// <summary>Maintains source render suppression without changing Graphic.enabled or authored fields.</summary>
@@ -71,6 +115,8 @@ namespace Monkey.StaticSortQueueProxy
         public ProxyMaskBinding[] maskBindings = Array.Empty<ProxyMaskBinding>();
         public ProxySpineOwnerDelegation[] spineOwnerDelegations = Array.Empty<ProxySpineOwnerDelegation>();
         public ProxySpineNonDrawChild[] spineNonDrawChildren = Array.Empty<ProxySpineNonDrawChild>();
+        public ProxySpineNullDataOwner[] spineNullDataOwners = Array.Empty<ProxySpineNullDataOwner>();
+        public ProxySpineEmptyPoseOwner[] spineEmptyPoseOwners = Array.Empty<ProxySpineEmptyPoseOwner>();
         public GameObject[] nestedProxyRoots = Array.Empty<GameObject>();
         public NativeStaticSortQueueProxyPresenter[] nestedProxyPresenters = Array.Empty<NativeStaticSortQueueProxyPresenter>();
         public bool[] nestedProxyRootActiveBefore = Array.Empty<bool>();
@@ -130,6 +176,13 @@ namespace Monkey.StaticSortQueueProxy
             foreach (var graphic in sourceRoot.GetComponentsInChildren<Graphic>(true))
             {
                 if (graphic == null) continue;
+                // An owned input-only surface must keep its CanvasRenderer uncullled:
+                // GraphicRaycaster uses cull as part of its hit test. The exact
+                // typed blocker contract is independently validated by the proxy readback.
+                var inputBlocker = graphic.GetComponent<NativeInputBlocker>();
+                if (graphic is NativeInputBlockerSurface && inputBlocker != null &&
+                    inputBlocker.OwnsSurface && inputBlocker.Surface == graphic)
+                    continue;
                 var cursor = graphic.transform;
                 while (cursor != null && cursor != sourceRoot.transform)
                 {

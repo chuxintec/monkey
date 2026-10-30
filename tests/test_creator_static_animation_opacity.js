@@ -34,6 +34,7 @@ Module._load = function (request, parent, isMain) {
 };
 
 const helper = require('../src/monkey/targets/CreatorStaticAnimationIntegration.js');
+const staticAnimationBindings = require('../src/monkey/targets/CreatorStaticAnimationBindings.js');
 const componentId = 'source:animation-component';
 const clipId = 'source:opacity-clip';
 const ownerId = 'source:owner';
@@ -66,6 +67,42 @@ assert.equal(owner.getComponent(Animation).playOnLoad, false);
 const saved = helper.readSaved(plan, nodes, animationAssets, sourceEvidence, [], bindingTypes);
 assert.equal(saved[0].staticReferenceStatus, 'reference_fields_verified');
 assert.equal(target.getComponent(UIOpacity).opacity, 41, 'saved readback keeps source Node.opacity');
+
+// Reopened/reloaded Editor assets can be distinct JS instances. This diagnostic
+// records UUID/type and strict object-identity results without relaxing the gate.
+clip._uuid = 'native-clip-uuid';
+const identityOwner = new Node('identity-owner');
+const identityComponent = 'identity:animation-component';
+const identityClipId = 'identity:clip';
+const identityPlan = {...plan, components: [{...plan.components[0], sourceId: identityComponent,
+    node: 'identity:owner', clips: [identityClipId], defaultClip: identityClipId}],
+    nodes: [{sourceId: 'identity:owner', opacity: 255}],
+    animations: [{id: identityClipId + '@' + identityComponent, tracks: []}],
+    syncPrefabBindings: []};
+const identityAssets = new Map([[identityClipId + '@' + identityComponent,
+    {...animationAssets.get(clipId + '@' + componentId), id: identityClipId + '@' + identityComponent,
+        uuid: 'native-clip-uuid'}]]);
+helper.bind(identityPlan, new Map([['identity:owner', identityOwner]]), identityAssets,
+    sourceEvidence, [], bindingTypes);
+const identityAnimation = identityOwner.getComponent(Animation);
+const identityMarker = identityOwner.getComponent(Binding);
+const duplicateClipObject = new AnimationClip(); duplicateClipObject._uuid = clip._uuid;
+identityAnimation.clips = [duplicateClipObject];
+identityMarker.nativeClips = [duplicateClipObject];
+identityMarker.sourceClips[0].nativeClip = duplicateClipObject;
+const identitySpec = helper.buildSpec(identityPlan.components[0], identityOwner, identityPlan,
+    identityAssets, sourceEvidence, []);
+const identityValue = identityAssets.get(identityClipId + '@' + identityComponent);
+const identityResolution = (clipPath, uuid, sha) => clipPath === identityValue.path && uuid === identityValue.uuid
+    && (!sha || sha === identityValue.sha256) ? identityValue.asset : null;
+const identityResult = staticAnimationBindings.read(identityOwner, identitySpec,
+    identityResolution, () => null, bindingTypes);
+assert.equal(identityResult.status, 'mismatch');
+const clipDiagnostic = identityResult.diagnostics[0].comparison.clipReferences[0];
+assert.equal(clipDiagnostic.expectedGuid, 'native-clip-uuid');
+assert.equal(clipDiagnostic.animationUuidMatchesExpected, true, JSON.stringify(clipDiagnostic));
+assert.equal(clipDiagnostic.animationIsResolvedObject, false,
+    'same serialized GUID but different runtime object stays a failed strict binding');
 
 const syncOwnerId = 'instance:owner';
 const syncTargetId = 'instance:target';

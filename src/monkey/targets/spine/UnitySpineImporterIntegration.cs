@@ -104,6 +104,122 @@ public static partial class MonkeyImporter
         }
     }
 
+    // Run after all generic Canvas/Layout/Graphic refreshes and immediately
+    // before static sort capture/readback. RawImage.texture dirties vertices;
+    // the pinned SkeletonGraphic SDK must be the last mesh writer so its
+    // actual clipped/polygon mesh is restored after any generic four-corner
+    // RawImage population. Do not initialize/advance the animation here.
+    static void FinalizeSavedStaticSortSpineMeshes(Graphic[] sourceOwners)
+    {
+        var owners = (sourceOwners ?? Array.Empty<Graphic>()).Distinct().ToArray();
+        if (owners.Length == 0) throw new InvalidOperationException("SPINE_STATIC_SORT_FINALIZE_OWNER_SET_EMPTY");
+        var seen = new HashSet<SkeletonGraphic>();
+        foreach (var sourceOwner in owners)
+        {
+            var graphic = sourceOwner as SkeletonGraphic;
+            var marker = graphic == null ? null : graphic.GetComponent<UnitySpineSourceIdentity>();
+            var identity = marker == null ? "null" : marker.instanceSourceComponentId ?? marker.sourceComponentId ?? "null";
+            if (graphic == null || !seen.Add(graphic))
+                throw new InvalidOperationException("SPINE_STATIC_SORT_FINALIZE_OWNER_DUPLICATE_OR_MISSING:" + identity);
+            if (marker == null || marker.renderer != graphic || graphic.skeletonDataAsset == null)
+                throw new InvalidOperationException("SPINE_STATIC_SORT_FINALIZE_OWNER_TYPED_IDENTITY_OR_DATA_MISSING:" + identity);
+            var helper = graphic.GetComponent<UnitySpineGraphicMaterialPresentation>();
+            if (helper == null || !helper.enabled ||
+                helper.SourceComponentId != marker.instanceSourceComponentId &&
+                helper.SourceComponentId != marker.sourceComponentId)
+                throw new InvalidOperationException("SPINE_STATIC_SORT_FINALIZE_HELPER_IDENTITY_MISMATCH:" + identity);
+            if (!helper.AttachForSavedInitialization())
+                throw new InvalidOperationException("SPINE_STATIC_SORT_FINALIZE_EVENT_ATTACH_FAILED:" + helper.SourceComponentId);
+            if (!graphic.IsValid)
+                throw new InvalidOperationException("SPINE_STATIC_SORT_FINALIZE_SKELETON_NOT_INITIALIZED:" + helper.SourceComponentId);
+
+            var savedData = graphic.skeletonDataAsset;
+            var savedSkin = graphic.initialSkinName;
+            var savedAnimation = graphic.startingAnimation;
+            var savedLoop = graphic.startingLoop;
+            var savedTimeScale = graphic.timeScale;
+            var savedMaterial = graphic.material;
+            var savedColor = graphic.color;
+            var savedPma = graphic.MeshGenerator == null ? (bool?)null : graphic.MeshGenerator.settings.pmaVertexColors;
+
+            // Rebuild the already-initialized fixed pose; do not call
+            // Initialize(true), advance time, wait for a frame, or play business logic.
+            graphic.UpdateMesh(keepRendererCount: false);
+            graphic.TrimRenderers();
+            graphic.UpdateMesh(keepRendererCount: false);
+            var bindingReadback = helper.ApplyExactBindings();
+            if (!bindingReadback.nativeMaterialVerified)
+                throw new InvalidOperationException("SPINE_STATIC_SORT_FINALIZE_MATERIAL_BINDING_FAILED:" +
+                    helper.SourceComponentId + ":" + String.Join(",", bindingReadback.gaps ?? Array.Empty<string>()));
+            if (graphic.skeletonDataAsset != savedData || graphic.initialSkinName != savedSkin ||
+                graphic.startingAnimation != savedAnimation || graphic.startingLoop != savedLoop ||
+                Math.Abs(graphic.timeScale - savedTimeScale) >= 0.000001f || graphic.material != savedMaterial ||
+                graphic.color != savedColor || savedPma != null &&
+                (graphic.MeshGenerator == null || graphic.MeshGenerator.settings.pmaVertexColors != savedPma.Value))
+                throw new InvalidOperationException("SPINE_STATIC_SORT_FINALIZE_AUTHORED_FIELDS_CHANGED:" + helper.SourceComponentId);
+
+            if (bindingReadback.instructionCount == 0)
+            {
+                var pose = bindingReadback.pose;
+                var rootMesh = graphic.canvasRenderer == null ? null : graphic.canvasRenderer.GetMesh();
+                var emptyPoseVerified = bindingReadback.nativeMaterialVerified &&
+                    bindingReadback.nativeMaterialStatus == "verified_empty_pose_with_persistent_material_pairs" &&
+                    bindingReadback.canvasRendererCount == 0 && pose != null && pose.emptyPoseVerified &&
+                    pose.initialized && pose.animationStateInitialized && pose.sourceDataIdentityVerified &&
+                    pose.sourceSkinVerified && pose.sourceAnimationVerified && pose.allSlotsHaveNoDrawableAttachment &&
+                    pose.emptyRendererStateVerified && pose.activeDrawableAttachmentCount == 0 && pose.trackTime == 0f &&
+                    pose.sourceSkinVerified && (pose.actualSkin == pose.sourceSkin ||
+                        pose.defaultSkinRuntimeNull && String.IsNullOrEmpty(pose.actualSkin) &&
+                        !String.IsNullOrEmpty(pose.runtimeDefaultSkinName) && pose.runtimeDefaultSkinName == pose.sourceSkin) &&
+                    pose.actualAnimation == pose.sourceAnimation && graphic.canvasRenderers != null &&
+                    graphic.canvasRenderers.Count == 0 && rootMesh == null;
+                if (!emptyPoseVerified)
+                    throw new InvalidOperationException("SPINE_STATIC_SORT_FINALIZE_ZERO_RENDERER_POSE_NOT_PROVEN_EMPTY:" +
+                        helper.SourceComponentId + ";status=" + bindingReadback.nativeMaterialStatus +
+                        ";instructions=" + bindingReadback.instructionCount + ";reportedRenderers=" +
+                        bindingReadback.canvasRendererCount + ";actualRenderers=" +
+                        (graphic.canvasRenderers == null ? -1 : graphic.canvasRenderers.Count) +
+                        ";rootMeshVertices=" + (rootMesh == null ? -1 : rootMesh.vertexCount) +
+                        ";skinRequested=" + (pose == null ? "<missing>" : pose.sourceSkin ?? "<null>") +
+                        ";skinRuntime=" + (pose == null ? "<missing>" : pose.actualSkin ?? "<null>") +
+                        ";defaultSkin=" + (pose == null ? "<missing>" : pose.runtimeDefaultSkinName ?? "<null>") +
+                        ";defaultNullAlias=" + (pose != null && pose.defaultSkinRuntimeNull) +
+                        ";animationRequested=" + (pose == null ? "<missing>" : pose.sourceAnimation ?? "<null>") +
+                        ";animationRuntime=" + (pose == null ? "<missing>" : pose.actualAnimation ?? "<null>") +
+                        ";trackTime=" + (pose == null ? "<missing>" : pose.trackTime.ToString("R", System.Globalization.CultureInfo.InvariantCulture)) +
+                        ";gaps=" + String.Join(",", bindingReadback.gaps ?? Array.Empty<string>()));
+                continue;
+            }
+            if (graphic.canvasRenderers == null || graphic.canvasRenderers.Count == 0)
+                throw new InvalidOperationException("SPINE_STATIC_SORT_FINALIZE_RENDERER_LIST_EMPTY_WITH_DRAW_INSTRUCTIONS:" +
+                    helper.SourceComponentId + ";instructions=" + bindingReadback.instructionCount);
+            var seenRenderers = new HashSet<CanvasRenderer>();
+            foreach (var renderer in graphic.canvasRenderers)
+            {
+                var child = renderer == null ? null : renderer.GetComponent<Graphic>();
+                var mesh = renderer == null ? null : renderer.GetMesh();
+                if (renderer == null || !seenRenderers.Add(renderer) || child == null ||
+                    !IsSpineStaticSortGeneratedChild(child, graphic) || mesh == null || mesh.vertexCount == 0 ||
+                    mesh.subMeshCount != 1 || renderer.materialCount != 1)
+                    throw new InvalidOperationException("SPINE_STATIC_SORT_FINALIZE_CHILD_MESH_INVALID:" +
+                        helper.SourceComponentId + ";child=" + (child == null ? "null" : child.name) +
+                        ";vertices=" + (mesh == null ? -1 : mesh.vertexCount) + ";submeshes=" +
+                        (mesh == null ? -1 : mesh.subMeshCount) + ";materials=" +
+                        (renderer == null ? -1 : renderer.materialCount));
+            }
+        }
+    }
+
+    static bool IsSpineStaticSortGeneratedChild(Graphic child, SkeletonGraphic owner)
+    {
+        if (child == null || owner == null || child.transform.parent != owner.transform ||
+            child.transform.childCount != 0 || !(child.transform is RectTransform) ||
+            child.GetType() != typeof(RawImage) || child.canvasRenderer == null ||
+            owner.canvasRenderers == null) return false;
+        return owner.canvasRenderers.Count(renderer => renderer == child.canvasRenderer &&
+            renderer.gameObject == child.gameObject) == 1;
+    }
+
     // canvasRenderers is the sole serialized derived list in the pinned SDK
     // SkeletonGraphic layout. rawImages/currentInstructions/meshes are protected
     // or private and lack [SerializeField], so Unity does not copy them.

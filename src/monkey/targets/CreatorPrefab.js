@@ -4,8 +4,35 @@ const sourceChildren=require('./static-richtext.js').sourceChildren;
 const cc=require('cc');
 const jobs=require('./jobs.js');
 const dynamic=require('./dynamic-ui.js');
+const ownedUndo=require('./owned-import-undo.js');
 const sortQueue=require('./CreatorStaticSortQueueIntegration.js');
 const near=(a,b)=>a.length===b.length&&a.every((v,i)=>Math.abs(v-b[i])<0.001);
+function failMaskReadback(plan,spec,persistent,initialized) {
+    const rows=[...persistent.map(row=>({phase:'persistent',...row})),...initialized.map(row=>({phase:'initialized',...row}))];
+    const failed=rows.filter(row=>!row.verified);let evidence=null;
+    if(plan.nativeProjectRoot) {
+        const fs=require('fs'),path=require('path'),crypto=require('crypto');
+        const root=fs.realpathSync(plan.nativeProjectRoot);
+        const frozen=JSON.parse(fs.readFileSync(path.join(root,'extensions/monkey-import/import-plan.json'),'utf8'));
+        if(frozen.projectUuid!==plan.projectUuid||frozen.sourceManifestSha256!==plan.sourceManifestSha256)
+            throw Error('STATIC_MASK_DIAGNOSTIC_PROJECT_IDENTITY_MISMATCH');
+        const folder=path.join(root,'Analysis/Readback/StaticMasks');fs.mkdirSync(folder,{recursive:true});
+        const key=crypto.createHash('sha256').update(spec.root).digest('hex').slice(0,24);
+        for(let sequence=0;sequence<10000;sequence++) {
+            const target=path.join(folder,key+'-'+sequence+'.json');
+            try {
+                fs.writeFileSync(target,JSON.stringify({scope:'native-static-mask-diagnostic-only',status:'failed',
+                    projectUuid:plan.projectUuid,sourceManifestSha256:plan.sourceManifestSha256,
+                    sourcePrefabId:spec.sourceId,rootScope:spec.root,rows},null,2)+'\n',{flag:'wx'});
+                evidence=path.relative(root,target);break;
+            }catch(error){if(error.code!=='EEXIST')throw error;}
+        }
+        if(!evidence)throw Error('STATIC_MASK_DIAGNOSTIC_SEQUENCE_EXHAUSTED');
+    }
+    throw Error('STATIC_MASK_PERSISTENT_OR_INITIALIZED_READBACK_FAILED:'+JSON.stringify({
+        sourcePrefabId:spec.sourceId,failed:failed.slice(0,4).map(row=>({phase:row.phase,sourceId:row.sourceId,
+            failedChecks:row.failedChecks||null})),evidence}));
+}
 function uiState(node,src,root=null) {
     if(!src.sourceGeometryProfile)return {};
     const group=node.getComponent(cc.UIOpacity);const opacity=group&&group.enabled?group.opacity:255;
@@ -34,6 +61,7 @@ async function serialize(plan,nodes) {
         if(!sourceRoot||!renderContextParent||!renderCanvas||!renderCanvas.enabledInHierarchy||!renderCanvas.node.activeInHierarchy)
             throw Error('Static sort proxy requires the actual active source Canvas context: '+spec.root);
         const root=cc.instantiate(sourceRoot);
+        ownedUndo.registerRoot(root);
         try {
             root.parent=renderContextParent;root.setSiblingIndex(renderContextParent.children.length-1);
             if(spec.rootNamePolicy==='creator-asset-basename-v1')root.name=spec.nativeRootName;
@@ -69,14 +97,15 @@ async function serialize(plan,nodes) {
 }
 function createReadContext(plan) {
     const scene=new cc.Scene('OwnedStaticPrefabReadback');
-    const node=new cc.Node('OwnedStaticPrefabCanvas');node.layer=cc.Layers.Enum.UI_2D;node.parent=scene;
+    ownedUndo.registerRoot(scene);
+    const node=new cc.Node('OwnedStaticPrefabCanvas');ownedUndo.registerRoot(node);node.layer=cc.Layers.Enum.UI_2D;node.parent=scene;
     const ui=node.addComponent(cc.UITransform);ui.setContentSize(...plan.designSize);ui.setAnchorPoint(0,0);
     const canvas=node.addComponent(cc.Canvas);
-    const cameraNode=new cc.Node('OwnedStaticPrefabCamera');cameraNode.parent=scene;cameraNode.setPosition(0,0,1000);
+    const cameraNode=new cc.Node('OwnedStaticPrefabCamera');ownedUndo.registerRoot(cameraNode);cameraNode.parent=scene;cameraNode.setPosition(0,0,1000);
     const camera=cameraNode.addComponent(cc.Camera);camera.projection=cc.Camera.ProjectionType.ORTHO;
     camera.orthoHeight=plan.designSize[1]/2;camera.near=1;camera.far=2000;camera.visibility=cc.Layers.Enum.UI_2D;
     canvas.cameraComponent=camera;
-    const sourceParent=new cc.Node('OwnedStaticPrefabDesign');sourceParent.layer=cc.Layers.Enum.UI_2D;sourceParent.parent=node;
+    const sourceParent=new cc.Node('OwnedStaticPrefabDesign');ownedUndo.registerRoot(sourceParent);sourceParent.layer=cc.Layers.Enum.UI_2D;sourceParent.parent=node;
     const designUI=sourceParent.addComponent(cc.UITransform);designUI.setContentSize(...plan.designSize);designUI.setAnchorPoint(0,0);
     scene._load();scene._activate(true);
     return {scene,canvas,sourceParent};
@@ -84,6 +113,7 @@ function createReadContext(plan) {
 function read(prefab,spec,plan,info,templates,staticAssets,animationContext) {
     sortQueue.validatePlan(plan);
     const root=cc.instantiate(prefab),context=createReadContext(plan);
+    ownedUndo.registerRoot(root);
     try {
         if(root.parent)throw Error('Saved prefab has external parent');
         const {scene,canvas}=context;
@@ -200,7 +230,7 @@ function read(prefab,spec,plan,info,templates,staticAssets,animationContext) {
         const staticMaskFields=staticMaskReadback?staticMaskReadback.readStaticMasks(maskSpecs,persistent,resolveMaskSprite):[];
         const staticMaskInitializedFields=staticMaskReadback?staticMaskReadback.readStaticMasks(maskSpecs,mapped,resolveMaskSprite,{initialized:true}):[];
         if(staticMaskFields.some(row=>!row.verified)||staticMaskInitializedFields.some(row=>!row.verified))
-            throw Error('STATIC_MASK_PERSISTENT_OR_INITIALIZED_READBACK_FAILED');
+            failMaskReadback(plan,spec,staticMaskFields,staticMaskInitializedFields);
         const staticLayoutFields=plan.layoutCompletion?require('./static-layout-completion.js').read(plan.layoutCompletion,persistent).staticLayoutFields:[];
         const prefabInstances=require('./prefab-instances.js').read(plan,mapped,templates,plan.savedPrefabs||[],spec.sourceId);
         const staticSortPersistent=sortQueue.readPersistent(plan,spec.root,persistent,prefab.data);
@@ -212,4 +242,4 @@ function read(prefab,spec,plan,info,templates,staticAssets,animationContext) {
             numericCodeBindings,behaviorBindings,rootNamePolicy:spec.rootNamePolicy||'source-name-v1',sourceRootName:sources.get(spec.root).name,nativeRootName:root.name};
     } finally {root.destroy();context.scene._activate(false);context.scene.destroy();}
 }
-module.exports={serialize,read,uiState};
+module.exports={serialize,read,uiState,failMaskReadback};
