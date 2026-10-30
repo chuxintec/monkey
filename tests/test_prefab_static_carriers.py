@@ -30,6 +30,28 @@ def snapshot(source_id="asset:one#1/components/0", source_type="example.Panel", 
 
 
 class PrefabStaticCarrierTests(unittest.TestCase):
+    def test_conflicting_source_enum_does_not_coerce_boolean_or_claim_complete(self):
+        from monkey.prefab_static_carriers import _field_plan
+        result,gap=_field_plan(dict(name='option',kind='bool',value=False,sourceDeclaredType='cc.Enum(cc.Boolean)'),0)
+        self.assertEqual(result['storageType'],'bool')
+        self.assertIs(result['boolValue'],False)
+        self.assertEqual(result['creatorType'],'CCBoolean')
+        self.assertEqual(result['sourceDeclaredType'],'cc.Enum(cc.Boolean)')
+        self.assertEqual(gap,'source_declared_primitive_conflict:option')
+
+    def test_packed_source_color_and_serialized_default_override(self):
+        from monkey.prefab_static_carriers import _field_plan
+        encoded={"__value_type__":{"kind":"float","value":4},"values":{"kind":"array","value":[{"kind":"float","value":0x2948BF0D}]}}
+        field={"name":"accent","kind":"object","value":encoded,"sourceDeclaredType":"cc.Color","serializedOverride":True,"declarationEvidence":{"sourceConstant":"cc.Color.WHITE"}}
+        result,gap=_field_plan(field,0)
+        self.assertIsNone(gap)
+        self.assertEqual([result[k]for k in ('colorR','colorG','colorB','colorA')],[13,191,72,41])
+        self.assertEqual(result['sourceConstant'],'')
+        self.assertEqual(json.loads(result['sourceValueEncodingJson']),encoded)
+        for malformed in (-1,0x100000000,True):
+            bad={**field,'value':{'__value_type__':4,'values':[malformed]}}
+            with self.assertRaises(StaticCarrierError):_field_plan(bad,0)
+
     def test_cc_color_preserves_channels_evidence_and_native_types_on_both_targets(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
@@ -231,12 +253,92 @@ const c=api.Create(spec,new Node()),a=api.Assign(spec,c,()=>{throw Error('resolv
         helper = Path("src/monkey/targets/CreatorStaticFields.js").resolve()
         source = r'''const Module=require('module'),original=Module._load;
 class Component{constructor(){this.enabled=true}} class Node extends Component{addComponent(C){const c=new C();c.node=this;return c}}
-class Asset{} class Record{constructor(){this.state=0;this.texture=null}} class Carrier extends Component{constructor(){super();this.__monkeySourceId='';this.entries=[]}}
+class Asset{constructor(uuid='asset:exact-texture'){this._uuid=uuid}} class Record{constructor(){this.state=0;this.texture=null}} class Carrier extends Component{constructor(){super();this.__monkeySourceId='';this.entries=[]}}
 const guid='12345678-1234-1234-1234-123456789abc',raw=guid.replace(/-/g,''),alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';let id=raw.slice(0,5);for(let i=5;i<32;i+=3){const n=parseInt(raw.slice(i,i+3),16);id+=alphabet[n>>6]+alphabet[n&63]}
 Module._load=function(req){if(req==='cc')return{Component,Node,Asset,js:{getClassByName:n=>n==='Recovered.StaticRecord'?Record:Carrier,getClassId:()=>id}};return original.apply(this,arguments)};
 const api=require(process.argv[1]),texture=new Asset(),spec={sourceId:'asset:records#1/components/0',typeName:'Recovered.Carrier',scriptGuid:guid,declarationDefaultsVerified:true,gaps:[],fields:[{sourceFieldName:'entries',fieldName:'entries',kind:'array',elementKind:'record',recordTypeName:'StaticRecord',storageType:'StaticRecord[]',recordValues:[{index:0,fields:[{sourceFieldName:'state',fieldName:'state',storageType:'double',numberValue:1},{sourceFieldName:'texture',fieldName:'texture',kind:'asset_ref',referenceKind:'asset_ref',storageType:'UnityEngine.Object',refValue:'asset:exact-texture'}]}]}]};
-const c=api.Create(spec,new Node());c.__monkeySourceId='template-source-id';const a=api.Assign(spec,c,id=>id==='asset:exact-texture'?texture:null),good=api.Read(spec,c,id=>id==='asset:exact-texture'?texture:null);if(c.enabled||c.__monkeySourceId!==spec.sourceId||!a.fieldsAssigned||!good.fieldsVerified||!good.nativeIdentityVerified||!good.fields[0].recordValues[0].fields[1].referenceVerified||c.entries[0].texture!==texture)throw Error('record/instance identity assign/read failed');c.entries[0].texture=new Asset();const bad=api.Read(spec,c,id=>texture);if(bad.fieldsVerified||!bad.gaps.some(x=>x.includes('record_reference_readback_mismatch')))throw Error('record reference mismatch passed');const partial=api.Assign(spec,c,()=>null);if(partial.fieldsAssigned||!partial.gaps.some(x=>x.includes('reference_unresolved'))||c.entries[0].state!==1||c.__monkeySourceId!==spec.sourceId)throw Error('missing record reference was not reported as partial');process.stdout.write('ok');'''
+const c=api.Create(spec,new Node());c.__monkeySourceId='template-source-id';const a=api.Assign(spec,c,id=>id==='asset:exact-texture'?texture:null),good=api.Read(spec,c,id=>id==='asset:exact-texture'?texture:null);if(c.enabled||c.__monkeySourceId!==spec.sourceId||!a.fieldsAssigned||!good.fieldsVerified||!good.nativeIdentityVerified||!good.fields[0].recordValues[0].fields[1].referenceVerified||c.entries[0].texture!==texture)throw Error('record/instance identity assign/read failed');c.entries[0].texture=new Asset('wrong-texture');const bad=api.Read(spec,c,id=>texture);if(bad.fieldsVerified||!bad.gaps.some(x=>x.includes('record_reference_readback_mismatch')))throw Error('record reference mismatch passed');const partial=api.Assign(spec,c,()=>null);if(partial.fieldsAssigned||!partial.gaps.some(x=>x.includes('reference_unresolved'))||c.entries[0].state!==1||c.__monkeySourceId!==spec.sourceId)throw Error('missing record reference was not reported as partial');process.stdout.write('ok');'''
         result = subprocess.run([node, "-e", source, str(helper)], capture_output=True, text=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "ok")
+
+    def test_creator_reference_readback_uses_uuid_class_and_exact_source_identity(self):
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("Node.js unavailable")
+        helper = Path("src/monkey/targets/CreatorStaticFields.js").resolve()
+        source = r'''const Module=require('module'),original=Module._load;
+class Component{constructor(uuid='component'){this.enabled=true;this.uuid=uuid}}
+class Node extends Component{constructor(uuid='node',name='same-name'){super(uuid);this.name=name}addComponent(C){return new C()}}
+class Asset{constructor(uuid='asset'){this._uuid=uuid}}
+class WrongAsset extends Asset{}
+class Record{constructor(){this.texture=null}}
+class Carrier extends Component{constructor(){super('carrier');this.__monkeySourceId='';this.asset=null;this.items=[];this.entries=[];this.nodeRef=null;this.componentRef=null}}
+const guid='12345678-1234-1234-1234-123456789abc',raw=guid.replace(/-/g,''),alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';let id=raw.slice(0,5);for(let i=5;i<32;i+=3){const n=parseInt(raw.slice(i,i+3),16);id+=alphabet[n>>6]+alphabet[n&63]}
+Module._load=function(req){if(req==='cc')return{Component,Node,Asset,js:{getClassByName:n=>n==='Recovered.StaticRecord'?Record:Carrier,getClassId:()=>id}};return original.apply(this,arguments)};
+const api=require(process.argv[1]);
+const assetId='bundle:asset-1',asset2Id='bundle:asset-2',nodeId='bundle:node-1',componentId='bundle:component-1';
+const expectedAsset=new Asset('native-asset-1'),expectedAsset2=new Asset('native-asset-2');
+const expectedNode=new Node('native-node-1','same-name');
+const expectedComponent=new Component('native-component-1');expectedComponent.__monkeySourceId=componentId;
+const spec={sourceId:'prefab:owner#1/components/0',typeName:'Recovered.Carrier',scriptGuid:guid,declarationDefaultsVerified:true,gaps:[],fields:[
+ {sourceFieldName:'asset',fieldName:'asset',kind:'asset_ref',referenceKind:'asset_ref',storageType:'UnityEngine.Object',refValue:assetId},
+ {sourceFieldName:'items',fieldName:'items',kind:'array',elementKind:'asset_ref',storageType:'UnityEngine.Object[]',refValues:[assetId,asset2Id]},
+ {sourceFieldName:'entries',fieldName:'entries',kind:'array',elementKind:'record',recordTypeName:'StaticRecord',storageType:'StaticRecord[]',recordValues:[{index:0,fields:[{sourceFieldName:'texture',fieldName:'texture',kind:'asset_ref',referenceKind:'asset_ref',storageType:'UnityEngine.Object',refValue:asset2Id}]}]},
+ {sourceFieldName:'nodeRef',fieldName:'nodeRef',kind:'node_ref',referenceKind:'node_ref',storageType:'UnityEngine.Object',refValue:nodeId},
+ {sourceFieldName:'componentRef',fieldName:'componentRef',kind:'component_ref',referenceKind:'component_ref',storageType:'UnityEngine.Object',refValue:componentId}
+]};
+const resolve=id=>({[assetId]:expectedAsset,[asset2Id]:expectedAsset2,[nodeId]:expectedNode,[componentId]:expectedComponent})[id]||null;
+const c=api.Create(spec,new Node('carrier-node'));const assigned=api.Assign(spec,c,resolve);if(!assigned.fieldsAssigned)throw Error('reference setup failed '+JSON.stringify(assigned.gaps));
+// Simulate deserialization wrappers: identity differs, native UUID/class/source identity remains exact.
+c.asset=new Asset('native-asset-1');c.items=[new Asset('native-asset-1'),new Asset('native-asset-2')];c.entries[0].texture=new Asset('native-asset-2');c.nodeRef=new Node('native-node-1','same-name');c.componentRef=new Component('native-component-1');c.componentRef.__monkeySourceId=componentId;
+const good=api.Read(spec,c,resolve);const scalarEvidence=good.fields[0].referenceEvidence,arrayEvidence=good.fields[1].referenceEvidence[0],recordEvidence=good.fields[2].recordValues[0].fields[0].referenceEvidence;if(!good.fieldsVerified||!good.fields[0].referenceVerified||!good.fields[1].referencesVerified||!good.fields[2].recordValues[0].fields[0].referenceVerified||!good.fields[3].referenceVerified||!good.fields[4].referenceVerified||scalarEvidence.actual.nativeUuid!=='native-asset-1'||scalarEvidence.expected.nativeUuid!=='native-asset-1'||scalarEvidence.actual.nativeClass!=='Asset'||scalarEvidence.expected.nativeClass!=='Asset'||!arrayEvidence.verified||!recordEvidence.verified||good.fields[4].referenceEvidence.actual.sourceIdentity!==componentId)throw Error('same UUID/type or exact source identity should pass '+JSON.stringify(good.gaps));
+c.asset=new Asset('different-native-uuid');let bad=api.Read(spec,c,resolve);if(bad.fieldsVerified||bad.fields[0].referenceEvidence.actual.nativeUuid!=='different-native-uuid'||bad.fields[0].referenceEvidence.expected.nativeUuid!=='native-asset-1')throw Error('wrong asset UUID passed or actual/expected identity was not reported');
+c.asset=new WrongAsset('native-asset-1');bad=api.Read(spec,c,resolve);if(bad.fieldsVerified||bad.fields[0].referenceEvidence.actual.nativeClass!=='WrongAsset')throw Error('wrong asset class passed or class evidence was not reported');
+c.asset=new Asset('native-asset-1');c.items[1]=new Asset('wrong-array-uuid');if(api.Read(spec,c,resolve).fieldsVerified)throw Error('wrong array UUID passed');
+c.items=[new Asset('native-asset-1'),new Asset('native-asset-2')];c.entries[0].texture=new Asset('wrong-record-uuid');if(api.Read(spec,c,resolve).fieldsVerified)throw Error('wrong record-leaf UUID passed');
+c.entries[0].texture=new Asset('native-asset-2');c.nodeRef=new Node('other-native-node','same-name');if(api.Read(spec,c,resolve).fieldsVerified)throw Error('same-name wrong node passed');
+c.nodeRef=new Node('native-node-1','same-name');c.componentRef=new Component('native-component-1');c.componentRef.__monkeySourceId='other-source-id';if(api.Read(spec,c,resolve).fieldsVerified)throw Error('wrong persistent component source identity passed');
+const missing=api.Read(spec,c,()=>null);if(missing.fieldsVerified||!missing.gaps.some(x=>x.includes('reference_unresolved'))||missing.fields[0].referenceEvidence.expected!==null)throw Error('unresolved reference was hidden or marked verified');
+process.stdout.write('ok');'''
+        result = subprocess.run([node, "-e", source, str(helper)], capture_output=True, text=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "ok")
+
+    def test_creator_sync_inherited_component_source_alias_requires_origin_proof(self):
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("Node.js unavailable")
+        fields_helper = Path("src/monkey/targets/CreatorStaticFields.js").resolve()
+        integration_helper = Path("src/monkey/targets/CreatorStaticFieldIntegration.js").resolve()
+        source = r'''const Module=require('module'),original=Module._load;
+class Component{constructor(uuid){this.uuid=uuid;this.enabled=false}}
+class Node{constructor(uuid,components=[]){this.uuid=uuid;this._components=components}getComponents(C){return this._components.filter(c=>c instanceof C)}}
+class Asset{}
+const guid='12345678-1234-1234-1234-123456789abc',raw=guid.replace(/-/g,''),alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';let classId=raw.slice(0,5);for(let i=5;i<32;i+=3){const n=parseInt(raw.slice(i,i+3),16);classId+=alphabet[n>>6]+alphabet[n&63]}
+class OwnerCarrier extends Component{constructor(){super('owner-carrier');this.__monkeySourceId='owner-carrier-source';this.target=null}}
+class TargetCarrier extends Component{constructor(){super('persistent-target-component');this.__monkeySourceId=''}}
+Module._load=function(req){if(req==='cc')return{Component,Node,Asset,js:{getClassByName:n=>n==='Recovered.OwnerCarrier'?OwnerCarrier:n==='Recovered.TargetCarrier'?TargetCarrier:null,getClassId:()=>classId}};if(req==='./static-fields.js')return require(process.argv[2]);return original.apply(this,arguments)};
+const integration=require(process.argv[1]),fields=require(process.argv[2]);
+const logical='gameAsset:owner#8::sync-component-copy',template='gameAsset:template#21/components/0',fieldSpec={sourceId:'owner-carrier-source',typeName:'Recovered.OwnerCarrier',scriptGuid:guid,declarationDefaultsVerified:true,gaps:[],fields:[{sourceFieldName:'target',fieldName:'target',kind:'component_ref',referenceKind:'component_ref',storageType:'UnityEngine.Object',refValue:logical}]};
+function makePlan(includeOrigin=true,originTemplate=template){return {components:[
+ {sourceId:logical,node:'owner-instance-node',staticFieldBinding:{typeName:'Recovered.TargetCarrier',sourceTemplateId:template}},
+ {sourceId:template,node:'template-node'}],sourcePrefabs:[{sourceId:'owner-prefab',nodes:['owner-instance-node']},{sourceId:'template-prefab',nodes:['template-node']}],
+ syncPrefabBindings:includeOrigin?[{owner:'owner-prefab',template:'template-prefab',componentOrigins:[{instanceSourceId:logical,templateSourceId:originTemplate}]}]:[]}}
+function run(plan,actualIdentity=template){
+ const target=new TargetCarrier();target.__monkeySourceId=actualIdentity;
+ const nodes=new Map([['owner-instance-node',new Node('owner-node')],['template-node',new Node('template-node')]]);nodes.get('owner-instance-node')._components.push(target);
+ const resolve=integration.resolver(plan,nodes,new Map());
+ const owner=new OwnerCarrier();owner.target=target;
+ return {read:fields.Read(fieldSpec,owner,resolve),proof:resolve.sourceIdentityProof(logical,target,resolve(logical))};
+}
+const good=run(makePlan());if(!good.read.fieldsVerified||!good.read.fields[0].referenceVerified||!good.read.fields[0].referenceEvidence.sourceIdentityAlias||good.read.fields[0].referenceEvidence.sourceIdentityAlias.proof!=='syncPrefabBindings.componentOrigins')throw Error('verified sync source-template alias rejected '+JSON.stringify(good.read.gaps));
+const noOrigin=run(makePlan(false));if(noOrigin.read.fieldsVerified||noOrigin.proof!==null)throw Error('unproven source-template alias passed');
+const wrongOrigin=run(makePlan(true,'unrelated-template-component'));if(wrongOrigin.read.fieldsVerified||wrongOrigin.proof!==null)throw Error('mismatched origin alias passed');
+const wrongMarker=run(makePlan(),'forged-template-component');if(wrongMarker.read.fieldsVerified||wrongMarker.proof!==null)throw Error('wrong marker passed despite origin proof');
+process.stdout.write('ok');'''
+        result = subprocess.run([node, "-e", source, str(integration_helper), str(fields_helper)],
+                                capture_output=True, text=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout, "ok")
 

@@ -177,7 +177,17 @@ def _suffix_generated_paths(component, target_id):
         stem, dot, extension = leaf.rpartition(".")
         if not dot:
             stem, extension = leaf, ""
-        cloned = f"{stem}__sync_{token}{'.' + extension if extension else ''}"
+        suffix = f"__sync_{token}{'.' + extension if extension else ''}"
+        cloned = stem + suffix
+        if len(cloned.encode("utf-8")) > 64:
+            # Include asset role in the shortened identity: normal/pressed clips
+            # share an extension and may lose their readable state suffix.
+            bounded_token = hashlib.sha256((target_id + "\n" + key).encode("utf-8")).hexdigest()[:12]
+            suffix = f"__sync_{bounded_token}{'.' + extension if extension else ''}"
+            budget = 64 - len(suffix.encode("utf-8"))
+            if budget < 1:
+                _fail("SYNC_ASSET_EXTENSION_TOO_LONG", target_id, "generated asset extension exceeds leaf budget")
+            cloned = stem.encode("utf-8")[:budget].decode("utf-8", errors="ignore").rstrip(" .") + suffix
         component[key] = f"{parent}{sep if sep else ''}{cloned}"
 
 
@@ -308,6 +318,11 @@ def bind_sync_prefab_instances(plan, source_manifest, source_ir=None, source_pro
                 cloned["node"] = origin_map[component["node"]]
                 if cloned.get("staticFieldBinding"):
                     cloned["staticFieldBinding"]["sourceTemplateId"] = component["sourceId"]
+                if cloned.get("spineBinding"):
+                    cloned["spineBinding"]["sourceTemplateComponentId"] = component["sourceId"]
+                    cloned["spineBinding"]["sourceComponentId"] = cloned["sourceId"]
+                    cloned["spineBinding"]["sourcePrefabId"] = owner
+                    cloned["spineBinding"]["sourceNodeId"] = cloned["node"]
                 _suffix_generated_paths(cloned, cloned["sourceId"])
                 if cloned["sourceId"] in components:
                     _fail("SYNC_PREFAB_ID_COLLISION", cloned["sourceId"], "stable clone identity collides with an existing plan component")

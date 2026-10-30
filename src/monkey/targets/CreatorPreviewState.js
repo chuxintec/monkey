@@ -46,7 +46,7 @@ function ensureUserBehaviorsDisabled(root) {
         const node = pending.pop();
         for (const component of node.getComponents(cc.Component)) {
             const className = cc.js.getClassName(component.constructor) || '';
-            if (!className.startsWith('cc.') && !className.startsWith('sp.') && component.enabled)
+            if (!className.startsWith('cc.') && !className.startsWith('sp.') && component.enabled && !(className==='MonkeySpineUITransformPreserver' && require('./spine-ui-transform.js').isPreserver(component,cc)))
                 throw Error('PREVIEW_STATE_ENABLED_USER_BEHAVIOR: ' + className);
         }
         pending.push(...node.children);

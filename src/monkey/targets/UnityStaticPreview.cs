@@ -185,7 +185,9 @@ public static partial class MonkeyImporter
     [MenuItem("Tools/Monkey/Open Static Preview")]
     public static void OpenStaticPreview() {
         var plan=JsonUtility.FromJson<Plan>(File.ReadAllText(Paths.plan));
-        EditorSceneManager.OpenScene(StaticPreviewStem(plan)+".unity",OpenSceneMode.Single);
+        var path=plan.previewState!=null&&!string.IsNullOrEmpty(plan.previewState.stateSha256)?StaticPreviewStem(plan)+".unity":ScenePath;
+        if(!File.Exists(path))throw new InvalidOperationException("NATIVE_PREVIEW_SCENE_MISSING: "+path);
+        EditorSceneManager.OpenScene(path,OpenSceneMode.Single);
         var gameView=Type.GetType("UnityEditor.GameView,UnityEditor");if(gameView!=null)EditorWindow.GetWindow(gameView).Show();
     }
 }

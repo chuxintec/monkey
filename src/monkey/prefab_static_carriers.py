@@ -161,7 +161,7 @@ def _field_plan(field, index):
     if declared_type is not None and not isinstance(declared_type, str):
         raise StaticCarrierError(f"field {name!r} has an invalid sourceDeclaredType")
     declaration_evidence = field.get("declarationEvidence") if isinstance(field.get("declarationEvidence"), dict) else {}
-    source_constant = field.get("sourceConstant", declaration_evidence.get("sourceConstant", ""))
+    source_constant = field.get("sourceConstant", "" if field.get("serializedOverride") else declaration_evidence.get("sourceConstant", ""))
     accessor_backing = field.get("accessorBacking", declaration_evidence.get("accessorBacking"))
     field_name = f"__sf_{index:03d}_{_slug(name)}"
     result = {"name": name, "sourceFieldName": name, "fieldName": field_name, "kind": kind,
@@ -192,7 +192,10 @@ def _field_plan(field, index):
             if declared_type.strip().startswith("cc.Enum("):
                 primitive_hint = ("float", "CCInteger")
         if primitive_hint and primitive_hint[0] != kind:
-            raise StaticCarrierError(f"field {name!r} kind conflicts with sourceDeclaredType {declared_type!r}")
+            # Preserve the actual serialized/default literal when a source
+            # decorator contradicts it; do not coerce Boolean to enum number.
+            result["creatorType"] = {"bool": "CCBoolean", "float": "CCFloat", "string": "CCString"}[kind]
+            return result, "source_declared_primitive_conflict:" + name
         result["creatorType"] = primitive_hint[1] if primitive_hint else {
             "bool": "CCBoolean", "float": "CCFloat", "string": "CCString"}[kind]
         return result, None
@@ -325,6 +328,20 @@ def _field_plan(field, index):
         result.update(storageType="string", mode="snapshot-json", snapshotJson=_json(value), stringValue=_json(value), creatorType="CCString")
         return result, gap
     if kind == "object" and declared_type == "cc.Color":
+        source_color_value = value
+        packed_color = False
+        if isinstance(value, dict) and set(value) == {"__value_type__", "values"}:
+            tag, payload = value["__value_type__"], value["values"]
+            if isinstance(tag, dict) and set(tag) == {"kind", "value"} and tag["kind"] == "float": tag = tag["value"]
+            if isinstance(payload, dict) and set(payload) == {"kind", "value"} and payload["kind"] == "array": payload = payload["value"]
+            if type(tag) is not int or tag != 4 or not isinstance(payload, list) or len(payload) != 1:
+                raise StaticCarrierError(f"cc.Color field {name!r} has invalid packed value type")
+            packed = payload[0]
+            if isinstance(packed, dict) and set(packed) == {"kind", "value"} and packed["kind"] == "float": packed = packed["value"]
+            if type(packed) is not int or not 0 <= packed <= 0xffffffff:
+                raise StaticCarrierError(f"cc.Color field {name!r} has invalid packed uint32")
+            value = dict(zip(("r", "g", "b", "a"), ((packed >> shift) & 255 for shift in (0, 8, 16, 24))))
+            packed_color = True
         if not isinstance(value, dict) or set(value) != {"r", "g", "b", "a"}:
             raise StaticCarrierError(f"cc.Color field {name!r} must contain exactly r/g/b/a channels")
         raw_channels = [value[key] for key in ("r", "g", "b", "a")]
@@ -346,8 +363,8 @@ def _field_plan(field, index):
             raise StaticCarrierError(f"cc.Color field {name!r} has invalid accessor backing evidence")
         result.update(storageType="Color", creatorType="Color", mode="typed-color",
                       colorR=channels[0], colorG=channels[1], colorB=channels[2], colorA=channels[3],
-                      sourceValueEncoding="nested_static_float_channel_values/1" if typed_channels else "plain_rgba_integer_channels/1",
-                      sourceValueEncodingJson=_json(value))
+                      sourceValueEncoding="cocos24_packed_aabbggrr/1" if packed_color else ("nested_static_float_channel_values/1" if typed_channels else "plain_rgba_integer_channels/1"),
+                      sourceValueEncodingJson=_json(source_color_value))
         return result, None
     if kind in {"object", "null", "unresolved_ref"}:
         gap = "field_snapshot_json_not_native:" + name

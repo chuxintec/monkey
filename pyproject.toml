@@ -21,6 +21,6 @@ where = ["src"]
 astc = ["texture2ddecoder==1.0.6"]
 
 [tool.setuptools.package-data]
-"monkey.targets" = ["*.cs", "*.js", "*.shader", "behaviors/*.cs", "behaviors/*.ts", "behaviors/probes/*.cs", "behaviors/probes/*.ts", "behaviors/probes/Editor/*.cs", "materials/ui_color/*.cs", "materials/ui_color/*.js", "materials/ui_color/*.shader", "materials/ui_color/*.effect", "materials/spine/*.cs", "materials/spine/*.js", "materials/spine/*.shader", "materials/spine/*.effect", "materials/sprite_outline/*.cs", "materials/sprite_outline/*.js", "materials/sprite_outline/*.shader", "materials/sprite_outline/*.effect", "spine/*.cs", "spine/*.js", "pure_lowering/*.cs", "pure_lowering/*.ts"]
+"monkey.targets" = ["*.cs", "*.js", "*.shader", "behaviors/*.cs", "behaviors/*.ts", "behaviors/probes/*.cs", "behaviors/probes/*.ts", "behaviors/probes/Editor/*.cs", "materials/ui_color/*.cs", "materials/ui_color/*.js", "materials/ui_color/*.shader", "materials/ui_color/*.effect", "materials/spine/*.cs", "materials/spine/*.js", "materials/spine/*.shader", "materials/spine/*.effect", "materials/sprite_outline/*.cs", "materials/sprite_outline/*.js", "materials/sprite_outline/*.shader", "materials/sprite_outline/*.effect", "materials/static_time/*.cs", "materials/static_time/*.js", "materials/static_time/*.shader", "materials/static_time/*.effect", "spine/*.cs", "spine/*.js", "spine/*.ts", "spine/*.ts.meta", "pure_lowering/*.cs", "pure_lowering/*.ts"]
 "monkey" = ["licenses/*.txt", "*.cjs", "code_profiles/*.json"]
 "monkey.sources" = ["*.cjs"]

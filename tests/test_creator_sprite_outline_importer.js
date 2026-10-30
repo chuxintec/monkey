@@ -7,7 +7,7 @@ const path = require('node:path');
 const load = Module._load;
 
 class Material { constructor(uuid, effectAsset) { this.uuid = uuid; this.effectAsset = effectAsset; this.technique = 0; } }
-class SpriteFrame { constructor() { this.rect = { width: 128, height: 128 }; } }
+class SpriteFrame { constructor(uuid) { this.uuid = uuid; this.rect = { width: 128, height: 128 }; } }
 class Sprite { constructor(frame, material) { this.spriteFrame = frame; this.customMaterial = material; } }
 const cc = { Material, SpriteFrame, Sprite, Color: class {}, Vec2: class {} };
 Module._load = function (request, parent, isMain) {
@@ -40,12 +40,16 @@ const spec = {
     sourceComponentIds: ['fixture:prefab#4'],
     spriteBindings: [{ sourceId: 'fixture:prefab#4', spriteFrameSourceId: 'fixture:frame' }],
 };
-const frame = new SpriteFrame();
-const sprite = new Sprite(frame, material);
+const frameUuid = '33333333-3333-3333-3333-333333333333@f9941';
+const prefabReloadFrame = new SpriteFrame(frameUuid);
+// Asset DB and a reloaded Prefab may expose separate JS wrappers for the same
+// persisted SpriteFrame. Identity must follow the native UUID, not object ===.
+const resolvedAssetFrame = new SpriteFrame(frameUuid);
+const sprite = new Sprite(prefabReloadFrame, material);
 const components = [{ sourceId: 'fixture:prefab#4', type: 'cc.Sprite', convertible: true,
     spriteFrame: 'fixture:frame', node: 'fixture:node' }];
 const nodes = new Map([['fixture:node', { getComponent(type) { return type === Sprite ? sprite : null; } }]]);
-const resolveFrame = id => id === 'fixture:frame' ? frame : null;
+const resolveFrame = id => id === 'fixture:frame' ? resolvedAssetFrame : null;
 
 const result = importer.readSaved(spec, components, nodes, material, effectAsset, resolveFrame, 'fixture:prefab');
 assert.equal(result.verified, true);
@@ -56,5 +60,9 @@ const wrongFrame = new SpriteFrame();
 sprite.spriteFrame = wrongFrame;
 assert.throws(() => importer.readSaved(spec, components, nodes, material, effectAsset, resolveFrame, 'fixture:prefab'),
     /SPRITE_OUTLINE_SOURCE_FRAME_MISMATCH/);
+sprite.spriteFrame = prefabReloadFrame;
+sprite.customMaterial = { uuid: '44444444-4444-4444-4444-444444444444' };
+assert.throws(() => importer.readSaved(spec, components, nodes, material, effectAsset, resolveFrame, 'fixture:prefab'),
+    /SPRITE_OUTLINE_COMPONENT_PERSISTED_READBACK_MISMATCH/);
 Module._load = load;
 fs.rmSync(emitted, { recursive: true, force: true });

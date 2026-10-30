@@ -29,7 +29,7 @@ function behaviorsDisabled(root) {
         const node = pending.pop();
         for (const component of node.getComponents(cc.Component)) {
             const name = cc.js.getClassName(component.constructor) || '';
-            if (!name.startsWith('cc.') && !name.startsWith('sp.') && component.enabled)
+            if (!name.startsWith('cc.') && !name.startsWith('sp.') && component.enabled && !(name==='MonkeySpineUITransformPreserver' && require('./spine-ui-transform.js').isPreserver(component,cc)))
                 throw Error('STATIC_SPRITE_ENABLED_USER_BEHAVIOR: ' + name);
         }
         pending.push(...node.children);
@@ -41,7 +41,8 @@ function spriteComponent(node) {
 function assertSprite(sprite, entry, expectedFrame) {
     const frame = sprite && sprite.spriteFrame;
     const rect = frame && frame.rect;
-    if (!sprite || !frame || frame !== expectedFrame || !rect || Math.abs(rect.width - entry.spriteChild.originalSize[0]) > 0.01 ||
+    if (!sprite || !(frame instanceof cc.SpriteFrame) || !(expectedFrame instanceof cc.SpriteFrame) ||
+        !frame._uuid || frame._uuid !== expectedFrame._uuid || !rect || Math.abs(rect.width - entry.spriteChild.originalSize[0]) > 0.01 ||
         Math.abs(rect.height - entry.spriteChild.originalSize[1]) > 0.01 ||
         sprite.sizeMode !== cc.Sprite.SizeMode.TRIMMED || sprite.enabled !== entry.spriteChild.enabled)
         throw Error('STATIC_SPRITE_READBACK_MISMATCH: ' + entry.projectionId);
@@ -123,7 +124,7 @@ function Read(plan, sourceNodes, resolveSpriteFrame) {
         const root = parent.children.find(child => child.name === name);
         if (!root || root.children.length !== 1) return { projectionId: entry.projectionId, verified: false };
         const sprite = spriteComponent(root.children[0]);
-        try { assertSprite(sprite, entry, expectedFrame);assertGeometry(parent,root,entry); } catch (_) { return { projectionId: entry.projectionId, verified: false }; }
+        try { assertSprite(sprite, entry, expectedFrame);assertGeometry(parent,root,entry); } catch (error) { return { projectionId: entry.projectionId, verified: false, error: String(error.message || error) }; }
         const rect = sprite.spriteFrame.rect;
         return { projectionId: entry.projectionId, parentSourceId: entry.parentSourceId,
             spriteFrameSourceId: entry.spriteChild.spriteFrameSourceId,

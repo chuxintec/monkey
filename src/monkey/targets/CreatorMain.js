@@ -199,6 +199,21 @@ module.exports = {
                 spriteOutlineReadback=await sceneJob('readOutlineMaterial',[{...spec,nativeDeadlineMs}],'materials');
                 spriteOutlineReadback.metaUuid=meta.uuid;spriteOutlineReadback.metaUuidVerified=true;
             }
+            if(plan.staticTimeMaterials)for(const row of plan.staticTimeMaterials.materials) {
+                const materialPath=within(root,row.creator.materialPath),metaPath=within(root,row.creator.materialMetaPath);
+                if(fs.existsSync(materialPath))throw Error('Static-time material output already exists');
+                const serialized=await sceneJob('prepareStaticTimeMaterial',[{...plan.staticTimeMaterials,nativeDeadlineMs},row.sourceMaterialId],'materials');
+                fs.mkdirSync(path.dirname(materialPath),{recursive:true});
+                if(fs.existsSync(metaPath)) {
+                    if(JSON.parse(fs.readFileSync(metaPath,'utf8')).uuid!==row.creator.materialUuid)throw Error('Static-time material metadata UUID conflict');
+                } else fs.writeFileSync(metaPath,JSON.stringify({ver:'1.0.5',importer:'material',imported:false,uuid:row.creator.materialUuid,files:[],subMetas:{},userData:{}},null,2),{flag:'wx'});
+                fs.writeFileSync(materialPath,serialized,{flag:'wx'});
+                await timedReq('refresh-asset','db://'+path.dirname(row.creator.materialPath));
+                const info=await timedReq('query-asset-info','db://'+row.creator.materialPath);
+                if(!info||info.invalid||info.uuid!==row.creator.materialUuid||JSON.parse(fs.readFileSync(metaPath,'utf8')).uuid!==row.creator.materialUuid)
+                    throw Error('Static-time material import identity differs');
+                await sceneJob('readStaticTimeMaterial',[{...plan.staticTimeMaterials,nativeDeadlineMs},row.sourceMaterialId],'materials');
+            }
             const nativePlan={...plan,resourceProbes,assets,nativeDeadlineMs,components:plan.components.filter(c=>c.convertible||c.staticFieldBinding),animations:(plan.animations||[]).filter(a=>a.convertible)};
             let result = await sceneJob('assemble',[nativePlan],'hierarchy');
             if (!result || (typeof result.serialized !== 'string'&&!result.assemblyId)) throw Error('No native scene serialization');
@@ -212,7 +227,7 @@ module.exports = {
                         if(!p||p.path!==spec.path||p.sourceId!==spec.sourceId||typeof p.serialized!=='string')throw Error('Native prefab serialization differs');
                         const info=await timedReq('create-asset','db://'+p.path,p.serialized,{overwrite:false,rename:false});
                         if(!info||info.invalid)throw Error('Native prefab save failed');
-                        savedPrefabs.push({sourceId:p.sourceId,path:p.path,uuid:info.uuid,nativeInitialNodes:p.nativeInitialNodes,sha256:hash(fs.readFileSync(dest))});
+                        savedPrefabs.push({sourceId:p.sourceId,path:p.path,uuid:info.uuid,nativeInitialNodes:p.nativeInitialNodes,spineUITransformReceipt:p.spineUITransformReceipt,sha256:hash(fs.readFileSync(dest))});
                     }
                     result=await sceneJob('finishAssembly',[assemblyId,savedPrefabs,nativePlan],'candidate-save');
                 }finally{
@@ -242,7 +257,7 @@ module.exports = {
                 execution.checkpoint('source-prefabs',savedPrefabs.length,(plan.sourcePrefabs||[]).length);
                 const info=await timedReq('create-asset','db://'+p.path,p.serialized,{overwrite:false,rename:false});
                 if(!info||info.invalid)throw Error('Native prefab save failed: '+p.sourceId);
-                savedPrefabs.push({sourceId:p.sourceId,path:p.path,uuid:info.uuid,nativeInitialNodes:p.nativeInitialNodes});expectedPrefabs.delete(p.sourceId);
+                savedPrefabs.push({sourceId:p.sourceId,path:p.path,uuid:info.uuid,nativeInitialNodes:p.nativeInitialNodes,spineUITransformReceipt:p.spineUITransformReceipt,sha256:hash(fs.readFileSync(within(root,p.path)))});expectedPrefabs.delete(p.sourceId);
             });
             execution.checkpoint('candidate-save');
             const scene = await req('create-asset', 'db://'+outputPaths.scene, result.serialized, {overwrite: false, rename: false});

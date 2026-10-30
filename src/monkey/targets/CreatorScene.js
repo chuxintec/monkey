@@ -42,6 +42,19 @@ module.exports = {
     methods: {
         async createStaticPreview(uuid,plan){return require("./static-preview.js").create(uuid,plan,loadAsset);},
         async readStaticPreview(uuid,plan){return require("./static-preview.js").read(uuid,plan,loadAsset);},
+        async prepareStaticTimeMaterial(spec, sourceId) {
+            const row=spec.materials.find(x=>x.sourceMaterialId===sourceId);
+            if(!row)throw Error('STATIC_TIME_SOURCE_MATERIAL_MISSING');
+            const helper=require('./static-time-materials.js');
+            const material=helper.create(spec,row,await loadAsset(row.creator.effectUuid,cc.EffectAsset));
+            try{return helper.serialize(spec,row,material);}finally{material.destroy();}
+        },
+        async readStaticTimeMaterial(spec, sourceId) {
+            const row=spec.materials.find(x=>x.sourceMaterialId===sourceId);
+            if(!row)throw Error('STATIC_TIME_SOURCE_MATERIAL_MISSING');
+            return require('./static-time-materials.js').readback(spec,row,
+                await loadAsset(row.creator.materialUuid,cc.Material),await loadAsset(row.creator.effectUuid,cc.EffectAsset));
+        },
         async prepareOutlineMaterial(spec) {
             const helper=require('./sprite-outline-material-bindings.js');
             const effect=await loadAsset(spec.creator.effectUuid,cc.EffectAsset),material=helper.create(spec,effect);
@@ -181,6 +194,16 @@ module.exports = {
                     }));
                     require('./material-bindings.js').bind(plan.materialBinding,material,sprites);
                 }
+                if(plan.staticTimeMaterials)for(const row of plan.staticTimeMaterials.materials) {
+                    const material=await loadAsset(row.creator.materialUuid,cc.Material);
+                    native.set(row.sourceMaterialId,material);
+                    const sprites=new Map(row.spriteBindings.map(binding=> {
+                        const c=plan.components.find(x=>x.sourceId===binding.sourceId&&x.convertible&&x.type==='cc.Sprite');
+                        if(!c)throw Error('STATIC_TIME_PLAN_SPRITE_MISSING');
+                        return [c.sourceId,nodes.get(c.node).getComponent(cc.Sprite)];
+                    }));
+                    require('./static-time-materials.js').apply(plan.staticTimeMaterials,row,material,sprites,id=>native.get(id));
+                }
                 for(const c of plan.components.filter(c=>c.convertible&&c.type==='cc.ProgressBar'))
                     require('./progress.js').bind(nodes.get(c.node).getComponent(cc.ProgressBar),c,nodes);
                 for(const c of plan.components.filter(c=>c.convertible&&c.type==='cc.LabelOutline')) {
@@ -196,6 +219,7 @@ module.exports = {
                     const gaps=require('./static-toggle.js').Create(plan.toggleBinding,id=>nodes.get(id),require('./static-field-integration.js').resolver(plan,nodes,native));
                     if(gaps.length)throw Error('STATIC_TOGGLE_BINDING_FAILED: '+gaps.join(','));
                 }
+                if(plan.spineBinding)require('./spine-ui-transform.js').attachPreservers(plan,nodes,cc);
                 require('./static-field-integration.js').createAssign(plan,nodes,native);
                 for(const c of plan.components.filter(c=>c.convertible&&c.type==='cc.Label')) {
                     checkTime(plan);nodes.get(c.node).getComponent(cc.Label).updateRenderData(true);
@@ -207,8 +231,8 @@ module.exports = {
                     const clip=motion.create(spec,nodes);const raw=EditorExtends.serialize(clip);
                     animationAssets.push({id:spec.id,path:spec.path,serialized:typeof raw==='string'?raw:JSON.stringify(raw)});
                 }
-                if((plan.prefabInstances||[]).length) {
-                    const assemblyId=relations.keep(plan,scene,nodes,{nativeRefs,animationAssets,numericCodeExercise,...describe(scene,plan)});
+                if((plan.prefabInstances||[]).length || (plan.staticPrefabAssetDependencies?.dependencies||[]).length) {
+                    const assemblyId=relations.keep(plan,scene,nodes,{nativeRefs,animationAssets,numericCodeExercise,...describe(scene,plan)},native);
                     retained=true;return {assemblyId,nativeRefs,animationAssets,numericCodeExercise};
                 }
                 dynamic.settle(scene,nodes,plan,null,true);
@@ -239,6 +263,13 @@ module.exports = {
                 mapped.set(sid,n);src.children.forEach((id,i)=>match(id,sourceChildren(n)[i]));
             }
             plan.nodes.filter(n=>n.parent===null).forEach((n,i)=>match(n.sourceId,design.children[i]));
+            // Initialize the owned saved Scene normally. Persistent native
+            // presentation components run their lifecycle; audit remains read-only.
+            if(plan.spineBinding) {
+                dynamic.settle(scene,mapped,plan,null,false);
+                const geometry=require('./spine-ui-transform.js').readAuthored(plan,mapped,cc);
+                if(geometry.status!=='verified')throw Error('SPINE_UI_TRANSFORM_SAVED_SCENE_MISMATCH: '+JSON.stringify(geometry));
+            }
             for(const n of plan.nodes)if(n.sourceUITransformEnabled===false&&mapped.get(n.sourceId).getComponent(cc.UITransform).enabled!==false)throw Error('Saved UITransform enabled state differs');
             const labels=[];const refs=[];const numericCodeBindings=[];
             for(const c of plan.components.filter(c=>c.convertible)) {
@@ -298,6 +329,22 @@ module.exports = {
             for(const a of (plan.spineBinding&&plan.spineBinding.assets)||[])staticAssets.set(a.sourceId,await loadAsset(a.creator.nativeUuid,cc.sp.SkeletonData));
             if(plan.materialBinding)staticAssets.set(plan.materialBinding.materialSourceId,await loadAsset(plan.materialBinding.creator.materialUuid,cc.Material));
             if(plan.components.some(c=>c.staticFieldBinding))for(const a of plan.assets)staticAssets.set(a.sourceId,await loadAsset(a.kind==='sprite'?a.spriteFrameUuid:a.uuid,a.kind==='sprite'?cc.SpriteFrame:a.kind==='json'?cc.JsonAsset:a.kind==='audio'?cc.AudioClip:cc.Font));
+            let staticTimeMaterials=null;
+            if(plan.staticTimeMaterials) {
+                const materials=[];
+                for(const row of plan.staticTimeMaterials.materials) {
+                    const material=await loadAsset(row.creator.materialUuid,cc.Material);
+                    const effect=await loadAsset(row.creator.effectUuid,cc.EffectAsset);
+                    staticAssets.set(row.sourceMaterialId,material);
+                    const sprites=new Map(row.spriteBindings.map(binding=> {
+                        const c=plan.components.find(x=>x.sourceId===binding.sourceId&&x.convertible&&x.type==='cc.Sprite');
+                        if(!c||!mapped.has(c.node))throw Error('STATIC_TIME_SAVED_SPRITE_MISSING');
+                        return [c.sourceId,mapped.get(c.node).getComponent(cc.Sprite)];
+                    }));
+                    materials.push(require('./static-time-materials.js').readPersistent(plan.staticTimeMaterials,row,material,effect,sprites,id=>staticAssets.get(id)));
+                }
+                staticTimeMaterials={schema:plan.staticTimeMaterials.schema,profile:plan.staticTimeMaterials.profile,sourceManifestSha256:plan.staticTimeMaterials.sourceManifestSha256,normalizedIrSha256:plan.staticTimeMaterials.normalizedIrSha256,materials};
+            }
             const prefabInstances=relations.read(plan,mapped,templates,plan.savedPrefabs||[]);
             const sourcePrefabs=[];
             for(const spec of plan.sourcePrefabs||[]) {
@@ -310,10 +357,11 @@ module.exports = {
             }
             const dynamicUiProbes=await dynamic.probe(plan,design,(done,total)=>jobs.progress('native-readback',sourcePrefabs.length+done,sourcePrefabs.length+total));
             const spineSpecs=plan.components.filter(c=>c.convertible&&c.spineBinding);
-            const spineBindings=require('./spine-bindings.js').readCreatorSpineBindings(spineSpecs.map(c=>c.spineBinding),id=> {
-                const c=spineSpecs.find(c=>c.sourceId===id);return c?mapped.get(c.node).getComponents(cc.sp.Skeleton):[];
-            });
-            return {spineBindings,resourceProbes:await resources.read(plan,scene),tiledRenderer:tiledReadback(plan,mapped),dynamicUiProbes,nativeInitialNodes:plan.nativeInitialNodes,sourcePrefabs,prefabInstances,jsonAssets,audioAssets,fontPages,animations,numericCodeBindings,nodeCount:saved.length,nodes:[...mapped].map(([sourceId,n])=>({sourceId,nodeUuid:n.uuid,name:n.name,
+            const spineModule=require('./spine-bindings.js'),spineById=new Map(spineSpecs.map(c=>[c.sourceId,c]));
+            const spineBindings=spineModule.readCreatorSpineBindings(spineSpecs.map(c=>c.spineBinding),id=> {
+                const c=spineById.get(id);return c?mapped.get(c.node).getComponents(cc.sp.Skeleton):[];
+            },id=>({sourceActivity:spineModule.sourceNodeActivity(plan,spineById.get(id).node),readbackScope:'saved_scene_mapped'}));
+            return {spineBindings,staticTimeMaterials,resourceProbes:await resources.read(plan,scene),tiledRenderer:tiledReadback(plan,mapped),dynamicUiProbes,nativeInitialNodes:plan.nativeInitialNodes,sourcePrefabs,prefabInstances,jsonAssets,audioAssets,fontPages,animations,numericCodeBindings,nodeCount:saved.length,nodes:[...mapped].map(([sourceId,n])=>({sourceId,nodeUuid:n.uuid,name:n.name,
                 position:[n.position.x,n.position.y,n.position.z],size:[n.getComponent(cc.UITransform).width,n.getComponent(cc.UITransform).height],
                 pivot:[n.getComponent(cc.UITransform).anchorX,n.getComponent(cc.UITransform).anchorY],scale:[n.scale.x,n.scale.y,n.scale.z],
                 rotation:[n.rotation.x,n.rotation.y,n.rotation.z,n.rotation.w],active:n.active,...prefabs.uiState(n,sourceNodes.get(sourceId))})),components:refs,labels,frames};

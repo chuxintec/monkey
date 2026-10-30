@@ -45,15 +45,23 @@ def load_binding(ir,ir_path,receipt_path,expected_sha,resources):
                     or pose.get('targetEngineSourceSha256')!='2e86383e7e7dfb93bc40ec1d7e44c6bb2b8ebe4e95c100ad16620bd24114329'
                     or pose.get('sourceMaterialRoute')!='Creator sp.Skeleton updateMaterial -> builtinResMgr.get(default-spine-material)'):
                 fail('SPINE_CREATOR_STATIC_POSE','spine','Creator persistent t0 policy is absent or invalid')
+            source_binding = (material.get('sourceMaterialBinding') or
+                              ({'status': 'explicit'} if isinstance(material, dict)
+                               and isinstance(material.get('sourceMaterialReferenceSourceId'), str)
+                               and isinstance(material.get('sourceMaterialSourceId'), str) else {}))
+            explicit_material = source_binding.get('status') == 'explicit'
+            source_default_material = source_binding.get('status') == 'resolved_source_engine_default'
             if (not material or material.get('sourceComponentId')!=sid
                     or material.get('targetMaterialUuid')!='default-spine-material'
                     or material.get('contract')!='cocos24-builtin-spine-material-v1'
                     or material.get('contractSha256')!=material_profile.get('contractSha256')
                     or material.get('evidenceStatus')!='source_to_internal_to_creator_builtin_pinned'
-                    or material.get('sourceMaterialReferenceSourceId')!=material_profile.get('sourceMaterialReferenceSourceId')
-                    or material.get('sourceMaterialSourceId')!=material_profile.get('sourceMaterialSourceId')
-                    or not material.get('sourceMaterialReferenceSourceId')
-                    or not material.get('sourceMaterialSourceId')):
+                    or (explicit_material and (material.get('sourceMaterialReferenceSourceId')!=material_profile.get('sourceMaterialReferenceSourceId')
+                                               or material.get('sourceMaterialSourceId')!=material_profile.get('sourceMaterialSourceId')))
+                    or (source_default_material and (material.get('sourceMaterialReferenceSourceId') is not None
+                                                     or material.get('sourceMaterialSourceId') is not None
+                                                     or source_binding.get('sourceSha256')!='7cdc119e26aa6dceec4bd78ae30dd08f39daa2f0da5d914d2197a730b558a5e8'))
+                    or not (explicit_material or source_default_material)):
                 fail('SPINE_CREATOR_MATERIAL_BINDING',sid,'Exact source-to-built-in material mapping is absent')
             source_scale=pose.get('sourceTimeScale')
             if not isinstance(source_scale,dict) or source_scale.get('status') not in {'explicit','resolved_source_engine_default'}:
@@ -105,6 +113,22 @@ def verify(components,rows,owner):
         return [diagnostic('SPINE_NATIVE_IDENTITY_MISMATCH',owner,'Source component denominator differs')]
     gaps=[]
     for sid,row in actual.items():
-        if row.get('status')!='verified' or row.get('failures'):
+        status=row.get('status')
+        failures=row.get('failures')
+        if status=='verified_source_inactive_runtime_uninitialized' and not failures:
+            # Source node/hierarchy is inactive by the exact target-plan tree.
+            # Serialized SkeletonData, requested names/default fields and native
+            # references are verified; no visible runtime pose is expected until
+            # the source hierarchy becomes active.
+            continue
+        if status=='incomplete_active_source_runtime_pose_uninitialized' and not failures:
+            gaps.append(diagnostic('SPINE_NATIVE_STATIC_POSE_NOT_INITIALIZED',sid,
+                'Source hierarchy is active and serialized SkeletonData/requested animation/skin identity is verified, but the saved-asset readback did not initialize a runtime Skeleton pose',sid))
+            continue
+        if status=='incomplete_source_activity_unknown_runtime_uninitialized' and not failures:
+            gaps.append(diagnostic('SPINE_NATIVE_COMPONENT_INCOMPLETE',sid,
+                'Runtime Skeleton state is uninitialized and source hierarchy activity is not proven',sid))
+            continue
+        if status!='verified' or failures:
             gaps.append(diagnostic('SPINE_NATIVE_COMPONENT_INCOMPLETE',sid,str(row.get('status'))+': '+str(row.get('failures',[])),sid))
     return gaps

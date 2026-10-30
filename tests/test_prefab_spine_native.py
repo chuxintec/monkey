@@ -99,6 +99,12 @@ class PrefabSpineNativePlanTests(unittest.TestCase):
         self.assertEqual(plan["dataAssets"][0]["scale"], 1.0)
         self.assertEqual(plan["scaleEvidence"]["status"], "verified_source_scale_and_target_unit_mapping")
         self.assertEqual(plan["dataAssets"][0]["factoryInput"]["scale"], 1.0)
+        factory = plan["dataAssets"][0]["factoryInput"]
+        self.assertEqual(factory["graphicShaderName"], "Monkey/SpineSourceGraphicProfile/Colored")
+        self.assertTrue(factory["pages"][0]["graphicNormalMaterialAssetPath"].endswith("_normal_graphic.mat"))
+        self.assertEqual(plan["unityGraphicShader"]["sha256"],
+                         hashlib.sha256(Path(plan["unityGraphicShader"]["sourcePath"]).read_bytes()).hexdigest())
+        self.assertEqual(plan["unityGraphicShader"]["targetPath"], "Assets/Game/Content/Shaders/UnitySpineGraphicProfile.shader")
 
     def test_changed_nonempty_source_material_ref_is_rejected(self):
         values = list(fixture())
@@ -113,6 +119,83 @@ class PrefabSpineNativePlanTests(unittest.TestCase):
         values[4]["copiedFiles"]["LICENSE"]["sha256"] = "0" * 64
         with self.assertRaisesRegex(SpineNativePlanError, "runtime copy differs"):
             build_unity_native_binding_plan(*values)
+
+    def test_verified_paired_editor_variant_is_joined_and_identity_pinned(self):
+        values = list(fixture())
+        runtime = copy.deepcopy(values[3]["unity"]["spinePlugin"])
+        stage = copy.deepcopy(values[4])
+        editor_hashes = {"spine-csharp.dll": "6" * 64, "spine-unity.dll": "7" * 64}
+        refs_core = [{"name": "netstandard", "version": "2.1.0.0"}]
+        refs_unity = [{"name": "spine-csharp", "version": "0.0.0.0"},
+                      {"name": "UnityEditor.CoreModule", "version": "0.0.0.0"}]
+        runtime["editorVariant"] = {
+            "status": "verified_editor_source_build", "upstreamCommit": "commit",
+            "compiledAgainst": "Unity6000.6.2f1", "compileDefines": ["UNITY_EDITOR"],
+            "sourceManifestSha256": "8" * 64,
+            "importPolicy": "paired_editor_only_assemblies_player_pair_excludes_editor",
+            "cocosCompatibilityFallbacksIncluded": False,
+            "evidencePath": "/private/evidence.json", "evidenceSha256": "9" * 64,
+            "playerAssemblyHashes": {name: runtime["fileChecks"][name]["expectedSha256"]
+                                     for name in ("spine-csharp.dll", "spine-unity.dll")},
+            "assemblies": {
+                "spine-csharp.dll": {"sha256": editor_hashes["spine-csharp.dll"], "bytes": 8,
+                    "assemblyName": "spine-csharp", "assemblyVersion": "0.0.0.0",
+                    "playerReferenceIdentity": {"name": "spine-csharp", "version": "0.0.0.0"},
+                    "references": refs_core, "runtimeImportPath": "Assets/Plugins/Spine38/EditorRuntime/spine-csharp.dll"},
+                "spine-unity.dll": {"sha256": editor_hashes["spine-unity.dll"], "bytes": 8,
+                    "assemblyName": "spine-unity", "assemblyVersion": "0.0.0.0",
+                    "playerReferenceIdentity": {"name": "spine-unity", "version": "0.0.0.0"},
+                    "references": refs_unity, "runtimeImportPath": "Assets/Plugins/Spine38/EditorRuntime/spine-unity.dll"},
+            },
+        }
+        stage["editorVariant"] = {"status": "verified_editor_source_build",
+            "sourceManifestSha256": "8" * 64,
+            "copiedFiles": {name: {"sha256": digest, "verified": True}
+                            for name, digest in editor_hashes.items()}}
+        values[3]["unity"]["spinePlugin"] = runtime
+        values[4] = stage
+        plan = build_unity_native_binding_plan(*values)
+        self.assertEqual(plan["runtime"]["editorVariant"]["status"], "verified_editor_source_build")
+        self.assertEqual(plan["runtime"]["editorVariant"]["assemblies"]["spine-unity.dll"]["sha256"],
+                         editor_hashes["spine-unity.dll"])
+        self.assertEqual(plan["runtime"]["editorVariant"]["assemblyLoadVerification"]["status"], "not_run")
+
+    def test_editor_variant_rejects_unpaired_core_api_or_missing_editor_define(self):
+        for failure in ("core_ref", "define"):
+            with self.subTest(failure=failure):
+                values = list(fixture())
+                runtime = copy.deepcopy(values[3]["unity"]["spinePlugin"])
+                stage = copy.deepcopy(values[4])
+                runtime["editorVariant"] = {
+                    "status": "verified_editor_source_build", "upstreamCommit": "commit",
+                    "compiledAgainst": "Unity6000.6.2f1", "compileDefines": ["UNITY_EDITOR"],
+                    "sourceManifestSha256": "8" * 64,
+                    "importPolicy": "paired_editor_only_assemblies_player_pair_excludes_editor",
+                    "cocosCompatibilityFallbacksIncluded": False,
+                    "playerAssemblyHashes": {name: runtime["fileChecks"][name]["expectedSha256"]
+                                             for name in ("spine-csharp.dll", "spine-unity.dll")},
+                    "assemblies": {
+                        name: {"sha256": char * 64, "bytes": 8, "assemblyName": name[:-4],
+                            "assemblyVersion": "0.0.0.0", "playerReferenceIdentity": {"name": name[:-4], "version": "0.0.0.0"},
+                            "references": ([{"name": "netstandard", "version": "2.1.0.0"}] if name == "spine-csharp.dll"
+                                else [{"name": "UnityEditor.CoreModule", "version": "0.0.0.0"},
+                                      {"name": "spine-csharp", "version": "0.0.0.0"}]),
+                            "runtimeImportPath": "Assets/Plugins/Spine38/EditorRuntime/" + name}
+                        for name, char in (("spine-csharp.dll", "6"), ("spine-unity.dll", "7"))},
+                }
+                if failure == "core_ref":
+                    runtime["editorVariant"]["assemblies"]["spine-unity.dll"]["references"] = [
+                        row for row in runtime["editorVariant"]["assemblies"]["spine-unity.dll"]["references"]
+                        if row["name"] != "spine-csharp"]
+                else:
+                    runtime["editorVariant"]["compileDefines"] = ["UNITY_6000_6_2"]
+                stage["editorVariant"] = {"status": "verified_editor_source_build", "sourceManifestSha256": "8" * 64,
+                    "copiedFiles": {name: {"sha256": char * 64, "verified": True}
+                                    for name, char in (("spine-csharp.dll", "6"), ("spine-unity.dll", "7"))}}
+                values[3]["unity"]["spinePlugin"] = runtime
+                values[4] = stage
+                with self.assertRaises(SpineNativePlanError):
+                    build_unity_native_binding_plan(*values)
 
     def test_missing_target_unit_evidence_does_not_use_unity_scale_fallback(self):
         values = list(fixture())

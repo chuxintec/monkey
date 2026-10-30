@@ -43,6 +43,7 @@ Shader "Monkey/Recovered/Shader2DOutline"
             #pragma multi_compile_local _ UNITY_UI_ALPHACLIP
             #include "UnityCG.cginc"
             #include "UnityUI.cginc"
+            float4 _ClipRect;
 
             sampler2D _MainTex;
             float4 _MainTex_ST;

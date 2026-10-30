@@ -58,6 +58,11 @@ public static class UnitySpriteOutlineMaterialBindings
             !Regex.IsMatch(spec.unity.shaderGuid ?? "", "^[0-9a-f]{32}$") ||
             !Regex.IsMatch(spec.unity.materialGuid ?? "", "^[0-9a-f]{32}$"))
             throw new InvalidOperationException("SPRITE_OUTLINE_UNITY_IDENTITY_INVALID");
+        if (!spec.unity.materialPath.StartsWith("Assets/", StringComparison.Ordinal) ||
+            !spec.unity.materialPath.EndsWith(".mat", StringComparison.Ordinal) ||
+            spec.unity.materialPath.Contains("..") || spec.unity.materialPath.Contains("\\") ||
+            !spec.unity.shaderPath.StartsWith("Assets/", StringComparison.Ordinal) || spec.unity.shaderPath.Contains(".."))
+            throw new InvalidOperationException("SPRITE_OUTLINE_ASSET_PATH_INVALID");
         if (spec.sourceComponentIds == null || spec.sourceComponentIds.Length == 0 ||
             spec.sourceComponentIds.Distinct().Count() != spec.sourceComponentIds.Length ||
             spec.spriteBindings == null || spec.spriteBindings.Length != spec.sourceComponentIds.Length ||
@@ -107,7 +112,26 @@ public static class UnitySpriteOutlineMaterialBindings
         material.SetFloat("_FillAlpha", spec.properties.fillAlpha);
         material.SetFloat("_AlphaThreshold", spec.properties.alphaThreshold);
         if (!VerifyProperties(material, spec)) throw new InvalidOperationException("SPRITE_OUTLINE_PRE_SAVE_PROPERTIES_MISMATCH");
-        AssetDatabase.CreateAsset(material, spec.unity.materialPath);
+        // CreateAsset assigns a fresh GUID even if an unregistered orphan
+        // meta exists. Serialize through Unity's native serializer, then import
+        // the complete asset/meta pair so the planned identity is retained.
+        try {
+            var metaPath = spec.unity.materialPath + ".meta";
+            if (System.IO.File.Exists(metaPath)) {
+                var meta = System.IO.File.ReadAllText(metaPath);
+                var match = Regex.Match(meta, @"(?m)^guid: ([0-9a-f]{32})\s*$");
+                if (!match.Success || match.Groups[1].Value != spec.unity.materialGuid)
+                    throw new InvalidOperationException("SPRITE_OUTLINE_MATERIAL_META_CONFLICT");
+            } else {
+                var raw = System.Text.Encoding.UTF8.GetBytes("fileFormatVersion: 2\nguid: " + spec.unity.materialGuid +
+                    "\nNativeFormatImporter:\n  externalObjects: {}\n  mainObjectFileID: 2100000\n  userData: \n  assetBundleName: \n  assetBundleVariant: \n");
+                using (var stream = new System.IO.FileStream(metaPath, System.IO.FileMode.CreateNew, System.IO.FileAccess.Write))
+                    stream.Write(raw, 0, raw.Length);
+            }
+            UnityEditorInternal.InternalEditorUtility.SaveToSerializedFileAndForget(
+                new UnityEngine.Object[] { material }, spec.unity.materialPath, true);
+        } finally { UnityEngine.Object.DestroyImmediate(material); }
+        AssetDatabase.ImportAsset(spec.unity.materialPath, ImportAssetOptions.ForceSynchronousImport | ImportAssetOptions.ForceUpdate);
         AssetDatabase.SaveAssets();
         return ReadbackNative(spec);
     }

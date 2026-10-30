@@ -2,6 +2,12 @@
 const cc=require('cc');
 const enabled=plan=>plan.uiGeometryReadback==='native-ui-layout-roundtrip-v1';
 function capture(nodes){return [...nodes].map(([sourceId,n])=>({sourceId,position:[n.position.x,n.position.y,n.position.z],size:[n.getComponent(cc.UITransform).width,n.getComponent(cc.UITransform).height]}));}
+function drivenFields(plan,sourceId){
+    const result={};
+    for(const [key,axes]of Object.entries((plan.uiDrivenFields||{})[sourceId]||{}))
+        if(Array.isArray(axes))result[key]=[...new Set(axes)];
+    return result;
+}
 function alignWidgets(nodes,root){
     const restore=[];
     try{
@@ -33,7 +39,7 @@ function settleOwned(scene,nodes,plan,root=null,initialize=false){
     // then let only enabled native components compute their driven axes.
     if(initialize)for(const spec of (Array.isArray(initialize)?initialize:plan.nodes)){
         const node=nodes.get(spec.sourceId);if(!node)throw Error('Native UI initial node missing');
-        const driven=(plan.uiDrivenFields||{})[spec.sourceId]||{},ui=node.getComponent(cc.UITransform);
+        const driven=drivenFields(plan,spec.sourceId),ui=node.getComponent(cc.UITransform);
         const position=[node.position.x,node.position.y,node.position.z],size=[ui.width,ui.height];
         for(let axis=0;axis<3;axis++)if(!(driven.position||[]).includes(axis))position[axis]=spec.position[axis];
         for(let axis=0;axis<2;axis++)if(!(driven.size||[]).includes(axis))size[axis]=spec.size[axis];
@@ -45,7 +51,15 @@ function settleOwned(scene,nodes,plan,root=null,initialize=false){
     let differences=[];
     for(let pass=0;pass<8;pass++){
         const before=capture(nodes);
-        for(const n of nodes.values())if(n.activeInHierarchy){const label=n.getComponent(cc.Label);if(label&&label.enabled)label.updateRenderData(true);}
+        for(const n of nodes.values())if(n.activeInHierarchy){
+            const label=n.getComponent(cc.Label);if(label&&label.enabled)label.updateRenderData(true);
+            const richText=n.getComponent(cc.RichText);
+            if(richText&&richText.enabled){
+                const update=richText._updateRichTextStatus||richText._updateRichText;
+                if(typeof update!=='function')throw Error('Native RichText size update unavailable');
+                update.call(richText);
+            }
+        }
         alignWidgets(nodes,root);
         for(const n of [...nodes.values()].reverse())if(n.activeInHierarchy){const layout=n.getComponent(cc.Layout);if(layout&&layout.enabled)layout.updateLayout(true);}
         const after=capture(nodes);differences=[];
@@ -54,18 +68,18 @@ function settleOwned(scene,nodes,plan,root=null,initialize=false){
     }
     throw Error('Native UI layout did not settle within eight passes: '+JSON.stringify(differences.slice(0,2)));
 }
-function settleRoot(root,nodes,plan){
+function settleRoot(root,nodes,plan,initialize=true){
     if(!enabled(plan))return capture(nodes);
     const scene=new cc.Scene('OwnedPrefabLayoutProbe'),context=new cc.Node('OwnedPrefabUiContext');
     const ui=context.addComponent(cc.UITransform);ui.setContentSize(...plan.designSize);ui.setAnchorPoint(0,0);context.parent=scene;root.parent=context;
-    try{settle(scene,nodes,plan,root,capture(nodes));return capture(nodes);}
+    try{settle(scene,nodes,plan,root,initialize?capture(nodes):false);return capture(nodes);}
     finally{root.parent=null;scene._activate(false);scene.destroy();}
 }
 function expected(source,plan,rows){
     if(!enabled(plan))return source;
     const row=(rows||[]).find(x=>x.sourceId===source.sourceId);if(!row)throw Error('Native pre-save geometry absent: '+source.sourceId);
     const result={...source};
-    for(const [key,axes]of Object.entries((plan.uiDrivenFields||{})[source.sourceId]||{})){
+    for(const [key,axes]of Object.entries(drivenFields(plan,source.sourceId))){
         result[key]=[...source[key]];for(const axis of axes)result[key][axis]=row[key][axis];
     }
     return result;
@@ -154,4 +168,4 @@ async function probe(plan,design,onProgress=()=>{}){
     }
     return result;
 }
-module.exports={enabled,capture,settle,settleRoot,expected,release,probeRoot,probe,alignWidgets};
+module.exports={enabled,capture,drivenFields,settle,settleRoot,expected,release,probeRoot,probe,alignWidgets};

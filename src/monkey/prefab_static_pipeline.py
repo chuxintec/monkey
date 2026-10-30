@@ -108,7 +108,10 @@ def enrich_declarations(ir, source_path, expected_sha256):
         fields={}
         for f in record['fields']:
             fields[f['name']]=dict(name=f['name'],**encode(f['value']),declarationEvidence={k:v for k,v in f.items()if k not in ('kind','value','name')})
-        for f in snapshot['fields']:fields[f['name']]=dict(fields.get(f['name'],{}),**f)
+        for f in snapshot['fields']:
+            merged=dict(fields.get(f['name'],{}),**f)
+            merged['serializedOverride']=True
+            fields[f['name']]=merged
         for name,f in fields.items():
             if name in types:f['sourceDeclaredType']=types[name]
         snapshot['fields']=[fields[n]for n in sorted(fields)]

@@ -36,6 +36,38 @@ function equalArray(left, right) {
     return Array.isArray(left) && Array.isArray(right) && left.length === right.length &&
         left.every((value, index) => value === right[index]);
 }
+function nativeUuid(value) {
+    if (!value || typeof value !== 'object') return null;
+    const uuid = value._uuid || value.uuid || value.__uuid__;
+    return typeof uuid === 'string' && uuid.length ? uuid : null;
+}
+function nativeClass(value) {
+    if (!value || (typeof value !== 'object' && typeof value !== 'function')) return null;
+    try {
+        if (cc.js && typeof cc.js.getClassName === 'function') {
+            const name = cc.js.getClassName(value);
+            if (typeof name === 'string' && name) return name;
+        }
+    } catch (_) { /* use the constructor when the engine has no class name */ }
+    return value.constructor && typeof value.constructor.name === 'string' && value.constructor.name ?
+        value.constructor.name : null;
+}
+function sourceIdentity(value) {
+    if (!value || typeof value !== 'object') return null;
+    for (const key of ['__monkeySourceId', '__sourceId'])
+        if (typeof value[key] === 'string' && value[key]) return value[key];
+    return null;
+}
+function referenceEvidence(actual, expected) {
+    const identity = value => value ? {nativeUuid: nativeUuid(value), nativeClass: nativeClass(value),
+        sourceIdentity: sourceIdentity(value)} : null;
+    return {actual: identity(actual), expected: identity(expected)};
+}
+function sourceIdentityAlias(resolveRef, sourceId, actual, expected) {
+    if (!resolveRef || typeof resolveRef.sourceIdentityProof !== 'function') return null;
+    try { return resolveRef.sourceIdentityProof(sourceId, actual, expected) || null; }
+    catch (_) { return null; }
+}
 function colorChannels(field) {
     const values = [field.colorR, field.colorG, field.colorB, field.colorA];
     return values.every(value => Number.isInteger(value) && value >= 0 && value <= 255) ? values : null;
@@ -155,12 +187,21 @@ function readRecords(field, actual, resolveRef, gaps) {
             }
             const value = instance[expected.fieldName];
             if (expected.storageType === 'UnityEngine.Object') {
-                if (expected.nullExpected) row.referenceVerified = value === null;
+                if (expected.nullExpected) {
+                    row.referenceVerified = value === null;
+                    row.referenceEvidence = {actual: referenceEvidence(value, null).actual, expected: null};
+                    row.referenceEvidence.verified = row.referenceVerified;
+                }
                 else {
                     const resolved = refValue(expected.refValue, resolveRef, gaps,
                         field.sourceFieldName + '[' + i + '].' + expected.sourceFieldName);
-                    row.referenceVerified = !!resolved && value === resolved &&
-                        validReference(expected.referenceKind || expected.kind, value);
+                    const kind = expected.referenceKind || expected.kind;
+                    const aliasProof = resolved ? sourceIdentityAlias(resolveRef, expected.refValue, value, resolved) : null;
+                    row.referenceVerified = !!resolved && sameReference(kind, value, resolved, expected.refValue, aliasProof);
+                    row.referenceEvidence = referenceEvidence(value, resolved);
+                    row.referenceEvidence.sourceId = expected.refValue;
+                    if (aliasProof) row.referenceEvidence.sourceIdentityAlias = aliasProof;
+                    row.referenceEvidence.verified = row.referenceVerified;
                 }
                 if (!row.referenceVerified) { gap(gaps, 'record_reference_readback_mismatch:' + expected.sourceFieldName); verified = false; }
             } else if (expected.storageType === 'bool') {
@@ -193,7 +234,26 @@ function validReference(kind, value) {
     if (kind === 'asset_ref') return value instanceof cc.Asset;
     return false;
 }
-function sameReference(actual, expected) { return actual === expected; }
+function sameReference(kind, actual, expected, sourceId, aliasProof) {
+    if (!actual || !expected || !validReference(kind, actual) || !validReference(kind, expected)) return false;
+    const actualUuid = nativeUuid(actual), expectedUuid = nativeUuid(expected);
+    const actualClass = nativeClass(actual), expectedClass = nativeClass(expected);
+    if (!actualUuid || !expectedUuid || actualUuid !== expectedUuid || !actualClass || actualClass !== expectedClass ||
+            actual.constructor !== expected.constructor) return false;
+    if (kind === 'node_ref' || kind === 'component_ref') {
+        const actualSource = sourceIdentity(actual), expectedSource = sourceIdentity(expected);
+        if (actualSource === sourceId && expectedSource === sourceId) return true;
+        if (actualSource || expectedSource) {
+            return !!aliasProof && aliasProof.verified === true &&
+                aliasProof.logicalSourceId === sourceId &&
+                typeof aliasProof.ownerPrefabSourceId === 'string' && !!aliasProof.ownerPrefabSourceId &&
+                typeof aliasProof.templatePrefabSourceId === 'string' && !!aliasProof.templatePrefabSourceId &&
+                typeof aliasProof.templateSourceId === 'string' &&
+                actualSource === aliasProof.templateSourceId && expectedSource === aliasProof.templateSourceId;
+        }
+    }
+    return true;
+}
 
 function Create(spec, node) {
     if (!node || typeof node.addComponent !== 'function') throw new Error('STATIC_CARRIER_NODE_MISSING: ' + spec.sourceId);
@@ -264,14 +324,42 @@ function Read(spec, component, resolveRef) {
                 } else if (expected.storageType === 'UnityEngine.Object') {
                     if (expected.nullExpected) {
                         row.referenceVerified = actual === null;
+                        row.referenceEvidence = {actual: referenceEvidence(actual, null).actual, expected: null,
+                            verified: row.referenceVerified};
                     } else {
                         const resolved = refValue(expected.refValue, resolveRef, gaps, expected.sourceFieldName);
-                        row.referenceVerified = !!resolved && sameReference(actual, resolved);
+                        const aliasProof = resolved ? sourceIdentityAlias(resolveRef, expected.refValue, actual, resolved) : null;
+                        row.referenceVerified = !!resolved && sameReference(expected.referenceKind || expected.kind,
+                            actual, resolved, expected.refValue, aliasProof);
+                        row.referenceEvidence = referenceEvidence(actual, resolved);
+                        row.referenceEvidence.sourceId = expected.refValue;
+                        if (aliasProof) row.referenceEvidence.sourceIdentityAlias = aliasProof;
+                        row.referenceEvidence.verified = row.referenceVerified;
                     }
                     if (!row.referenceVerified) { gap(gaps, 'reference_readback_mismatch:' + expected.sourceFieldName); verified = false; }
                 } else if (expected.storageType === 'UnityEngine.Object[]') {
-                    const resolved = expectedValue(expected, resolveRef, gaps);
-                    row.referencesVerified = Array.isArray(resolved) && equalArray(actual, resolved);
+                    const refs = expected.refValues || [];
+                    const resolved = refs.map((id, index) => refValue(id, resolveRef, gaps,
+                        expected.sourceFieldName + '[' + index + ']'));
+                    const valid = resolved.map((value, index) => {
+                        if (value && !validReference(expected.elementKind, value)) {
+                            gap(gaps, 'reference_array_type_mismatch:' + expected.sourceFieldName);
+                            return null;
+                        }
+                        return value;
+                    });
+                    const isActualArray = Array.isArray(actual);
+                    const countMatches = isActualArray && actual.length === refs.length;
+                    row.referenceEvidence = refs.map((id, index) => {
+                        const evidence = referenceEvidence(isActualArray ? actual[index] : null, valid[index]);
+                        evidence.sourceId = id;
+                        const aliasProof = valid[index] ? sourceIdentityAlias(resolveRef, id, actual[index], valid[index]) : null;
+                        evidence.verified = countMatches && !!valid[index] &&
+                            sameReference(expected.elementKind, actual[index], valid[index], id, aliasProof);
+                        if (aliasProof) evidence.sourceIdentityAlias = aliasProof;
+                        return evidence;
+                    });
+                    row.referencesVerified = countMatches && row.referenceEvidence.every(item => item.verified);
                     if (!row.referencesVerified) { gap(gaps, 'reference_array_readback_mismatch:' + expected.sourceFieldName); verified = false; }
                 } else if (expected.storageType === 'bool') {
                     row.boolValue = actual;

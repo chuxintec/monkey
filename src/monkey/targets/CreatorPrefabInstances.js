@@ -9,6 +9,18 @@ const api=()=>{
     if(!u||!p||!u.generateTargetMap||!p.addPrefabInfo||!p.checkAndStripNode)throw Error('Native Prefab SDK unavailable');
     return {u,p};
 };
+function sourceTemplateNode(plan,id) {
+    const origins=new Map(),nodes=new Set(plan.nodes.map(n=>n.sourceId));
+    for(const relation of plan.syncPrefabBindings||[])for(const pair of relation.origins||[]) {
+        if(!nodes.has(pair.instanceSourceId)||!nodes.has(pair.templateSourceId)||
+            origins.has(pair.instanceSourceId)&&origins.get(pair.instanceSourceId)!==pair.templateSourceId)
+            throw Error('Native sync node origin differs');
+        origins.set(pair.instanceSourceId,pair.templateSourceId);
+    }
+    const seen=new Set();
+    while(origins.has(id)){if(seen.has(id))throw Error('Native sync node origin cycle');seen.add(id);id=origins.get(id);}
+    return id;
+}
 const nativeClass=name=>name==='sp.Skeleton'?cc.sp.Skeleton:typeof name==='string'&&name.startsWith('cc.')?cc[name.slice(3)]:undefined;
 function markMounted(object,root){
     // Match the native SDK's applyMountedChildren/applyMountedComponents editor
@@ -47,7 +59,7 @@ function session(id,plan) {
     if(plan.nativeDeadlineMs!=null&&Date.now()>=plan.nativeDeadlineMs)throw Error('NATIVE_BUDGET_EXHAUSTED');
     return current;
 }
-function keep(plan,scene,nodes,result){if(current)throw Error('Native assembly session already exists');current={id:'prefabs-'+(++sequence),plan,scene,nodes,result,prepared:new Set()};return current.id;}
+function keep(plan,scene,nodes,result,nativeAssets){if(current)throw Error('Native assembly session already exists');current={id:'prefabs-'+(++sequence),plan,scene,nodes,result,nativeAssets:new Map(nativeAssets||[]),prepared:new Set()};return current.id;}
 function release(id){if(current&&current.id===id){dynamic.release(current.scene);current.scene.destroy();current=null;}}
 function mapTree(root,spec,plan) {
     const source=new Map(plan.nodes.map(n=>[n.sourceId,n])),mapped=new Map();
@@ -105,7 +117,7 @@ async function prepare(state,owner,saved,load) {
             // standalone template. Recreate that same planned dependency on
             // the source instance before comparing native component sets.
             if(node.getComponent(cc.UIOpacity)&&!old.getComponent(cc.UIOpacity)) {
-                const authored=(plan.animations||[]).some(a=>a.convertible&&(a.tracks||[]).some(t=>t.node===pair.templateObject&&t.property.split('.')[0]==='opacity'));
+                const authored=(plan.animations||[]).some(a=>a.convertible&&(a.tracks||[]).some(t=>t.node===sourceTemplateNode(plan,pair.templateObject)&&t.property.split('.')[0]==='opacity'));
                 if(authored){const source=plan.nodes.find(n=>n.sourceId===pair.instanceObject);const opacity=old.addComponent(cc.UIOpacity);opacity.opacity=source.opacity;}
             }
             const sourceMask=old.getComponent(cc.Mask),templateMask=node.getComponent(cc.Mask);
@@ -151,17 +163,34 @@ async function prepare(state,owner,saved,load) {
 }
 async function serializePrefab(id,sid,saved,plan,load) {
     const state=session(id,plan),spec=plan.sourcePrefabs.find(p=>p.sourceId===sid);if(!spec)throw Error('Unexpected native prefab owner');
+    // Bind persistent asset dependencies before native instance deltas are
+    // recorded, so inherited carriers serialize the same final references.
+    for(const info of saved)if(!state.nativeAssets.has(info.sourceId)) {
+        const asset=await load(info.uuid,cc.Prefab);
+        if(!(asset instanceof cc.Prefab)||asset._uuid!==info.uuid)throw Error('Static Prefab asset identity differs: '+info.sourceId);
+        state.nativeAssets.set(info.sourceId,asset);
+    }
+    const ownerNodes=new Map(spec.nodes.map(nodeId=>[nodeId,state.nodes.get(nodeId)]));
+    require('./static-field-integration.js').createAssign(plan,ownerNodes,state.nativeAssets);
     await prepare(state,sid,saved,load);
     const root=cc.instantiate(state.nodes.get(spec.root));
     try {
         root.parent=null;root.name=spec.nativeRootName;
         const mapped=mapTree(root,spec,plan);
-        const nativeInitialNodes=dynamic.settleRoot(root,mapped,plan);
+        let nativeInitialNodes=dynamic.settleRoot(root,mapped,plan);
+        if(plan.spineBinding) {
+            // Construction only: source-authored geometry is serialized along
+            // with its persistent native preserver. Reopen never calls this.
+            require('./spine-ui-transform.js').restoreAuthored(plan,mapped,cc,spec.sourceId);
+            nativeInitialNodes=dynamic.settleRoot(root,mapped,plan,false);
+        }
         const prefab=new cc.Prefab();prefab.name=root.name;prefab.data=root;
         const {p}=api();
         if(root._prefab&&root._prefab.instance)throw Error('Creator root template inheritance requires a dedicated native asset contract');
         p.addPrefabInfo(root,root,prefab);root._prefab.nestedPrefabInstanceRoots=instanceRoots(root);
-        return {sourceId:sid,path:spec.path,nativeInitialNodes,serialized:serializeNative(root,prefab)};
+        const serialized=serializeNative(root,prefab);
+        const spineUITransformReceipt=plan.spineBinding?require('./spine-ui-transform.js').verifySerializedPrefab(plan,spec,serialized,{saved,templates:saved}):null;
+        return {sourceId:sid,path:spec.path,nativeInitialNodes,spineUITransformReceipt,serialized};
     }finally{root.destroy();}
 }
 async function finish(id,saved,plan,load) {
@@ -199,4 +228,4 @@ function read(plan,mapped,templates,saved,owner=null){
     }
     return rows;
 }
-module.exports={keep,release,serializePrefab,finish,read};
+module.exports={sourceTemplateNode,keep,release,serializePrefab,finish,read};

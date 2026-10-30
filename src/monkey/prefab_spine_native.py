@@ -70,6 +70,80 @@ def _safe_key(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()[:16]
 
 
+def _verified_editor_variant(runtime: dict, stage: dict) -> dict | None:
+    """Validate an optional, paired Editor-only Spine runtime.
+
+    The player pair remains the authority for non-Editor platforms. The
+    separate Editor pair must be compiled from the pinned source and refer to
+    its paired core assembly; matching assembly names alone is insufficient.
+    """
+    evidence = runtime.get("editorVariant")
+    if evidence is None:
+        return None
+    if not isinstance(evidence, dict) or evidence.get("status") != "verified_editor_source_build":
+        raise SpineNativePlanError("Editor Spine runtime variant is not source-build verified")
+    if (evidence.get("upstreamCommit") != runtime.get("upstreamCommit") or
+        evidence.get("compiledAgainst") != "Unity6000.6.2f1" or
+        evidence.get("importPolicy") != "paired_editor_only_assemblies_player_pair_excludes_editor" or
+        evidence.get("cocosCompatibilityFallbacksIncluded") is not False):
+        raise SpineNativePlanError("Editor Spine runtime pin, import policy, or source profile differs")
+    defines = evidence.get("compileDefines")
+    if not isinstance(defines, list) or "UNITY_EDITOR" not in defines:
+        raise SpineNativePlanError("Editor Spine runtime was not compiled with UNITY_EDITOR")
+    hashes = evidence.get("playerAssemblyHashes")
+    if not isinstance(hashes, dict):
+        raise SpineNativePlanError("Editor Spine runtime lacks frozen player assembly hashes")
+    assemblies = evidence.get("assemblies")
+    staged = stage.get("editorVariant")
+    if not isinstance(assemblies, dict) or not isinstance(staged, dict) or staged.get("status") != "verified_editor_source_build":
+        raise SpineNativePlanError("Editor Spine assembly pair or stage copy is missing")
+    staged_files = staged.get("copiedFiles")
+    base_checks = runtime.get("fileChecks", {})
+    for filename in ("spine-csharp.dll", "spine-unity.dll"):
+        row = assemblies.get(filename)
+        stage_row = staged_files.get(filename) if isinstance(staged_files, dict) else None
+        if (not isinstance(row, dict) or not isinstance(stage_row, dict) or stage_row.get("verified") is not True or
+            stage_row.get("sha256") != row.get("sha256") or hashes.get(filename) != base_checks.get(filename, {}).get("expectedSha256") or
+            row.get("assemblyName") != filename[:-4] or row.get("assemblyVersion") != "0.0.0.0" or
+            row.get("playerReferenceIdentity") != {"name": filename[:-4], "version": "0.0.0.0"}):
+            raise SpineNativePlanError("Editor Spine assembly does not have a verified matching player assembly identity: " + filename)
+        if row.get("runtimeImportPath") != "Assets/Plugins/Spine38/EditorRuntime/" + filename:
+            raise SpineNativePlanError("Editor Spine assembly import path must avoid Unity's special Editor folder: " + filename)
+    unity_refs = assemblies["spine-unity.dll"].get("references")
+    core_refs = assemblies["spine-csharp.dll"].get("references")
+    if (not isinstance(unity_refs, list) or {row.get("name") for row in unity_refs if isinstance(row, dict)}.isdisjoint({"spine-csharp"}) or
+        not any(isinstance(row, dict) and row.get("name") == "spine-csharp" and row.get("version") == "0.0.0.0" for row in unity_refs) or
+        not any(isinstance(row, dict) and row.get("name") == "UnityEditor.CoreModule" for row in unity_refs) or
+        not isinstance(core_refs, list) or any(isinstance(row, dict) and row.get("name") == "UnityEditor.CoreModule" for row in core_refs)):
+        raise SpineNativePlanError("Editor Spine unity/core assembly reference pairing is invalid")
+    if staged.get("sourceManifestSha256") != evidence.get("sourceManifestSha256"):
+        raise SpineNativePlanError("Editor Spine stage source manifest differs from its build evidence")
+    return {
+        "status": evidence["status"],
+        "sourceEvidencePath": evidence.get("evidencePath"),
+        "sourceEvidenceSha256": evidence.get("evidenceSha256"),
+        "sourceManifestSha256": evidence.get("sourceManifestSha256"),
+        "importPolicy": evidence["importPolicy"],
+        "assemblies": {
+            name: {"sha256": assemblies[name]["sha256"], "bytes": assemblies[name]["bytes"],
+                   "assemblyName": assemblies[name]["assemblyName"],
+                   "assemblyVersion": assemblies[name]["assemblyVersion"],
+                   "references": assemblies[name]["references"],
+                   "runtimeImportPath": assemblies[name]["runtimeImportPath"]}
+            for name in ("spine-csharp.dll", "spine-unity.dll")
+        },
+        "assemblyLoadVerification": {
+            "status": "not_run",
+            "expectedAssemblyPath": assemblies["spine-unity.dll"]["runtimeImportPath"],
+            "expectedAssemblySha256": assemblies["spine-unity.dll"]["sha256"],
+            "expectedCoreAssemblyPath": assemblies["spine-csharp.dll"]["runtimeImportPath"],
+            "expectedCoreAssemblySha256": assemblies["spine-csharp.dll"]["sha256"],
+            "expectedUnityEditorReference": True,
+            "requiredActualFields": ["typeof(SkeletonGraphic).Assembly.Location", "assemblySha256",
+                                     "referencedAssemblies", "unityEditorReferencePresent"]},
+    }
+
+
 def build_unity_native_binding_plan(emission: dict, material_contract: dict,
                                     unity_closure: dict, runtime_evidence: dict,
                                     runtime_stage_evidence: dict,
@@ -121,6 +195,8 @@ def build_unity_native_binding_plan(emission: dict, material_contract: dict,
     if set(material_by_component) != set(ids) or set(unity_material_by_component) != set(ids):
         raise SpineNativePlanError("material contract component denominator differs")
     shader_path = Path(__file__).resolve().parent / "targets/materials/spine/UnitySpineSourceProfile.shader"
+    graphic_shader_path = Path(__file__).resolve().parent / "targets/materials/spine/UnitySpineGraphicProfile.shader"
+    graphic_shader_sha = hashlib.sha256(graphic_shader_path.read_bytes()).hexdigest()
     shader_sha = hashlib.sha256(shader_path.read_bytes()).hexdigest()
     pinned_shader_sha = _hash(material_contract.get("spec", {}).get("unity", {}).get("shaderSourceSha256"),
                               "material.unity.shaderSourceSha256")
@@ -140,6 +216,7 @@ def build_unity_native_binding_plan(emission: dict, material_contract: dict,
     for required in ("spine-csharp.dll", "spine-unity.dll", "Shaders/Spine-SkeletonGraphic.shader", "LICENSE"):
         if required not in copied_checks:
             raise SpineNativePlanError("isolated runtime stage lacks required file: " + required)
+    editor_variant = _verified_editor_variant(runtime, stage)
 
     unity_copies = {(row.get("sourceId"), row.get("path")): row for row in copy_rows
                     if row.get("target") == "unity"}
@@ -174,19 +251,40 @@ def build_unity_native_binding_plan(emission: dict, material_contract: dict,
         material_binding = material_by_component[sid]
         expected_ref = material_binding.get("sourceMaterialReferenceSourceId")
         expected_target = material_binding.get("sourceMaterialSourceId")
-        if expected_ref != source_material_reference or expected_target != resolved_material_source:
-            raise SpineNativePlanError(f"component {sid} source material profile identity differs")
+        source_binding = material_binding.get("sourceMaterialBinding") or ({"status": "explicit"}
+            if isinstance(expected_ref, str) and isinstance(expected_target, str) else {})
+        material_state = source_binding.get("status")
+        if material_state == "explicit":
+            if expected_ref != source_material_reference or expected_target != resolved_material_source:
+                raise SpineNativePlanError(f"component {sid} source material profile identity differs")
+        elif material_state == "resolved_source_engine_default":
+            if (expected_ref is not None or expected_target is not None
+                    or source_binding.get("sourceEngineVersion") != "2.4.15"
+                    or source_binding.get("sourcePath") != "extensions/spine/Skeleton.js"
+                    or source_binding.get("sourceSha256") != "7cdc119e26aa6dceec4bd78ae30dd08f39daa2f0da5d914d2197a730b558a5e8"
+                    or source_binding.get("method") != "Skeleton._getDefaultMaterial -> cc.Material.getBuiltinMaterial('2d-spine')"):
+                raise SpineNativePlanError(f"component {sid} source engine default material evidence differs")
+        else:
+            raise SpineNativePlanError(f"component {sid} source material state is not supported")
         serialized_materials = component.get("sourceSerializedFields", {}).get("_materials", [])
+        if serialized_materials is None:
+            serialized_materials = []
+        if not isinstance(serialized_materials, list):
+            raise SpineNativePlanError(f"component {sid} has malformed serialized material references")
         actual_refs = [f"{component.get('sourcePrefabId', '').split(':', 1)[0]}:{row.get('__uuid__')}"
                        for row in serialized_materials if isinstance(row, dict) and isinstance(row.get("__uuid__"), str)]
-        if actual_refs != [expected_ref]:
-            raise SpineNativePlanError(f"component {sid} has missing/extra/changed serialized material references")
+        if material_state == "explicit":
+            if actual_refs != [expected_ref]:
+                raise SpineNativePlanError(f"component {sid} has missing/extra/changed serialized material references")
+        elif "_materials" in component.get("sourceSerializedFields", {}):
+            raise SpineNativePlanError(f"component {sid} source engine default is not backed by an omitted _materials field")
 
         creator = {
             "sourceMaterialReferenceSourceId": expected_ref,
             "sourceMaterialSourceId": expected_target,
             "targetMaterialUuid": material_contract["spec"]["creator38"]["targetMaterialUuid"],
-            "status": "exact_source_builtin_profile_mapping",
+            "sourceMaterialBinding": source_binding,
+            "status": "exact_source_builtin_profile_mapping" if material_state == "explicit" else "resolved_source_engine_default",
         }
         unity_material = unity_material_by_component[sid]
         data_asset = data_by_id.get(source_data_id) if source_data_id else None
@@ -299,6 +397,7 @@ def build_unity_native_binding_plan(emission: dict, material_contract: dict,
             if page_copy is None:
                 raise SpineNativePlanError(f"Unity page texture output missing for {source_id}:{target_page}")
             normal = f"Assets/Game/Content/Spine/GeneratedMaterials/{key}/{page.get('pageIndex')}_normal.mat"
+            graphic_normal = f"Assets/Game/Content/Spine/GeneratedMaterials/{key}/{page.get('pageIndex')}_normal_graphic.mat"
             variants = []
             page_variant_modes = set((page.get("materialIdentitySeeds") or {}).keys())
             for variant in profile.get("variants", []):
@@ -308,12 +407,14 @@ def build_unity_native_binding_plan(emission: dict, material_contract: dict,
                 variants.append({"blendMode": variant["blendMode"],
                                  "sourceSlotCountAcrossAsset": variant["sourceSlotCount"],
                                  "sourceSlotCountScope": "whole_skeleton_atlas_pages_not_per_page_count",
-                                 "materialAssetPath": f"Assets/Game/Content/Spine/GeneratedMaterials/{key}/{page.get('pageIndex')}_{variant['blendMode']}.mat"})
+                                 "materialAssetPath": f"Assets/Game/Content/Spine/GeneratedMaterials/{key}/{page.get('pageIndex')}_{variant['blendMode']}.mat",
+                                 "graphicMaterialAssetPath": f"Assets/Game/Content/Spine/GeneratedMaterials/{key}/{page.get('pageIndex')}_{variant['blendMode']}_graphic.mat"})
             page_specs.append({"sourceAtlasPage": source_page, "nativeAtlasPage": target_page,
                                "sourceTextureSourceId": page["sourceTextureSourceId"],
                                "textureAssetPath": target_texture_path,
                                "textureSha256": page_copy["sha256"],
-                               "normalMaterialAssetPath": normal, "variants": variants})
+                               "normalMaterialAssetPath": normal, "graphicNormalMaterialAssetPath": graphic_normal,
+                               "variants": variants})
 
         requested_animations = sorted({prop.get("sourceValue") for row in rows
                                        for prop in [row.get("unity", {}).get("fields", {}).get("animation", {})]
@@ -330,6 +431,9 @@ def build_unity_native_binding_plan(emission: dict, material_contract: dict,
             "skeletonDataAssetPath": f"{folder}/{stem}_SkeletonData.asset",
             "shaderName": SHADER, "shaderAssetPath": "Assets/Game/Content/Shaders/UnitySpineSourceProfile.shader",
             "shaderSha256": material_contract.get("spec", {}).get("unity", {}).get("shaderSourceSha256"),
+            "graphicShaderName": "Monkey/SpineSourceGraphicProfile/Colored",
+            "graphicShaderAssetPath": "Assets/Game/Content/Shaders/UnitySpineGraphicProfile.shader",
+            "graphicShaderSha256": graphic_shader_sha,
             "premultipliedAlpha": profile.get("pmaVertexColors"),
             "scale": scale,
             "expectedSpineVersion": asset.get("sourceSpineVersion"),
@@ -354,7 +458,8 @@ def build_unity_native_binding_plan(emission: dict, material_contract: dict,
                     "compiledAgainst": runtime.get("compiledAgainst"),
                     "isolatedStagePath": stage.get("destination"), "manifestSha256": stage.get("sourceManifestSha256"),
                     "runtimeFilesVerified": len(copied_checks), "licenseIncluded": "LICENSE" in copied_checks,
-                    "targetCandidatePath": "Assets/Plugins/Spine38", "editorImport": "not_run"},
+                    "targetCandidatePath": "Assets/Plugins/Spine38", "editorImport": "not_run",
+                    "editorVariant": editor_variant},
         "sourceMaterialProfile": {"sourceReferenceSourceId": source_material_reference,
                                   "resolvedSourceMaterialId": resolved_material_source,
                                   "creatorTargetMaterialUuid": material_contract["spec"]["creator38"]["targetMaterialUuid"],
@@ -362,6 +467,10 @@ def build_unity_native_binding_plan(emission: dict, material_contract: dict,
         "unityShader": {"sourcePath": str(shader_path),
                         "targetPath": "Assets/Game/Content/Shaders/UnitySpineSourceProfile.shader",
                         "shaderName": SHADER, "sha256": shader_sha, "status": "source_hash_verified_target_copy_required"},
+        "unityGraphicShader": {"sourcePath": str(graphic_shader_path),
+                               "targetPath": "Assets/Game/Content/Shaders/UnitySpineGraphicProfile.shader",
+                               "shaderName": "Monkey/SpineSourceGraphicProfile/Colored",
+                               "sha256": graphic_shader_sha, "status": "native_ui_shader_source_hash_verified"},
         "unityFactoryContract": {
             "helperPath": "src/monkey/targets/spine/UnitySpineNativeFactory.cs",
             "stageHelperPath": "src/monkey/targets/spine/UnitySpineNativeStage.cs",

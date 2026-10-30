@@ -100,6 +100,34 @@ def make_plan_inputs(root):
 
 
 class PrefabSpineComponentBindingTests(unittest.TestCase):
+    def test_static_only_resource_proof_binds_saved_identity_without_claiming_animation(self):
+        with tempfile.TemporaryDirectory() as temp:
+            contract, readback, execution, verification, unity = make_plan_inputs(Path(temp))
+            readback = {'resourceProbes': {'profile': 'creator-spine-3.8-v1', 'spines': []}}
+            proofs = [{
+                'schemaVersion': 1, 'profile': 'creator-spine-3.8-v1',
+                'status': 'static_resource_identity_verified', 'nativeImportCompleted': True,
+                'sourceCodeExecuted': False, 'dynamicAnimationComplete': False,
+                'spines': [{'sourceId': asset['sourceId'], 'skeletonUuid': 'static-' + asset['sourceId'][-1],
+                            'sourceSkeletonSha256': asset['skeletonBinarySha256'], 'version': '3.8.99',
+                            'savedReferenceVerified': True, 'bones': 12, 'slots': 5,
+                            'textureIdentitiesVerified': True, 'dynamicPoseStatus': 'partial_no_observed_bone_motion',
+                            'diagnostics': [{'code': 'NO_OBSERVED_BONE_MOTION'}]}],
+            } for asset in contract['skeletonData']]
+            plan = build_component_binding_plan(contract, readback, unity,
+                                                creator_execution_result=execution,
+                                                creator_verification=verification,
+                                                creator_import_plan_sha256='d' * 64,
+                                                creator_candidate_manifest_sha256='e' * 64,
+                                                creator_cache_mode_evidence=CACHE_MODE_EVIDENCE,
+                                                creator_static_resource_proofs=proofs)
+        self.assertFalse(plan['creatorNativeReadback']['verified'])
+        self.assertEqual(plan['creatorNativeReadback']['status'], 'partial_static_resource_readback')
+        self.assertEqual(plan['dataAssets'][0]['creator']['status'], 'native_static_resource_readback_verified')
+        self.assertTrue(plan['dataAssets'][0]['creator']['staticResourceVerified'])
+        self.assertFalse(plan['dataAssets'][0]['creator']['nativePlaybackVerified'])
+        self.assertEqual(plan['dataAssets'][0]['creator']['dynamicPoseStatus'], 'partial_no_observed_bone_motion')
+
     def test_exact_source_denominator_dual_target_refs_and_unbound_dynamic_gap(self):
         with tempfile.TemporaryDirectory() as temp:
             contract, readback, execution, verification, unity = make_plan_inputs(Path(temp))
@@ -321,6 +349,28 @@ class PrefabSpineComponentBindingTests(unittest.TestCase):
         self.assertEqual(animation['sourceFallback'], '_animationName')
         self.assertEqual(animation['creator']['member'], 'defaultAnimation')
 
+    def test_pipeline_keeps_active_uninitialized_pose_incomplete_but_accepts_source_inactive_identity(self):
+        from monkey.prefab_spine_pipeline import verify
+
+        components = [{'sourceId': 'spine#inactive', 'convertible': True, 'spineBinding': {'creator': {}}},
+                      {'sourceId': 'spine#active', 'convertible': True, 'spineBinding': {'creator': {}}}]
+        rows = [
+            {'sourceComponentId': 'spine#inactive', 'status': 'verified_source_inactive_runtime_uninitialized',
+             'serializedRequestedIdentityVerified': True, 'runtimeSkeletonInitialized': False,
+             'failures': [], 'sourceActivity': {'hierarchyActive': False}},
+            {'sourceComponentId': 'spine#active', 'status': 'incomplete_active_source_runtime_pose_uninitialized',
+             'serializedRequestedIdentityVerified': True, 'runtimeSkeletonInitialized': False,
+             'failures': [], 'sourceActivity': {'hierarchyActive': True}},
+        ]
+        diagnostics = verify(components, rows, 'prefab:test')
+        self.assertEqual([d['code'] for d in diagnostics], ['SPINE_NATIVE_STATIC_POSE_NOT_INITIALIZED'])
+        self.assertEqual(diagnostics[0]['sourceId'], 'spine#active')
+
+        rows[0]['status'] = 'mismatch'
+        rows[0]['failures'] = ['requestedAnimationActive']
+        diagnostics = verify(components, rows, 'prefab:test')
+        self.assertEqual({d['sourceId'] for d in diagnostics}, {'spine#inactive', 'spine#active'})
+
     def test_creator_helper_binds_exact_data_and_leaves_unbound_data_unset(self):
         helper = Path(__file__).resolve().parents[1] / 'src/monkey/targets/spine/creator_spine_binding.js'
         js = r"""
@@ -349,7 +399,7 @@ const untouched={skeletonData:'keep'};
 const skipped=api.applyCreatorSpineBinding(unbound,()=>untouched,()=>{throw Error('fallback resource requested')});
 if(untouched.skeletonData!=='keep'||!skipped.unresolvedDynamicAssignment)throw Error('unbound source was overwritten');
 const staticBinding={sourceComponentId:'source#static',creator:{fields:{
- skeletonData:{sourceAssetId:'asset:static'},
+ skeletonData:{sourceAssetId:'asset:static',creator:{nativeUuid:'asset-native'}},
  timeScale:{creator:{member:'timeScale',value:1,status:'explicit'}},
  animation:{creator:{member:'defaultAnimation',value:'idle',status:'explicit'}}
 }},creatorStaticPose:{policy:'enabled_realtime_renderer_with_serialized_timeScale_zero',nativeEnabled:true,nativeTimeScale:0,
@@ -392,6 +442,31 @@ const native={uuid:'component-native',skeletonData:{uuid:'native',getRuntimeData
 const read=api.readCreatorSpineBinding(readSpec,()=>native);
 if(read.status!=='mismatch'||read.checks.requestedAnimationExists!==false||read.checks.requestedAnimationActive!==false)throw Error('a different current animation cannot satisfy the requested source animation');
 if(read.actual.runtimeAnimationNames.join(',')!=='b_idle')throw Error('readback must expose the actual runtime animation list');
+// Serialized identity and runtime pose are separate evidence. A source-active
+// hierarchy with an uninitialized runtime skeleton remains incomplete; an
+// inactive ancestor explains the missing runtime pose without weakening the
+// exact serialized animation/skin and SkeletonData checks.
+const sourcePlan={nodes:[
+ {sourceId:'root',parent:null,active:false},
+ {sourceId:'spine-node',parent:'root',active:true}
+]};
+const activity=api.sourceNodeActivity(sourcePlan,'spine-node');
+if(activity.hierarchyActive!==false||activity.nodeActive!==true)throw Error('source node activity must include the exact inactive ancestor');
+const serializedOnly={uuid:'native-component',node:{active:true},enabled:true,customMaterial:null,
+ skeletonData:{uuid:'native',getRuntimeData:()=>({animations:[{name:'z_idle'}],skins:[{name:'default'}]})},
+ defaultSkin:'default',defaultAnimation:'z_idle',loop:false,timeScale:1,premultipliedAlpha:false,defaultCacheMode:0,
+ isAnimationCached:()=>false,getCurrent:()=>null};
+const inactiveRead=api.readCreatorSpineBinding(readSpec,()=>serializedOnly,
+ {sourceActivity:activity,readbackScope:'instantiated_mapped'});
+if(inactiveRead.status!=='verified_source_inactive_runtime_uninitialized'||!inactiveRead.serializedRequestedIdentityVerified||
+ inactiveRead.runtimeSkeletonInitialized||inactiveRead.readbackScope!=='instantiated_mapped'||
+ inactiveRead.serializedIdentityStatus!=='verified'||inactiveRead.instantiatedRuntimeStatus!=='not_initialized')
+ throw Error('inactive source must report serialized identity separately from uninitialized instance pose');
+const activeRead=api.readCreatorSpineBinding(readSpec,()=>serializedOnly,
+ {sourceActivity:{...activity,hierarchyActive:true,status:'verified_source_hierarchy_active'},readbackScope:'instantiated_mapped'});
+if(activeRead.status!=='incomplete_active_source_runtime_pose_uninitialized'||activeRead.serializedIdentityStatus!=='verified'||
+ activeRead.instantiatedRuntimeStatus!=='not_initialized')
+ throw Error('active source without initialized runtime pose must remain incomplete');
 const catalog=api.readCreatorSpineDataCatalog('spineAsset:source',{uuid:'native',getRuntimeData:()=>({animations:[{name:'b_idle'},{name:'z_idle'}],skins:[{name:'default'}],bones:[{},{}],slots:[{}]})},
  {nativeUuid:'native',animationName:'z_idle',skinName:'default'});
 if(catalog.status!=='verified'||!catalog.animationNames.includes('z_idle')||catalog.boneCount!==2)throw Error('complete native SkeletonData names/counts were not read');

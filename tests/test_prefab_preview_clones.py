@@ -537,7 +537,7 @@ layoutComponentSourceId:null,layoutMode:'source-manual',firstSourcePosition:[0,-
 retainedTemplateDisposition:'inactive',positionsAreTargetReadbackOnly:true,sourceManualLayout:{formulaId:'centered-horizontal-linear/1',sourceEvidenceId:'manual-proof',
 sourceCodePath:'manual.js',sourceCodeSha256:hash,sourceBytes:{start:0,end:1},sourceSpanSha256:hash,templateWidth:100,gap:10,count:2,sourceTemplateY:-50},
 sourceTree:[{sourceId:manualRootId,name:'DayTab',childrenSourceIds:[],componentSourceIds:[manualLabelId,manualSpriteId]}]},instances:manualRows};
-const manualResolverFactory=map=>id=>id===manualLabelId?map.get(manualRootId).getComponent(Label):id===manualRootId?map.get(manualRootId):null;
+const manualResolverFactory=map=>id=>id===manualLabelId?map.get(manualRootId).getComponent(Label):id===manualSpriteId?map.get(manualRootId).getComponent(Sprite):id===manualRootId?map.get(manualRootId):null;
 const manualApplied=api.Apply(manualBatch,manualNodes,manualResolverFactory,null);
 if(!manualApplied.verified||manualParent.children.length!==3||manualRoot.active||manualParent.children[1].position.x!==-45||manualParent.children[2].position.x!==45)
 throw Error('source-manual clone apply failed');

@@ -2,6 +2,7 @@
 
 const assert = require('node:assert/strict');
 const bridge = require('../src/monkey/targets/materials/spine/CreatorSpineMaterialBindings');
+const spineBinding = require('../src/monkey/targets/spine/creator_spine_binding');
 
 function makePass({ defines, blendSrc, blendDst, shaderName = 'observed-gfx-shader' }) {
   return {
@@ -94,6 +95,40 @@ assert.equal(bindResult.runtimeValidation.status, 'matched_observations');
 assert.equal(component.premultipliedAlpha, false);
 assert.equal(component.useTint, false);
 assert.equal(component.enableBatch, false);
+
+const sourceDefaultContract = makeContract();
+sourceDefaultContract.spec.creator38.perComponent[0].sourceMaterialReferenceSourceId = null;
+sourceDefaultContract.spec.creator38.perComponent[0].sourceMaterialSourceId = null;
+sourceDefaultContract.spec.creator38.perComponent[0].sourceMaterialBinding = {
+  status: 'resolved_source_engine_default', sourceEngineVersion: '2.4.15',
+  sourcePath: 'extensions/spine/Skeleton.js',
+  sourceSha256: '7cdc119e26aa6dceec4bd78ae30dd08f39daa2f0da5d914d2197a730b558a5e8',
+  method: "Skeleton._getDefaultMaterial -> cc.Material.getBuiltinMaterial('2d-spine')",
+  targetProfile: "Creator 3.8.8 builtinResMgr.get('default-spine-material')",
+};
+const defaultMaterialComponent = makeComponent();
+const defaultMaterialResult = bridge.bindCreatorSpineMaterial(sourceId, defaultMaterialComponent,
+  sourceDefaultContract, { builtinResMgr: { get(id) { return id === 'default-spine-material' ? inactiveMaterial : null; } } });
+assert.equal(defaultMaterialResult.status, 'bound_resource_observed_runtime_separately');
+assert.equal(defaultMaterialResult.sourceMaterialBinding.status, 'resolved_source_engine_default');
+assert.equal(defaultMaterialResult.sourceMaterialBinding.referenceSourceId, null);
+
+const staticDefaultBinding = {
+  sourceComponentId: sourceId,
+  creator: { fields: {} },
+  creatorMaterialBinding: {
+    sourceComponentId: sourceId, targetMaterialUuid: 'default-spine-material',
+    contract: 'cocos24-builtin-spine-material-v1', contractSha256: 'a'.repeat(64),
+    evidenceStatus: 'source_to_internal_to_creator_builtin_pinned',
+    sourceMaterialReferenceSourceId: null, sourceMaterialSourceId: null,
+    sourceMaterialBinding: sourceDefaultContract.spec.creator38.perComponent[0].sourceMaterialBinding,
+  },
+};
+const appliedDefault = spineBinding.applyCreatorSpineBinding(staticDefaultBinding, () => makeComponent(), () => null);
+assert.equal(appliedDefault.materialRoute, 'builtin-spine-material');
+staticDefaultBinding.creatorMaterialBinding.sourceMaterialBinding.sourceSha256 = '0'.repeat(64);
+assert.throws(() => spineBinding.applyCreatorSpineBinding(staticDefaultBinding, () => makeComponent(), () => null),
+  /Invalid exact Creator built-in Spine material mapping/);
 
 const wrongMaterial = makeMaterial({ hash: 1 });
 const wrong = bridge.bindCreatorSpineMaterial(sourceId, makeComponent(), makeContract(), {

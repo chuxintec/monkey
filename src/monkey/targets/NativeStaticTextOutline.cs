@@ -28,7 +28,7 @@ public sealed class NativeStaticTextOutline : MonoBehaviour
     [Serializable]
     public sealed class Readback
     {
-        public string status;
+        public string status, sourceLabelId;
         public float sourceOutlineWidth;
         public Color sourceOutlineColor;
         public FaceReadback[] faces;
@@ -42,7 +42,9 @@ public sealed class NativeStaticTextOutline : MonoBehaviour
     readonly Dictionary<TMP_FontAsset, MaterialVariant> variants = new Dictionary<TMP_FontAsset, MaterialVariant>();
     readonly Dictionary<TMP_SubMeshUI, SubmeshBaseline> submeshBaselines = new Dictionary<TMP_SubMeshUI, SubmeshBaseline>();
     TMP_Text subscribedTarget;
+    [NonSerialized] string diagnosticSourceLabelId;
     bool applying;
+    [NonSerialized] bool refreshPending;
     Readback lastReadback = new Readback { status = "not_run" };
 
     sealed class MaterialVariant
@@ -65,43 +67,73 @@ public sealed class NativeStaticTextOutline : MonoBehaviour
 
     public void Configure(TMP_Text text, float width, Color color)
     {
+        Configure(text, width, color, null);
+    }
+
+    public void Configure(TMP_Text text, float width, Color color, string sourceLabelId)
+    {
         if (text == null) throw new ArgumentNullException(nameof(text));
         if (float.IsNaN(width) || float.IsInfinity(width) || width < 0f)
             throw new ArgumentOutOfRangeException(nameof(width));
         target = text;
         sourceOutlineWidth = width;
         sourceOutlineColor = color;
+        diagnosticSourceLabelId = sourceLabelId;
         BindTarget();
+        refreshPending = false;
+        // Configure is an explicit importer/runtime call, outside Unity's
+        // serialization validation callbacks, so its requested readback stays
+        // synchronous. OnEnable/OnValidate never call this directly.
         RefreshNow();
     }
 
     void OnEnable()
     {
-        if (target == null) target = GetComponent<TMP_Text>();
+        // Do not force TMP mesh generation from a Unity lifecycle callback:
+        // TMP may create TMP_SubMeshUI children during deserialization/validation.
         BindTarget();
-        if (target != null) RefreshNow();
+        ScheduleSafeRefresh();
     }
 
     void OnDisable()
     {
+        CancelSafeRefresh();
         UnbindTarget();
         ReleaseVariants();
     }
 
     void OnDestroy()
     {
+        CancelSafeRefresh();
         UnbindTarget();
         ReleaseVariants();
     }
 
     void OnValidate()
     {
-        if (target == null) target = GetComponent<TMP_Text>();
-        if (isActiveAndEnabled && target != null)
-        {
-            BindTarget();
-            RefreshNow();
-        }
+        // OnValidate can run inside SerializedObject.ApplyModifiedProperties.
+        // Only mark work pending; mesh generation/component creation belongs in
+        // LateUpdate after Unity has left the serialization consistency scope.
+        if (isActiveAndEnabled && target != null) ScheduleSafeRefresh();
+    }
+
+    void ScheduleSafeRefresh()
+    {
+        if (isActiveAndEnabled && target != null) refreshPending = true;
+    }
+
+    void CancelSafeRefresh()
+    {
+        refreshPending = false;
+    }
+
+    void LateUpdate()
+    {
+        if (!refreshPending) return;
+        refreshPending = false;
+        if (!isActiveAndEnabled || target == null) return;
+        BindTarget();
+        RefreshNow();
     }
 
     void BindTarget()
@@ -127,17 +159,66 @@ public sealed class NativeStaticTextOutline : MonoBehaviour
 
     public Readback RefreshNow()
     {
+        refreshPending = false;
         if (target == null)
         {
             lastReadback = Failure("NATIVE_STATIC_TEXT_OUTLINE_TARGET_MISSING");
             return lastReadback;
         }
         BindTarget();
+        // TMP does not initialize inactive TextMeshProUGUI objects just because
+        // ForceMeshUpdate(ignoreActiveState:true) was called: inactive objects
+        // may not have run Awake and OnPreRenderCanvas returns without building
+        // textInfo. Preserve their explicit inactive outline state without
+        // pretending that glyph material values were rendered/read back.
+        if (!target.enabled || !target.gameObject.activeInHierarchy)
+        {
+            lastReadback = NotVisible("not_visible_inactive",
+                "Outline target is disabled or outside the active hierarchy; no glyph geometry was requested.");
+            return lastReadback;
+        }
+        if (string.IsNullOrEmpty(target.text))
+        {
+            lastReadback = NotVisible("not_visible_empty_text",
+                "Empty source text has no glyph geometry; serialized outline inputs were retained.");
+            return lastReadback;
+        }
+        try
+        {
+            // Imported or cloned TMP labels can carry a serialized reference to
+            // the source label's HideAndDontSave variant. That material is owned
+            // by the old component and may already have been destroyed. TMP
+            // resolves fallback materials while sizing arrays in ForceMeshUpdate,
+            // before HandlePreRenderText/Apply can repair the assignment. Give
+            // this component a live primary variant first.
+            PreparePrimaryMaterialForMesh();
+        }
+        catch (Exception exception)
+        {
+            lastReadback = Failure("NATIVE_STATIC_TEXT_OUTLINE_PRIMARY_MATERIAL_PREPARE_FAILED: "
+                + exception.GetType().Name);
+            return lastReadback;
+        }
         target.ForceMeshUpdate(true, true);
         // The callback normally runs during ForceMeshUpdate. Applying once more
         // guarantees a deterministic readback even when TMP skips unchanged text.
         Apply(target.textInfo);
         return lastReadback;
+    }
+
+    void PreparePrimaryMaterialForMesh()
+    {
+        if (target == null || target.font == null)
+            throw new InvalidOperationException("NATIVE_STATIC_TEXT_OUTLINE_TEXT_UNAVAILABLE");
+        var primary = GetVariant(target.font);
+        bool requiresPaddingUpdate = ConfigureMaterial(primary, target.font, target.fontSize);
+        if (target.fontSharedMaterial != primary)
+        {
+            target.fontSharedMaterial = primary;
+            requiresPaddingUpdate = true;
+        }
+
+        if (requiresPaddingUpdate) target.UpdateMeshPadding();
     }
 
     void Apply(TMP_TextInfo textInfo)
@@ -153,13 +234,14 @@ public sealed class NativeStaticTextOutline : MonoBehaviour
             }
             if (string.IsNullOrEmpty(target.text))
             {
-                lastReadback = new Readback {
-                    status = "not_visible_empty_text",
-                    sourceOutlineWidth = sourceOutlineWidth,
-                    sourceOutlineColor = sourceOutlineColor,
-                    faces = Array.Empty<FaceReadback>(),
-                    diagnostics = new[] { "Empty source text has no glyph geometry; serialized outline inputs were retained." },
-                };
+                lastReadback = NotVisible("not_visible_empty_text",
+                    "Empty source text has no glyph geometry; serialized outline inputs were retained.");
+                return;
+            }
+            if (!target.enabled || !target.gameObject.activeInHierarchy)
+            {
+                lastReadback = NotVisible("not_visible_inactive",
+                    "Outline target is disabled or outside the active hierarchy; no glyph geometry was requested.");
                 return;
             }
             if (textInfo == null || textInfo.characterCount <= 0)
@@ -238,11 +320,24 @@ public sealed class NativeStaticTextOutline : MonoBehaviour
                     {
                         if (submesh == null || submesh.fontAsset != font) continue;
                         if (!submeshBaselines.ContainsKey(submesh))
+                        {
+                            var baselineSource = submesh.fallbackSourceMaterial;
+                            var baselineFallback = submesh.fallbackMaterial;
+                            // A cloned TMP submesh can deserialize references to
+                            // the source component's owned (or already destroyed)
+                            // materials. Never restore those references after this
+                            // component releases its variants.
+                            if (baselineSource == null || IsOwnedMaterial(baselineSource))
+                            {
+                                baselineSource = font.material;
+                                baselineFallback = null;
+                            }
                             submeshBaselines.Add(submesh, new SubmeshBaseline {
                                 submesh = submesh,
-                                sourceMaterial = submesh.fallbackSourceMaterial,
-                                fallbackMaterial = submesh.fallbackMaterial,
+                                sourceMaterial = baselineSource,
+                                fallbackMaterial = baselineFallback,
                             });
+                        }
                         if (submesh.fallbackSourceMaterial != primary || submesh.fallbackMaterial != material)
                         {
                             submesh.fallbackSourceMaterial = primary;
@@ -268,6 +363,7 @@ public sealed class NativeStaticTextOutline : MonoBehaviour
             lastReadback = new Readback {
                 status = rows.TrueForAll(row => row.materialValuesVerified)
                     ? "material_values_applied_and_read_back" : "partial",
+                sourceLabelId = diagnosticSourceLabelId,
                 sourceOutlineWidth = sourceOutlineWidth,
                 sourceOutlineColor = sourceOutlineColor,
                 faces = rows.ToArray(),
@@ -355,11 +451,40 @@ public sealed class NativeStaticTextOutline : MonoBehaviour
     {
         return new Readback {
             status = "failed",
+            sourceLabelId = diagnosticSourceLabelId,
             sourceOutlineWidth = sourceOutlineWidth,
             sourceOutlineColor = sourceOutlineColor,
             faces = Array.Empty<FaceReadback>(),
-            diagnostics = new[] { diagnostic },
+            diagnostics = new[] { diagnostic + ContextDiagnostic() },
         };
+    }
+
+    Readback NotVisible(string status, string reason)
+    {
+        return new Readback {
+            status = status,
+            sourceLabelId = diagnosticSourceLabelId,
+            sourceOutlineWidth = sourceOutlineWidth,
+            sourceOutlineColor = sourceOutlineColor,
+            faces = Array.Empty<FaceReadback>(),
+            diagnostics = new[] { reason + ContextDiagnostic() },
+        };
+    }
+
+    string ContextDiagnostic()
+    {
+        if (target == null) return " [sourceLabel=" + (diagnosticSourceLabelId ?? "unknown") + "; target=null]";
+        int length = target.text == null ? 0 : target.text.Length;
+        int characterCount = target.textInfo == null ? -1 : target.textInfo.characterCount;
+        return " [sourceLabel=" + (diagnosticSourceLabelId ?? "unknown")
+            + "; textLength=" + length
+            + "; textInfoCharacters=" + characterCount
+            + "; enabled=" + target.enabled
+            + "; activeSelf=" + target.gameObject.activeSelf
+            + "; activeInHierarchy=" + target.gameObject.activeInHierarchy
+            + "; richText=" + target.richText
+            + "; maxVisibleCharacters=" + target.maxVisibleCharacters
+            + "; colorAlpha=" + target.color.a + "]";
     }
 
     void ReleaseVariants()

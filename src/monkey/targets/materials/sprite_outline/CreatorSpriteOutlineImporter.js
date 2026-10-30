@@ -24,7 +24,8 @@ function buildSpriteMap(spec, components, nodes, resolveSpriteFrame) {
         const node = nodes.get(component.node);
         const sprite = node && node.getComponent(cc.Sprite);
         const frame = resolveSpriteFrame(binding.spriteFrameSourceId);
-        if (!(sprite instanceof cc.Sprite) || !(frame instanceof cc.SpriteFrame) || sprite.spriteFrame !== frame)
+        if (!(sprite instanceof cc.Sprite) || !(frame instanceof cc.SpriteFrame) ||
+            !bindings.sameSpriteFrame(sprite.spriteFrame, frame))
             throw Error('SPRITE_OUTLINE_SOURCE_FRAME_MISMATCH: ' + binding.sourceId);
         if (Math.abs(frame.rect.width - spec.properties.outlineTextureSize[0]) > 0.01 ||
             Math.abs(frame.rect.height - spec.properties.outlineTextureSize[1]) > 0.01)

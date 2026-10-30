@@ -423,7 +423,7 @@ public static class UnitySystemFonts
 
         var component = label.GetComponent<NativeStaticTextOutline>();
         if (component == null) component = label.gameObject.AddComponent<NativeStaticTextOutline>();
-        component.Configure(label, sourceOutlineWidth, sourceOutlineColor);
+        component.Configure(label, sourceOutlineWidth, sourceOutlineColor, sourceLabelId);
         EditorUtility.SetDirty(component);
         PrefabUtility.RecordPrefabInstancePropertyModifications(component);
         var serializedOutline = new SerializedObject(component);
@@ -436,18 +436,23 @@ public static class UnitySystemFonts
             || serializedOutline.FindProperty("sourceOutlineColor").colorValue != sourceOutlineColor)
             throw new InvalidOperationException("SYSTEM_FONT_OUTLINE_SERIALIZED_STATE_READBACK_MISMATCH: " + sourceLabelId);
         var native = component.LastReadback;
-        if (native != null && native.status == "not_visible_empty_text"
-            && string.IsNullOrEmpty(label.text)
+        bool noGlyphsByEmptyText = native != null && native.status == "not_visible_empty_text"
+            && native.sourceLabelId == sourceLabelId
+            && string.IsNullOrEmpty(label.text);
+        bool noGlyphsByInactiveState = native != null && native.status == "not_visible_inactive"
+            && native.sourceLabelId == sourceLabelId
+            && (!label.enabled || !label.gameObject.activeInHierarchy);
+        if ((noGlyphsByEmptyText || noGlyphsByInactiveState)
             && Mathf.Approximately(native.sourceOutlineWidth, sourceOutlineWidth)
             && native.sourceOutlineColor == sourceOutlineColor)
             return new OutlineReadback {
-                status = "not_visible_empty_text",
+                status = native.status,
                 sourceLabelId = sourceLabelId,
-                textSha256 = Sha256(Encoding.UTF8.GetBytes(string.Empty)),
+                textSha256 = Sha256(Encoding.UTF8.GetBytes(label.text ?? string.Empty)),
                 sourceOutlineWidth = sourceOutlineWidth,
                 sourceOutlineColor = sourceOutlineColor,
                 faces = Array.Empty<OutlineFaceReadback>(),
-                diagnostics = new[] { "Empty source text has no glyph geometry; serialized width/color and primary font binding were validated." },
+                diagnostics = native.diagnostics ?? Array.Empty<string>(),
             };
         if (native == null || native.status != "material_values_applied_and_read_back"
             || native.faces == null || native.faces.Length == 0)
@@ -466,15 +471,16 @@ public static class UnitySystemFonts
                 throw new InvalidOperationException("SYSTEM_FONT_OUTLINE_UNBOUND_RENDER_FONT: " + path);
             foreach (int unicode in row.assignedUnicode ?? Array.Empty<int>())
             {
-                string expectedPath = null;
-                foreach (string candidatePath in allowedPaths)
-                {
-                    var candidate = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(candidatePath);
-                    if (candidate != null && candidate.HasCharacter(unicode)) { expectedPath = candidatePath; break; }
-                }
-                if (expectedPath != path)
+                // TMP's textInfo reports the face it actually selected after
+                // applying its style/typeface and fallback search rules. The
+                // first allowed asset whose lookup contains a codepoint is not
+                // necessarily that face (for example, duplicate glyph coverage
+                // or an alternative typeface can route the rendered character
+                // to a later declared fallback). Verify the reported face is in
+                // the exact declared chain above and that it owns this glyph.
+                if (!row.fontAsset.HasCharacter(unicode))
                     throw new InvalidOperationException("SYSTEM_FONT_OUTLINE_GLYPH_FONT_ASSIGNMENT_MISMATCH: U+"
-                        + unicode.ToString("X4") + " expected=" + (expectedPath ?? "missing") + " actual=" + path);
+                        + unicode.ToString("X4") + " actual=" + path + " actualOwnsGlyph=false");
             }
             faces.Add(new OutlineFaceReadback {
                 fontAssetPath = path,

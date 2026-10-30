@@ -153,6 +153,72 @@ class PrefabSpineMaterialTests(unittest.TestCase):
             self.assertEqual(component_binding["sourceMaterialReferenceSourceId"], "gameAsset:material-uuid")
             self.assertEqual(component_binding["sourceMaterialSourceId"], "internal:material-uuid")
 
+    def test_omitted_materials_uses_pinned_source_engine_default(self):
+        with tempfile.TemporaryDirectory() as temp:
+            manifest, ir, hashes = _fixture(Path(temp))
+            manifest_data = json.loads(manifest.read_text())
+            ir_data = json.loads(ir.read_text())
+            component = manifest_data["assets"][-1]["document"]["instances"][1]["_components"][0]
+            clone = json.loads(json.dumps(component))
+            manifest_data["assets"][-1]["document"]["instances"][1]["_components"].append(clone)
+            ir_data["components"].append({"type": "sp.Skeleton", "sourceId": "gameAsset:prefab-uuid#1/components/1",
+                                          "materials": ["gameAsset:material-uuid"]})
+            component.pop("_materials")
+            ir_data["components"][0]["materials"] = []
+            manifest.write_text(json.dumps(manifest_data), encoding="utf-8")
+            ir.write_text(json.dumps(ir_data), encoding="utf-8")
+            with patch.object(spine_materials, "SPINE_EFFECT_STAGE_HASHES", hashes):
+                result = inspect_spine_materials(manifest, ir)
+            binding = next(row for row in result["binding"]["creator38"]["perComponent"]
+                           if row["sourceComponentId"].endswith("/components/0"))
+            self.assertEqual(binding["sourceMaterialBinding"]["status"], "resolved_source_engine_default")
+            self.assertIsNone(binding["sourceMaterialReferenceSourceId"])
+            self.assertIsNone(binding["sourceMaterialSourceId"])
+            self.assertEqual(binding["sourceMaterialBinding"]["sourcePath"], "extensions/spine/Skeleton.js")
+            self.assertTrue(result["source"]["irComponentCheck"]["exactMatch"])
+
+    def test_dependency_prefab_rows_are_source_pinned_without_claiming_ir_presence(self):
+        with tempfile.TemporaryDirectory() as temp:
+            manifest, ir, hashes = _fixture(Path(temp))
+            manifest_data = json.loads(manifest.read_text())
+            prefab = json.loads(json.dumps(manifest_data["assets"][-1]))
+            prefab.update(sourceId="gameAsset:dependency-prefab", index=2, key="dependency-prefab")
+            prefab["document"]["instances"][1]["_components"][0]["_materials"] = [{"__uuid__": "material-uuid"}]
+            manifest_data["assets"].append(prefab)
+            manifest.write_text(json.dumps(manifest_data), encoding="utf-8")
+            with patch.object(spine_materials, "SPINE_EFFECT_STAGE_HASHES", hashes):
+                result = inspect_spine_materials(manifest, ir, selected_prefab_indices=[1, 2])
+            check = result["source"]["irComponentCheck"]
+            self.assertEqual(check["sourceComponentCount"], 2)
+            self.assertEqual(check["matchedComponentCount"], 1)
+            self.assertEqual(check["sourceManifestOnlyComponentCount"], 1)
+            self.assertTrue(check["exactMatch"])
+
+    def test_explicit_null_or_empty_materials_are_not_rewritten_to_default(self):
+        for invalid in (None, [], [{"__uuid__": "unknown-material-uuid"}]):
+            with self.subTest(invalid=invalid), tempfile.TemporaryDirectory() as temp:
+                manifest, ir, hashes = _fixture(Path(temp))
+                manifest_data = json.loads(manifest.read_text())
+                ir_data = json.loads(ir.read_text())
+                component = manifest_data["assets"][-1]["document"]["instances"][1]["_components"][0]
+                clone = json.loads(json.dumps(component))
+                manifest_data["assets"][-1]["document"]["instances"][1]["_components"].append(clone)
+                ir_data["components"].append({"type": "sp.Skeleton", "sourceId": "gameAsset:prefab-uuid#1/components/1",
+                                              "materials": ["gameAsset:material-uuid"]})
+                component["_materials"] = invalid
+                ir_data["components"][0]["materials"] = []
+                manifest.write_text(json.dumps(manifest_data), encoding="utf-8")
+                ir.write_text(json.dumps(ir_data), encoding="utf-8")
+                with patch.object(spine_materials, "SPINE_EFFECT_STAGE_HASHES", hashes):
+                    result = inspect_spine_materials(manifest, ir)
+                row = next(row for row in result["binding"]["creator38"]["perComponent"]
+                           if row["sourceComponentId"].endswith("/components/0"))
+                expected_state = ("explicit_null" if invalid is None else "explicit_empty"
+                                  if invalid == [] else "explicit_unknown_or_unmatched")
+                self.assertEqual(row["sourceMaterialBinding"]["status"], expected_state)
+                self.assertEqual(result["binding"]["status"], "blocked-by-source-variant-mismatch")
+                self.assertFalse(result["source"]["irComponentCheck"]["exactMatch"])
+
     def test_same_effect_name_with_changed_formula_fails_exact_stage_profile(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

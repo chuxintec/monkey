@@ -58,7 +58,7 @@ public static class UnityPreviewClones
         public bool hasLayoutIndex;
         public string positionEvidenceId;
         public float[] position;
-        public UnityPreviewState.Spec previewState;
+        public UnityPreviewState.OperationState previewState;
         public ColorOperation[] extraOperations;
     }
     [Serializable] public sealed class EvidenceFile { public string path, sha256; public int bytes; }
@@ -111,7 +111,7 @@ public static class UnityPreviewClones
     public delegate GameObject TemplateProvider(string templatePrefabId, string rootSourceId);
     static readonly HashSet<string> LayoutHelpers = new HashSet<string>(StringComparer.Ordinal) {
         "NativeRectConstraints", "NativeTextLineBox", "IntrinsicGridLayoutGroup", "NativeLinearLayoutGroup",
-        "NativeHorizontalProgressFill", "NativeInputBlocker", "NativeInputBlockerSurface", "NativeStaticTextOutline"
+        "NativeHorizontalProgressFill", "NativeInputBlocker", "NativeInputBlockerSurface", "NativeStaticTextOutline", "Monkey.Targets.Spine.UnitySpineGraphicMaterialPresentation"
     };
 
     static void Require(bool condition, string code) { if (!condition) throw new InvalidOperationException(code); }
@@ -327,7 +327,7 @@ public static class UnityPreviewClones
     }
     static Transform[] SourceChildren(Transform parent)
     {
-        return Enumerable.Range(0,parent.childCount).Select(parent.GetChild).Where(child=>!IsGeneratedTextSubmesh(child)).ToArray();
+        return Enumerable.Range(0,parent.childCount).Select(parent.GetChild).Where(child=>!MonkeyImporter.IsGeneratedNativePresentationChild(child)).ToArray();
     }
     static ColorReadback ApplyColor(ColorOperation op,CloneResolver resolve,IDictionary<string,GameObject> map)
     {

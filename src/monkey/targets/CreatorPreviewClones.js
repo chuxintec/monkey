@@ -17,9 +17,12 @@ function colorTarget(op, resolve) {
     const targetKind = op.targetKind || 'component';
     if (targetKind === 'node') {
         const node = resolve(op.targetNodeSourceId || op.sourceId);
-        if (!(node instanceof cc.Node) || !node.color) throw Error('PREVIEW_CLONE_COLOR_TARGET: ' + op.sourceId);
-        return {read: () => [node.color.r, node.color.g, node.color.b, node.color.a],
-            write: value => { node.color = new cc.Color(...value); }};
+        const sprite = resolve(op.targetComponentSourceId);
+        if (!(node instanceof cc.Node) || !(sprite instanceof cc.Sprite) || sprite.node !== node)
+            throw Error('PREVIEW_CLONE_COLOR_TARGET: ' + op.sourceId);
+        // Creator 3 moves the source Node color to the renderer component.
+        return {read: () => [sprite.color.r, sprite.color.g, sprite.color.b, sprite.color.a],
+            write: value => { sprite.color = new cc.Color(...value); }};
     }
     if (targetKind !== 'component') throw Error('PREVIEW_CLONE_COLOR_TARGET_KIND: ' + targetKind);
     const sprite = resolve(op.targetComponentSourceId || op.sourceId);
@@ -38,7 +41,7 @@ function assertStaticOnly(root) {
         if (!(node instanceof cc.Node) || !node.isValid) throw Error('PREVIEW_CLONE_INVALID_NODE');
         for (const component of node.getComponents(cc.Component)) {
             const className = cc.js.getClassName(component.constructor) || '';
-            if (!className.startsWith('cc.') && !className.startsWith('sp.') && component.enabled)
+            if (!className.startsWith('cc.') && !className.startsWith('sp.') && component.enabled && !(className==='MonkeySpineUITransformPreserver' && require('./spine-ui-transform.js').isPreserver(component,cc)))
                 throw Error('PREVIEW_CLONE_ENABLED_SOURCE_BEHAVIOR: ' + className);
         }
         pending.push(...node.children);

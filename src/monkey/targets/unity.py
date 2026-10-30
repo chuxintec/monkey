@@ -452,6 +452,15 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
                 result=bind_sync_prefab_instances(result,sync_manifest,source_ir=ir,source_profile=ir.get('sourceProfile'))
             except SyncPrefabError as error:
                 fail(error.code,error.where,error.detail)
+    from ..prefab_static_asset_dependencies import plan_source_prefab_dependencies, PrefabDependencyError
+    try:
+        dependencies=plan_source_prefab_dependencies(result)
+    except PrefabDependencyError as error:
+        fail(error.code,'sourcePrefabs',str(error.details))
+    result['staticPrefabAssetDependencies']=dependencies
+    prefab_by_id={row['sourceId']:row for row in result.get('sourcePrefabs',[])}
+    result['sourcePrefabs']=[prefab_by_id[sid] for sid in dependencies['order']]
+    result['diagnostics'].extend(diagnostic('STATIC_PREFAB_DEPENDENCY_GAP',row.get('owner')or'sourcePrefabs',str(row)) for row in dependencies['gaps'])
     write_json(out/'plan.json',result)
     return finish(out,result)
 
@@ -489,7 +498,7 @@ def export(plan_path, output):
         target=inside(out,c['target']);target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(read(inside(plan_path.parent,c['source'])))
         metadata='fileFormatVersion: 2\nguid: '+c['guid']+'\n'
         if c['role'] in ('sprite','bitmap-atlas'):
-            metadata+='TextureImporter:\n  serializedVersion: 13\n  externalObjects: {}\n  textureType: 0\n  textureShape: 1\n  alphaSource: 0\n  alphaIsTransparency: 1\n'
+            metadata+='TextureImporter:\n  serializedVersion: 13\n  externalObjects: {}\n  textureType: 0\n  textureShape: 1\n  alphaUsage: 1\n  alphaIsTransparency: 1\n'
         Path(str(target)+'.meta').write_text(metadata,encoding='utf-8')
         ownership.append(dict(path=c['target'],sourceId=c['sourceId'],guid=c['guid']))
     # Shipped sources keep their GUID keys across layouts; only their location follows monkey-project/2.0.0.
@@ -526,12 +535,28 @@ def export(plan_path, output):
         emit_attached(plan_path.parent,plan_path.parent,out)
     from ..prefab_material_pipeline import emit as emit_material
     emit_material(p.get('materialBinding'),plan_path.parent,out)
+    if p.get('staticTimeMaterials'):
+        from ..prefab_static_time_materials import emit as emit_static_time
+        emit_static_time(p['staticTimeMaterials'],plan_path.parent,out)
+        helper_root=out/'Assets/Game/Editor/Conversion/StaticTime'
+        helper_root.mkdir(parents=True,exist_ok=True)
+        for name in ('UnityStaticTimeMaterialBindings.cs','UnityStaticTimeMaterialsIntegration.cs'):
+            dest=helper_root/name
+            dest.write_bytes(files('monkey.targets').joinpath('materials/static_time/'+name).read_bytes())
+            Path(str(dest)+'.meta').write_text('fileFormatVersion: 2\nguid: '+guid(p['namespace'],'static-time-helper/'+name)+'\n')
+
     # Only the typed, finite import instruction subset is sent to the Editor.
     instruction={key:p.get(key,[]) for key in ('designSize','pixelsPerUnit','textures','assets','bitmapFonts','nodes','components','galleryOnly','animations','sourcePrefabs','prefabInstances')}
+    if p.get('spineNativeStage') or p.get('spriteOutlineBinding'):
+        # Editor-only evidence pins for independent native readback verifiers.
+        for key in ('spineNativeStage','sourceManifestPath','sourceManifestSha256','sourceIrSha256'):
+            instruction[key]=p.get(key)
     instruction['systemFontBinding']=p.get('systemFontBinding')
     instruction['staticFontReceiptPath']=(static_fonts or {}).get('portableReceiptRelativePath')
     instruction['staticFontReceiptSha256']=(static_fonts or {}).get('portableReceiptSha256')
     instruction['materialBinding']=(p.get('materialBinding')or {}).get('spec')
+    instruction['sourceManifestSha256']=p.get('sourceManifestSha256')
+    instruction['staticTimeMaterialsJson']=encoded(p['staticTimeMaterials']).decode('utf-8') if p.get('staticTimeMaterials') else None
     instruction['spriteOutlineBindingJson']=encoded(p['spriteOutlineBinding']).decode('utf-8') if p.get('spriteOutlineBinding') else None
     instruction['tmpResources']=dict(packageName='com.unity.ugui',packageVersion='2.6.0',resource='Package Resources/TMP Essential Resources.unitypackage',importMode='package-completion-callback')
     instruction['glyphReadback']='native-quad-padding-v1'
@@ -690,6 +715,28 @@ def verify(candidate, output, level='static'):
                     diagnostics.append(diagnostic('NATIVE_FILE_CHANGED',relative,'Native file differs from saved readback'))
             instruction=load(read(root/standard.locate(m,'importPlan'),max_bytes=128*1024*1024),max_nodes=8_000_000)
             diagnostics.extend(gallery_readback(instruction,rb))
+            from ..prefab_spine_unity_readback import verify as verify_spine_saved
+            diagnostics.extend(verify_spine_saved(instruction,root,rb))
+            from ..prefab_sprite_outline_unity_readback import verify as verify_outline_saved
+            diagnostics.extend(verify_outline_saved(instruction,root,rb))
+            if instruction.get('staticTimeMaterialsJson'):
+                from ..prefab_static_time_materials import verify as verify_static_time
+                time_spec=load(instruction['staticTimeMaterialsJson'].encode('utf-8'))
+                time_path=root/'Analysis/Readback/static-time-materials.json'
+                time_read=load(read(time_path)) if time_path.is_file() else {}
+                expected_owners={b['ownerPrefabId'] for mat in time_spec['materials'] for b in mat['spriteBindings']}
+                owner_rows=time_read.get('prefabs',[])
+                owner_map={row.get('sourcePrefabId'):row for row in owner_rows if isinstance(row,dict)}
+                if len(owner_map)!=len(owner_rows) or set(owner_map)!=expected_owners:
+                    diagnostics.append(diagnostic('STATIC_TIME_MATERIAL_OWNER_MISMATCH',str(time_path),'Saved per-Prefab material denominator differs'))
+                for owner in expected_owners:
+                    local_materials=[]
+                    for mat in time_spec['materials']:
+                        subset=[b for b in mat['spriteBindings'] if b['ownerPrefabId']==owner]
+                        if subset:local_materials.append(dict(mat,spriteBindings=subset))
+                    diagnostics.extend(verify_static_time(dict(time_spec,materials=local_materials),
+                        dict(time_read,materials=owner_map.get(owner,{}).get('materials',[])),'unity'))
+
             from ..code_validation import numeric as verify_numeric
             from ..prefab_material_pipeline import verify as verify_material
             diagnostics.extend(verify_material(instruction.get('materialBinding'),rb.get('materialBinding'),'unity'))

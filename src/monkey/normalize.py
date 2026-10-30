@@ -121,7 +121,7 @@ def normalize(manifest_path, output, *, audio_provider=None):
     result = dict(schemaVersion=1, toolVersion=__version__, sourceProfile=m['sourceProfile'],
                   sourceManifestSha256=sha(stage_bytes(manifest_path)),sourceManifestPath=str(manifest_path),sourceRoots=m.get('sourceRoots',{m['bundle']:m['sourceRoot']}),
                   sourceNames=source_names(m),sourceLocations={a['sourceId']:dict(bundle=a.get('bundle',m['bundle']),importPath=a.get('importPath'),nativePath=a.get('native')) for a in m['assets']}, evidenceFiles=m.get('evidenceFiles',[]),aliases=aliases, assets=[], spriteFrames=[], bitmapFonts=[],materials=[], nodes=[],
-                  components=[], quarantinedAssets=[],prefabInstances=[],prefabOverrideGaps=[],animationSchemaVersion=1,animationClips=[],diagnostics=diagnostics,
+                  components=[], sourceValueObjects=[], quarantinedAssets=[],prefabInstances=[],prefabOverrideGaps=[],animationSchemaVersion=1,animationClips=[],diagnostics=diagnostics,
                   scopeMode='whole-input' if m.get('packageSelection') else 'asset-selection',
                   coordinateConvention=dict(origin='center anchor', x='right', y='up', units='pixels'))
     prefab_resolver=None
@@ -138,7 +138,7 @@ def normalize(manifest_path, output, *, audio_provider=None):
             kind = value.get('__type__', asset.get('kind'))
         else:
             objects, value, kind = [], {}, asset.get('kind')
-        lengths={k:len(result[k]) for k in ('assets','spriteFrames','bitmapFonts','materials','nodes','components','animationClips')}
+        lengths={k:len(result[k]) for k in ('assets','spriteFrames','bitmapFonts','materials','nodes','components','sourceValueObjects','animationClips')}
         try:
             cocos38=m.get('sourceProfile')=='cocos-3.8.7-bundle'
             cocos34=m.get('sourceProfile')=='cocos-3.4.1-bundle'
@@ -252,7 +252,11 @@ def normalize(manifest_path, output, *, audio_provider=None):
                 node_start=len(result['nodes']);component_start=len(result['components'])
                 try:
                     # Nodes/components remain conversion-time data; unknown fields reported downstream.
-                    for index, obj in expand_nodes(objects,sid):
+                    expanded = list(expand_nodes(objects,sid))
+                    component_indices = {v.get('__id__') for _, n in expanded
+                        if isinstance(n,dict) and n.get('__type__') in ('cc.Node','cc.Scene')
+                        for v in n.get('_components',[]) if isinstance(v,dict) and type(v.get('__id__')) is int}
+                    for index, obj in expanded:
                         typ = obj.get('__type__') if isinstance(obj, dict) else None
                         location = f"{asset.get('importPath')}#instances/{index}"
                         if typ in ('cc.Node','cc.Scene'):
@@ -276,6 +280,14 @@ def normalize(manifest_path, output, *, audio_provider=None):
                             result['nodes'].append(node)
                             diagnostics.extend(diagnostic('UNSUPPORTED_NODE_FIELD', location, g, node['sourceId']) for g in gaps)
                         elif typ not in ('cc.Prefab', 'cc.PrefabInfo', 'cc.SceneAsset', None):
+                            if index not in component_indices and 'node' not in obj:
+                                # Referenced serializable values (e.g. ClickEvent)
+                                # are not node components. Preserve their complete
+                                # source payload and identity without inventing a node.
+                                import copy
+                                result['sourceValueObjects'].append(dict(sourceId=sid+'#'+str(index),
+                                    type=typ, sourceData=copy.deepcopy(obj), native='not_run'))
+                                continue
                             component, gaps = component_ir(sid, index, obj, source_profile=m['sourceProfile'])
                             result['components'].append(component)
                             diagnostics.extend(diagnostic('UNSUPPORTED_COMPONENT_SEMANTIC', location, g, component['sourceId']) for g in gaps)

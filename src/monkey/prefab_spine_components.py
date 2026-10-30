@@ -70,6 +70,7 @@ def build_component_binding_plan(
     creator_candidate_manifest_sha256: str | None = None,
     creator_cache_mode_evidence: dict[str, Any] | None = None,
     source_default_evidence: dict[str, Any] | None = None,
+    creator_static_resource_proofs: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Resolve all source Skeleton components into dual-target binding records.
 
@@ -92,6 +93,25 @@ def build_component_binding_plan(
         if not source_id or source_id in creator_by_source:
             raise ValueError(f"missing or duplicate Creator Spine readback sourceId: {source_id}")
         creator_by_source[source_id] = row
+
+    static_resource_by_source: dict[str, dict[str, Any]] = {}
+    for proof in creator_static_resource_proofs or []:
+        if (not isinstance(proof, dict) or proof.get("schemaVersion") != 1
+                or proof.get("profile") != "creator-spine-3.8-v1"
+                or proof.get("status") != "static_resource_identity_verified"
+                or proof.get("nativeImportCompleted") is not True
+                or proof.get("sourceCodeExecuted") is not False
+                or proof.get("dynamicAnimationComplete") is not False
+                or not isinstance(proof.get("spines"), list)):
+            raise ValueError("Creator static resource proof is incomplete or unsupported")
+        for row in proof["spines"]:
+            source_id = row.get("sourceId") if isinstance(row, dict) else None
+            if (not isinstance(source_id, str) or source_id in static_resource_by_source
+                    or row.get("savedReferenceVerified") is not True
+                    or row.get("textureIdentitiesVerified") is not True
+                    or row.get("dynamicPoseStatus") not in {"partial_no_observed_bone_motion", "not_assessed_by_static_proof"}):
+                raise ValueError(f"Creator static resource proof has invalid or duplicate row: {source_id}")
+            static_resource_by_source[source_id] = row
 
     execution_pass = bool(
         creator_execution_result
@@ -137,6 +157,14 @@ def build_component_binding_plan(
                           and not creator.get("diagnostics"))
             creator_status = ("native_readback_verified" if source_hash_ok and runtime_ok and execution_pass
                               else "readback_present_but_proof_incomplete")
+        static_creator = static_resource_by_source.get(source_id)
+        if static_creator is not None:
+            if (static_creator.get("sourceSkeletonSha256") != data.get("skeletonBinarySha256")
+                    or static_creator.get("version") != data.get("spineVersion")):
+                raise ValueError(f"Creator static resource proof differs from source contract: {source_id}")
+            if creator is not None:
+                raise ValueError(f"Creator asset has both animation and static-only proof rows: {source_id}")
+            creator_status = "native_static_resource_readback_verified"
 
         unity = closure_rows.get(source_id)
         unity_status = "source_id_not_in_unity_closure"
@@ -169,16 +197,18 @@ def build_component_binding_plan(
             "creator": {
                 "status": creator_status,
                 "assetType": "sp.SkeletonData",
-                "nativeUuid": creator.get("skeletonUuid") if creator else None,
-                "sourceSkeletonSha256": creator.get("sourceSkeletonSha256") if creator else None,
-                "version": creator.get("version") if creator else None,
-                "savedReferenceVerified": creator.get("savedReferenceVerified") if creator else False,
-                "bones": creator.get("bones") if creator else None,
-                "slots": creator.get("slots") if creator else None,
+                "nativeUuid": (static_creator or creator or {}).get("skeletonUuid"),
+                "sourceSkeletonSha256": (static_creator or creator or {}).get("sourceSkeletonSha256"),
+                "version": (static_creator or creator or {}).get("version"),
+                "savedReferenceVerified": (static_creator or creator or {}).get("savedReferenceVerified", False),
+                "bones": (static_creator or creator or {}).get("bones"),
+                "slots": (static_creator or creator or {}).get("slots"),
                 "probeAnimation": creator.get("animation") if creator else None,
                 "probeDuration": creator.get("duration") if creator else None,
                 "nativePlaybackVerified": bool(creator and creator.get("nativeStateAdvanced") is True
                                                and creator.get("poseChanged") is True),
+                "staticResourceVerified": bool(static_creator),
+                "dynamicPoseStatus": static_creator.get("dynamicPoseStatus") if static_creator else None,
                 "diagnostics": creator.get("diagnostics", []) if creator else [],
                 "candidateManifestSha256": creator_candidate_manifest_sha256,
                 "verificationPass": verification_pass,
@@ -400,7 +430,9 @@ def build_component_binding_plan(
         "staticAssetUnboundComponents": sum(not c["sourceDataAssetId"] for c in components),
         "uniqueStaticDataAssets": len(data_specs),
         "creatorNativeReadback": {
-            "verified": execution_pass and verification_pass,
+            "verified": execution_pass and verification_pass and not creator_static_resource_proofs,
+            "status": "partial_static_resource_readback" if creator_static_resource_proofs else None,
+            "staticResourceProofSourceIds": sorted(static_resource_by_source),
             "executionResultStatus": creator_execution_result.get("status") if creator_execution_result else None,
             "verification": creator_verification.get("editorValidation") if creator_verification else None,
             "diagnostics": creator_verification.get("diagnostics") if creator_verification else None,
@@ -602,9 +634,17 @@ def prepare_spine_emission(
         if len(material_by_component) != len(rows) or set(material_by_component) != expected_ids:
             raise ValueError("Creator material profile component denominator differs from Spine emission")
         for source_id, row in material_by_component.items():
+            source_binding = row.get("sourceMaterialBinding") or ({"status": "explicit"}
+                if isinstance(row.get("sourceMaterialReferenceSourceId"), str) and isinstance(row.get("sourceMaterialSourceId"), str) else {})
+            explicit = source_binding.get("status") == "explicit"
+            source_default = source_binding.get("status") == "resolved_source_engine_default"
             if (row.get("targetMaterialUuid") != "default-spine-material"
-                    or not isinstance(row.get("sourceMaterialReferenceSourceId"), str)
-                    or not isinstance(row.get("sourceMaterialSourceId"), str)
+                    or (explicit and (not isinstance(row.get("sourceMaterialReferenceSourceId"), str)
+                                      or not isinstance(row.get("sourceMaterialSourceId"), str)))
+                    or (source_default and (row.get("sourceMaterialReferenceSourceId") is not None
+                                            or row.get("sourceMaterialSourceId") is not None
+                                            or source_binding.get("sourcePath") != "extensions/spine/Skeleton.js"))
+                    or not (explicit or source_default)
                     or row.get("runtimeMaterialStrategy") != "Creator Spine runtime creates per-slot MaterialInstance over builtin-spine and selects blend factors from component PMA"):
                 raise ValueError(f"Creator material mapping is incomplete or ambiguous for {source_id}")
         material_profile = {

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 from collections import defaultdict
 from collections.abc import Mapping
@@ -17,14 +18,18 @@ _INTERACTABLE_KEYS = ("_N$interactable", "interactable")
 _TARGET_KEYS = ("_N$target", "target")
 _TRANSITION_KEYS = ("_N$transition", "transition")
 _NORMAL_COLOR_KEYS = ("_N$normalColor", "normalColor")
+_ZOOM_SCALE_KEYS = ("zoomScale",)
 _EVENT_KEYS = {"cc.Toggle": ("checkEvents", "clickEvents", "_N$clickEvents"),
                "cc.ToggleContainer": ("checkEvents",)}
 _TOGGLE_MAPPED = {"__type__", "node", "_enabled", "_id", "_objFlags", "_prefab", "_name",
                   "_N$isChecked", "isChecked", "_N$interactable", "interactable", "_N$target", "target",
-                  "checkMark", "_N$transition", "transition", "_N$normalColor", "normalColor",
-                  "checkEvents", "clickEvents", "_N$clickEvents"}
+                  "toggleGroup", "checkMark", "_N$transition", "transition", "_N$normalColor", "normalColor",
+                  "zoomScale", "checkEvents", "clickEvents", "_N$clickEvents"}
 _CONTAINER_MAPPED = {"__type__", "node", "_enabled", "_id", "_objFlags", "_prefab", "_name",
                      "_allowSwitchOff", "allowSwitchOff", "checkEvents"}
+# Include native renderers that do not project to a Unity UI Graphic as well;
+# their presence must fail closed instead of being mistaken for an empty node.
+_TARGET_RENDERER_TYPES = {"cc.Sprite", "cc.Label", "cc.RichText", "cc.Graphics", "sp.Skeleton"}
 
 
 class StaticToggleError(ValueError):
@@ -110,6 +115,37 @@ def _component_ref(value, asset_id, objects, component_ids, expected_type, label
     return identity
 
 
+def _source_node_renderers(node_id, asset_id, objects):
+    """Return source renderer components attached directly to a target node."""
+    match = _COMPONENT_ID.fullmatch(node_id or "")
+    if not match or match.group("asset") != asset_id or match.group("ordinal") is not None:
+        raise StaticToggleError(f"Toggle target node identity is malformed: {node_id!r}")
+    node_index = int(match.group("object"))
+    node = objects[node_index] if node_index < len(objects) else None
+    if not isinstance(node, Mapping) or node.get("__type__") != "cc.Node":
+        return []
+    components = node.get("_components", [])
+    if not isinstance(components, list):
+        raise StaticToggleError(f"Toggle target node has malformed _components: {node_id}")
+    result = []
+    for ordinal, ref in enumerate(components):
+        if isinstance(ref, Mapping) and set(ref) == {"__id__"} and type(ref.get("__id__")) is int:
+            index = ref["__id__"]
+            obj = objects[index] if 0 <= index < len(objects) else None
+            if not isinstance(obj, Mapping):
+                raise StaticToggleError(f"Toggle target component reference is invalid: {node_id}")
+            typ = obj.get("__type__")
+            source_id = _source_id(asset_id, index)
+        elif isinstance(ref, Mapping):
+            typ = ref.get("__type__")
+            source_id = f"{asset_id}#{node_index}/components/{ordinal}"
+        else:
+            raise StaticToggleError(f"Toggle target component entry is malformed: {node_id}")
+        if typ in _TARGET_RENDERER_TYPES:
+            result.append(source_id)
+    return result
+
+
 def _json(value):
     return json.dumps(value, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
 
@@ -158,7 +194,7 @@ def prepare(source_manifest_path, plan, target, output):
     toggle_rows = []
     containers_by_node = defaultdict(list)
     toggles_by_node = defaultdict(list)
-    source_cache = {}
+    toggle_contexts = {}
     for source_id, component in components.items():
         typ = component.get("type")
         if typ not in _TYPES:
@@ -178,11 +214,20 @@ def prepare(source_manifest_path, plan, target, output):
             check_mark = _component_ref(raw.get("checkMark"), asset_id, objects, component_ids, "cc.Sprite", "Toggle.checkMark")
             target_present, target_value, _ = _pick(raw, _TARGET_KEYS, "Toggle.target")
             target_node_id = _node_ref(target_value, asset_id, objects, "Toggle.target") if target_present else None
+            target_renderer_ids = _source_node_renderers(target_node_id, asset_id, objects) if target_node_id else []
+            source_toggle_enabled = raw.get("_enabled", True)
+            if type(source_toggle_enabled) is not bool:
+                raise StaticToggleError(f"Toggle source enabled state must be bool: {source_id}")
+            explicit_group = raw.get("toggleGroup")
             transition_present, transition, _ = _pick(raw, _TRANSITION_KEYS, "Toggle.transition")
             if transition_present and type(transition) is not int:
                 raise StaticToggleError(f"Toggle transition must be an integer: {source_id}")
             color_present, color_raw, _ = _pick(raw, _NORMAL_COLOR_KEYS, "Toggle.normalColor")
             color_value = _color(color_raw, "Toggle.normalColor") if color_present else {"r": 255, "g": 255, "b": 255, "a": 255, "packed": 0xFFFFFFFF}
+            zoom_scale_present, zoom_scale_raw, _ = _pick(raw, _ZOOM_SCALE_KEYS, "Toggle.zoomScale")
+            zoom_scale = zoom_scale_raw if zoom_scale_present else 1.2
+            if type(zoom_scale) not in (int, float) or not math.isfinite(zoom_scale):
+                raise StaticToggleError(f"Toggle zoomScale must be a finite number: {source_id}")
             event_keys = [key for key in _EVENT_KEYS[typ] if key in raw]
             dynamic_events = {key: raw[key] for key in event_keys}
             gaps = []
@@ -198,6 +243,12 @@ def prepare(source_manifest_path, plan, target, output):
                 raise StaticToggleError(f"Toggle target is absent from plan nodes: {target_node_id}")
             if event_keys:
                 gaps.append("dynamic_toggle_events_not_executed")
+            # Cocos 2.4 Toggle uses an explicit legacy ToggleGroup first, then
+            # falls back to a ToggleContainer on the direct parent node. The
+            # legacy component is outside this native static carrier, so never
+            # bind the fallback container when a non-null explicit group wins.
+            if explicit_group is not None:
+                gaps.append("explicit_toggle_group_reference_unsupported")
             unmapped = sorted(set(raw) - _TOGGLE_MAPPED)
             if unmapped:
                 gaps.append("source_fields_preserved_not_native_mapped:" + ",".join(unmapped))
@@ -210,6 +261,9 @@ def prepare(source_manifest_path, plan, target, output):
                        "checkMarkPresent": "checkMark" in raw, "checkMarkSourceId": check_mark,
                        "checkMarkSourceDefaultVerified": "checkMark" not in raw,
                        "targetPresent": target_present, "targetSourceId": target_node_id,
+                       "targetHasSourceRenderer": bool(target_renderer_ids),
+                       "targetRendererSourceIds": target_renderer_ids,
+                       "sourceToggleEnabled": source_toggle_enabled,
                        "targetSourceDefaultVerified": not target_present,
                        "transitionPresent": transition_present, "transitionValue": transition,
                        "transitionSourceDefaultVerified": not transition_present,
@@ -217,17 +271,26 @@ def prepare(source_manifest_path, plan, target, output):
                        "targetTransitionMapping": "Unity scale transition is inactive in this disabled static carrier; source enum/name remain in binding" if target == "unity" and transition == 3 else "native enum mapped",
                        "normalColorPresent": color_present, "normalColorValue": color_value,
                        "normalColorSourceDefaultVerified": not color_present,
+                       "zoomScalePresent": zoom_scale_present, "zoomScaleValue": zoom_scale,
+                       "zoomScaleSourceDefaultVerified": not zoom_scale_present,
                        "sourceTransitionName": {0: "NONE", 1: "COLOR", 2: "SPRITE", 3: "SCALE"}.get(transition),
                        "sourceDefaultsEvidence": {"version": "2.4.15", "CCToggle.js": "_N$isChecked default true",
-                           "CCButton.js": "interactable default true; transition NONE; normalColor WHITE; target null",
+                           "CCButton.js": "interactable default true; transition NONE; normalColor WHITE; target null; duration 0.1",
+                           "CCButton.zoomScale": "inherited Toggle.zoomScale; default 1.2",
                            "CCToggleContainer.js": "allowSwitchOff default false"},
-                       "groupSourceId": None, "groupNodeSourceId": None, "dynamicEventsJson": _json(dynamic_events),
+                       "groupSourceId": None, "groupNodeSourceId": None,
+                       "explicitToggleGroupPresent": explicit_group is not None,
+                       "dynamicEventsJson": _json(dynamic_events),
                        "sourceFieldsJson": _json(raw), "gaps": gaps,
                        "enabled": False, "dynamicBehaviorComplete": False}
             binding["staticGaps"] = [gap for gap in gaps if not gap.startswith("dynamic_")]
             binding["staticComplete"] = not binding["staticGaps"]
             toggle_rows.append(binding)
             toggles_by_node[node_id].append(binding)
+            match = _COMPONENT_ID.fullmatch(node_id)
+            if not match:
+                raise StaticToggleError(f"Toggle source identity cannot be tied to a serialized owner node: {source_id}")
+            toggle_contexts[source_id] = (asset_id, objects, int(match.group("object")))
         else:
             allow_present, allow_value, _ = _pick(raw, ("_allowSwitchOff", "allowSwitchOff"), "ToggleContainer.allowSwitchOff")
             if allow_present and type(allow_value) is not bool:
@@ -251,24 +314,56 @@ def prepare(source_manifest_path, plan, target, output):
             toggle_rows.append(binding)
             containers_by_node[node_id].append(binding)
 
-    parent = {sid: row.get("parent") for sid, row in nodes.items()}
     for toggle in (row for row in toggle_rows if row["kind"] == "cc.Toggle"):
-        node_id = toggle["nodeSourceId"]
-        ancestor = node_id
-        found = []
-        while ancestor is not None:
-            found.extend(containers_by_node.get(ancestor, []))
-            ancestor = parent.get(ancestor)
-        if len(found) > 1:
-            raise StaticToggleError(f"Toggle has multiple ToggleContainer ancestors: {toggle['sourceId']}")
-        if found:
-            container = found[0]
-            if parent.get(node_id) != container["nodeSourceId"]:
-                toggle["gaps"].append("toggle_container_not_direct_parent")
-            else:
-                toggle["groupSourceId"] = container["sourceId"]
-                toggle["groupNodeSourceId"] = container["nodeSourceId"]
-                container["memberToggleSourceIds"].append(toggle["sourceId"])
+        asset_id, objects, node_index = toggle_contexts[toggle["sourceId"]]
+        owner_node = objects[node_index]
+        parent_ref = owner_node.get("_parent") if isinstance(owner_node, Mapping) else None
+        parent_index = parent_ref.get("__id__") if isinstance(parent_ref, Mapping) and set(parent_ref) == {"__id__"} else None
+        parent_source_id = _source_id(asset_id, parent_index) if type(parent_index) is int else None
+        if parent_source_id != nodes[toggle["nodeSourceId"]].get("parent"):
+            raise StaticToggleError(f"Toggle source parent differs from target plan: {toggle['sourceId']}")
+
+        parent_node = objects[parent_index] if type(parent_index) is int and 0 <= parent_index < len(objects) else None
+        raw_groups = []
+        if isinstance(parent_node, Mapping) and parent_node.get("__type__") == "cc.Node":
+            for ordinal, component_ref in enumerate(parent_node.get("_components") or []):
+                candidate_ids = {f"{asset_id}#{parent_index}/components/{ordinal}"}
+                if isinstance(component_ref, Mapping) and set(component_ref) == {"__id__"} and type(component_ref.get("__id__")) is int:
+                    index = component_ref["__id__"]
+                    if index < 0 or index >= len(objects):
+                        raise StaticToggleError(f"Toggle parent has an invalid source component reference: {toggle['sourceId']}")
+                    raw_component = objects[index]
+                    candidate_ids.add(_source_id(asset_id, index))
+                elif isinstance(component_ref, Mapping) and isinstance(component_ref.get("__type__"), str):
+                    # Some Creator 2.4 pack records inline a component object in
+                    # Node._components instead of storing a separate __id__ row.
+                    raw_component = component_ref
+                else:
+                    raise StaticToggleError(f"Toggle parent has a malformed source component reference: {toggle['sourceId']}")
+                if isinstance(raw_component, Mapping) and raw_component.get("__type__") == "cc.ToggleContainer":
+                    raw_groups.append((candidate_ids, ordinal, raw_component))
+        if len(raw_groups) > 1:
+            raise StaticToggleError(f"Toggle parent has multiple source ToggleContainers: {toggle['sourceId']}")
+        # An explicit non-null cc.ToggleGroup takes precedence over the parent
+        # ToggleContainer in Creator 2.4. Do not manufacture a different group.
+        if toggle.get("explicitToggleGroupPresent"):
+            continue
+        if raw_groups:
+            candidate_ids, ordinal, _ = raw_groups[0]
+            planned = [source_id for source_id in candidate_ids if source_id in components]
+            if len(planned) != 1:
+                raise StaticToggleError(f"Toggle's source parent ToggleContainer is missing or ambiguous in the target plan: {toggle['sourceId']}")
+            group_source_id = planned[0]
+            group_component = components[group_source_id]
+            if group_component.get("type") != "cc.ToggleContainer" or group_component.get("node") != parent_source_id:
+                raise StaticToggleError(f"Toggle's source parent ToggleContainer identity differs in the target plan: {toggle['sourceId']}")
+            group_rows = [row for row in containers_by_node.get(parent_source_id, []) if row["sourceId"] == group_source_id]
+            if len(group_rows) != 1:
+                raise StaticToggleError(f"Toggle's exact source ToggleContainer binding is absent: {toggle['sourceId']}")
+            container = group_rows[0]
+            toggle["groupSourceId"] = container["sourceId"]
+            toggle["groupNodeSourceId"] = container["nodeSourceId"]
+            container["memberToggleSourceIds"].append(toggle["sourceId"])
     for node_id, rows in toggles_by_node.items():
         if len(rows) > 1:
             raise StaticToggleError(f"multiple source Toggles on one node are ambiguous for native readback: {node_id}")
@@ -279,7 +374,8 @@ def prepare(source_manifest_path, plan, target, output):
                 "sources": {"toggle": "https://github.com/cocos/cocos-engine/blob/v2.4.15/cocos2d/core/components/CCToggle.js",
                             "button": "https://github.com/cocos/cocos-engine/blob/v2.4.15/cocos2d/core/components/CCButton.js",
                             "toggleContainer": "https://github.com/cocos/cocos-engine/blob/v2.4.15/cocos2d/core/components/CCToggleContainer.js",
-                            "color": "https://github.com/cocos/cocos-engine/blob/v2.4.15/cocos2d/core/value-types/color.ts"}},
+                            "color": "https://github.com/cocos/cocos-engine/blob/v2.4.15/cocos2d/core/value-types/color.ts"},
+            "groupResolution": "Cocos 2.4.15 cc.Toggle prefers explicit toggleGroup; otherwise its _toggleContainer fallback queries the direct parent for cc.ToggleContainer. Non-null explicit ToggleGroup references are preserved but not statically mapped."},
             "sourceProfile": manifest.get("sourceProfile"), "sourceVersion": manifest.get("sourceVersion"),
             "bindings": bindings, "diagnostics": [
                 {"code": "DYNAMIC_TOGGLE_GAP" if gap.startswith("dynamic_") else "STATIC_TOGGLE_GAP",

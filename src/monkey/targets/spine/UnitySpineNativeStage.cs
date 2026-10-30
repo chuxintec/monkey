@@ -16,11 +16,34 @@ namespace Monkey.Targets.Spine
             public string contract;
             public string sourceManifestSha256;
             public string normalizedIrSha256;
+            public RuntimeInfo runtime;
             public string visualPolicy;
             public bool persistentVisiblePose;
             public VisiblePoseEvidence persistentVisiblePoseEvidence;
             public DataAssetRow[] dataAssets;
             public ComponentRow[] components;
+        }
+
+        [Serializable] public sealed class RuntimeInfo
+        {
+            public EditorVariant editorVariant;
+        }
+
+        [Serializable] public sealed class EditorVariant
+        {
+            public string status;
+            public AssemblyLoadVerification assemblyLoadVerification;
+        }
+
+        [Serializable] public sealed class AssemblyLoadVerification
+        {
+            public string status;
+            public string expectedAssemblyPath;
+            public string expectedAssemblySha256;
+            public string expectedCoreAssemblyPath;
+            public string expectedCoreAssemblySha256;
+            public bool expectedUnityEditorReference;
+            public string[] requiredActualFields;
         }
 
         [Serializable] public sealed class VisiblePoseEvidence
@@ -47,6 +70,7 @@ namespace Monkey.Targets.Spine
             public string sourceComponentId;
             public string sourcePrefabId;
             public string sourceNodeId;
+            public TemplateOrigin templateOrigin;
             public string sourceNodePath;
             public string sourceDataAssetId;
             public bool sourceHasStaticDataReference;
@@ -56,6 +80,15 @@ namespace Monkey.Targets.Spine
             public string rendererKind;
             public FieldBinding[] targetFieldBindings;
             public FieldGap[] fieldGaps;
+        }
+
+        [Serializable] public sealed class TemplateOrigin
+        {
+            public string sourceComponentId;
+            public string sourcePrefabId;
+            public string sourceNodeId;
+            public string[] componentOriginChain;
+            public string[] nodeOriginChain;
         }
 
         [Serializable] public sealed class FieldBinding
@@ -80,6 +113,9 @@ namespace Monkey.Targets.Spine
             public string sourceId;
             public string code;
             public string message;
+            public string phase;
+            public string exceptionType;
+            public string stackTrace;
         }
 
         public sealed class CreateResult
@@ -115,6 +151,17 @@ namespace Monkey.Targets.Spine
                 plan.persistentVisiblePoseEvidence.runtimeVersion != "3.8.99" ||
                 plan.persistentVisiblePoseEvidence.targetPolicy != "keep_native_renderer_enabled_and_set_timeScale_zero; preserve verified sourceTimeScale in identity/readback; no recovered game behavior" ||
                 plan.components.Any(row => row == null || !row.persistentVisiblePose || !row.sourceTimeScaleVerified ||
+                                           String.IsNullOrWhiteSpace(row.sourceComponentId) || String.IsNullOrWhiteSpace(row.sourcePrefabId) ||
+                                           String.IsNullOrWhiteSpace(row.sourceNodeId) || row.templateOrigin == null ||
+                                           String.IsNullOrWhiteSpace(row.templateOrigin.sourceComponentId) ||
+                                           String.IsNullOrWhiteSpace(row.templateOrigin.sourcePrefabId) ||
+                                           String.IsNullOrWhiteSpace(row.templateOrigin.sourceNodeId) ||
+                                           row.templateOrigin.componentOriginChain == null || row.templateOrigin.componentOriginChain.Length < 1 ||
+                                           row.templateOrigin.nodeOriginChain == null || row.templateOrigin.nodeOriginChain.Length < 1 ||
+                                           row.templateOrigin.componentOriginChain[0] != row.sourceComponentId ||
+                                           row.templateOrigin.componentOriginChain[row.templateOrigin.componentOriginChain.Length - 1] != row.templateOrigin.sourceComponentId ||
+                                           row.templateOrigin.nodeOriginChain[0] != row.sourceNodeId ||
+                                           row.templateOrigin.nodeOriginChain[row.templateOrigin.nodeOriginChain.Length - 1] != row.templateOrigin.sourceNodeId ||
                                            Double.IsNaN(row.sourceTimeScale) || Double.IsInfinity(row.sourceTimeScale)))
                 throw new InvalidOperationException("SPINE_NATIVE_STAGE_VISUAL_POLICY_OR_SOURCE_TIME_SCALE_INVALID");
             if (plan.components.Select(row => row.sourceComponentId).Distinct(StringComparer.Ordinal).Count() != plan.components.Length ||
@@ -147,10 +194,28 @@ namespace Monkey.Targets.Spine
                 }
                 catch (Exception error)
                 {
-                    result.gaps.Add(new StageGap { sourceId = row.sourceAssetId, code = "SPINE_DATA_ASSET_CREATE_FAILED", message = error.GetType().Name + ": " + error.Message });
+                    var factoryError = error as UnitySpineNativeFactory.DataAssetCreateException;
+                    var originalType = factoryError == null ? error.GetType().FullName : factoryError.originalExceptionType;
+                    var originalStack = factoryError == null ? error.ToString() : factoryError.originalStackTrace;
+                    var phase = factoryError == null ? "factory_input_or_existing_asset_validation" : factoryError.phase;
+                    result.gaps.Add(new StageGap {
+                        sourceId = row.sourceAssetId,
+                        code = "SPINE_DATA_ASSET_CREATE_FAILED",
+                        message = "phase=" + phase + "; " + error.GetType().Name + ": " + error.Message,
+                        phase = phase,
+                        exceptionType = originalType,
+                        stackTrace = BoundDiagnosticText(originalStack),
+                    });
                 }
             }
             return result;
+        }
+
+        static string BoundDiagnosticText(string text)
+        {
+            if (String.IsNullOrEmpty(text)) return String.Empty;
+            const int maxChars = UnitySpineNativeFactory.DiagnosticStackMaxChars;
+            return text.Length <= maxChars ? text : text.Substring(0, maxChars) + "\n...[bounded]";
         }
 
         /// <summary>
@@ -235,7 +300,8 @@ namespace Monkey.Targets.Spine
                 var readback = UnitySpineNativeFactory.ReadComponent(row.sourceComponentId, row.sourceDataAssetId,
                     component, asset, row.sourceHasStaticDataReference,
                     ToTargetFields(row.targetFieldBindings, row.persistentVisiblePose),
-                    SourceFieldGapStrings(row.fieldGaps), dataReadback, row.persistentVisiblePose);
+                    null, dataReadback, row.persistentVisiblePose);
+                AddFieldGaps(readback, row.fieldGaps);
                 result.components.Add(readback);
                 foreach (var gap in readback.gaps) result.gaps.Add(new StageGap { sourceId = row.sourceComponentId, code = "SPINE_COMPONENT_READBACK_GAP", message = gap });
             }
@@ -272,20 +338,36 @@ namespace Monkey.Targets.Spine
             return result;
         }
 
-        static string[] SourceFieldGapStrings(FieldGap[] rows)
-        {
-            return (rows ?? Array.Empty<FieldGap>()).Where(row => row != null)
-                .Select(row => "source_field_unmapped:" + row.sourceProperty + ":" + row.status).ToArray();
-        }
-
         static void AddFieldGaps(UnitySpineNativeFactory.ComponentReadback readback, FieldGap[] rows)
         {
             if (readback == null || rows == null || rows.Length == 0) return;
             var gaps = new List<string>(readback.gaps ?? Array.Empty<string>());
-            foreach (var gap in SourceFieldGapStrings(rows)) if (!gaps.Contains(gap)) gaps.Add(gap);
+            var sourceOnly = new List<string>(readback.sourceOnlyFieldGaps ?? Array.Empty<string>());
+            bool everyGapExplicitlyAllowlisted = true;
+            for (int index = 0; index < rows.Length; index++)
+            {
+                var row = rows[index];
+                if (row == null) { everyGapExplicitlyAllowlisted = false; continue; }
+                var gap = "source_field_unmapped:" + row.sourceProperty + ":" + row.status;
+                if (!gaps.Contains(gap)) gaps.Add(gap);
+                if (IsExplicitlyAllowedSourceOnlyFieldGap(row))
+                {
+                    if (!sourceOnly.Contains(gap)) sourceOnly.Add(gap);
+                }
+                else everyGapExplicitlyAllowlisted = false;
+            }
             readback.gaps = gaps.ToArray();
+            readback.sourceOnlyFieldGaps = sourceOnly.ToArray();
+            readback.mappedStaticFieldsVerified &= everyGapExplicitlyAllowlisted;
             readback.fieldsVerified = false;
             readback.nativeComplete = false;
+        }
+
+        static bool IsExplicitlyAllowedSourceOnlyFieldGap(FieldGap row)
+        {
+            if (row == null) return false;
+            return row.sourceProperty == "playTimes" && row.status == "source_only_no_same_component_field" ||
+                row.sourceProperty == "caching" && row.status == "source_only_runtime_cache_mapping_unresolved";
         }
     }
 }

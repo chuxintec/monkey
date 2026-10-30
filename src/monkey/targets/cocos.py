@@ -237,6 +237,15 @@ def plan(ir_path,namespace,output,bindings_path=None,animation_selection=None,la
                 result=bind_sync_prefab_instances(result,sync_manifest,source_ir=ir,source_profile=ir.get('sourceProfile'))
             except SyncPrefabError as error:
                 fail(error.code,error.where,error.detail)
+    from ..prefab_static_asset_dependencies import plan_source_prefab_dependencies, PrefabDependencyError
+    try:
+        dependencies=plan_source_prefab_dependencies(result)
+    except PrefabDependencyError as error:
+        fail(error.code,'sourcePrefabs',str(error.details))
+    result['staticPrefabAssetDependencies']=dependencies
+    prefab_by_id={row['sourceId']:row for row in result.get('sourcePrefabs',[])}
+    result['sourcePrefabs']=[prefab_by_id[sid] for sid in dependencies['order']]
+    result['diagnostics'].extend(diagnostic('STATIC_PREFAB_DEPENDENCY_GAP',row.get('owner')or'sourcePrefabs',str(row)) for row in dependencies['gaps'])
     write_json(out/'plan.json',result);return finish(out,result)
 
 
@@ -269,8 +278,15 @@ def export(plan_path,output):
         emit_attached(path.parent,path.parent,out)
     from ..prefab_material_pipeline import emit as emit_material
     emit_material(p.get('materialBinding'),path.parent,out)
+    from ..prefab_static_time_materials import emit as emit_static_time
+    emit_static_time(p.get('staticTimeMaterials'),path.parent,out)
     from ..prefab_spine_pipeline import emit as emit_spine
     emit_spine(p.get('spineBinding'),path.parent,out)
+    if p.get('spineBinding'):
+        runtime_dir=out/'assets/Game/Scripts/Presentation/Recovered/Spine'
+        runtime_dir.mkdir(parents=True,exist_ok=True)
+        for name in ('CreatorSpineUITransformPreserver.ts','CreatorSpineUITransformPreserver.ts.meta'):
+            (runtime_dir/name).write_bytes(files('monkey.targets').joinpath('spine/'+name).read_bytes())
     project_id=identity(p['namespace'],'project')
     write_json(out/'package.json',dict(name='monkey-native-candidate',version='3.8.8',uuid=project_id,creator=dict(version='3.8.8')))
     write_json(out/'settings/v2/packages/project.json',dict(__version__='1.0.6',general=dict(designResolution=dict(width=p['designSize'][0],height=p['designSize'][1]))))
@@ -309,14 +325,20 @@ def export(plan_path,output):
     (ext/'animation.js').write_bytes(files('monkey.targets').joinpath('CreatorAnimation.js').read_bytes())
     (ext/'resources.js').write_bytes(files('monkey.targets').joinpath('CreatorResources.js').read_bytes())
     (ext/'progress.js').write_bytes(files('monkey.targets').joinpath('CreatorProgress.js').read_bytes())
+    if p.get('staticTimeMaterials'):
+        (ext/'static-time-materials.js').write_bytes(files('monkey.targets').joinpath('materials/static_time/CreatorStaticTimeMaterials.js').read_bytes())
     (ext/'material-bindings.js').write_bytes(files('monkey.targets').joinpath('materials/ui_color/CreatorMaterialBindings.js').read_bytes())
     (ext/'spine-bindings.js').write_bytes(files('monkey.targets').joinpath('spine/creator_spine_binding.js').read_bytes())
+    (ext/'spine-ui-transform.js').write_bytes(files('monkey.targets').joinpath('spine/CreatorSpineUITransformBindings.js').read_bytes())
     write_json(ext/'package.json',dict(package_version=2,version='0.2.0',name='monkey-import',main='./main.js',
         contributions=dict(scene=dict(script='./scene.js'),menu=[dict(path='Monkey',label='Import isolated candidate',message='import-candidate')],
                            messages={'import-candidate':dict(methods=['importCandidate'])})))
     write_json(ext/'import-plan.json',{k:p[k] for k in ['schemaVersion','targetProfile','designSize','assets','nodes','components'] }|dict(resourceProbes=p.get('resourceProbes'),rendererBudget=p.get('rendererBudget'),projectUuid=project_id,animations=p.get('animations',[]),sourcePrefabs=p.get('sourcePrefabs',[]),prefabInstances=p.get('prefabInstances',[]),prefabRelationshipReadback='creator-native-fileid-v1',uiGeometryReadback='native-ui-layout-roundtrip-v1',sceneGeometryReadback='full-local-v1',bitmapPageReadback='sprite-frame-v1',spriteMeshReadback='native-rect-mesh-v1',outputPaths=standard.creator_output_paths()))
     from .dynamic_ui import driven_fields
     instruction_path=ext/'import-plan.json';instruction=load(instruction_path.read_bytes())
+    instruction['syncPrefabBindings']=p.get('syncPrefabBindings',[])
+    instruction['staticPrefabAssetDependencies']=p.get('staticPrefabAssetDependencies')
+    instruction['staticTimeMaterials']=p.get('staticTimeMaterials')
     instruction['previewState']=p.get('previewState')
     instruction['previewStates']=p.get('previewStates')
     instruction['toggleBinding']=p.get('toggleBinding')
@@ -450,6 +472,10 @@ def verify(candidate,output,level='static'):
             code_gaps=verify_numeric(plan['components'],rb.get('numericCodeBindings'),'cocos','scene',rb.get('numericCodeExercise',[]))
             if code_gaps:good=False;diagnostics.extend(code_gaps)
             good=good and standard.locate(m,'previewScene','creator') in native and bool(rb.get('sceneUuid'))
+            if plan.get('staticTimeMaterials'):
+                from ..prefab_static_time_materials import verify as verify_static_time
+                static_time_gaps=verify_static_time(plan['staticTimeMaterials'],rb.get('staticTimeMaterials'),'creator')
+                diagnostics.extend(static_time_gaps);good=good and not static_time_gaps
             actual_prefabs={v['sourceId']:v for v in rb.get('sourcePrefabs',[])}
             expected_prefabs={v['sourceId']:v for v in plan.get('sourcePrefabs',[])}
             if set(actual_prefabs)!=set(expected_prefabs):good=False

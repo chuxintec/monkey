@@ -47,6 +47,16 @@ class StaticRichTextTests(unittest.TestCase):
         self.assertTrue(result["convertible"], result["gaps"])
         self.assertEqual(result["unityMarkup"], "<size=50>Creator</size>")
 
+    def test_creator_24_color_short_close_is_normalized(self):
+        result = convert_static_richtext({
+            "__type__": "cc.RichText",
+            "_N$string": "<color=#cb945a>建造</c><color=#de551f>5</color><color=#cb945a>次</c>",
+        }, source_id="fixture#creator-color-short-close", font_binding=self.binding_for("建造5次"))
+        self.assertTrue(result["contentConvertible"], result["gaps"])
+        self.assertTrue(result["renderReady"], result["gaps"])
+        self.assertEqual(result["plainText"], "建造5次")
+        self.assertEqual(result["creatorMarkup"], "<color=#cb945a>建造</color><color=#de551f>5</color><color=#cb945a>次</color>")
+
     def test_img_event_outline_and_unknown_tags_fail_closed(self):
         for markup in (
             "before<img src='icon' />after",

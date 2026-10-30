@@ -1,5 +1,7 @@
 """Finite conversion-time AnimationClip subset. No source callbacks or runtime evaluation."""
 import math
+import struct
+import sys
 from ..io import diagnostic
 from ..sources.compiled import fail, ParseError
 
@@ -207,6 +209,69 @@ def sample(keys,time):
     return keys[-1]['value']
 
 
+def _float32_value(value):
+    """Return the exact value stored by Creator's Float32Array curve data."""
+    try:return struct.unpack('<f',struct.pack('<f',value))[0]
+    except (OverflowError,struct.error):return math.inf if value>0 else -math.inf
+
+
+def _float32_ulp(value):
+    """Return the positive Float32 spacing at value's magnitude."""
+    rounded=abs(_float32_value(value))
+    if not math.isfinite(rounded):return 0.0
+    bits=struct.unpack('<I',struct.pack('<f',rounded))[0]
+    if bits>=0x7f7fffff:return 0.0
+    following=struct.unpack('<f',struct.pack('<I',bits+1))[0]
+    return following-rounded
+
+
+def _native_probe_float32_bound(track,probe):
+    """Bound probe drift from Float32 storage and native curve evaluation.
+
+    Creator stores RealCurve key times and values in Float32Arrays. Probe input
+    and evaluated values can also cross a Float32 boundary in the native curve
+    path. Re-sampling the quantized local segment for both double and Float32
+    probe/output forms bounds endpoint value rounding, local-slope time error,
+    and output rounding without a global epsilon. Unity's linear tangent mode
+    evaluates a tangent-defined curve; its native Float32 Hermite arithmetic
+    adds a few local ULPs beyond the quantized linear reference. The four-ULP
+    allowance is measured at this probe's adjacent key/value scale, not clip
+    or channel scale. This applies only to probe values; native key arrays,
+    bindings and interpolation modes remain independently checked.
+    """
+    keys=track.get('keys',[]);time=probe.get('time')
+    if len(keys)<2 or type(time) not in (int,float) or not math.isfinite(time):return 0.0
+    rounded=[]
+    for key in keys:
+        kt=key.get('time');kv=key.get('value')
+        if type(kt) not in (int,float) or type(kv) not in (int,float):return 0.0
+        rt,rv=_float32_value(kt),_float32_value(kv)
+        if not math.isfinite(rt) or not math.isfinite(rv):return 0.0
+        rounded.append(dict(time=rt,value=rv,interpolation=key.get('interpolation')))
+    if any(a['time']>=b['time'] for a,b in zip(rounded,rounded[1:])):return 0.0
+    expected=probe.get('value')
+    if type(expected) not in (int,float) or not math.isfinite(expected):return 0.0
+    candidates=[]
+    for query_time in {time,_float32_value(time)}:
+        if not math.isfinite(query_time):return 0.0
+        value=sample(rounded,query_time)
+        if not math.isfinite(value):return 0.0
+        candidates.extend((value,_float32_value(value)))
+    candidates=[value for value in candidates if math.isfinite(value)]
+    if not candidates:return 0.0
+    # Double arithmetic contributes only a tiny relative allowance; native
+    # interpolation arithmetic is bounded separately at local Float32 scale.
+    arithmetic=16*sys.float_info.epsilon*max(1.0,abs(expected),*(abs(x) for x in candidates))
+    query=_float32_value(time)
+    nearby=[abs(expected),*(abs(value) for value in candidates)]
+    for left,right in zip(rounded,rounded[1:]):
+        if left['time']<=query<=right['time']:
+            nearby.extend((abs(left['value']),abs(right['value'])))
+            break
+    local_ulp=max((_float32_ulp(value) for value in nearby),default=0.0)
+    return max(abs(value-expected) for value in candidates)+arithmetic+4*local_ulp
+
+
 def plan_clips(ir,namespace,profile,selection=None,naming=None):
     clips=ir.get('animationClips',[])
     if ('animationSchemaVersion' in ir or clips) and ir.get('animationSchemaVersion')!=SCHEMA:fail('UNSUPPORTED_ANIMATION_IR','$','Expected animation schema 1')
@@ -300,6 +365,12 @@ def verify_native(specs,actual,native_files):
             n=observed.get(key,{})
             good=good and numbers_equal(n.get('times'),[k['time'] for k in t['keys']]) and numbers_equal(n.get('values'),[k['value'] for k in t['keys']])
             good=good and n.get('interpolations')==[k['interpolation'] for k in t['keys']]
-            good=good and numbers_equal(n.get('probeTimes'),[p['time'] for p in t['probes']]) and numbers_equal(n.get('probeValues'),[p['value'] for p in t['probes']])
+            good=good and numbers_equal(n.get('probeTimes'),[p['time'] for p in t['probes']])
+            actual_probes=n.get('probeValues')
+            expected_probes=t['probes']
+            good=good and isinstance(actual_probes,list) and len(actual_probes)==len(expected_probes) and all(
+                type(actual) in (int,float) and math.isfinite(actual)
+                and abs(actual-probe['value'])<=_native_probe_float32_bound(t,probe)
+                for probe,actual in zip(expected_probes,actual_probes))
         if not good:gaps.append(diagnostic('ANIMATION_READBACK_MISMATCH',spec['path'],'Saved binding/time/value/interpolation/probes/events differ',sid))
     return gaps

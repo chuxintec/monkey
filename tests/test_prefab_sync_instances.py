@@ -64,6 +64,31 @@ def _manifest(*, missing=False, cycle=False, unsupported=False):
 
 
 class SyncPrefabTests(unittest.TestCase):
+    def test_long_multibyte_clone_asset_names_keep_bounded_distinct_roles(self):
+        from monkey.prefab_sync_instances import _suffix_generated_paths
+        from pathlib import PurePosixPath
+        row={key:'Assets/Generated/'+('界面'*25)+tail for key,tail in [('controllerPath','.controller'),('normalClipPath','_normal.anim'),('pressedClipPath','_pressed.anim')]}
+        original=copy.deepcopy(row);_suffix_generated_paths(row,'bundle:owner#1')
+        self.assertEqual(len(set(row.values())),3)
+        self.assertTrue(all(len(PurePosixPath(p).name.encode('utf-8'))<=64 for p in row.values()))
+        again=copy.deepcopy(original);_suffix_generated_paths(again,'bundle:owner#1');self.assertEqual(row,again)
+        different=copy.deepcopy(original);_suffix_generated_paths(different,'bundle:owner#2');self.assertTrue(set(row.values()).isdisjoint(different.values()))
+
+    def test_spine_instance_owns_target_identity_and_preserves_template_origin(self):
+        plan=_plan()
+        plan['components'][0]['spineBinding']={'sourceComponentId':'bundle:t#c0','sourcePrefabId':'bundle:t','sourceNodeId':'1','sourceDataId':'asset:shared'}
+        result=bind_sync_prefab_instances(plan,_manifest())
+        clones=[c for c in result['components']if '::sync-component' in c['sourceId']]
+        self.assertEqual(len(clones),2)
+        for c in clones:
+            b=c['spineBinding']
+            self.assertEqual(b['sourceTemplateComponentId'],'bundle:t#c0')
+            self.assertEqual(b['sourceComponentId'],c['sourceId'])
+            self.assertEqual(b['sourceNodeId'],c['node'])
+            self.assertEqual(b['sourcePrefabId'],c['node'].split('#')[0])
+            self.assertEqual(b['sourceDataId'],'asset:shared')
+        self.assertEqual(plan['components'][0]['spineBinding']['sourcePrefabId'],'bundle:t')
+
     def test_two_sync_instances_clone_template_and_remap_internal_refs(self):
         plan = _plan()
         original_template = copy.deepcopy(plan["nodes"][-2:])

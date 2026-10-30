@@ -29,7 +29,7 @@ public static class UnityPreviewState
     }
     static readonly HashSet<string> StaticLayoutHelpers = new HashSet<string>(StringComparer.Ordinal)
     {
-        "NativeRectConstraints", "NativeTextLineBox", "IntrinsicGridLayoutGroup", "NativeLinearLayoutGroup", "NativeHorizontalProgressFill", "NativeInputBlocker", "NativeInputBlockerSurface", "NativeStaticTextOutline"
+        "NativeRectConstraints", "NativeTextLineBox", "IntrinsicGridLayoutGroup", "NativeLinearLayoutGroup", "NativeHorizontalProgressFill", "NativeInputBlocker", "NativeInputBlockerSurface", "NativeStaticTextOutline", "Monkey.Targets.Spine.UnitySpineGraphicMaterialPresentation"
     };
     [Serializable] public sealed class EvidenceSpec { public string id, path, sha256; }
     [Serializable] public sealed class OperationSpec
@@ -38,12 +38,16 @@ public static class UnityPreviewState
         public bool boolValue, expectedBoolValue, sourceEnabled; public float numberValue,expectedNumberValue;
         public float[] vectorValue, expectedVectorValue;
     }
-    [Serializable] public sealed class Spec
+    [Serializable] public class OperationState
     {
         public int schemaVersion;
         public string stateId, sourcePrefabId, sourceManifestSha256, sourceVersion, referenceVersion, stateSha256;
         public EvidenceSpec[] evidence;
         public OperationSpec[] operations;
+    }
+    // Clone rows carry only operations; never recursively serialize clone batches.
+    [Serializable] public sealed class Spec : OperationState
+    {
         public UnityPreviewClones.CloneBatch[] cloneBatches;
         public UnityStaticSpriteFrames.ProjectionPlan spriteProjection;
     }
@@ -68,7 +72,7 @@ public static class UnityPreviewState
         public Action apply;
     }
     static bool Digest(string value) { return Regex.IsMatch(value ?? "", "^[0-9a-f]{64}$"); }
-    static void Validate(Spec spec)
+    static void Validate(OperationState spec)
     {
         if (spec == null || spec.schemaVersion != 1 || String.IsNullOrEmpty(spec.stateId) ||
             String.IsNullOrEmpty(spec.sourcePrefabId) || String.IsNullOrEmpty(spec.sourceVersion) ||
@@ -180,7 +184,7 @@ public static class UnityPreviewState
         if(op.kind=="label.fontSize")label.fontSize=op.numberValue;
         else label.lineSpacing=(op.numberValue-label.font.faceInfo.lineHeight*label.fontSize/label.font.faceInfo.pointSize)*100f/label.fontSize;
     }
-    public static Readback Apply(Spec spec, Func<string, UnityEngine.Object> resolve)
+    public static Readback Apply(OperationState spec, Func<string, UnityEngine.Object> resolve)
     {
         Validate(spec);
         var pending = new List<Pending>();
@@ -237,7 +241,7 @@ public static class UnityPreviewState
         return result;
     }
 
-    public static Readback Read(Spec spec, Func<string, UnityEngine.Object> resolve)
+    public static Readback Read(OperationState spec, Func<string, UnityEngine.Object> resolve)
     {
         Validate(spec);
         var rows = new List<OperationReadback>();

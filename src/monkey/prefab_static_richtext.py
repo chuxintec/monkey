@@ -53,6 +53,12 @@ def _parse_markup(value: str) -> _ParseResult:
                 errors.append(f"unmatched rich-text closing tag: </{closing}>")
                 continue
             expected = stack[-1]
+            # Creator 2.4 HTMLTextParser closes by popping its style stack on any
+            # </...> token; source assets use </c> as the color close shorthand.
+            # Normalize only the evidenced color shorthand and keep other
+            # mismatched closures fail-closed in this static adapter.
+            if closing == "c" and expected == "color":
+                closing = expected
             if closing not in ("", expected):
                 errors.append(f"rich-text tag nesting mismatch: expected </{expected}>, got </{closing}>")
                 continue

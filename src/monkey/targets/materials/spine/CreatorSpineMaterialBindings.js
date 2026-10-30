@@ -9,6 +9,7 @@ const TARGET_EFFECT_NAME = 'builtin-spine';
 const TARGET_EFFECT_PROGRAM = 'spine|sprite-vs:vert|sprite-fs:frag';
 const TARGET_EFFECT_PROGRAM_HASH = 3890043391;
 const BUILTIN_MATERIAL_UUID = 'default-spine-material';
+const SOURCE_DEFAULT_MATERIAL_SHA256 = '7cdc119e26aa6dceec4bd78ae30dd08f39daa2f0da5d914d2197a730b558a5e8';
 
 function error(code, message) {
   const value = new Error(message);
@@ -282,6 +283,23 @@ function matchesPinnedBuiltinResource(material) {
   return { ok: true, observedProgramHash: program.hash, observedProgramName: program.name };
 }
 
+function sourceMaterialMode(source, pins) {
+  const evidence = source && source.sourceMaterialBinding;
+  if (!evidence || evidence.status === 'explicit') {
+    return source && typeof source.sourceMaterialReferenceSourceId === 'string' &&
+      source.sourceMaterialReferenceSourceId === pins.materialReferenceSourceId &&
+      source.sourceMaterialSourceId === pins.materialSourceId ? 'explicit' : null;
+  }
+  if (evidence.status === 'resolved_source_engine_default' &&
+      source.sourceMaterialReferenceSourceId === null && source.sourceMaterialSourceId === null &&
+      evidence.sourceEngineVersion === '2.4.15' &&
+      evidence.sourcePath === 'extensions/spine/Skeleton.js' &&
+      evidence.sourceSha256 === SOURCE_DEFAULT_MATERIAL_SHA256 &&
+      evidence.method === "Skeleton._getDefaultMaterial -> cc.Material.getBuiltinMaterial('2d-spine')" &&
+      evidence.targetProfile === "Creator 3.8.8 builtinResMgr.get('default-spine-material')") return 'resolved_source_engine_default';
+  return null;
+}
+
 function bindCreatorSpineMaterial(componentSourceId, component, contract, cclegacy, options) {
   options = options || {};
   if (!contract || contract.profile !== SOURCE_PROFILE ||
@@ -296,12 +314,11 @@ function bindCreatorSpineMaterial(componentSourceId, component, contract, cclega
   const rows = contract.spec.creator38.perComponent;
   const source = Array.isArray(rows) && rows.find(row => row.sourceComponentId === componentSourceId);
   if (!source) throw error('SPINE_MATERIAL_SOURCE_COMPONENT', 'Source component is outside the pinned material plan.');
-  if (typeof source.sourceMaterialReferenceSourceId !== 'string' ||
-      source.sourceMaterialReferenceSourceId !== contract.pins.materialReferenceSourceId ||
-      source.sourceMaterialSourceId !== contract.pins.materialSourceId) {
+  const materialMode = sourceMaterialMode(source, contract.pins);
+  if (!materialMode) {
     throw error('SPINE_SOURCE_MATERIAL_CONTRACT_MISMATCH', 'Source material reference or redirect target differs from the pinned profile.');
   }
-  if (!options.sourceMaterialReferenceSourceId) {
+  if (materialMode === 'explicit' && !options.sourceMaterialReferenceSourceId) {
     return {
       schema: 'creator-spine-material-bind/1', sourceComponentId: componentSourceId, status: 'binding_not_attempted',
       sourceProfile: SOURCE_PROFILE, sourceMaterialStatus: 'source_material_reference_not_supplied',
@@ -310,7 +327,10 @@ function bindCreatorSpineMaterial(componentSourceId, component, contract, cclega
       readback: component ? collectCreatorSpineMaterialReadback(componentSourceId, component, options) : null,
     };
   }
-  if (options.sourceMaterialReferenceSourceId !== source.sourceMaterialReferenceSourceId) {
+  if (materialMode === 'resolved_source_engine_default' && options.sourceMaterialReferenceSourceId) {
+    throw error('SPINE_SOURCE_MATERIAL_CONTRACT_MISMATCH', 'A source-engine-default material row cannot carry a serialized source reference.');
+  }
+  if (materialMode === 'explicit' && options.sourceMaterialReferenceSourceId !== source.sourceMaterialReferenceSourceId) {
     return {
       schema: 'creator-spine-material-bind/1', sourceComponentId: componentSourceId, status: 'binding_not_attempted',
       sourceProfile: SOURCE_PROFILE, sourceMaterialStatus: 'source_material_reference_mismatch',
@@ -361,10 +381,11 @@ function bindCreatorSpineMaterial(componentSourceId, component, contract, cclega
     status: materialBindingReadback ? 'bound_resource_observed_runtime_separately' : 'binding_readback_missing',
     sourceProfile: SOURCE_PROFILE,
     sourceMaterialBinding: {
-      referenceSourceId: source.sourceMaterialReferenceSourceId,
-      resolvedSourceId: source.sourceMaterialSourceId,
+      referenceSourceId: source.sourceMaterialReferenceSourceId || null,
+      resolvedSourceId: source.sourceMaterialSourceId || null,
       targetResourceUuid: 'default-spine-material',
-      status: 'exact_source_builtin_profile_mapping',
+      status: materialMode === 'explicit' ? 'exact_source_builtin_profile_mapping' : 'resolved_source_engine_default',
+      sourceDefaultEvidence: materialMode === 'resolved_source_engine_default' ? source.sourceMaterialBinding : null,
     },
     targetMaterialIdentity: { status: 'observed', uuid: resolved.material._uuid, effectName: resolved.material.effectAsset.name,
                              effectProgramName: resourceGuard.observedProgramName,

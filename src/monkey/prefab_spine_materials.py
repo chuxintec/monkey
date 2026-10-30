@@ -67,7 +67,7 @@ UNITY_SPINE38_REFERENCE = {
     "targetUse": "official 3.8 runtime source reference; local Unity runtime package/native material readback is still required",
 }
 UNITY_PROFILE_SHADER_SHA256 = "0fe1ea3481787d0de2bd7545c8e77d769c681a7d30ca48d6ad56482bdeec549b"
-CREATOR_BINDING_HELPER_SHA256 = "fa5adf1ef29280f22976a6d9df5d01dbd3dc52abcb0825d87878b1e59a8b9bee"
+CREATOR_BINDING_HELPER_SHA256 = "cb2bc9f1470efd6a8ea0093a3607b85f317eaa7c0079df6ac1163532c770f32a"
 UNITY_BINDING_HELPER_SHA256 = "464fb0e61a938257837f993640a0ba8944708aac2cad786aee8c6a39ef241f00"
 TARGET_DIR = Path(__file__).parent / "targets" / "materials" / "spine"
 
@@ -325,9 +325,20 @@ def _source_semantics(effect: dict, shader: dict) -> dict:
     }
 
 
-def _component_occurrences(manifest: dict, material_uuid: str) -> list[dict]:
+SOURCE_DEFAULT_SPINE_MATERIAL = {
+    "status": "resolved_source_engine_default",
+    "sourceEngineVersion": "2.4.15",
+    "sourcePath": "extensions/spine/Skeleton.js",
+    "sourceUrl": "https://raw.githubusercontent.com/cocos/cocos-engine/v2.4.15/extensions/spine/Skeleton.js",
+    "sourceSha256": SOURCE_ENGINE_FILE_PINS["extensions/spine/Skeleton.js"],
+    "method": "Skeleton._getDefaultMaterial -> cc.Material.getBuiltinMaterial('2d-spine')",
+    "targetProfile": "Creator 3.8.8 builtinResMgr.get('default-spine-material')",
+}
+
+
+def _component_occurrences(manifest: dict, material_uuid: str, selected_indices: list[int] | None = None) -> list[dict]:
     rows = _asset_rows(manifest)
-    selected = manifest.get("selection")
+    selected = manifest.get("selection") if selected_indices is None else selected_indices
     if not isinstance(selected, list):
         raise SpineMaterialError("source manifest selection is missing")
     result = []
@@ -351,7 +362,7 @@ def _component_occurrences(manifest: dict, material_uuid: str) -> list[dict]:
                 components = [(None, obj)]
             for component_index, component in components:
                 refs = component.get("_materials", [])
-                if not any(isinstance(ref, dict) and ref.get("__uuid__") == material_uuid for ref in refs):
+                if not isinstance(refs, list) or not any(isinstance(ref, dict) and ref.get("__uuid__") == material_uuid for ref in refs):
                     continue
                 component_id = (f"{asset['sourceId']}#{object_index}" if component_index is None else
                                 f"{asset['sourceId']}#{object_index}/components/{component_index}")
@@ -371,14 +382,71 @@ def _component_occurrences(manifest: dict, material_uuid: str) -> list[dict]:
                     "preCacheMode": component.get("_preCacheMode"),
                     "defaultCacheMode": component.get("_defaultCacheMode", component.get("defaultCacheMode")),
                     "enableBatch": component.get("enableBatch"),
+                    "sourceMaterialBinding": {"status": "explicit", "sourceMaterialReferenceSourceId": f"gameAsset:{material_uuid}"},
                 })
+            # Only a missing serialized field uses the source engine default.
+            # Explicit null, an empty array, and unknown refs remain distinct and
+            # are not silently rewritten to the built-in material.
+            if obj.get("__type__") == "cc.Node":
+                components = [(ci, c) for ci, c in enumerate(obj.get("_components", []) or [])
+                              if isinstance(c, dict) and c.get("__type__") == "sp.Skeleton" and "_materials" not in c]
+            elif obj.get("__type__") == "sp.Skeleton" and "_materials" not in obj:
+                components = [(None, obj)]
+            else:
+                components = []
+            for component_index, component in components:
+                component_id = (f"{asset['sourceId']}#{object_index}" if component_index is None else
+                                f"{asset['sourceId']}#{object_index}/components/{component_index}")
+                data_ref = component.get("_N$skeletonData")
+                skeleton_data_uuid = data_ref.get("__uuid__") if isinstance(data_ref, dict) else None
+                result.append({
+                    "prefabSourceId": asset["sourceId"], "prefabPath": asset.get("logicalPath"),
+                    "prefabLocator": locator, "sourceComponentId": component_id,
+                    "inlineComponentIndex": component_index, "materialUuid": None,
+                    "skeletonDataUuid": skeleton_data_uuid,
+                    "premultipliedAlpha": {"status": "explicit", "value": component["premultipliedAlpha"]}
+                        if isinstance(component.get("premultipliedAlpha"), bool)
+                        else {"status": "not-serialized-default-unresolved"},
+                    "useTint": {"status": "explicit", "value": component["useTint"]}
+                        if isinstance(component.get("useTint"), bool)
+                        else {"status": "not-serialized-default-unresolved"},
+                    "preCacheMode": component.get("_preCacheMode"),
+                    "defaultCacheMode": component.get("_defaultCacheMode", component.get("defaultCacheMode")),
+                    "enableBatch": component.get("enableBatch"),
+                    "sourceMaterialBinding": dict(SOURCE_DEFAULT_SPINE_MATERIAL),
+                })
+            # Preserve invalid serialized states as explicit blockers. In
+            # particular, `null` and `[]` are not the same as an omitted key.
+            invalid_components = []
+            candidates = ([(ci, c) for ci, c in enumerate(obj.get("_components", []) or [])
+                           if isinstance(c, dict) and c.get("__type__") == "sp.Skeleton"]
+                          if obj.get("__type__") == "cc.Node" else
+                          [(None, obj)] if obj.get("__type__") == "sp.Skeleton" else [])
+            for component_index, component in candidates:
+                if "_materials" not in component:
+                    continue
+                refs = component.get("_materials")
+                if isinstance(refs, list) and any(isinstance(ref, dict) and ref.get("__uuid__") == material_uuid for ref in refs):
+                    continue
+                component_id = (f"{asset['sourceId']}#{object_index}" if component_index is None else
+                                f"{asset['sourceId']}#{object_index}/components/{component_index}")
+                status = "explicit_null" if refs is None else "explicit_empty" if refs == [] else "explicit_unknown_or_unmatched"
+                invalid_components.append((component_id, status))
+            for component_id, status in invalid_components:
+                result.append({"prefabSourceId": asset["sourceId"], "prefabPath": asset.get("logicalPath"),
+                               "prefabLocator": locator, "sourceComponentId": component_id,
+                               "inlineComponentIndex": None, "materialUuid": None, "skeletonDataUuid": None,
+                               "premultipliedAlpha": {"status": "not-serialized-default-unresolved"},
+                               "useTint": {"status": "not-serialized-default-unresolved"},
+                               "preCacheMode": None, "defaultCacheMode": None, "enableBatch": None,
+                               "sourceMaterialBinding": {"status": status}})
     return result
 
 
-def _selected_spine_material_candidates(manifest: dict) -> dict[str, int]:
+def _selected_spine_material_candidates(manifest: dict, selected_indices: list[int] | None = None) -> dict[str, int]:
     """Count exact material UUID references on selected source Spine components."""
     rows = _asset_rows(manifest)
-    selected = manifest.get("selection")
+    selected = manifest.get("selection") if selected_indices is None else selected_indices
     if not isinstance(selected, list):
         raise SpineMaterialError("source manifest selection is missing")
     counts: dict[str, int] = {}
@@ -465,6 +533,7 @@ def _runtime_variants(manifest: dict, occurrences: list[dict]) -> dict:
     for occurrence in occurrences:
         row = {"sourceComponentId": occurrence["sourceComponentId"],
                "materialUuid": occurrence.get("materialUuid"),
+               "sourceMaterialBinding": occurrence.get("sourceMaterialBinding", {"status": "explicit"}),
                "premultipliedAlpha": occurrence["premultipliedAlpha"],
                "useTint": occurrence["useTint"], "enableBatch": occurrence["enableBatch"]}
         pma = occurrence["premultipliedAlpha"]
@@ -519,28 +588,44 @@ def _runtime_variants(manifest: dict, occurrences: list[dict]) -> dict:
             "inputGamma": gamma, "components": result}
 
 
-def _ir_check(ir: dict, occurrences: list[dict], material_source_id: str) -> dict:
+def _ir_check(ir: dict, occurrences: list[dict], material_source_id: str,
+              normalized_selection: set[int] | None = None) -> dict:
     components = ir.get("components")
     if not isinstance(components, list):
         raise SpineMaterialError("normalized IR has no component list")
     actual = {c.get("sourceId"): c for c in components if isinstance(c, dict)}
     ids = [row["sourceComponentId"] for row in occurrences]
-    missing, mismatched = [], []
+    missing, source_manifest_only, mismatched = [], [], []
+    occurrence_by_id = {row["sourceComponentId"]: row for row in occurrences}
     for sid in ids:
         component = actual.get(sid)
         if not component:
-            missing.append(sid)
+            locator = occurrence_by_id[sid].get("prefabLocator")
+            if normalized_selection is not None and locator not in normalized_selection:
+                source_manifest_only.append(sid)
+            else:
+                missing.append(sid)
             continue
-        if component.get("type") != "sp.Skeleton" or material_source_id not in component.get("materials", []):
+        binding = next(row.get("sourceMaterialBinding", {}) for row in occurrences if row["sourceComponentId"] == sid)
+        if component.get("type") != "sp.Skeleton":
             mismatched.append(sid)
-    return {"sourceComponentCount": len(ids), "matchedComponentCount": len(ids) - len(missing) - len(mismatched),
+        elif binding.get("status") == "explicit" and material_source_id not in component.get("materials", []):
+            mismatched.append(sid)
+        elif binding.get("status") == "resolved_source_engine_default" and component.get("materials", []):
+            mismatched.append(sid)
+        elif binding.get("status") not in {"explicit", "resolved_source_engine_default"}:
+            mismatched.append(sid)
+    return {"sourceComponentCount": len(ids), "matchedComponentCount": len(ids) - len(missing) - len(mismatched) - len(source_manifest_only),
+            "sourceManifestOnlyComponentCount": len(source_manifest_only),
+            "sourceManifestOnlySourceIds": source_manifest_only,
             "missingSourceIds": missing, "mismatchedSourceIds": mismatched,
             "exactMatch": not missing and not mismatched}
 
 
 def inspect_spine_materials(manifest_path: str | Path, ir_path: str | Path,
                             app_config_path: str | Path | None = None,
-                            runtime_entry_path: str | Path | None = None) -> dict:
+                            runtime_entry_path: str | Path | None = None,
+                            selected_prefab_indices: list[int] | None = None) -> dict:
     """Inspect the exact source material/effect closure and component references."""
     manifest_path, ir_path = Path(manifest_path), Path(ir_path)
     manifest_raw, ir_raw = manifest_path.read_bytes(), ir_path.read_bytes()
@@ -550,7 +635,17 @@ def inspect_spine_materials(manifest_path: str | Path, ir_path: str | Path,
     rows = _asset_rows(manifest)
     # Discover the candidate from selected component references.  No private
     # source UUID or asset name is itself a capability predicate.
-    candidate_counts = _selected_spine_material_candidates(manifest)
+    selected_indices = manifest.get("selection") if selected_prefab_indices is None else selected_prefab_indices
+    if (not isinstance(selected_indices, list) or not selected_indices
+            or any(type(index) is not int for index in selected_indices)
+            or len(set(selected_indices)) != len(selected_indices)):
+        raise SpineMaterialError("selected Prefab locators must be a nonempty, duplicate-free integer list")
+    known_prefab_indices = {row.get("index") for candidates in rows.values() for row in candidates
+                            if row.get("kind") == "cc.Prefab"}
+    if not set(selected_indices) <= known_prefab_indices:
+        raise SpineMaterialError("selected Prefab locator is not present in the pinned source manifest")
+    normalized_selection = set(manifest.get("selection", []))
+    candidate_counts = _selected_spine_material_candidates(manifest, selected_indices)
     eligible = []
     candidate_errors: list[SpineMaterialError] = []
     for candidate_uuid, count in candidate_counts.items():
@@ -582,15 +677,21 @@ def inspect_spine_materials(manifest_path: str | Path, ir_path: str | Path,
     material = _root(material_asset)
     material_info = _material(effect_uuid, material)
     semantics = _source_semantics(effect, shader)
-    occurrences = _component_occurrences(manifest, material_uuid)
+    occurrences = _component_occurrences(manifest, material_uuid, selected_indices)
     if not occurrences:
         raise SpineMaterialError("selected Prefabs have no Spine component referencing the resolved Material")
     reference_material_source_id = f"gameAsset:{material_uuid}"
-    ir_result = _ir_check(ir, occurrences, reference_material_source_id)
+    ir_result = _ir_check(ir, occurrences, reference_material_source_id, normalized_selection)
     variants = _runtime_variants(manifest, occurrences)
     creator_issues = []
     unity_issues = []
     for variant in variants["components"]:
+        material_state = next(row.get("sourceMaterialBinding", {}) for row in occurrences
+                              if row["sourceComponentId"] == variant["sourceComponentId"])
+        if material_state.get("status") not in {"explicit", "resolved_source_engine_default"}:
+            creator_issues.append({"code": "CREATOR_SPINE_MATERIAL_SOURCE_STATE_UNSUPPORTED",
+                                   "componentSourceId": variant["sourceComponentId"],
+                                   "message": "Serialized _materials is null, empty, or does not resolve to the pinned Spine material."})
         if variant["sourceCacheMode"]["status"] == "unrecognized":
             creator_issues.append({"code": "CREATOR_SPINE_CACHE_MODE_UNKNOWN",
                                    "componentSourceId": variant["sourceComponentId"],
@@ -704,9 +805,11 @@ def inspect_spine_materials(manifest_path: str | Path, ir_path: str | Path,
                                         "useModelPerComponent": "runtimeVariantEvidence.components[].sourceUseModelDefine"},
             "macroMapping": semantics["creator388BuiltinMapping"],
             "perComponent": [{"sourceComponentId": row["sourceComponentId"],
-                              "sourceMaterialReferenceSourceId": f"gameAsset:{row['materialUuid']}",
-                              "sourceMaterialSourceId": material_asset["sourceId"],
+                              "sourceMaterialReferenceSourceId": row.get("sourceMaterialBinding", {}).get("sourceMaterialReferenceSourceId"),
+                              "sourceMaterialSourceId": material_asset["sourceId"] if row.get("sourceMaterialBinding", {}).get("status") == "explicit" else None,
                               "targetMaterialUuid": "default-spine-material",
+                              "sourceMaterialBinding": next(occurrence["sourceMaterialBinding"] for occurrence in occurrences
+                                                             if occurrence["sourceComponentId"] == row["sourceComponentId"]),
                               "premultipliedAlpha": row["sourcePmaEffective"],
                               "useTint": row["sourceUseTintDefine"],
                               "enableBatch": row["sourceEnableBatchEffective"],
@@ -765,9 +868,10 @@ def inspect_spine_materials(manifest_path: str | Path, ir_path: str | Path,
 def plan_spine_materials(manifest_path: str | Path, ir_path: str | Path,
                          expected_manifest_sha256: str, expected_ir_sha256: str,
                          app_config_path: str | Path | None = None,
-                         runtime_entry_path: str | Path | None = None) -> dict:
+                         runtime_entry_path: str | Path | None = None,
+                         selected_prefab_indices: list[int] | None = None) -> dict:
     """Create an explicit, non-emitting contract for parent plan integration."""
-    result = inspect_spine_materials(manifest_path, ir_path, app_config_path, runtime_entry_path)
+    result = inspect_spine_materials(manifest_path, ir_path, app_config_path, runtime_entry_path, selected_prefab_indices)
     if result["source"]["manifestSha256"] != expected_manifest_sha256 or result["source"]["normalizedIrSha256"] != expected_ir_sha256:
         raise SpineMaterialError("explicit source manifest/IR pin mismatch")
     return {

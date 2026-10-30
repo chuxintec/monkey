@@ -8,6 +8,11 @@ const PROGRAM_HASH = '53fbec41d8b524d31908b3b27f1b6cccbd2fcd1eb0be9ace5917be386d
 const EPSILON = 0.0001;
 
 function uuid(asset) { return asset && (asset.uuid || asset._uuid); }
+function sameSpriteFrame(actual, expected) {
+    const actualUuid = uuid(actual), expectedUuid = uuid(expected);
+    return actual instanceof cc.SpriteFrame && expected instanceof cc.SpriteFrame &&
+        typeof actualUuid === 'string' && actualUuid.length > 0 && actualUuid === expectedUuid;
+}
 function validate(spec) {
     if (!spec || spec.schema !== 'monkey-prefab-sprite-outline-binding/1' || spec.profile !== PROFILE ||
         spec.programCanonicalSha256 !== PROGRAM_HASH || !spec.creator)
@@ -118,13 +123,13 @@ function bind(spec, savedMaterial, spritesBySourceId, resolveSpriteFrame) {
         throw Error('SPRITE_OUTLINE_SOURCE_SPRITE_MAP_MISMATCH');
     for (const sourceId of spec.sourceComponentIds) {
         const sprite = spritesBySourceId instanceof Map ? spritesBySourceId.get(sourceId) : spritesBySourceId[sourceId];
-        if (!(sprite instanceof cc.Sprite) || sprite.spriteFrame !== expectedFrame(spec, sourceId, resolveSpriteFrame))
+        if (!(sprite instanceof cc.Sprite) || !sameSpriteFrame(sprite.spriteFrame, expectedFrame(spec, sourceId, resolveSpriteFrame)))
             throw Error('SPRITE_OUTLINE_SOURCE_SPRITEFRAME_MISMATCH: ' + sourceId);
         const current = sprite.customMaterial;
         if (current && uuid(current) !== uuid(savedMaterial) && current.parent !== savedMaterial)
             throw Error('SPRITE_OUTLINE_EXISTING_CUSTOM_MATERIAL_CONFLICT: ' + sourceId);
         sprite.customMaterial = savedMaterial;
-        if (sprite.spriteFrame !== expectedFrame(spec, sourceId, resolveSpriteFrame) ||
+        if (!sameSpriteFrame(sprite.spriteFrame, expectedFrame(spec, sourceId, resolveSpriteFrame)) ||
             !sprite.customMaterial || (sprite.customMaterial !== savedMaterial && uuid(sprite.customMaterial) !== uuid(savedMaterial) && sprite.customMaterial.parent !== savedMaterial))
             throw Error('SPRITE_OUTLINE_BINDING_READBACK_MISMATCH: ' + sourceId);
     }
@@ -139,7 +144,7 @@ function readPersistent(spec, savedMaterial, spritesBySourceId, effectAsset, res
         throw Error('SPRITE_OUTLINE_SOURCE_SPRITE_MAP_MISMATCH');
     for (const sourceId of spec.sourceComponentIds) {
         const sprite = spritesBySourceId instanceof Map ? spritesBySourceId.get(sourceId) : spritesBySourceId[sourceId];
-        if (!(sprite instanceof cc.Sprite) || sprite.spriteFrame !== expectedFrame(spec, sourceId, resolveSpriteFrame) ||
+        if (!(sprite instanceof cc.Sprite) || !sameSpriteFrame(sprite.spriteFrame, expectedFrame(spec, sourceId, resolveSpriteFrame)) ||
             !sprite.customMaterial || (sprite.customMaterial !== savedMaterial && uuid(sprite.customMaterial) !== uuid(savedMaterial) && sprite.customMaterial.parent !== savedMaterial))
             throw Error('SPRITE_OUTLINE_COMPONENT_PERSISTED_READBACK_MISMATCH: ' + sourceId);
     }
@@ -152,8 +157,8 @@ function readBound(spec, savedMaterial, sourceId, sprite, resolveSpriteFrame) {
         !(sprite instanceof cc.Sprite) || typeof resolveSpriteFrame !== 'function') return false;
     const frame = expectedFrame(spec, sourceId, resolveSpriteFrame);
     const custom = sprite.customMaterial;
-    return sprite.spriteFrame === frame && !!custom &&
+    return sameSpriteFrame(sprite.spriteFrame, frame) && !!custom &&
         (custom === savedMaterial || uuid(custom) === uuid(savedMaterial) || custom.parent === savedMaterial);
 }
 
-module.exports = { create, serialize, createSaveReadback, readback, bind, readBound, readPersistent, verifyProperties };
+module.exports = { create, serialize, createSaveReadback, readback, bind, readBound, readPersistent, verifyProperties, sameSpriteFrame };

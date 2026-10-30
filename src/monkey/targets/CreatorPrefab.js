@@ -32,10 +32,17 @@ async function serialize(plan,nodes) {
             if(spec.rootNamePolicy==='creator-asset-basename-v1')root.name=spec.nativeRootName;
             const mapped=new Map();const sources=new Map(plan.nodes.map(n=>[n.sourceId,n]));
             function walk(sid,n){mapped.set(sid,n);sources.get(sid).children.forEach((child,i)=>walk(child,sourceChildren(n)[i]));}walk(spec.root,root);
-            const nativeInitialNodes=dynamic.settleRoot(root,mapped,plan);
+            let nativeInitialNodes=dynamic.settleRoot(root,mapped,plan);
+        if(plan.spineBinding) {
+            // Construction only: source-authored geometry is serialized along
+            // with its persistent native preserver. Reopen never calls this.
+            require('./spine-ui-transform.js').restoreAuthored(plan,mapped,cc,spec.sourceId);
+            nativeInitialNodes=dynamic.settleRoot(root,mapped,plan,false);
+        }
             const prefab=new cc.Prefab();prefab.name=root.name;prefab.data=root;
-            const raw=EditorExtends.serialize(prefab);
-            result.push({sourceId:spec.sourceId,path:spec.path,nativeInitialNodes,serialized:typeof raw==='string'?raw:JSON.stringify(raw)});
+            const raw=EditorExtends.serialize(prefab),serialized=typeof raw==='string'?raw:JSON.stringify(raw);
+            const spineUITransformReceipt=plan.spineBinding?require('./spine-ui-transform.js').verifySerializedPrefab(plan,spec,serialized):null;
+            result.push({sourceId:spec.sourceId,path:spec.path,nativeInitialNodes,spineUITransformReceipt,serialized});
         } finally {root.destroy();}
     }
     return result;
@@ -55,6 +62,18 @@ function read(prefab,spec,plan,info,templates,staticAssets) {
             const fields=Object.keys(actual).filter(key=>['active','sourceLayer','opacity'].includes(key)?actual[key]!==src[key]:!near(actual[key],src[key]));
             if(fields.length)geometryMismatches.push({sourceId:sid,fields,expected:Object.fromEntries(fields.map(key=>[key,src[key]])),actual:Object.fromEntries(fields.map(key=>[key,actual[key]]))});
             mapped.set(sid,node);src.children.forEach((child,i)=>match(child,sourceChildren(node)[i]));
+        }
+        if(plan.spineBinding) {
+            const lifecycleNodes=new Map();
+            function index(sid,node){
+                const src=sources.get(sid),children=node&&sourceChildren(node);
+                if(!src||!node||children.length!==src.children.length)throw Error('Saved lifecycle hierarchy differs: '+sid);
+                lifecycleNodes.set(sid,node);src.children.forEach((child,i)=>index(child,children[i]));
+            }
+            index(spec.root,root);
+            dynamic.settleRoot(root,lifecycleNodes,plan,false);
+            const geometry=require('./spine-ui-transform.js').readAuthored(plan,lifecycleNodes,cc,spec.sourceId);
+            if(geometry.status!=='verified')throw Error('SPINE_UI_TRANSFORM_SAVED_PREFAB_MISMATCH: '+JSON.stringify(geometry));
         }
         match(spec.root,root);
         const persistent=new Map();
@@ -76,7 +95,12 @@ function read(prefab,spec,plan,info,templates,staticAssets) {
             if(c.nativeSpriteOutlineMaterialSourceId&&(!plan.spriteOutlineBinding||!require('./sprite-outline-material-bindings.js').readBound(plan.spriteOutlineBinding,comp.customMaterial,c.sourceId,comp,id=>staticAssets.get(id))))throw Error('Prefab outline material differs: '+c.sourceId);
             if(c.nativeMaterialSourceId&&(!plan.materialBinding||!comp.customMaterial||comp.customMaterial._uuid!==plan.materialBinding.creator.materialUuid||
                !require('./material-bindings.js').readBound(plan.materialBinding,comp.customMaterial,comp)))throw Error('Prefab custom material differs: '+c.sourceId);
-            if(c.type==='cc.RichText'&&(comp.string!==c.text||comp.fontFamily!==c.fontFamily))throw Error('Prefab RichText font/text differs');
+            if(c.nativeStaticTimeMaterialSourceId) {
+                const row=plan.staticTimeMaterials&&plan.staticTimeMaterials.materials.find(x=>x.sourceMaterialId===c.nativeStaticTimeMaterialSourceId);
+                if(!row||!require('./static-time-materials.js').readBound(plan.staticTimeMaterials,row,staticAssets.get(row.sourceMaterialId),c.sourceId,comp,id=>staticAssets.get(id)))
+                    throw Error('Prefab static-time material differs: '+c.sourceId);
+            }
+            if(c.type==='cc.RichText'&&(comp.string!==(c.staticRichText?c.staticRichText.creatorMarkup:c.text)||comp.fontFamily!==c.fontFamily))throw Error('Prefab RichText font/text differs');
             if(c.type==='cc.Label') {
                 const fontMatches=c.nativeSystemFont?
                     comp.useSystemFont&&comp.font===null&&comp.fontFamily===c.fontFamily:
@@ -100,9 +124,14 @@ function read(prefab,spec,plan,info,templates,staticAssets) {
             components.push(c.sourceId);
         }
         const spineSpecs=plan.components.filter(c=>c.convertible&&c.spineBinding&&mapped.has(c.node));
-        const spineBindings=require('./spine-bindings.js').readCreatorSpineBindings(spineSpecs.map(c=>c.spineBinding),id=> {
-            const c=spineSpecs.find(c=>c.sourceId===id);return c?persistent.get(c.node).getComponents(cc.sp.Skeleton):[];
-        });
+        const spineModule=require('./spine-bindings.js'),spineById=new Map(spineSpecs.map(c=>[c.sourceId,c]));
+        const spineContext=(id,scope)=>({sourceActivity:spineModule.sourceNodeActivity(plan,spineById.get(id).node),readbackScope:scope});
+        const spineBindings=spineModule.readCreatorSpineBindings(spineSpecs.map(c=>c.spineBinding),id=> {
+            const c=spineById.get(id);return c?mapped.get(c.node).getComponents(cc.sp.Skeleton):[];
+        },id=>spineContext(id,'instantiated_mapped'));
+        const serializedSpineBindings=spineModule.readCreatorSpineBindings(spineSpecs.map(c=>c.spineBinding),id=> {
+            const c=spineById.get(id);return c?persistent.get(c.node).getComponents(cc.sp.Skeleton):[];
+        },id=>spineContext(id,'serialized_template'));
         const staticFieldBindings=plan.components.some(c=>c.staticFieldBinding&&persistent.has(c.node))?require('./static-field-integration.js').read(plan,persistent,staticAssets,info.uuid):[];
         let toggleFields=null;
         if(plan.toggleBinding){
@@ -110,7 +139,7 @@ function read(prefab,spec,plan,info,templates,staticAssets) {
             toggleFields=require('./static-toggle.js').Read(subset,id=>persistent.get(id),require('./static-field-integration.js').resolver(plan,persistent,staticAssets));
             if(toggleFields.fields.some(x=>!x.verified))throw Error('STATIC_TOGGLE_SAVED_READBACK_FAILED');
         }
-        return {...info,toggleFields,staticFieldBindings,spineBindings,prefabInstances:require('./prefab-instances.js').read(plan,mapped,templates,plan.savedPrefabs||[],spec.sourceId),nodeCount:mapped.size,savedReloaded:true,geometryVerified:geometryMismatches.length===0,geometryMismatches,referencesVerified:true,components,
+        return {...info,toggleFields,staticFieldBindings,spineBindings,serializedSpineBindings,prefabInstances:require('./prefab-instances.js').read(plan,mapped,templates,plan.savedPrefabs||[],spec.sourceId),nodeCount:mapped.size,savedReloaded:true,geometryVerified:geometryMismatches.length===0,geometryMismatches,referencesVerified:true,components,
             numericCodeBindings,behaviorBindings,rootNamePolicy:spec.rootNamePolicy||'source-name-v1',sourceRootName:sources.get(spec.root).name,nativeRootName:root.name};
     } finally {root.destroy();}
 }

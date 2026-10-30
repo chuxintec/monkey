@@ -76,7 +76,9 @@ public static partial class MonkeyImporter
             if (Mathf.Abs(frame.rect.width - spec.properties.outlineTextureSize[0]) > .01f ||
                 Mathf.Abs(frame.rect.height - spec.properties.outlineTextureSize[1]) > .01f)
                 throw new InvalidOperationException("SPRITE_OUTLINE_TEXTURE_SIZE_MISMATCH: " + binding.sourceId);
-            frames.Add(binding.spriteFrameSourceId, frame);
+            if (frames.TryGetValue(binding.spriteFrameSourceId, out var existing) && existing != frame)
+                throw new InvalidOperationException("SPRITE_OUTLINE_DUPLICATE_FRAME_IDENTITY_MISMATCH");
+            frames[binding.spriteFrameSourceId] = frame;
         }
         return frames;
     }
@@ -95,7 +97,7 @@ public static partial class MonkeyImporter
         }
     }
 
-    static SpriteOutlineReadContext LoadReadOnlySpriteOutlineContext(Dictionary<string, GameObject> nodes)
+    static SpriteOutlineReadContext LoadReadOnlySpriteOutlineContext(Dictionary<string, GameObject> nodes, Plan suppliedPlan = null)
     {
         if (nodes == null) throw new InvalidOperationException("SPRITE_OUTLINE_CURRENT_NODE_MAP_MISSING");
         if (String.IsNullOrWhiteSpace(Paths.plan) || !File.Exists(Paths.plan))
@@ -103,7 +105,7 @@ public static partial class MonkeyImporter
         // Domain reload intentionally starts with no static outline state.
         // Rebuild the mapping from the exact saved import plan and its texture
         // source IDs/asset paths; this method never creates or rebinds assets.
-        var plan = JsonUtility.FromJson<Plan>(File.ReadAllText(Paths.plan));
+        var plan = suppliedPlan ?? JsonUtility.FromJson<Plan>(File.ReadAllText(Paths.plan));
         if (plan == null || String.IsNullOrWhiteSpace(plan.spriteOutlineBindingJson)) return null;
         var spec = ParseSpriteOutlineSpec(plan.spriteOutlineBindingJson);
         var frames = LoadOutlineFrames(plan, spec);
@@ -168,11 +170,13 @@ public static partial class MonkeyImporter
     // Optional read-only native reference resolver. It reloads the plan and
     // saved Material after domain reload, and validates only this import's
     // source-node map; it never creates a Material or changes a component.
-    static partial void ResolveOptionalSpriteOutline(string id,
+    static partial void ResolveOptionalSpriteOutline(Plan plan, string id,
         Dictionary<string, GameObject> nodes, ref UnityEngine.Object value)
     {
-        if (String.IsNullOrWhiteSpace(id)) return;
-        var context = LoadReadOnlySpriteOutlineContext(nodes);
+        if (String.IsNullOrWhiteSpace(id) || plan == null) return;
+        var spec = ParseSpriteOutlineSpec(plan.spriteOutlineBindingJson);
+        if (spec == null || id != spec.materialSourceId) return;
+        var context = LoadReadOnlySpriteOutlineContext(nodes, plan);
         if (context == null || id != context.spec.materialSourceId) return;
         VerifyCurrentOutlineBindings(context, nodes, context.spec.spriteBindings);
         value = context.material;
@@ -220,15 +224,15 @@ public static partial class MonkeyImporter
         if (material == null)
             throw new InvalidOperationException("SPRITE_OUTLINE_NATIVE_MATERIAL_MISSING: " + spec.unity.materialPath);
         UnitySpriteOutlineMaterialBindings.Bind(spec, material, components,
-            sourceId => spriteFramesBySourceId.TryGetValue(
-                spec.spriteBindings.Single(binding => binding.sourceId == sourceId).spriteFrameSourceId, out var frame) ? frame : null);
+            frameSourceId => spriteFramesBySourceId.TryGetValue(frameSourceId, out var frame) ? frame : null);
     }
 
     // Public read-only reference method retained for optional integrations.
     public static void ResolveSpriteOutlineReference(string id, Dictionary<string, GameObject> nodes,
         ref UnityEngine.Object value)
     {
-        ResolveOptionalSpriteOutline(id, nodes, ref value);
+        var plan = JsonUtility.FromJson<Plan>(File.ReadAllText(Paths.plan));
+        ResolveOptionalSpriteOutline(plan, id, nodes, ref value);
     }
 
     public static void ReadSavedSpriteOutline(Dictionary<string, GameObject> nodes, string prefabId)

@@ -17,6 +17,32 @@ function assign(component, row) {
     component[row.member] = row.value;
 }
 
+const SOURCE_DEFAULT_SPINE_MATERIAL_SHA256 = '7cdc119e26aa6dceec4bd78ae30dd08f39daa2f0da5d914d2197a730b558a5e8';
+
+function sourceMaterialBindingKind(binding) {
+    const evidence = binding && binding.sourceMaterialBinding;
+    if (!evidence) {
+        return typeof binding.sourceMaterialReferenceSourceId === 'string' && binding.sourceMaterialReferenceSourceId &&
+            typeof binding.sourceMaterialSourceId === 'string' && binding.sourceMaterialSourceId
+            ? 'explicit' : null;
+    }
+    if (evidence.status === 'explicit') {
+        return typeof binding.sourceMaterialReferenceSourceId === 'string' && binding.sourceMaterialReferenceSourceId &&
+            typeof binding.sourceMaterialSourceId === 'string' && binding.sourceMaterialSourceId
+            ? 'explicit' : null;
+    }
+    if (evidence.status === 'resolved_source_engine_default' &&
+        binding.sourceMaterialReferenceSourceId === null && binding.sourceMaterialSourceId === null &&
+        evidence.sourceEngineVersion === '2.4.15' &&
+        evidence.sourcePath === 'extensions/spine/Skeleton.js' &&
+        evidence.sourceSha256 === SOURCE_DEFAULT_SPINE_MATERIAL_SHA256 &&
+        evidence.method === "Skeleton._getDefaultMaterial -> cc.Material.getBuiltinMaterial('2d-spine')" &&
+        evidence.targetProfile === "Creator 3.8.8 builtinResMgr.get('default-spine-material')") {
+        return 'resolved_source_engine_default';
+    }
+    return null;
+}
+
 function applyCreatorSpineBinding(binding, resolveComponent, resolveSkeletonData) {
     if (!binding || !binding.sourceComponentId || !binding.creator || !binding.creator.fields)
         throw new Error('Invalid source-exact Spine component binding');
@@ -57,12 +83,13 @@ function applyCreatorSpineBinding(binding, resolveComponent, resolveSkeletonData
     }
 
     const materialBinding = binding.creatorMaterialBinding || null;
+    const materialBindingKind = materialBinding ? sourceMaterialBindingKind(materialBinding) : null;
     if (materialBinding && (materialBinding.targetMaterialUuid !== 'default-spine-material' ||
         materialBinding.contract !== 'cocos24-builtin-spine-material-v1' ||
         materialBinding.evidenceStatus !== 'source_to_internal_to_creator_builtin_pinned' ||
         !/^[0-9a-f]{64}$/.test(materialBinding.contractSha256 || '') ||
         materialBinding.sourceComponentId !== binding.sourceComponentId ||
-        !materialBinding.sourceMaterialReferenceSourceId || !materialBinding.sourceMaterialSourceId))
+        !materialBindingKind))
         throw new Error('Invalid exact Creator built-in Spine material mapping');
 
     return {
@@ -88,7 +115,39 @@ function applyCreatorSpineBindings(bindings, resolvers) {
         binding, resolvers.resolveComponent, resolvers.resolveSkeletonData));
 }
 
-function readCreatorSpineBinding(binding, resolveComponent) {
+function sourceNodeActivity(plan, sourceNodeId) {
+    if (!plan || !Array.isArray(plan.nodes) || typeof sourceNodeId !== 'string' || !sourceNodeId)
+        return { sourceNodeId, nodeActive: null, hierarchyActive: null, chain: [], status: 'source_activity_unavailable' };
+    const nodes = new Map(plan.nodes.map(row => [row.sourceId, row]));
+    if (nodes.size !== plan.nodes.length) throw new Error('SPINE_SOURCE_NODE_IDENTITY_DUPLICATE');
+    const chain = [];
+    const seen = new Set();
+    let current = sourceNodeId;
+    let hierarchyActive = true;
+    let complete = false;
+    let nodeActive = null;
+    while (current) {
+        if (seen.has(current)) throw new Error('SPINE_SOURCE_NODE_HIERARCHY_CYCLE:' + sourceNodeId);
+        seen.add(current);
+        const row = nodes.get(current);
+        if (!row) break;
+        chain.push(current);
+        if (typeof row.active !== 'boolean') hierarchyActive = null;
+        else if (row.active === false) hierarchyActive = false;
+        if (current === sourceNodeId && typeof row.active === 'boolean') nodeActive = row.active;
+        const parent = row.parent;
+        if (parent === null || parent === undefined || parent === '') { complete = true; break; }
+        current = parent;
+    }
+    if (hierarchyActive !== false && !complete) hierarchyActive = null;
+    return {
+        sourceNodeId, nodeActive, hierarchyActive, chain,
+        status: hierarchyActive === false ? 'verified_source_hierarchy_inactive'
+            : hierarchyActive === true ? 'verified_source_hierarchy_active' : 'source_activity_unresolved',
+    };
+}
+
+function readCreatorSpineBinding(binding, resolveComponent, readContext) {
     if (!binding || !binding.sourceComponentId || !binding.creator || !binding.creator.fields)
         throw new Error('Invalid source-exact Spine component binding');
     const resolved = resolveComponent(binding.sourceComponentId);
@@ -113,9 +172,7 @@ function readCreatorSpineBinding(binding, resolveComponent) {
     const animations = runtimeData && Array.isArray(runtimeData.animations) ? runtimeData.animations : [];
     const skins = runtimeData && Array.isArray(runtimeData.skins) ? runtimeData.skins : [];
     const animationExists = requestedAnimation === null || !hasStaticSourceData || !runtimeData ? null
-        : (typeof component.findAnimation === 'function'
-            ? !!component.findAnimation(requestedAnimation)
-            : animations.some(row => row && row.name === requestedAnimation));
+        : animations.some(row => row && row.name === requestedAnimation);
     const skinExists = requestedSkin === null || !hasStaticSourceData || !runtimeData ? null
         : skins.some(row => row && row.name === requestedSkin);
     const isCached = typeof component.isAnimationCached === 'function' && component.isAnimationCached();
@@ -125,6 +182,16 @@ function readCreatorSpineBinding(binding, resolveComponent) {
         : (currentEntry && currentEntry.animation && currentEntry.animation.name) || component.animation || null;
     const actualSkin = (component._skeleton && component._skeleton.skin && component._skeleton.skin.name)
         || component._skinName || null;
+    const runtimeSkeletonInitialized = !!component._skeleton || !!currentEntry || isCached;
+    const sourceActivity = (readContext && readContext.sourceActivity) || binding.sourceNodeActivity || null;
+    const readbackScope = readContext && typeof readContext.readbackScope === 'string'
+        ? readContext.readbackScope : 'unspecified';
+    const sourceNodeActive = sourceActivity && typeof sourceActivity.nodeActive === 'boolean'
+        ? sourceActivity.nodeActive : null;
+    const sourceHierarchyActive = sourceActivity && typeof sourceActivity.hierarchyActive === 'boolean'
+        ? sourceActivity.hierarchyActive : null;
+    const nativeNodeActive = component.node && typeof component.node.active === 'boolean'
+        ? component.node.active : null;
 
     const actual = {
         nativeComponentUuid: component.uuid || null,
@@ -150,8 +217,12 @@ function readCreatorSpineBinding(binding, resolveComponent) {
         exactSkeletonDataUuid: hasStaticSourceData ? !!expectedData && actualDataUuid === expectedData : null,
         requestedAnimationExists: requestedAnimation === null ? null : animationExists,
         requestedSkinExists: requestedSkin === null ? null : skinExists,
-        requestedAnimationActive: requestedAnimation === null || !runtimeData ? null : actualAnimation === requestedAnimation,
-        requestedSkinActive: requestedSkin === null || !runtimeData ? null : actualSkin === requestedSkin,
+        requestedAnimationActive: requestedAnimation === null || !runtimeData || !runtimeSkeletonInitialized
+            ? null : actualAnimation === requestedAnimation,
+        requestedSkinActive: requestedSkin === null || !runtimeData || !runtimeSkeletonInitialized
+            ? null : actualSkin === requestedSkin,
+        sourceNodeActiveMatchesPlan: sourceNodeActive === null || nativeNodeActive === null
+            ? null : sourceNodeActive === nativeNodeActive,
     };
     const staticPose = binding.creatorStaticPose || null;
     if (staticPose) {
@@ -171,8 +242,7 @@ function readCreatorSpineBinding(binding, resolveComponent) {
             materialBinding.contract === 'cocos24-builtin-spine-material-v1' &&
             materialBinding.evidenceStatus === 'source_to_internal_to_creator_builtin_pinned' &&
             /^[0-9a-f]{64}$/.test(materialBinding.contractSha256 || '') &&
-            typeof materialBinding.sourceMaterialReferenceSourceId === 'string' &&
-            typeof materialBinding.sourceMaterialSourceId === 'string';
+            !!sourceMaterialBindingKind(materialBinding);
         // The Creator engine resolves the built-in Spine material internally
         // in _updateBuiltinMaterial(). Do not assign a custom material here.
         checks.usesDefaultBuiltinMaterialRoute = component.customMaterial == null;
@@ -189,13 +259,28 @@ function readCreatorSpineBinding(binding, resolveComponent) {
         checks[key + 'FieldMatchesSource'] = Object.is(actualValue, row.value);
     }
     const failures = Object.entries(checks).filter(([, value]) => value === false).map(([name]) => name);
+    const serializedRequestedIdentityVerified = hasStaticSourceData && !!runtimeData &&
+        checks.exactSkeletonDataUuid === true &&
+        (requestedAnimation === null || checks.requestedAnimationExists === true && checks.animationFieldMatchesSource === true) &&
+        (requestedSkin === null || checks.requestedSkinExists === true && checks.skinFieldMatchesSource === true);
+    const runtimePoseStatus = runtimeSkeletonInitialized
+        ? (failures.length ? 'initialized_runtime_state_mismatch' : 'initialized_runtime_state_verified')
+        : sourceHierarchyActive === false ? 'runtime_state_not_initialized_source_inactive'
+            : sourceHierarchyActive === true ? 'runtime_state_not_initialized_active_source'
+                : 'runtime_state_not_initialized_source_activity_unknown';
     return {
         sourceComponentId: binding.sourceComponentId,
         nativeComponentType: component.constructor && component.constructor.name || 'sp.Skeleton',
         status: failures.length ? 'mismatch'
             : !hasStaticSourceData ? 'incomplete_dynamic_assignment'
             : !runtimeData ? 'incomplete_runtime_data'
-                : 'verified',
+                : !runtimeSkeletonInitialized && serializedRequestedIdentityVerified && sourceHierarchyActive === false
+                    ? 'verified_source_inactive_runtime_uninitialized'
+                    : !runtimeSkeletonInitialized && serializedRequestedIdentityVerified && sourceHierarchyActive === true
+                        ? 'incomplete_active_source_runtime_pose_uninitialized'
+                        : !runtimeSkeletonInitialized && serializedRequestedIdentityVerified
+                            ? 'incomplete_source_activity_unknown_runtime_uninitialized'
+                            : 'verified',
         staticDataBoundBySource: hasStaticSourceData,
         expectedTargetDataUuidAvailable: !!expectedData,
         runtimeDataAvailable: !!runtimeData,
@@ -203,6 +288,19 @@ function readCreatorSpineBinding(binding, resolveComponent) {
         observedDataWithoutStaticSourceReference: !hasStaticSourceData && !!actualDataUuid,
         requestedAnimation,
         requestedSkin,
+        sourceActivity: sourceActivity || { status: 'source_activity_unavailable', nodeActive: null, hierarchyActive: null, chain: [] },
+        // Keep persisted component identity distinct from an initialized
+        // instance's runtime pose. Callers should use `instantiated_mapped`
+        // only when the component came from the exact saved-prefab instance map.
+        readbackScope,
+        serializedIdentityStatus: serializedRequestedIdentityVerified ? 'verified' : 'incomplete_or_mismatch',
+        instantiatedRuntimeStatus: runtimeSkeletonInitialized
+            ? (failures.length ? 'initialized_mismatch' : 'initialized_verified')
+            : 'not_initialized',
+        nativeNodeActive,
+        runtimeSkeletonInitialized,
+        runtimePoseStatus,
+        serializedRequestedIdentityVerified,
         actual,
         checks,
         failures,
@@ -255,10 +353,11 @@ function readCreatorSpineDataCatalog(sourceId, skeletonData, expected) {
     };
 }
 
-function readCreatorSpineBindings(bindings, resolveComponent) {
+function readCreatorSpineBindings(bindings, resolveComponent, resolveReadContext) {
     if (!Array.isArray(bindings) || typeof resolveComponent !== 'function')
         throw new Error('Creator Spine readback requires bindings and an exact component resolver');
-    return bindings.map(binding => readCreatorSpineBinding(binding, resolveComponent));
+    return bindings.map(binding => readCreatorSpineBinding(binding, resolveComponent,
+        typeof resolveReadContext === 'function' ? resolveReadContext(binding.sourceComponentId) : null));
 }
 
 module.exports = {
@@ -266,5 +365,6 @@ module.exports = {
     applyCreatorSpineBindings,
     readCreatorSpineBinding,
     readCreatorSpineBindings,
+    sourceNodeActivity,
     readCreatorSpineDataCatalog,
 };
