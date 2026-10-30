@@ -27,6 +27,56 @@ for(let i=5;i<32;i+=3){const value=parseInt(rawPreserverUuid.slice(i,i+3),16);PR
 function isPreserverType(type){return type===PRESERVER_SCRIPT_UUID||type===PRESERVER_COMPILED_ID;}
 
 const PRESERVER_CLASS_NAME = 'MonkeySpineUITransformPreserver';
+const STATIC_SORT_PROXY_MARKER_UUID = '9094b98e-f332-509c-a99d-7a0b8fc42364';
+const STATIC_SORT_PROXY_PRESENTER_UUID = 'f4fa4dce-6293-52c2-b9bc-532f8551cb92';
+
+function compiledScriptId(uuid) {
+    const raw = uuid.replace(/-/g, '');
+    let compiled = raw.slice(0, 5);
+    for (let index = 5; index < 32; index += 3) {
+        const value = parseInt(raw.slice(index, index + 3), 16);
+        compiled += uuidAlphabet[value >> 6] + uuidAlphabet[value & 63];
+    }
+    return compiled;
+}
+
+function isPinnedScriptType(type, uuid) {
+    return type === uuid || type === compiledScriptId(uuid);
+}
+
+function isSerializedGeneratedSortProxyRoot(child, parent, sourceId, records, allowedSourceIds) {
+    if (!child || child.__type__ !== 'cc.Node' || !parent) return false;
+    const deref = value => value && Number.isInteger(value.__id__) ? records[value.__id__] : null;
+    const components = (child._components || []).map(deref).filter(Boolean);
+    const markers = components.filter(row => isPinnedScriptType(row.__type__, STATIC_SORT_PROXY_MARKER_UUID));
+    const presenters = components.filter(row => isPinnedScriptType(row.__type__, STATIC_SORT_PROXY_PRESENTER_UUID));
+    if (markers.length !== 1 || presenters.length !== 1) return false;
+    const marker = markers[0], presenter = presenters[0];
+    const allowed = allowedSourceIds instanceof Set ? allowedSourceIds : new Set([sourceId]);
+    return marker.kind === 'root' && allowed.has(marker.sourceNode) &&
+        deref(marker.sourceRootOwner) === parent &&
+        deref(presenter.sourceRoot) === parent && deref(presenter.proxyRoot) === child &&
+        presenter.sourceRootId === marker.sourceNode;
+}
+
+function serializedProxyOriginMap(plan, prefabId, nodeOrigins) {
+    const mapping = new Map(nodeOrigins);
+    for (const link of plan.prefabInstances || []) {
+        if (!link || link.owner !== prefabId) continue;
+        if (!Array.isArray(link.nodes))
+            throw new Error('SPINE_UI_TRANSFORM_PROXY_ORIGIN_INSTANCE_MAPPING_INVALID:' + prefabId);
+        for (const pair of link.nodes) {
+            if (!pair || typeof pair.instanceObject !== 'string' || !pair.instanceObject ||
+                typeof pair.templateObject !== 'string' || !pair.templateObject)
+                throw new Error('SPINE_UI_TRANSFORM_PROXY_ORIGIN_INSTANCE_EDGE_INVALID:' + prefabId);
+            const previous = mapping.get(pair.instanceObject);
+            if (previous && previous !== pair.templateObject)
+                throw new Error('SPINE_UI_TRANSFORM_PROXY_ORIGIN_AMBIGUOUS:' + pair.instanceObject);
+            mapping.set(pair.instanceObject, pair.templateObject);
+        }
+    }
+    return mapping;
+}
 
 function pair(value, sourceId, field) {
     if (!Array.isArray(value) || value.length !== 2 ||
@@ -308,6 +358,7 @@ function verifySerializedPrefab(plan, prefabSpec, serialized, context) {
     const spineNodeIds = new Set(spineRows.keys());
     const instanceLinks = (plan.prefabInstances || []).filter(link => link &&
         link.owner === prefabSpec.sourceId && link.outermost === true);
+    const proxyNodeOrigins = serializedProxyOriginMap(plan, prefabSpec.sourceId, nodeOrigins);
     const nativeNodes = new Map();
     const verified = [];
     const covered = new Set();
@@ -316,6 +367,8 @@ function verifySerializedPrefab(plan, prefabSpec, serialized, context) {
         if (!source || !nativeNode || nativeNode.__type__ !== 'cc.Node')
             throw new Error('SPINE_UI_TRANSFORM_SERIALIZED_NODE_MISMATCH:' + sourceId);
         nativeNodes.set(sourceId, nativeNode);
+        const proxySourceIdChain = canonicalId(sourceId, proxyNodeOrigins, 'serialized-sort-proxy-root').chain;
+        const allowedProxySourceIds = new Set(proxySourceIdChain);
 
         // Native Prefab instances are an atomic serialized reference. Creator's
         // SDK may strip the inherited descendants and Components from this raw
@@ -352,8 +405,11 @@ function verifySerializedPrefab(plan, prefabSpec, serialized, context) {
         }
 
         const children = (nativeNode._children || []).map(deref);
-        if (children.length !== (source.children || []).length)
-            throw new Error('SPINE_UI_TRANSFORM_SERIALIZED_CHILD_COUNT_MISMATCH:' + sourceId);
+        const sourceChildren = children.filter(child =>
+            !isSerializedGeneratedSortProxyRoot(child, nativeNode, sourceId, records, allowedProxySourceIds));
+        if (sourceChildren.length !== (source.children || []).length)
+            throw new Error('SPINE_UI_TRANSFORM_SERIALIZED_CHILD_COUNT_MISMATCH:' + sourceId + ':' +
+                sourceChildren.length + '/' + (source.children || []).length);
         if (spineNodeIds.has(sourceId)) {
             const spineRow = spineRows.get(sourceId);
             const transforms = (nativeNode._components || []).map(deref)
@@ -399,7 +455,7 @@ function verifySerializedPrefab(plan, prefabSpec, serialized, context) {
             covered.add(sourceId);
         }
         for (let index = 0; index < (source.children || []).length; index++)
-            walk(source.children[index], children[index]);
+            walk(source.children[index], sourceChildren[index]);
     }
     const proofRows = [];
     walk(prefabSpec.root, root);
@@ -492,5 +548,6 @@ function verifyNativeInstanceLink(plan, prefabSpec, link, inheritedRows, nativeR
 }
 
 module.exports = { SOURCE_ENGINE_EVIDENCE, TARGET_ENGINE_EVIDENCE, PRESERVER_SCRIPT_UUID,
+    STATIC_SORT_PROXY_MARKER_UUID, STATIC_SORT_PROXY_PRESENTER_UUID, compiledScriptId, isSerializedGeneratedSortProxyRoot,
     PRESERVER_CLASS_NAME, sourceRows, isPreserver, attachPreservers,
     restoreAuthored, readAuthored, verifySerializedPrefab };

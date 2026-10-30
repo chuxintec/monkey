@@ -342,6 +342,13 @@ def inspect(source_manifest_path: str | Path, normalized_ir_path: str | Path) ->
         # declaration/pass/material contract is an error, not a silent fallback.
         profile, stage_hashes, effect_props = _validate_effect(effect)
         source_material_id = material_asset["sourceId"]
+        def resolves_material(identity):
+            seen=set()
+            while identity in assets and assets[identity].get('kind')=='redirect':
+                if identity in seen:raise StaticTimeMaterialError('material redirect cycle')
+                seen.add(identity);identity=assets[identity].get('redirectTarget')
+            return identity==source_material_id
+        source_material_references=sorted(sid for sid in assets if resolves_material(sid))
         material_uuid = _asset_uuid(material_asset)
         if not material_uuid:
             continue
@@ -351,7 +358,7 @@ def inspect(source_manifest_path: str | Path, normalized_ir_path: str | Path) ->
         # lookup records; they are not profile bindings for this conversion.
         selected_sprites = [row for row in source_sprites
                              if row["sourceComponentId"] in ir_components
-                             and ir_components[row["sourceComponentId"]].get("materials") == [material_asset["sourceId"]]]
+                             and ir_components[row["sourceComponentId"]].get("materials") in [[sid]for sid in source_material_references]]
         if not selected_sprites:
             continue
         props, defines = _source_property_snapshot(profile, material, effect_props)
@@ -364,9 +371,14 @@ def inspect(source_manifest_path: str | Path, normalized_ir_path: str | Path) ->
             # gameAsset. Pin the manifest-resolved identity here.
             row["spriteFrameSourceId"] = frame_asset["sourceId"]
             component = ir_components.get(row["sourceComponentId"])
-            if not isinstance(component, dict) or component.get("type") != "cc.Sprite" or component.get("spriteFrame") != frame_asset["sourceId"]:
+            frame_identity=component.get('spriteFrame') if isinstance(component,dict) else None
+            frame_seen=set()
+            while frame_identity in assets and assets[frame_identity].get('kind')=='redirect':
+                if frame_identity in frame_seen:raise StaticTimeMaterialError('SpriteFrame redirect cycle')
+                frame_seen.add(frame_identity);frame_identity=assets[frame_identity].get('redirectTarget')
+            if not isinstance(component, dict) or component.get("type") != "cc.Sprite" or frame_identity != frame_asset["sourceId"]:
                 raise StaticTimeMaterialError(f"source IR lacks an exact Sprite/frame binding: {row['sourceComponentId']}")
-            if component.get("materials") != [source_material_id]:
+            if component.get("materials") not in [[sid]for sid in source_material_references]:
                 raise StaticTimeMaterialError(f"source IR Sprite material binding differs: {row['sourceComponentId']}")
             row["sourceFrameDocumentSha256"] = _canonical_json_sha(frame_asset.get("document"))
         identity = _target_identities(profile, props, source_material_id)
@@ -378,6 +390,7 @@ def inspect(source_manifest_path: str | Path, normalized_ir_path: str | Path) ->
             "effectDocumentSha256": _canonical_json_sha(effect_asset.get("document")),
             "sourceEffectDocumentSha256": _canonical_json_sha(effect_asset.get("document")),
             "sourceMaterialId": source_material_id,
+            "sourceMaterialReferenceIds": source_material_references,
             "sourceMaterialUuid": material_uuid,
             "sourceMaterialDocumentSha256": _canonical_json_sha(material_asset.get("document")),
             "sourceMaterialProperties": props,
@@ -455,7 +468,7 @@ def attach(plan: dict, spec: dict, target: str) -> dict:
             component = components_by_id.get(component_id)
             if not isinstance(component, dict) or component.get("type") != "cc.Sprite":
                 raise StaticTimeMaterialError(f"profile Sprite component is missing from the target plan: {component_id}")
-            if component.get("materials") != [source_id] or component.get("spriteFrame") != origin_to_frame[component_id]:
+            if component.get("materials") not in [[sid]for sid in material.get('sourceMaterialReferenceIds',[source_id])] or component.get("spriteFrame") != origin_to_frame[component_id]:
                 raise StaticTimeMaterialError(f"plan Sprite material/frame no longer matches profile evidence: {component_id}")
             frame = _validate_frame_available(plan, target, origin_to_frame[component_id])
             if not component.get("node") or component["node"] not in {n.get("sourceId") for n in plan.get("nodes", []) if isinstance(n, dict)}:

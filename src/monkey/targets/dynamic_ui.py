@@ -24,7 +24,16 @@ def probe_sources(plan):
 def driven_fields(plan):
     nodes={n['sourceId']:n for n in plan['nodes']};result={}
     def allow(sid,key,axes):result.setdefault(sid,{}).setdefault(key,set()).update(axes)
-    for c in plan['components']:
+    components=list(plan['components'])
+    if plan.get('targetProfile')=='cocos-3.8.8':
+        for owner in (plan.get('layoutCompletion')or{}).get('nodes',[]):
+            for slot in owner.get('layouts',[]):
+                if slot.get('status')=='native_algorithm_supported':
+                    components.append(dict(slot,**{'type':'cc.Layout','node':owner['sourceNodeId'],'convertible':True,'enabled':slot['sourceEnabled']}))
+            for slot in owner.get('widgets',[]):
+                if slot.get('status')=='native_constraint_supported':
+                    components.append(dict(slot,**{'type':'cc.Widget','node':owner['sourceNodeId'],'flags':slot['alignFlags'],'convertible':True,'enabled':slot['sourceEnabled']}))
+    for c in components:
         if not c.get('convertible'):continue
         sid=c['node'];typ=c['type']
         if (typ=='cc.ScrollView' and plan.get('targetProfile')=='cocos-3.8.8' and

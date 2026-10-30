@@ -24,6 +24,10 @@ public static partial class MonkeyImporter
         var c=plan.components.FirstOrDefault(x=>x.sourceId==id);
         if(c!=null&&nodes.TryGetValue(c.node,out node)) {
             if(c.staticFieldBinding!=null&&!string.IsNullOrEmpty(c.staticFieldBinding.typeName))return StaticComponent(c,node);
+            if(c.type=="cc.Graphics"&&plan.staticControlBindings!=null)return node.GetComponent<NativeStaticGraphics>();
+            if(c.type=="cc.EditBox"&&plan.staticControlBindings!=null)return node.GetComponent<NativeStaticEditBox>();
+            if(c.type=="cc.Animation"&&plan.staticCompletionEnabled)return node.GetComponent<NativeStaticAnimationBinding>();
+            if(c.type=="cc.ProgressBar"&&!c.convertible&&c.staticProgressBinding!=null&&c.staticProgressBinding.policy=="native-static-progress-v1")return ResolveStaticProgress(plan,nodes,id);
             if(!c.convertible) {
                 // Optional native Spine components are created by their pinned
                 // stage even when the generic component adapter is unavailable.
@@ -46,6 +50,11 @@ public static partial class MonkeyImporter
             UnityEngine.Object spineComponent=null;ResolveStaticSpineReference(id,nodes,ref spineComponent);if(spineComponent==null)ResolveOptionalSpriteOutline(plan,id,nodes,ref spineComponent);return spineComponent;
         }
         UnityEngine.Object spineAsset=null;ResolveStaticSpineReference(id,nodes,ref spineAsset);if(spineAsset==null)ResolveOptionalSpriteOutline(plan,id,nodes,ref spineAsset);if(spineAsset==null)ResolveOptionalStaticTimeMaterial(plan,id,ref spineAsset);if(spineAsset!=null)return spineAsset;
+        if(plan.staticRetainedAssets!=null&&plan.staticRetainedAssets.assets.Any(x=>x.sourceId==id))return ResolveStaticRetainedAsset(plan,id);
+        var animation=(plan.staticAnimationAssetReferences??Array.Empty<StaticAnimationAssetRef>()).SingleOrDefault(x=>x.sourceId==id);
+        if(animation!=null)return AssetDatabase.LoadAssetAtPath<AnimationClip>(animation.path);
+        var bitmap=plan.bitmapFonts.FirstOrDefault(x=>x.id==id);
+        if(bitmap!=null)return AssetDatabase.LoadAssetAtPath<TMPro.TMP_FontAsset>(bitmap.fontPath);
         var texture=plan.textures.FirstOrDefault(x=>x.id==id);
         if(texture!=null)return AssetDatabase.LoadAssetAtPath<Sprite>(texture.path);
         if(plan.materialBinding!=null&&plan.materialBinding.materialSourceId==id)

@@ -514,6 +514,106 @@ def _expected_initial_string(component: dict, member: str):
     return matches[0]['stringValue']
 
 
+def _expected_stencil_mask_ancestors(source_node_id: str, nodes: dict, static_masks):
+    """Return active serialized source Masks from the Graphic node toward its Canvas."""
+    if not isinstance(source_node_id, str) or source_node_id not in nodes or not isinstance(static_masks, list):
+        return None
+    masks_by_node = {}
+    for row in static_masks:
+        if not isinstance(row, dict) or not isinstance(row.get('node'), str):
+            return None
+        if row.get('enabled') is True:
+            masks_by_node.setdefault(row['node'], []).append(row.get('sourceId'))
+    expected = []
+    current = source_node_id
+    visited = set()
+    while current in nodes:
+        if current in visited:
+            return None
+        visited.add(current)
+        node = nodes[current]
+        if not isinstance(node, dict) or type(node.get('active')) is not bool:
+            return None
+        # A child Spine Graphic can be authored inactive while an ancestor
+        # Mask remains active. MaskUtilities checks the Mask's own hierarchy,
+        # not the child's active state, so evaluate each mask node separately.
+        active_in_hierarchy = node['active']
+        parent = node.get('parent')
+        parent_seen = set()
+        while parent not in (None, ''):
+            if not isinstance(parent, str) or parent in parent_seen:
+                return None
+            parent_seen.add(parent)
+            parent_node = nodes.get(parent)
+            if not isinstance(parent_node, dict) or type(parent_node.get('active')) is not bool:
+                return None
+            active_in_hierarchy = active_in_hierarchy and parent_node['active']
+            parent = parent_node.get('parent')
+        if active_in_hierarchy:
+            matches = masks_by_node.get(current, [])
+            if len(matches) > 1 or any(not isinstance(source_id, str) or not source_id for source_id in matches):
+                return None
+            expected.extend(matches)
+        parent = node.get('parent')
+        if parent in (None, ''):
+            break
+        if not isinstance(parent, str):
+            return None
+        current = parent
+    return expected
+
+
+def _verify_transient_stencil_variant(row: dict, expected: dict, actual_asset_path: str,
+                                     nodes: dict, static_masks, source_node_id: str, root: Path,
+                                     source_id: str, index: int, owner: str):
+    failures = []
+    # Candidate file identities are checked by the caller; this helper validates
+    # all per-renderer provenance carried by the saved native readback.
+    expected_ancestors = _expected_stencil_mask_ancestors(source_node_id, nodes, static_masks)
+    actual_ancestors = row.get('stencilMaskAncestorSourceIds')
+    if expected_ancestors is None or actual_ancestors != expected_ancestors:
+        failures.append(f'{owner}: Spine renderer stencil-mask ancestry differs {source_id}[{index}]')
+    maskable = row.get('rawImageMaskable')
+    depth = row.get('stencilDepth')
+    if type(maskable) is not bool or type(depth) is not int:
+        failures.append(f'{owner}: Spine renderer stencil depth is malformed {source_id}[{index}]')
+        expected_depth = -1
+    else:
+        expected_depth = len(expected_ancestors) if maskable and expected_ancestors is not None else 0
+        if depth != expected_depth:
+            failures.append(f'{owner}: Spine renderer stencil depth differs from source ancestry {source_id}[{index}]')
+    if not isinstance(row.get('stencilRootSortCanvasPath'), str) or not row.get('stencilRootSortCanvasPath'):
+        failures.append(f'{owner}: Spine renderer root sort Canvas provenance is missing {source_id}[{index}]')
+    if actual_asset_path != '':
+        failures.append(f'{owner}: Spine transient stencil renderer unexpectedly reports a persistent material path {source_id}[{index}]')
+    stencil_id = (1 << expected_depth) - 1 if 0 < expected_depth < 31 else -1
+    wanted_state = {
+        'stencilReference': stencil_id,
+        'stencilComparison': 3,  # UnityEngine.Rendering.CompareFunction.Equal
+        'stencilOperation': 0,  # UnityEngine.Rendering.StencilOp.Keep
+        'stencilReadMask': stencil_id,
+        'stencilWriteMask': 0,
+        'stencilColorMask': 15,  # UnityEngine.Rendering.ColorWriteMask.All
+        'stencilUseAlphaClip': 0,
+    }
+    if stencil_id < 0 or any(row.get(key) != value for key, value in wanted_state.items()):
+        failures.append(f'{owner}: Spine renderer stencil material state differs from UGUI ancestry formula {source_id}[{index}]')
+    for key in ('baseMaterialPersistentReferenceVerified', 'modifiedMaterialShaderMatchesBase',
+                'nonStencilMaterialPropertiesMatch', 'stencilAncestryVerified',
+                'stencilConfigurationVerified', 'transientStencilVariantVerified'):
+        if row.get(key) is not True:
+            failures.append(f'{owner}: Spine renderer {key} is not verified {source_id}[{index}]')
+    if (row.get('baseMaterialAssetPath') != expected.get('materialPath') or
+            row.get('baseMaterialShader') != _UI_SHADER):
+        failures.append(f'{owner}: Spine renderer persistent base material path/shader differs {source_id}[{index}]')
+    if row.get('baseMaterialAssetGuid') != _guid_from_meta(root, expected.get('materialPath')):
+        failures.append(f'{owner}: Spine renderer persistent base material GUID differs {source_id}[{index}]')
+    if (row.get('baseMaterialTextureAssetPath') != expected.get('texturePath') or
+            row.get('baseMaterialTextureGuid') != _guid_from_meta(root, expected.get('texturePath'))):
+        failures.append(f'{owner}: Spine renderer persistent base texture path/GUID differs {source_id}[{index}]')
+    return failures
+
+
 def _verify_empty_pose(stage_component: dict, pose: dict, data_asset: dict, owner: str):
     failures = []
     source_id = stage_component.get('sourceComponentId')
@@ -559,7 +659,8 @@ def _verify_empty_pose(stage_component: dict, pose: dict, data_asset: dict, owne
 
 
 def _verify_graphic_renderer(root: Path, stage_component: dict, actual: dict, data_asset_plan: dict,
-                             actual_data_asset: dict, ui_shader: dict, owner: str):
+                             actual_data_asset: dict, ui_shader: dict, owner: str, nodes: dict,
+                             static_masks):
     failures = []
     source_id = stage_component.get('sourceComponentId')
     expected_bindings = _graphic_material_bindings(data_asset_plan)
@@ -614,6 +715,7 @@ def _verify_graphic_renderer(root: Path, stage_component: dict, actual: dict, da
         failures.append(f'{owner}: SkeletonGraphic native material status is unknown or unverified {source_id}')
     if len(renderer_rows) != instruction_count:
         failures.append(f'{owner}: saved SkeletonGraphic typed pair row count differs {source_id}')
+    canvas_paths = actual.get('canvasRendererMaterialAssetPaths')
     for index, row in enumerate(renderer_rows):
         if not isinstance(row, dict) or row.get('index') != index:
             failures.append(f'{owner}: malformed SkeletonGraphic renderer row {source_id}[{index}]')
@@ -637,9 +739,14 @@ def _verify_graphic_renderer(root: Path, stage_component: dict, actual: dict, da
                 failures.append(f'{owner}: Spine UI renderer {flag} is not verified {source_id}[{index}]')
         if type(row.get('rawImageMaskable')) is not bool:
             failures.append(f'{owner}: Spine UI RawImage mask state is malformed {source_id}[{index}]')
+        canvas_path = (canvas_paths[index + 1] if isinstance(canvas_paths, list) and
+                       len(canvas_paths) == instruction_count + 1 and isinstance(canvas_paths[index + 1], str) else None)
+        if canvas_path == '':
+            failures.extend(_verify_transient_stencil_variant(row, expected, canvas_path, nodes, static_masks,
+                                                               stage_component.get('sourceNodeId'), root,
+                                                               source_id, index, owner))
 
     canvas_shaders = actual.get('canvasRendererMaterialShaders')
-    canvas_paths = actual.get('canvasRendererMaterialAssetPaths')
     expected_child_paths = []
     for row in renderer_rows:
         expected = expected_bindings.get(row.get('sourceMaterialId')) if isinstance(row, dict) else None
@@ -660,14 +767,17 @@ def _verify_graphic_renderer(root: Path, stage_component: dict, actual: dict, da
                 zip(canvas_shaders, expected_shaders))):
         failures.append(f'{owner}: CanvasRenderer material shader set differs {source_id}')
     if (not isinstance(canvas_paths, list) or len(canvas_paths) != len(expected_paths) or
-            any(actual_value != expected_value for actual_value, expected_value in
-                zip(canvas_paths, expected_paths))):
+            not canvas_paths or canvas_paths[0] != '' or any(
+                actual_path != expected_path and not (actual_path == '' and index > 0 and
+                    index - 1 < len(renderer_rows) and isinstance(renderer_rows[index - 1], dict) and
+                    renderer_rows[index - 1].get('transientStencilVariantVerified') is True)
+                for index, (actual_path, expected_path) in enumerate(zip(canvas_paths, expected_paths)))):
         failures.append(f'{owner}: CanvasRenderer material asset path set differs {source_id}')
     return failures
 
 
 def _verify_component(stage_component: dict, actual: dict, visual: dict, data_assets: dict,
-                      stage_assets: dict, nodes: dict, ui_shader: dict, root: Path, owner: str):
+                      stage_assets: dict, nodes: dict, static_masks, ui_shader: dict, root: Path, owner: str):
     failures = []
     source_id = stage_component.get('sourceComponentId')
     has_data = stage_component.get('sourceHasStaticDataReference') is True
@@ -698,7 +808,7 @@ def _verify_component(stage_component: dict, actual: dict, visual: dict, data_as
             failures.append(f'{owner}: component data asset path/GUID/content differs {source_id}')
         if renderer_kind == 'SkeletonGraphic' and data_asset is not None and data_asset_plan is not None:
             failures.extend(_verify_graphic_renderer(root, stage_component, actual, data_asset_plan,
-                                                     data_asset, ui_shader, owner))
+                                                     data_asset, ui_shader, owner, nodes, static_masks))
     elif (actual.get('dataAssetContentVerified') is not False or actual.get('nativeDataAssetPath') not in (None, '') or
           actual.get('nativeDataAssetGuid') not in (None, '')):
         failures.append(f'{owner}: source-unbound Spine component has a native data asset {source_id}')
@@ -924,6 +1034,8 @@ def verify(plan, projectRoot, editorReadback):
         components_by_prefab.setdefault(row['sourcePrefabId'], []).append(row)
     assets_by_id = {row['sourceAssetId']: row for row in stage_assets}
     nodes = {row.get('sourceId'): row for row in plan.get('nodes', []) if isinstance(row, dict)}
+    static_mask_contract = plan.get('staticMasks')
+    static_masks = static_mask_contract.get('masks') if isinstance(static_mask_contract, dict) else None
     warnings = []
 
     for prefab_id, expected_components in sorted(components_by_prefab.items()):
@@ -1014,7 +1126,7 @@ def verify(plan, projectRoot, editorReadback):
                 continue
             failures.extend(diagnostic('SPINE_NATIVE_READBACK_INVALID', relative, message, prefab_id)
                             for message in _verify_component(expected, actual, visual_by_id.get(source_id), actual_assets,
-                                                             assets_by_id, nodes, ui_shader, root, prefab_id))
+                                                             assets_by_id, nodes, static_masks, ui_shader, root, prefab_id))
             dynamic_gaps = _expected_dynamic_gaps(expected)
             if dynamic_gaps is None:
                 continue

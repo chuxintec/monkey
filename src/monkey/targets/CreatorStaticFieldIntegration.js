@@ -50,6 +50,9 @@ function resolver(plan,nodes,assets){
         if(c&&nodes.has(c.node)){
             const node=nodes.get(c.node);
             if(c.staticFieldBinding)return component(c,node);
+            if(c.staticControlBinding)return node.getComponent(c.type==='cc.Graphics'?cc.Graphics:cc.EditBox);
+            if(c.type==='cc.Animation'&&plan.staticAnimationEvidence)return node.getComponent(cc.Animation);
+            if(c.staticProgressBinding)return node.getComponent(cc.ProgressBar);
             if(!c.convertible)return null;
             if(c.behaviorBinding){const ctor=cc.js.getClassByName(c.behaviorBinding.typeName);return ctor?node.getComponent(ctor):null;}
             const type=c.spineBinding?cc.sp.Skeleton:cc[c.type==='cc.LabelOutline'?'Label':c.type.slice(3)];

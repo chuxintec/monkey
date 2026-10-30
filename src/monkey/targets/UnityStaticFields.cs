@@ -46,12 +46,11 @@ public static class UnityStaticFields
         public FieldSpec[] fields;
         public string[] gaps;
     }
-    [Serializable] sealed class RecordSerializationProbe { public RecordValueSpec[] rows; }
     [Serializable] public sealed class Readback
     {
         public string sourceId, nativeSourceId, typeName, scriptGuid, nativeScriptGuid;
         public bool fieldsVerified, fieldsAssigned, nativeIdentityVerified, enabled, nativeComplete, dynamicBehaviorComplete;
-        public bool recordJsonRoundTripVerified;
+        public bool recordSpecStructureVerified;
         public FieldSpec[] fields;
         public string[] gaps;
     }
@@ -93,7 +92,7 @@ public static class UnityStaticFields
     public static Readback Assign(Spec spec, MonoBehaviour component, Func<string, UnityEngine.Object> resolveRef)
     {
         var gaps = new List<string>();
-        bool recordJsonRoundTripVerified = true;
+        bool recordSpecStructureVerified = true;
         if (spec == null || component == null) return Result(spec, component, false, gaps, Array.Empty<FieldSpec>());
         try
         {
@@ -110,8 +109,8 @@ public static class UnityStaticFields
                 try
                 {
                     if (field.elementKind == "record" && field.recordTypeName != null &&
-                        !RecordRowsSerializeAndReadBack(field.recordValues))
-                    { Gap(gaps, "record_array_json_roundtrip_failed:" + field.sourceFieldName); recordJsonRoundTripVerified = false; continue; }
+                        !RecordRowsAreValid(field.recordValues))
+                    { Gap(gaps, "record_array_spec_invalid:" + field.sourceFieldName); recordSpecStructureVerified = false; continue; }
                     var info = component.GetType().GetField(field.fieldName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly);
                     if (info == null) { Gap(gaps, "carrier_field_missing:" + field.sourceFieldName); continue; }
                     object value = ScalarValue(field);
@@ -154,7 +153,7 @@ public static class UnityStaticFields
         bool fieldsAssigned = gaps.Count == 0;
         var assignment = Result(spec, component, false, gaps, Clone(spec.fields));
         assignment.fieldsAssigned = fieldsAssigned;
-        assignment.recordJsonRoundTripVerified = recordJsonRoundTripVerified;
+        assignment.recordSpecStructureVerified = recordSpecStructureVerified;
         assignment.gaps = MergeGaps(spec, gaps);
         return assignment;
     }
@@ -165,7 +164,7 @@ public static class UnityStaticFields
         var nativeGaps = new List<string>();
         var fields = new List<FieldSpec>();
         bool verified = spec != null && component != null;
-        bool recordJsonRoundTripVerified = true;
+        bool recordSpecStructureVerified = true;
         try
         {
             if (spec == null || component == null || component.GetType() != Resolve(spec))
@@ -175,8 +174,8 @@ public static class UnityStaticFields
                 foreach (var expected in spec.fields ?? Array.Empty<FieldSpec>())
                 {
                     if (expected.elementKind == "record" && expected.recordTypeName != null &&
-                        !RecordRowsSerializeAndReadBack(expected.recordValues))
-                    { Gap(gaps, "record_array_json_roundtrip_failed:" + expected.sourceFieldName); verified = false; recordJsonRoundTripVerified = false; }
+                        !RecordRowsAreValid(expected.recordValues))
+                    { Gap(gaps, "record_array_spec_invalid:" + expected.sourceFieldName); verified = false; recordSpecStructureVerified = false; }
                     var actual = Clone(expected);
                     var info = component.GetType().GetField(expected.fieldName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly);
                     if (info == null) { Gap(gaps, "carrier_field_missing:" + expected.sourceFieldName); verified = false; fields.Add(actual); continue; }
@@ -236,8 +235,8 @@ public static class UnityStaticFields
             nativeSourceId = nativeSourceId, scriptGuid = spec == null ? null : spec.scriptGuid, nativeScriptGuid = nativeScriptGuid,
             nativeIdentityVerified = nativeIdentityVerified, fieldsVerified = fieldsVerified,
             enabled = false, fields = fields.ToArray(), gaps = allGaps,
-            nativeComplete = fieldsVerified && nativeIdentityVerified && !enabled && recordJsonRoundTripVerified && spec != null && spec.declarationDefaultsVerified && (spec.gaps == null || spec.gaps.Length == 0),
-            recordJsonRoundTripVerified = recordJsonRoundTripVerified,
+            nativeComplete = fieldsVerified && nativeIdentityVerified && !enabled && recordSpecStructureVerified && spec != null && spec.declarationDefaultsVerified && (spec.gaps == null || spec.gaps.Length == 0),
+            recordSpecStructureVerified = recordSpecStructureVerified,
             dynamicBehaviorComplete = false };
     }
 
@@ -261,8 +260,8 @@ public static class UnityStaticFields
             arrayType.GetElementType().Name != expected.recordTypeName)
         { Gap(gaps, "record_array_type_mismatch:" + expected.sourceFieldName); return null; }
         var rows = expected.recordValues ?? Array.Empty<RecordValueSpec>();
-        if (!RecordRowsSerializeAndReadBack(rows))
-        { Gap(gaps, "record_array_json_roundtrip_failed:" + expected.sourceFieldName); return null; }
+        if (!RecordRowsAreValid(rows))
+        { Gap(gaps, "record_array_spec_invalid:" + expected.sourceFieldName); return null; }
         var result = Array.CreateInstance(arrayType.GetElementType(), rows.Length);
         for (int i = 0; i < rows.Length; i++)
         {
@@ -292,7 +291,7 @@ public static class UnityStaticFields
     {
         var rows = value as Array;
         var sourceRows = expected.recordValues ?? Array.Empty<RecordValueSpec>();
-        if (!RecordRowsSerializeAndReadBack(sourceRows)) { verified = false; return null; }
+        if (!RecordRowsAreValid(sourceRows)) { verified = false; return null; }
         if (rows == null || rows.Length != sourceRows.Length) { verified = false; return null; }
         var actualRows = new RecordValueSpec[rows.Length];
         for (int i = 0; i < rows.Length; i++)
@@ -388,8 +387,50 @@ public static class UnityStaticFields
         else if (field.storageType == "double[]") field.numberValues = value as double[] ?? Array.Empty<double>();
         else if (field.storageType == "string[]") field.stringValues = value as string[] ?? Array.Empty<string>();
     }
-    static FieldSpec Clone(FieldSpec field) { return JsonUtility.FromJson<FieldSpec>(JsonUtility.ToJson(field)); }
-    static RecordFieldValueSpec Clone(RecordFieldValueSpec field) { return JsonUtility.FromJson<RecordFieldValueSpec>(JsonUtility.ToJson(field)); }
+    static FieldSpec Clone(FieldSpec field)
+    {
+        if (field == null) return null;
+        return new FieldSpec {
+            name = field.name, sourceFieldName = field.sourceFieldName, fieldName = field.fieldName,
+            kind = field.kind, storageType = field.storageType, elementKind = field.elementKind,
+            mode = field.mode, sourceDeclaredType = field.sourceDeclaredType,
+            referenceKind = field.referenceKind, dynamicType = field.dynamicType,
+            sourceConstant = field.sourceConstant, accessorBackingJson = field.accessorBackingJson,
+            sourceValueEncoding = field.sourceValueEncoding, sourceValueEncodingJson = field.sourceValueEncodingJson,
+            recordTypeName = field.recordTypeName, recordName = field.recordName,
+            numberValue = field.numberValue, stringValue = field.stringValue, refValue = field.refValue,
+            snapshotJson = field.snapshotJson, boolValue = field.boolValue, nullExpected = field.nullExpected,
+            referenceVerified = field.referenceVerified, referencesVerified = field.referencesVerified,
+            numberValues = field.numberValues == null ? null : (double[])field.numberValues.Clone(),
+            stringValues = field.stringValues == null ? null : (string[])field.stringValues.Clone(),
+            refValues = field.refValues == null ? null : (string[])field.refValues.Clone(),
+            boolValues = field.boolValues == null ? null : (bool[])field.boolValues.Clone(),
+            colorR = field.colorR, colorG = field.colorG, colorB = field.colorB, colorA = field.colorA,
+            recordValues = Clone(field.recordValues)
+        };
+    }
+    static RecordFieldValueSpec Clone(RecordFieldValueSpec field)
+    {
+        if (field == null) return null;
+        return new RecordFieldValueSpec {
+            name = field.name, sourceFieldName = field.sourceFieldName, fieldName = field.fieldName,
+            kind = field.kind, storageType = field.storageType, referenceKind = field.referenceKind,
+            sourceDeclaredType = field.sourceDeclaredType, dynamicType = field.dynamicType,
+            sourceConstant = field.sourceConstant, sourceValueEncoding = field.sourceValueEncoding,
+            sourceValueEncodingJson = field.sourceValueEncodingJson, numberValue = field.numberValue,
+            stringValue = field.stringValue, refValue = field.refValue, boolValue = field.boolValue,
+            nullExpected = field.nullExpected, referenceVerified = field.referenceVerified,
+            colorR = field.colorR, colorG = field.colorG, colorB = field.colorB, colorA = field.colorA
+        };
+    }
+    static RecordValueSpec[] Clone(RecordValueSpec[] rows)
+    {
+        if (rows == null) return null;
+        return rows.Select(row => row == null ? null : new RecordValueSpec {
+            index = row.index,
+            fields = row.fields == null ? null : row.fields.Select(Clone).ToArray()
+        }).ToArray();
+    }
     static FieldSpec[] Clone(FieldSpec[] fields) { return (fields ?? Array.Empty<FieldSpec>()).Select(Clone).ToArray(); }
     static bool ColorEquals(object value, int r, int g, int b, int a)
     { return value is Color32 color && color.r == r && color.g == g && color.b == b && color.a == a; }
@@ -397,36 +438,39 @@ public static class UnityStaticFields
     { field.colorR = color.r; field.colorG = color.g; field.colorB = color.b; field.colorA = color.a; }
     static void CopyColor(RecordFieldValueSpec field, Color32 color)
     { field.colorR = color.r; field.colorG = color.g; field.colorB = color.b; field.colorA = color.a; }
-    static bool RecordRowsSerializeAndReadBack(RecordValueSpec[] rows)
+    // JsonUtility cannot reliably round-trip this nested plan shape. The plan
+    // has already been parsed by Unity; validate its typed rows directly, then
+    // prove the actual assigned values in ReadRecords after native persistence.
+    static bool RecordRowsAreValid(RecordValueSpec[] rows)
     {
-        try
+        rows = rows ?? Array.Empty<RecordValueSpec>();
+        for (var i = 0; i < rows.Length; i++)
         {
-            var probe = new RecordSerializationProbe { rows = rows ?? Array.Empty<RecordValueSpec>() };
-            var serialized = JsonUtility.ToJson(probe);
-            var restored = JsonUtility.FromJson<RecordSerializationProbe>(serialized);
-            if (restored == null || restored.rows == null || restored.rows.Length != probe.rows.Length) return false;
-            for (var i = 0; i < probe.rows.Length; i++)
+            var row = rows[i];
+            if (row == null || row.index != i || row.fields == null) return false;
+            var names = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var field in row.fields)
             {
-                var expected = probe.rows[i]; var actual = restored.rows[i];
-                if (expected == null || actual == null || expected.index != actual.index ||
-                    (expected.fields ?? Array.Empty<RecordFieldValueSpec>()).Length != (actual.fields ?? Array.Empty<RecordFieldValueSpec>()).Length) return false;
-                for (var j = 0; j < expected.fields.Length; j++)
+                if (field == null || String.IsNullOrEmpty(field.sourceFieldName) ||
+                    String.IsNullOrEmpty(field.fieldName) || !names.Add(field.fieldName)) return false;
+                switch (field.storageType)
                 {
-                    var left = expected.fields[j]; var right = actual.fields[j];
-                    if (left == null || right == null || left.sourceFieldName != right.sourceFieldName ||
-                        left.fieldName != right.fieldName || left.storageType != right.storageType ||
-                        left.kind != right.kind || left.referenceKind != right.referenceKind ||
-                        left.nullExpected != right.nullExpected || left.boolValue != right.boolValue ||
-                        left.numberValue != right.numberValue || left.stringValue != right.stringValue || left.refValue != right.refValue)
+                    case "bool":
+                    case "string":
+                    case "Color":
+                        break;
+                    case "double":
+                        if (Double.IsNaN(field.numberValue) || Double.IsInfinity(field.numberValue)) return false;
+                        break;
+                    case "UnityEngine.Object":
+                        if (field.nullExpected ? !String.IsNullOrEmpty(field.refValue) : String.IsNullOrEmpty(field.refValue)) return false;
+                        break;
+                    default:
                         return false;
-                    if (left.colorR != right.colorR || left.colorG != right.colorG || left.colorB != right.colorB || left.colorA != right.colorA ||
-                        left.sourceConstant != right.sourceConstant || left.sourceValueEncoding != right.sourceValueEncoding ||
-                        left.sourceValueEncodingJson != right.sourceValueEncodingJson) return false;
                 }
             }
-            return true;
         }
-        catch { return false; }
+        return true;
     }
     static string NativeSourceId(MonoBehaviour component)
     {

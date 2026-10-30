@@ -61,7 +61,7 @@ function settleOwned(scene,nodes,plan,root=null,initialize=false){
             }
         }
         alignWidgets(nodes,root);
-        for(const n of [...nodes.values()].reverse())if(n.activeInHierarchy){const layout=n.getComponent(cc.Layout);if(layout&&layout.enabled)layout.updateLayout(true);}
+        for(const n of [...nodes.values()].reverse())if(n.activeInHierarchy)for(const layout of n.getComponents(cc.Layout))if(layout.enabled)layout.updateLayout(true);
         const after=capture(nodes);differences=[];
         after.forEach((row,i)=>{for(const key of ['position','size'])if(row[key].some((v,j)=>!Number.isFinite(v)||Math.abs(v-before[i][key][j])>.001))differences.push({sourceId:row.sourceId,key,before:before[i][key],after:row[key]});});
         if(!differences.length)return;

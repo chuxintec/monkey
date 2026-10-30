@@ -257,6 +257,12 @@ def export(plan_path,output):
         if not c['target'].startswith(standard.ROOTS['creator']['content']+'/') or sha(read(inside(path.parent,c['source'])))!=c['sha256']:
             fail('SOURCE_CHANGED',c['target'],'Invalid plan resource')
     out=new_output(output,[path.parent,*p.get('sourceRoots',{}).values()])
+    if p.get('sourceResourceCompletion'):
+        from ..prefab_static_asset_completion import emit as emit_source_assets
+        emit_source_assets(p,path.parent/p['sourceResourceCompletion']['stageRelativePath'],out,'creator')
+    if p.get('staticRetainedAssets'):
+        from ..prefab_static_retained_assets import emit as emit_retained
+        emit_retained(p['staticRetainedAssets'],path.parent,out,'creator')
     for folder in ['assets',standard.ROOTS['creator']['conversion'],'Analysis']:
         (out/folder).mkdir(parents=True,exist_ok=True)
     by_path={a['path']:a for a in p['assets']};by_id={a['sourceId']:a for a in p['assets']}
@@ -287,6 +293,37 @@ def export(plan_path,output):
         runtime_dir.mkdir(parents=True,exist_ok=True)
         for name in ('CreatorSpineUITransformPreserver.ts','CreatorSpineUITransformPreserver.ts.meta'):
             (runtime_dir/name).write_bytes(files('monkey.targets').joinpath('spine/'+name).read_bytes())
+    if p.get('staticAnimationEvidence'):
+        runtime_dir=out/'assets/Game/Scripts/Presentation/Recovered/Animation'
+        runtime_dir.mkdir(parents=True,exist_ok=True)
+        for name in ('CreatorStaticAnimation.ts','CreatorStaticAnimation.ts.meta'):
+            (runtime_dir/name).write_bytes(files('monkey.targets').joinpath(name).read_bytes())
+    if any(b.get('sourceType')=='cc.EditBox' for b in (p.get('staticControls')or{}).get('bindings',[])):
+        runtime_dir=out/'assets/Game/Scripts/Presentation/StaticControls'
+        runtime_dir.mkdir(parents=True,exist_ok=True)
+        for name in ('CreatorStaticEditBox.ts','CreatorStaticEditBox.ts.meta'):
+            (runtime_dir/name).write_bytes(files('monkey.targets').joinpath(name).read_bytes())
+    if (p.get('bitmapMissingGlyphs')or{}).get('components'):
+        runtime_dir=out/'assets/Game/Scripts/Presentation/Bitmap'
+        runtime_dir.mkdir(parents=True,exist_ok=True)
+        for name in ('CreatorStaticBitmapMissingGlyphs.ts','CreatorStaticBitmapMissingGlyphs.ts.meta'):
+            (runtime_dir/name).write_bytes(files('monkey.targets').joinpath(name).read_bytes())
+    if p.get('staticSortQueue'):
+        runtime_dir=out/'assets/Game/Scripts/Presentation/StaticSort'
+        runtime_dir.mkdir(parents=True,exist_ok=True)
+        for stem in ('CreatorStaticSortQueue','CreatorStaticSortQueueProxy','CreatorStaticSortQueueProxyMarker','CreatorStaticSortQueueProxyPresenter','CreatorStaticSortRootField'):
+            for suffix in ('.ts','.ts.meta'):
+                (runtime_dir/(stem+suffix)).write_bytes(files('monkey.targets').joinpath(stem+suffix).read_bytes())
+    if p.get('staticMasks'):
+        runtime_dir=out/'assets/Game/Scripts/Presentation/StaticMasks'
+        runtime_dir.mkdir(parents=True,exist_ok=True)
+        for name in ('CreatorStaticMaskIdentity.ts','CreatorStaticMaskIdentity.ts.meta'):
+            (runtime_dir/name).write_bytes(files('monkey.targets').joinpath(name).read_bytes())
+    if p.get('layoutCompletion'):
+        runtime_dir=out/'assets/Game/Scripts/Presentation/StaticLayout'
+        runtime_dir.mkdir(parents=True,exist_ok=True)
+        for name in ('CreatorStaticLayoutCompletion.ts','CreatorStaticLayoutCompletion.ts.meta'):
+            (runtime_dir/name).write_bytes(files('monkey.targets').joinpath(name).read_bytes())
     project_id=identity(p['namespace'],'project')
     write_json(out/'package.json',dict(name='monkey-native-candidate',version='3.8.8',uuid=project_id,creator=dict(version='3.8.8')))
     write_json(out/'settings/v2/packages/project.json',dict(__version__='1.0.6',general=dict(designResolution=dict(width=p['designSize'][0],height=p['designSize'][1]))))
@@ -314,6 +351,15 @@ def export(plan_path,output):
     (ext/'static-sprite-frames.js').write_bytes(files('monkey.targets').joinpath('CreatorStaticSpriteFrames.js').read_bytes())
     (ext/'preview-clones.js').write_bytes(files('monkey.targets').joinpath('CreatorPreviewClones.js').read_bytes())
     (ext/'static-preview.js').write_bytes(files('monkey.targets').joinpath('CreatorStaticPreview.js').read_bytes())
+    for source,dest in [('CreatorStaticAnimationBindings.js','static-animation-bindings.js'),('CreatorStaticAnimationIntegration.js','static-animation-integration.js'),('CreatorStaticAnimationContext.js','static-animation-context.js')]:
+        (ext/dest).write_bytes(files('monkey.targets').joinpath(source).read_bytes())
+    (ext/'static-retained-assets.js').write_bytes(files('monkey.targets').joinpath('CreatorStaticRetainedAssets.js').read_bytes())
+    (ext/'bitmap-missing-glyphs.js').write_bytes(files('monkey.targets').joinpath('CreatorStaticBitmapMissingGlyphs.js').read_bytes())
+    (ext/'static-masks.js').write_bytes(files('monkey.targets').joinpath('CreatorStaticMaskSort.js').read_bytes())
+    (ext/'CreatorStaticSortQueueIntegration.js').write_bytes(files('monkey.targets').joinpath('CreatorStaticSortQueueIntegration.js').read_bytes())
+    (ext/'static-layout-completion.js').write_bytes(files('monkey.targets').joinpath('CreatorStaticLayoutCompletion.js').read_bytes())
+    (ext/'static-controls.js').write_bytes(files('monkey.targets').joinpath('CreatorStaticControls.js').read_bytes())
+    (ext/'static-progress.js').write_bytes(files('monkey.targets').joinpath('CreatorStaticProgress.js').read_bytes())
     (ext/'static-fields.js').write_bytes(files('monkey.targets').joinpath('CreatorStaticFields.js').read_bytes())
     (ext/'static-field-integration.js').write_bytes(files('monkey.targets').joinpath('CreatorStaticFieldIntegration.js').read_bytes())
     (ext/'prefab.js').write_bytes(files('monkey.targets').joinpath('CreatorPrefab.js').read_bytes())
@@ -336,6 +382,10 @@ def export(plan_path,output):
     write_json(ext/'import-plan.json',{k:p[k] for k in ['schemaVersion','targetProfile','designSize','assets','nodes','components'] }|dict(resourceProbes=p.get('resourceProbes'),rendererBudget=p.get('rendererBudget'),projectUuid=project_id,animations=p.get('animations',[]),sourcePrefabs=p.get('sourcePrefabs',[]),prefabInstances=p.get('prefabInstances',[]),prefabRelationshipReadback='creator-native-fileid-v1',uiGeometryReadback='native-ui-layout-roundtrip-v1',sceneGeometryReadback='full-local-v1',bitmapPageReadback='sprite-frame-v1',spriteMeshReadback='native-rect-mesh-v1',outputPaths=standard.creator_output_paths()))
     from .dynamic_ui import driven_fields
     instruction_path=ext/'import-plan.json';instruction=load(instruction_path.read_bytes())
+    instruction['sourceManifestSha256']=p.get('sourceManifestSha256')
+    instruction['staticCompletion']=p.get('staticCompletion')
+    for key in ('staticAnimationEvidence','staticAnimationComponentOrigins','staticAnimationAssetReferences','staticControls','staticRetainedAssets','staticParticleBoundary','staticPresentation','layoutCompletion','staticMasks','bitmapMissingGlyphs','staticSortQueue'):
+        if key in p:instruction[key]=p[key]
     instruction['syncPrefabBindings']=p.get('syncPrefabBindings',[])
     instruction['staticPrefabAssetDependencies']=p.get('staticPrefabAssetDependencies')
     instruction['staticTimeMaterials']=p.get('staticTimeMaterials')
@@ -379,6 +429,57 @@ def export(plan_path,output):
     write_json(find_analysis(out,'candidate.json'),report);return finish(out,report)
 
 
+def _verify_creator_native_identity_contract(plan, readback, project_uuid, manifest_sha256):
+    """Check the readback's top-level Creator version, ownership and identity coverage."""
+    gaps=[]
+    def mismatch(code,location,expected,actual):
+        gaps.append(diagnostic(code,location,'Expected '+str(expected)+'; observed '+str(actual),location))
+
+    if readback.get('creatorVersion')!='3.8.8':
+        mismatch('CREATOR_VERSION_IDENTITY_MISMATCH','CreatorVersion','3.8.8',readback.get('creatorVersion'))
+    if readback.get('projectUuid')!=project_uuid or plan.get('projectUuid')!=project_uuid:
+        mismatch('CREATOR_PROJECT_IDENTITY_MISMATCH','CreatorProjectUuid',project_uuid,
+                 dict(plan=plan.get('projectUuid'),readback=readback.get('projectUuid')))
+    if readback.get('manifestSha256')!=manifest_sha256:
+        mismatch('CREATOR_MANIFEST_IDENTITY_MISMATCH','CreatorManifestSha256',manifest_sha256,readback.get('manifestSha256'))
+
+    scopes=(('assets','assets','uuid'),('nodes','nodes','nodeUuid'),
+            ('components','components','componentUuid'),('sourcePrefabs','sourcePrefabs','uuid'))
+    for readback_key,plan_key,native_key in scopes:
+        expected_rows=plan.get(plan_key,[])
+        if plan_key=='components':
+            expected_rows=[row for row in expected_rows if row.get('convertible')]
+        actual_rows=readback.get(readback_key)
+        if not isinstance(expected_rows,list): expected_rows=[]
+        if not isinstance(actual_rows,list): actual_rows=[]
+        expected_ids=[row.get('sourceId') for row in expected_rows if isinstance(row,dict)]
+        actual_ids=[row.get('sourceId') for row in actual_rows if isinstance(row,dict)]
+        expected_set=set(x for x in expected_ids if isinstance(x,str))
+        actual_set=set(x for x in actual_ids if isinstance(x,str))
+        duplicates=sorted({x for x in actual_ids if isinstance(x,str) and actual_ids.count(x)>1})
+        if (len(expected_set)!=len(expected_ids) or len(actual_set)!=len(actual_ids) or
+                duplicates or expected_set!=actual_set):
+            mismatch('CREATOR_NATIVE_SOURCE_COUNT_MISMATCH',readback_key,
+                     dict(rows=len(expected_rows),uniqueSourceIds=len(expected_set)),
+                     dict(rows=len(actual_rows),uniqueSourceIds=len(actual_set),
+                          missing=sorted(expected_set-actual_set)[:8],extra=sorted(actual_set-expected_set)[:8],duplicates=duplicates[:8]))
+        expected_by_id={row.get('sourceId'):row for row in expected_rows if isinstance(row,dict)}
+        actual_by_id={row.get('sourceId'):row for row in actual_rows if isinstance(row,dict)}
+        for source_id in sorted(expected_set & actual_set):
+            actual=actual_by_id[source_id]
+            identity=actual.get(native_key)
+            if not isinstance(identity,str) or not identity:
+                mismatch('CREATOR_NATIVE_IDENTITY_MISSING',source_id,native_key,identity)
+                continue
+            if readback_key in ('assets','sourcePrefabs'):
+                expected=expected_by_id[source_id].get('uuid')
+                if isinstance(expected,str) and expected and identity!=expected:
+                    mismatch('CREATOR_NATIVE_IDENTITY_MISMATCH',source_id,expected,identity)
+    if readback.get('nodeCount')!=len(plan.get('nodes',[])):
+        mismatch('CREATOR_NATIVE_NODE_COUNT_MISMATCH','nodeCount',len(plan.get('nodes',[])),readback.get('nodeCount'))
+    return gaps
+
+
 def verify(candidate,output,level='static'):
     root=safe(candidate);m=stage_manifest(root);diagnostics=[]
     from ..sources.containers import fingerprint
@@ -394,14 +495,17 @@ def verify(candidate,output,level='static'):
             actual_assets={a['sourceId']:a for a in rb.get('assets',[])}
             json_assets={a['sourceId']:a for a in rb.get('jsonAssets',[])}
             audio_assets={a['sourceId']:a for a in rb.get('audioAssets',[])}
-            good=rb.get('creatorVersion')=='3.8.8' and rb.get('projectUuid')==m['projectUuid'] and rb.get('manifestSha256')==fingerprint(root/'manifest.json')
+            identity_gaps=_verify_creator_native_identity_contract(plan,rb,m['projectUuid'],fingerprint(root/'manifest.json'))
+            good=not identity_gaps
+            if identity_gaps:diagnostics.extend(identity_gaps)
             good=good and set(expected_assets)==set(actual_assets) and rb.get('nodeCount')==len(plan['nodes'])
             from ..prefab_material_pipeline import verify as verify_material
             material_gaps=verify_material(plan.get('materialBinding'),rb.get('materialBinding'),'creator')
             if material_gaps:good=False;diagnostics.extend(material_gaps)
             from ..prefab_spine_pipeline import verify as verify_spines
             spine_gaps=verify_spines(plan['components'],rb.get('spineBindings'),'scene')
-            if spine_gaps:good=False;diagnostics.extend(spine_gaps)
+            if spine_gaps:
+                good=good and all(g['code']=='SPINE_SOURCE_UNBOUND_DYNAMIC_NOT_RUN' for g in spine_gaps);diagnostics.extend(spine_gaps)
             from ..creator_geometry import verify_tiled_readback
             if not verify_tiled_readback(plan,rb):
                 good=False;diagnostics.append(diagnostic('TILED_NATIVE_READBACK_MISMATCH','CreatorScene','Tiled mesh allocation/budget/topology/identity readback differs'))
@@ -476,6 +580,12 @@ def verify(candidate,output,level='static'):
                 from ..prefab_static_time_materials import verify as verify_static_time
                 static_time_gaps=verify_static_time(plan['staticTimeMaterials'],rb.get('staticTimeMaterials'),'creator')
                 diagnostics.extend(static_time_gaps);good=good and not static_time_gaps
+            from ..prefab_static_completion_readback import verify_assets as verify_retained
+            retained_gaps=verify_retained(plan,rb.get('staticRetainedAssetReadback'),'creator')
+            diagnostics.extend(retained_gaps);good=good and not retained_gaps
+            from ..prefab_static_sort_readback import verify_creator as verify_static_sort
+            sort_gaps=verify_static_sort(plan,rb)
+            diagnostics.extend(sort_gaps);good=good and not sort_gaps
             actual_prefabs={v['sourceId']:v for v in rb.get('sourcePrefabs',[])}
             expected_prefabs={v['sourceId']:v for v in plan.get('sourcePrefabs',[])}
             if set(actual_prefabs)!=set(expected_prefabs):good=False
@@ -483,12 +593,20 @@ def verify(candidate,output,level='static'):
                 actual=actual_prefabs.get(sid,{})
                 source_nodes=set(spec['nodes']);code_specs=[c for c in plan['components']if c.get('node')in source_nodes]
                 from ..prefab_static_readback import verify as verify_static
+                from ..prefab_static_completion_readback import verify_prefab as verify_completion
+                completion_gaps=verify_completion(plan,code_specs,actual,'creator',sid)
+                diagnostics.extend(completion_gaps)
+                good=good and not any(g['code']=='STATIC_COMPLETION_NATIVE_MISMATCH' for g in completion_gaps)
+                from ..prefab_static_progress import verify as verify_progress
+                progress_gaps=verify_progress(code_specs,actual.get('staticProgressFields'),'creator',sid)
+                if progress_gaps:good=False;diagnostics.extend(progress_gaps)
                 static_gaps=verify_static(code_specs,actual.get('staticFieldBindings'),actual.get('uuid'),'creator',sid)
                 if static_gaps:good=False;diagnostics.extend(static_gaps)
                 code_gaps=verify_numeric(code_specs,actual.get('numericCodeBindings'),'cocos',sid)
                 if code_gaps:good=False;diagnostics.extend(code_gaps)
                 spine_gaps=verify_spines(code_specs,actual.get('spineBindings'),sid)
-                if spine_gaps:good=False;diagnostics.extend(spine_gaps)
+                if spine_gaps:
+                    good=good and all(g['code']=='SPINE_SOURCE_UNBOUND_DYNAMIC_NOT_RUN' for g in spine_gaps);diagnostics.extend(spine_gaps)
                 if plan.get('behaviorBindingReadback')=='persistent-source-fields-v1':
                     from ..prefab_target_behaviors import verify_bindings
                     behavior_gaps=verify_bindings(code_specs,actual.get('behaviorBindings'),actual.get('uuid'),'creator',sid)
@@ -517,7 +635,6 @@ def verify(candidate,output,level='static'):
             if relation_gaps:good=False;diagnostics.extend(relation_gaps)
             from ..assets.animation import verify_native
             motion_gaps=verify_native(plan.get('animations',[]),rb.get('animations',[]),native);diagnostics.extend(motion_gaps);good=good and not motion_gaps
-            if not good:diagnostics.append(diagnostic('EDITOR_READBACK_FAILED',str(rb_path),'Native identities/counts/version differ'))
             editor='pass' if good else 'fail'
     for f in m['files']:
         if f.get('owner')=='manual':continue
@@ -544,6 +661,7 @@ def verify(candidate,output,level='static'):
         diagnostics.extend(scan([f['path'] for f in m['files']]))
     if any(d['code'] in ('GENERATED_FILE_CHANGED','NATIVE_FILE_CHANGED') for d in diagnostics) and editor=='pass':editor='fail'
     out=new_output(output,[root]);report=dict(schemaVersion=1,toolVersion=__version__,diagnostics=diagnostics,
-        staticValidation='conflict' if any(d['code']!='EDITOR_NOT_RUN' for d in diagnostics) else 'pass',editorValidation=editor,
+        staticValidation='conflict' if any(d['code']not in {'EDITOR_NOT_RUN','SPINE_SOURCE_UNBOUND_DYNAMIC_NOT_RUN','ANIMATION_DYNAMIC_CURVES_NOT_LOWERED'} for d in diagnostics) else 'pass',editorValidation=editor,
+        nativeStaticValidation='pass' if editor=='pass' else editor, runtimeCheck='pass' if editor=='pass' and not any(d['code']not in {'SPINE_SOURCE_UNBOUND_DYNAMIC_NOT_RUN','ANIMATION_DYNAMIC_CURVES_NOT_LOWERED'} for d in diagnostics) else 'not_run' if level!='editor' else 'fail',
         counts=dict(scope='candidate-import-plan',assets=len(plan['assets']),spriteFrames=sum(a['kind']=='sprite'for a in plan['assets']),nodes=len(plan['nodes']),plannedPrefabs=len(plan.get('sourcePrefabs',[]))))
     write_json(out/'verification.json',report);return finish(out,report)

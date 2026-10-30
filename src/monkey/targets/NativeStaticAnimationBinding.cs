@@ -17,6 +17,10 @@ public sealed class NativeStaticAnimationBinding : MonoBehaviour
         public string nativeClipSha256;
         public string status;
         public AnimationClip nativeClip;
+        public string sourceEvidencePath;
+        public string sourceEvidenceGuid;
+        public string sourceEvidenceSha256;
+        public TextAsset sourceEvidenceAsset;
     }
 
     [SerializeField] string sourceComponentId;

@@ -4,6 +4,16 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const helper = require('../src/monkey/targets/spine/CreatorSpineUITransformBindings');
+const proxyMarkerPath = path.join(__dirname, '../src/monkey/targets/CreatorStaticSortQueueProxyMarker.ts');
+const proxyPresenterPath = path.join(__dirname, '../src/monkey/targets/CreatorStaticSortQueueProxyPresenter.ts');
+const proxyMarkerMeta = JSON.parse(fs.readFileSync(proxyMarkerPath + '.meta', 'utf8'));
+const proxyPresenterMeta = JSON.parse(fs.readFileSync(proxyPresenterPath + '.meta', 'utf8'));
+assert.equal(helper.STATIC_SORT_PROXY_MARKER_UUID, proxyMarkerMeta.uuid);
+assert.equal(helper.STATIC_SORT_PROXY_PRESENTER_UUID, proxyPresenterMeta.uuid);
+assert.match(fs.readFileSync(proxyMarkerPath, 'utf8'), /public sourceRootOwner/);
+assert.match(fs.readFileSync(proxyPresenterPath, 'utf8'), /public sourceRootId/);
+assert.match(fs.readFileSync(proxyPresenterPath, 'utf8'), /public sourceRoot:/);
+assert.match(fs.readFileSync(proxyPresenterPath, 'utf8'), /public proxyRoot:/);
 
 const preserverPath = path.join(__dirname, '../src/monkey/targets/spine/CreatorSpineUITransformPreserver.ts');
 const preserverMetaPath = preserverPath + '.meta';
@@ -115,6 +125,41 @@ assert.throws(() => helper.verifySerializedPrefab(plan, prefabSpec, missingPrese
 const wrongPreserver = makeSerialized([681, 293], [0.5, 0.5]);
 wrongPreserver[3].sourceAnchorY = 0.5172407;
 assert.throws(() => helper.verifySerializedPrefab(plan, prefabSpec, wrongPreserver), /PRESERVER_SERIALIZED_VALUE_MISMATCH/);
+
+const generatedProxyPlan = structuredClone(plan);
+const generatedProxyChildId = 'gameAsset:prefab#82';
+generatedProxyPlan.nodes[0].children = [generatedProxyChildId];
+generatedProxyPlan.nodes.push({ sourceId: generatedProxyChildId, size: [1, 1], anchor: [0.5, 0.5], children: [] });
+generatedProxyPlan.sourcePrefabs[0].nodes = [sourceId, generatedProxyChildId];
+function serializedWithProxy({markerOwner = 1, presenterSource = 1, presenterProxy = 5, markerSourceNode = sourceId,
+  preserverSourceNodeId = sourceId,
+  markerType = helper.STATIC_SORT_PROXY_MARKER_UUID, presenterType = helper.STATIC_SORT_PROXY_PRESENTER_UUID} = {}) {
+  const records = makeSerialized([681, 293], [0.5, 0.5]);
+  records[3].sourceNodeId = preserverSourceNodeId;
+  records[1]._children = [{ __id__: 4 }, { __id__: 5 }];
+  records.push({ __type__: 'cc.Node', _children: [], _components: [] }); // source child, id 4
+  records.push({ __type__: 'cc.Node', _children: [], _components: [{ __id__: 6 }, { __id__: 7 }] }); // generated proxy, id 5
+  records.push({ __type__: markerType, _node: { __id__: 5 }, kind: 'root', sourceNode: markerSourceNode,
+    sourceRootOwner: { __id__: markerOwner } });
+  records.push({ __type__: presenterType, _node: { __id__: 5 }, sourceRootId: markerSourceNode,
+    sourceRoot: { __id__: presenterSource }, proxyRoot: { __id__: presenterProxy } });
+  return records;
+}
+assert.equal(helper.verifySerializedPrefab(generatedProxyPlan, prefabSpec, serializedWithProxy()).status, 'verified',
+  'a generated direct child is filtered only when marker and presenter refs prove exact ownership');
+assert.equal(helper.verifySerializedPrefab(generatedProxyPlan, prefabSpec, serializedWithProxy({
+  markerType: helper.compiledScriptId(helper.STATIC_SORT_PROXY_MARKER_UUID),
+  presenterType: helper.compiledScriptId(helper.STATIC_SORT_PROXY_PRESENTER_UUID),
+})).status, 'verified', 'Creator compiled script UUIDs retain the same typed identity');
+assert.throws(() => helper.verifySerializedPrefab(generatedProxyPlan, prefabSpec,
+  serializedWithProxy({markerOwner: 4})), /SERIALIZED_CHILD_COUNT_MISMATCH/,
+  'a sourceRootOwner mismatch does not remove a child from the source denominator');
+assert.throws(() => helper.verifySerializedPrefab(generatedProxyPlan, prefabSpec,
+  serializedWithProxy({presenterProxy: 4})), /SERIALIZED_CHILD_COUNT_MISMATCH/,
+  'a presenter proxyRoot mismatch does not remove a child from the source denominator');
+assert.throws(() => helper.verifySerializedPrefab(generatedProxyPlan, prefabSpec,
+  serializedWithProxy({markerType: 'MonkeyStaticSortQueueProxyMarker'})), /SERIALIZED_CHILD_COUNT_MISMATCH/,
+  'a class-name lookalike without the pinned script UUID does not remove a child');
 
 const disabledPlan = structuredClone(plan);
 disabledPlan.nodes[0].sourceUITransformEnabled = false;
@@ -235,6 +280,53 @@ assert.throws(() => helper.sourceRows(geometryOverride), /ROOT_GEOMETRY_OVERRIDE
 const originCycle = structuredClone(syncPlan);
 originCycle.syncPrefabBindings[0].origins[1].templateSourceId = instanceRootId;
 assert.throws(() => helper.sourceRows(originCycle), /ORIGIN_CYCLE/);
+
+const nestedProxyPlan = structuredClone(generatedProxyPlan);
+const nestedProxySourceComponent = nestedProxyPlan.components[0].sourceId;
+const nestedMiddlePrefabId = 'gameAsset:sort-middle-template';
+const nestedMiddleRootId = nestedMiddlePrefabId + '#1';
+const nestedMiddleComponentId = nestedMiddleRootId + '/components/0';
+const nestedFinalPrefabId = 'gameAsset:sort-final-template';
+const nestedFinalRootId = nestedFinalPrefabId + '#1';
+const nestedFinalComponentId = nestedFinalRootId + '/components/0';
+nestedProxyPlan.nodes.push(
+  {sourceId:nestedMiddleRootId,size:[681,293],anchor:[0.5,0.5],children:[]},
+  {sourceId:nestedFinalRootId,size:[681,293],anchor:[0.5,0.5],children:[]},
+);
+nestedProxyPlan.components.push(
+  {sourceId:nestedMiddleComponentId,node:nestedMiddleRootId,type:'sp.Skeleton',spineBinding:{}},
+  {sourceId:nestedFinalComponentId,node:nestedFinalRootId,type:'sp.Skeleton',spineBinding:{}},
+);
+nestedProxyPlan.sourcePrefabs.push(
+  {sourceId:nestedMiddlePrefabId,root:nestedMiddleRootId,nodes:[nestedMiddleRootId]},
+  {sourceId:nestedFinalPrefabId,root:nestedFinalRootId,nodes:[nestedFinalRootId]},
+);
+nestedProxyPlan.syncPrefabBindings = [{owner:'gameAsset:prefab',root:sourceId,template:nestedMiddlePrefabId,
+  rootOverrides:{position:'_trs[0:3]'},
+  origins:[
+    {instanceSourceId:sourceId,templateSourceId:nestedMiddleRootId},
+    {instanceSourceId:nestedMiddleRootId,templateSourceId:nestedFinalRootId},
+  ],
+  componentOrigins:[
+    {instanceSourceId:nestedProxySourceComponent,templateSourceId:nestedMiddleComponentId},
+    {instanceSourceId:nestedMiddleComponentId,templateSourceId:nestedFinalComponentId},
+  ]}];
+assert.equal(helper.verifySerializedPrefab(nestedProxyPlan,prefabSpec,
+  serializedWithProxy({markerSourceNode:nestedFinalRootId,preserverSourceNodeId:nestedFinalRootId})).status,'verified',
+  'an inherited proxy may use only the terminal root in the exact two-edge origins chain');
+assert.throws(()=>helper.verifySerializedPrefab(nestedProxyPlan,prefabSpec,
+  serializedWithProxy({markerSourceNode:'gameAsset:foreign-root#1'})),/SERIALIZED_CHILD_COUNT_MISMATCH/,
+  'a foreign root ID outside the exact instance-to-template chain remains a source child');
+const ambiguousProxyPlan=structuredClone(nestedProxyPlan);
+ambiguousProxyPlan.syncPrefabBindings[0].origins.push({instanceSourceId:sourceId,templateSourceId:'gameAsset:foreign-root#1'});
+assert.throws(()=>helper.verifySerializedPrefab(ambiguousProxyPlan,prefabSpec,
+  serializedWithProxy({markerSourceNode:nestedFinalRootId,preserverSourceNodeId:nestedFinalRootId})),/ORIGIN_AMBIGUOUS/,
+  'an ambiguous instance-to-template mapping cannot authorize a proxy root');
+const cyclicProxyPlan=structuredClone(nestedProxyPlan);
+cyclicProxyPlan.syncPrefabBindings[0].origins[1].templateSourceId=sourceId;
+assert.throws(()=>helper.verifySerializedPrefab(cyclicProxyPlan,prefabSpec,
+  serializedWithProxy({markerSourceNode:nestedFinalRootId,preserverSourceNodeId:nestedFinalRootId})),/ORIGIN_CYCLE/,
+  'a cyclic instance-to-template mapping cannot authorize a proxy root');
 const wrongClass = { ...Preserver, __cid__: 'wrong-script-uuid' };
 const wrongCc = { ...cc, js: { ...cc.js, getClassByName: () => wrongClass } };
 assert.equal(helper.isPreserver(wrongClass, wrongCc), false);

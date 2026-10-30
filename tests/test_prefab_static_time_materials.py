@@ -76,6 +76,22 @@ class StaticTimeMaterialTests(unittest.TestCase):
         self.assertTrue(clone["convertible"])
         self.assertEqual(plan["nodes"], _plan()["nodes"])
 
+    def test_attach_accepts_only_explicit_frozen_material_redirect_id(self):
+        plan = _plan()
+        material = _material()
+        plan['textures']=[{'id':'gameAsset:frame-a','path':'Assets/frame.png','guid':'f'*32}]
+        alias = 'lookup:material-a'
+        material['sourceMaterialReferenceIds'] = [material['sourceMaterialId'], alias]
+        for component in plan['components']:
+            component['materials'] = [alias]
+        spec = {'schema': stm.SCHEMA, 'profile': stm.PROFILE, 'sourceManifestSha256': 'd'*64,
+                'normalizedIrSha256': 'e'*64, 'materials': [material]}
+        stm.attach(plan, spec, 'unity')
+        self.assertTrue(all(c.get('convertible') for c in plan['components']))
+        plan['components'][0]['materials'] = ['lookup:wrong']
+        with self.assertRaises(stm.StaticTimeMaterialError):
+            stm.attach(plan, spec, 'unity')
+
     def test_attach_rejects_unexportable_frame_without_relaxing_sprite_checks(self):
         plan = _plan()
         plan["assets"][0]["path"] = ""

@@ -38,8 +38,18 @@ function apply(component, spec) {
 
 function sourceChildren(node){
     const cc=require('cc');
-    if(!node.getComponent(cc.RichText))return node.children;
+    const withoutSortProxy=node.children.filter(child=>!isGeneratedSortProxyRoot(child));
+    if(!node.getComponent(cc.RichText))return withoutSortProxy;
     // Creator 3.8.8 rich-text.ts creates these hidden, nonserialized segments.
-    return node.children.filter(c=>!((c.name==='RICHTEXT_CHILD'||c.name==='RICHTEXT_Image_CHILD')&&c.hideFlags));
+    return withoutSortProxy.filter(c=>!((c.name==='RICHTEXT_CHILD'||c.name==='RICHTEXT_Image_CHILD')&&c.hideFlags));
 }
-module.exports = { schema: SCHEMA, apply, sourceChildren };
+function isGeneratedSortProxyRoot(node){
+    const cc=require('cc');
+    const markerType=cc.js&&cc.js.getClassByName&&cc.js.getClassByName('MonkeyStaticSortQueueProxyMarker');
+    const marker=markerType&&node?node.getComponent(markerType):null;
+    if(!marker||marker.kind!=='root')return false;
+    const api=cc.js&&cc.js.getClassByName&&cc.js.getClassByName('MonkeyStaticSortQueueProxyApi');
+    if(!api||typeof api.isGeneratedProxyRoot!=='function')throw Error('Static sort proxy API is not registered while source hierarchy contains a generated root');
+    return !!api.isGeneratedProxyRoot(node);
+}
+module.exports = { schema: SCHEMA, apply, sourceChildren, isGeneratedSortProxyRoot };

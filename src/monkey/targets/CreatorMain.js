@@ -214,7 +214,31 @@ module.exports = {
                     throw Error('Static-time material import identity differs');
                 await sceneJob('readStaticTimeMaterial',[{...plan.staticTimeMaterials,nativeDeadlineMs},row.sourceMaterialId],'materials');
             }
-            const nativePlan={...plan,resourceProbes,assets,nativeDeadlineMs,components:plan.components.filter(c=>c.convertible||c.staticFieldBinding),animations:(plan.animations||[]).filter(a=>a.convertible)};
+            for(const entry of plan.staticRetainedAssets?.assets||[])if(entry.retentionKind==='builtin-default-material') {
+                const dest=within(root,entry.creator.path);
+                if(fs.existsSync(dest))throw Error('Retained builtin material already exists');
+                const serialized=await sceneJob('prepareRetainedBuiltin',[entry],'materials');
+                fs.mkdirSync(path.dirname(dest),{recursive:true});
+                fs.writeFileSync(dest+'.meta',JSON.stringify({ver:'1.0.21',importer:'material',imported:false,uuid:entry.creator.uuid,files:[],subMetas:{},userData:{}}));
+                fs.writeFileSync(dest,serialized,{flag:'wx'});
+                await timedReq('refresh-asset','db://'+path.dirname(entry.creator.path));
+                const info=await timedReq('query-asset-info','db://'+entry.creator.path);
+                if(!info||info.invalid||info.uuid!==entry.creator.uuid)throw Error('Retained builtin material identity differs');
+            }
+            const nativePlan={...plan,nativeProjectRoot:root,resourceProbes,assets,nativeDeadlineMs,components:plan.components.filter(c=>c.convertible||c.staticFieldBinding||c.staticProgressBinding||c.staticControlBinding||(plan.staticAnimationEvidence&&c.type==='cc.Animation')),animations:(plan.animations||[]).filter(a=>a.convertible)};
+            const earlyAnimationAssets=[];
+            if(plan.staticAnimationEvidence) {
+                const prepared=await sceneJob('prepareStaticAnimationAssets',[nativePlan],'animations');
+                for(const a of prepared) {
+                    if(!a.path.startsWith(outputPaths.animations+'/')||!a.path.endsWith('.anim'))throw Error('Unsafe animation path');
+                    fs.mkdirSync(path.dirname(within(root,a.path)),{recursive:true});
+                    await timedReq('refresh-asset','db://'+path.dirname(a.path));
+                    const info=await timedReq('create-asset','db://'+a.path,a.serialized,{overwrite:false,rename:false});
+                    if(!info||info.invalid)throw Error('Static animation asset import failed');
+                    earlyAnimationAssets.push({id:a.id,path:a.path,uuid:info.uuid,sha256:hash(fs.readFileSync(within(root,a.path)))});
+                }
+                nativePlan.animationAssets=earlyAnimationAssets;
+            }
             let result = await sceneJob('assemble',[nativePlan],'hierarchy');
             if (!result || (typeof result.serialized !== 'string'&&!result.assemblyId)) throw Error('No native scene serialization');
             const assemblyId=result.assemblyId;const savedPrefabs=[];
@@ -234,7 +258,7 @@ module.exports = {
                     await Editor.Message.request('scene','execute-scene-script',{name:'monkey-import',method:'releaseAssembly',args:[assemblyId]});
                 }
             }
-            const animationAssets=[];
+            const animationAssets=[...earlyAnimationAssets];
             for(const a of result.animationAssets||[]) {
                 if(!a.path.startsWith(outputPaths.animations+'/')||!a.path.endsWith('.anim'))throw Error('Unsafe animation path');
                 within(root,a.path);

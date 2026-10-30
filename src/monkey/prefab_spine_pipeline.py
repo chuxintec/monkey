@@ -112,9 +112,26 @@ def verify(components,rows,owner):
     if len(actual)!=len(rows) or set(actual)!=expected:
         return [diagnostic('SPINE_NATIVE_IDENTITY_MISMATCH',owner,'Source component denominator differs')]
     gaps=[]
+    expected_specs={c['sourceId']:c.get('spineBinding',{}) for c in components}
     for sid,row in actual.items():
         status=row.get('status')
         failures=row.get('failures')
+        spec=expected_specs[sid]
+        checks=row.get('checks')or{}
+        unbound_checks=('sourceNodeActiveMatchesPlan','sourceTimeScaleRetainedInPinnedSpec','nativeTimeScaleFrozenAtT0',
+            'nativeRendererEnabled','exactBuiltinMaterialContract','usesDefaultBuiltinMaterialRoute','skinFieldMatchesSource',
+            'animationFieldMatchesSource','loopFieldMatchesSource','premultipliedAlphaFieldMatchesSource','tintFieldMatchesSource',
+            'debugSlotsFieldMatchesSource','debugBonesFieldMatchesSource','debugMeshFieldMatchesSource','enableBatchFieldMatchesSource','cachingFieldMatchesSource')
+        if (status=='incomplete_dynamic_assignment' and failures==[] and spec.get('sourceDataAssetId') is None
+            and spec.get('runtimeDynamicAssignment',{}).get('status')=='source_static_uuid_absent_runtime_assignment_unverified'
+            and spec.get('runtimeDynamicAssignment',{}).get('targetDefaultAssetFallback') is False
+            and row.get('staticDataBoundBySource') is False and row.get('runtimeDataAvailable') is False
+            and row.get('observedDataWithoutStaticSourceReference') is False
+            and row.get('actual',{}).get('skeletonDataUuid') is None and bool(row.get('actual',{}).get('nativeComponentUuid'))
+            and all(checks.get(key)is True for key in unbound_checks)):
+            gaps.append(diagnostic('SPINE_SOURCE_UNBOUND_DYNAMIC_NOT_RUN',sid,
+                'Source SkeletonData is absent; saved native null reference and mapped static fields verified. Runtime data assignment is not run.',sid))
+            continue
         if status=='verified_source_inactive_runtime_uninitialized' and not failures:
             # Source node/hierarchy is inactive by the exact target-plan tree.
             # Serialized SkeletonData, requested names/default fields and native

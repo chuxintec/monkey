@@ -97,7 +97,7 @@ const Module=require('module'),load=Module._load,assert=require('assert');
 class Label{}class Widget{}class Layout{}class UITransform{}
 const manager={isAligning:false},ui={width:10,height:20};
 const widget={enabled:true,updateAlignment(){assert(manager.isAligning);ui.width=100;}};
-const node={activeInHierarchy:true,position:{x:0,y:0,z:0},getComponent(t){return t===UITransform?ui:t===Widget?widget:null;}};
+const node={activeInHierarchy:true,position:{x:0,y:0,z:0},getComponents(t){const c=this.getComponent(t);return c?[c]:[];},getComponent(t){return t===UITransform?ui:t===Widget?widget:null;}};
 Module._load=function(name,...args){return name==='cc'?{Label,Widget,Layout,UITransform,widgetManager:manager}:load.call(this,name,...args);};
 const api=require(process.argv[1]),plan={uiGeometryReadback:'native-ui-layout-roundtrip-v1'};
 const scene={_load(){},_activate(){assert(manager.isAligning);}};
@@ -161,7 +161,7 @@ class UITransform{constructor(){this.width=85.35;this.height=30.24;}setContentSi
 class RichText{}
 const manager={isAligning:false},ui=new UITransform(),calls=[];
 const rich={enabled:true,maxWidth:0,lineHeight:24,string:'<color=#cb945a>建造</color><color=#de551f>5</color><color=#cb945a>次</color>',_updateRichTextStatus(){calls.push('update');ui.setContentSize(86.4,30.24);}};
-const node={activeInHierarchy:true,position:{x:3,y:4,z:0},getComponent(t){return t===UITransform?ui:t===RichText?rich:null;},setPosition(x,y,z){this.position={x,y,z};}};
+const node={activeInHierarchy:true,position:{x:3,y:4,z:0},getComponents(t){const c=this.getComponent(t);return c?[c]:[];},getComponent(t){return t===UITransform?ui:t===RichText?rich:null;},setPosition(x,y,z){this.position={x,y,z};}};
 Module._load=function(name,...args){return name==='cc'?{UITransform,RichText,Label:class{},Widget:class{},Layout:class{},widgetManager:manager}:load.call(this,name,...args);};
 const api=require(process.argv[1]),plan={targetProfile:'cocos-3.8.8',uiGeometryReadback:'native-ui-layout-roundtrip-v1',uiDrivenFields:{node:{size:[0,1]}},nodes:[{sourceId:'node',position:[3,4,0],size:[85.35,30.24]}]};
 const scene={_load(){},_activate(){}};api.settle(scene,new Map([['node',node]]),plan,null,true);
@@ -198,7 +198,7 @@ assert(calls.length>=1);assert.strictEqual(rich.maxWidth,0);assert.strictEqual(r
 const Module=require('module'),load=Module._load,assert=require('assert');
 class UITransform{}class Label{}class Widget{}class Layout{}
 const manager={isAligning:false},ui={width:0,height:0,setContentSize(w,h){this.width=w;this.height=h;}};
-const node={activeInHierarchy:true,position:{x:-240,y:0,z:0},setPosition(x,y,z){this.position={x,y,z};},getComponent(t){return t===UITransform?ui:null;}};
+const node={activeInHierarchy:true,position:{x:-240,y:0,z:0},setPosition(x,y,z){this.position={x,y,z};},getComponents(t){const c=this.getComponent(t);return c?[c]:[];},getComponent(t){return t===UITransform?ui:null;}};
 Module._load=function(name,...args){return name==='cc'?{UITransform,Label,Widget,Layout,widgetManager:manager}:load.call(this,name,...args);};
 const api=require(process.argv[1]);let activated=false;
 const scene={_load(){},_activate(){if(!activated){activated=true;ui.setContentSize(300,200);node.position.x=-236;}}};

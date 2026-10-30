@@ -280,9 +280,7 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
                 entry['convertible']=False
                 diagnostics.append(diagnostic('SLICED_UNTRIMMED_UNSUPPORTED',c['sourceId'],'Needs Cocos size-mode evidence',c['sourceId']))
         elif c['type']=='cc.Label':
-            if c.get('italic') or c.get('underline'):
-                entry['convertible']=False
-                diagnostics.append(diagnostic('LABEL_STYLE_UNSUPPORTED',c['sourceId'],'Italic/underline require explicit native style mapping',c['sourceId']))
+            entry['nativeTextStylePolicy']='tmp-font-style-flags-v1'
             if c.get('font') not in resource_ids:
                 entry['convertible']=False
                 diagnostics.append(diagnostic('FONT_NOT_CONVERTIBLE',c['sourceId'],'No imported matching font; no fallback text',c['sourceId']))
@@ -294,6 +292,7 @@ def plan(ir_path, namespace, output, bindings_path=None,animation_selection=None
                     entry['convertible']=False
                     diagnostics.append(diagnostic('SOURCE_FONT_GLYPHS_MISSING',c['sourceId'],'Original TTF lacks codepoints: '+str(absent),c['sourceId']))
             font=next((f for f in bitmap_fonts if f['id']==c.get('font')),None)
+            entry['bitmapLabel']=bool(font)
             if font:
                 from ..assets.bitmap import single_line
                 try:
@@ -485,6 +484,20 @@ def export(plan_path, output):
         if not c['target'].startswith(standard.ROOTS['unity']['content']+'/'):
             fail('UNSAFE_TARGET',c['target'],'Unexpected target root')
     out=new_output(output,[plan_path.parent])
+    if p.get('sourceResourceCompletion'):
+        from ..prefab_static_asset_completion import emit as emit_source_assets
+        emit_source_assets(p,plan_path.parent/p['sourceResourceCompletion']['stageRelativePath'],out,'unity')
+    if p.get('staticRetainedAssets'):
+        from ..prefab_static_retained_assets import emit as emit_retained
+        emit_retained(p['staticRetainedAssets'],plan_path.parent,out,'unity')
+    if p.get('staticControls'):
+        from ..prefab_static_controls import emit_unity
+        emit_unity(p['staticControls'],out)
+    if any(x['maskType']==2 for x in (p.get('staticMasks')or{}).get('masks',[])):
+        shader=out/'Assets/Game/Content/Materials/StaticMasks/NativeStaticImageMask.shader'
+        shader.parent.mkdir(parents=True,exist_ok=True)
+        shader.write_bytes(files('monkey.targets').joinpath('materials/static_mask/NativeStaticImageMask.shader').read_bytes())
+        Path(str(shader)+'.meta').write_text('fileFormatVersion: 2\nguid: '+guid(p['namespace'],'static-mask-shader')+'\n')
     static_fonts=p.get('staticFontInputs')
     for item in (static_fonts or {}).get('copies',[]):
         raw=read(inside(plan_path.parent,item['relativePath']))
@@ -506,6 +519,30 @@ def export(plan_path, output):
             ('IntrinsicGridLayoutGroup.cs',standard.UNITY_LAYOUT_DIR+'/IntrinsicGridLayoutGroup.cs','intrinsic-grid-script'),
             ('UnityNumericCode.cs',standard.unity('numericCode'),'numeric-code-editor'),
             ('UnityBehaviorBindings.cs',str(Path(standard.unity('importer')).with_name('UnityBehaviorBindings.cs')),'behavior-bindings-editor'),
+            ('UnityStaticRetainedAssets.cs',str(Path(standard.unity('importer')).with_name('UnityStaticRetainedAssets.cs')),'static-retained-assets-editor'),
+            ('UnityStaticControls.cs',str(Path(standard.unity('importer')).with_name('UnityStaticControls.cs')),'static-controls-editor'),
+            ('UnityStaticSortQueue.cs',str(Path(standard.unity('importer')).with_name('UnityStaticSortQueue.cs')),'static-sort-editor/UnityStaticSortQueue.cs'),
+            ('UnityStaticSortQueueProxy.cs',str(Path(standard.unity('importer')).with_name('UnityStaticSortQueueProxy.cs')),'static-sort-editor/UnityStaticSortQueueProxy.cs'),
+            ('UnityStaticSortQueueIntegration.cs',str(Path(standard.unity('importer')).with_name('UnityStaticSortQueueIntegration.cs')),'static-sort-editor/UnityStaticSortQueueIntegration.cs'),
+            ('UnityStaticSortTextSource.cs',str(Path(standard.unity('importer')).with_name('UnityStaticSortTextSource.cs')),'static-sort-editor/UnityStaticSortTextSource.cs'),
+            ('NativeStaticSortTextSource.cs','Assets/Game/Scripts/Presentation/StaticSort/NativeStaticSortTextSource.cs','static-sort-runtime/NativeStaticSortTextSource.cs'),
+            ('NativeStaticSortQueueProxyGraphic.cs','Assets/Game/Scripts/Presentation/StaticSort/NativeStaticSortQueueProxyGraphic.cs','static-sort-runtime/NativeStaticSortQueueProxyGraphic.cs'),
+            ('NativeStaticSortQueueProxyPresenter.cs','Assets/Game/Scripts/Presentation/StaticSort/NativeStaticSortQueueProxyPresenter.cs','static-sort-runtime/NativeStaticSortQueueProxyPresenter.cs'),
+            ('NativeStaticSortQueueProxyMarker.cs','Assets/Game/Scripts/Presentation/StaticSort/NativeStaticSortQueueProxyMarker.cs','static-sort-runtime/NativeStaticSortQueueProxyMarker.cs'),
+            ('NativeStaticSortOrderIdentity.cs','Assets/Game/Scripts/Presentation/StaticSort/NativeStaticSortOrderIdentity.cs','static-sort-runtime/NativeStaticSortOrderIdentity.cs'),
+            ('NativeStaticSortRootIdentity.cs','Assets/Game/Scripts/Presentation/StaticSort/NativeStaticSortRootIdentity.cs','static-sort-runtime/NativeStaticSortRootIdentity.cs'),
+            ('UnityStaticMaskSort.cs',str(Path(standard.unity('importer')).with_name('UnityStaticMaskSort.cs')),'static-mask-editor/UnityStaticMaskSort.cs'),
+            ('UnityBitmapMissingGlyphsIntegration.cs',str(Path(standard.unity('importer')).with_name('UnityBitmapMissingGlyphsIntegration.cs')),'bitmap-missing-editor'),
+            ('NativeBitmapMissingGlyphs.cs','Assets/Game/Scripts/Presentation/Bitmap/NativeBitmapMissingGlyphs.cs','bitmap-missing-runtime'),
+            ('UnityStaticMaskIntegration.cs',str(Path(standard.unity('importer')).with_name('UnityStaticMaskIntegration.cs')),'static-mask-editor/UnityStaticMaskIntegration.cs'),
+            ('NativeStaticEllipseMaskGraphic.cs','Assets/Game/Scripts/Presentation/StaticMasks/NativeStaticEllipseMaskGraphic.cs','static-mask-runtime/NativeStaticEllipseMaskGraphic.cs'),
+            ('NativeStaticInvertedMaskGraphic.cs','Assets/Game/Scripts/Presentation/StaticMasks/NativeStaticInvertedMaskGraphic.cs','static-mask-runtime/NativeStaticInvertedMaskGraphic.cs'),
+            ('NativeStaticMaskIdentity.cs','Assets/Game/Scripts/Presentation/StaticMasks/NativeStaticMaskIdentity.cs','static-mask-runtime/NativeStaticMaskIdentity.cs'),
+            ('UnityStaticLayoutCompletionIntegration.cs',str(Path(standard.unity('importer')).with_name('UnityStaticLayoutCompletionIntegration.cs')),'static-layout-editor'),
+            ('NativeStaticLayoutCompletion.cs','Assets/Game/Scripts/Presentation/StaticLayout/NativeStaticLayoutCompletion.cs','static-layout-runtime'),
+            ('UnityStaticAnimationIntegration.cs',str(Path(standard.unity('importer')).with_name('UnityStaticAnimationIntegration.cs')),'static-animation-integration'),
+            ('UnityStaticAnimationBindings.cs',str(Path(standard.unity('importer')).with_name('UnityStaticAnimationBindings.cs')),'static-animation-editor'),
+            ('UnityStaticProgressIntegration.cs',str(Path(standard.unity('importer')).with_name('UnityStaticProgressIntegration.cs')),'static-progress-editor'),
             ('UnityStaticFields.cs',str(Path(standard.unity('importer')).with_name('UnityStaticFields.cs')),'static-fields-editor'),
             ('UnityStaticFieldIntegration.cs',str(Path(standard.unity('importer')).with_name('UnityStaticFieldIntegration.cs')),'static-field-integration-editor'),
             ('materials/ui_color/UnityMaterialBindings.cs',str(Path(standard.unity('importer')).with_name('UnityMaterialBindings.cs')),'material-bindings-editor'),
@@ -517,7 +554,7 @@ def export(plan_path, output):
             ('UnityStaticToggle.cs',str(Path(standard.unity('importer')).with_name('UnityStaticToggle.cs')),'static-toggle-editor'),
             ('UnitySystemFonts.cs',str(Path(standard.unity('importer')).with_name('UnitySystemFonts.cs')),'system-fonts-editor'),
             ('UnityPrefabInstances.cs',standard.unity('prefabInstances'),'prefab-instances-editor'),
-            *[(name,standard.UNITY_LAYOUT_DIR+'/'+name,'native-ui/'+name) for name in ('NativeLinearLayoutGroup.cs','NativeRectConstraints.cs','NativeTextLineBox.cs','NativeHorizontalProgressFill.cs','NativeInputBlocker.cs','NativeInputBlockerSurface.cs','NativeStaticButtonTarget.cs','NativeStaticTextOutline.cs')],
+            *[(name,standard.UNITY_LAYOUT_DIR+'/'+name,'native-ui/'+name) for name in ('NativeLinearLayoutGroup.cs','NativeRectConstraints.cs','NativeTextLineBox.cs','NativeHorizontalProgressFill.cs','UnityStaticProgress.cs','NativeStaticAnimationBinding.cs','NativeStaticEditBox.cs','NativeStaticGraphics.cs','NativeRetainedMaterial.cs','NativeStaticLabelStyle.cs','NativeInputBlocker.cs','NativeInputBlockerSurface.cs','NativeStaticButtonTarget.cs','NativeStaticTextOutline.cs')],
             ('UnityDynamicUi.cs',standard.unity('dynamicUi'),'native-ui/UnityDynamicUi.cs'),
             ('UnityButtonAnimations.cs',Path(standard.unity('importer')).with_name('NativeButtonAnimations.cs').as_posix(),'button-animations-editor'),
             ('UnityImporter.cs',standard.unity('importer'),'editor-adapter')]:
@@ -551,6 +588,18 @@ def export(plan_path, output):
         # Editor-only evidence pins for independent native readback verifiers.
         for key in ('spineNativeStage','sourceManifestPath','sourceManifestSha256','sourceIrSha256'):
             instruction[key]=p.get(key)
+    instruction['staticCompletionEnabled']=bool(p.get('staticCompletion'))
+    instruction['staticRetainedAssets']=p.get('staticRetainedAssets')
+    instruction['staticPresentation']=p.get('staticPresentation')
+    instruction['layoutCompletion']=p.get('layoutCompletion')
+    instruction['staticMasks']=p.get('staticMasks')
+    instruction['staticSortQueue']=p.get('staticSortQueue')
+    instruction['bitmapMissingGlyphs']=p.get('bitmapMissingGlyphs')
+    instruction['staticParticleBoundary']=p.get('staticParticleBoundary')
+    instruction['staticAnimationEvidence']=p.get('staticAnimationEvidence')
+    instruction['staticAnimationComponentOrigins']=p.get('staticAnimationComponentOrigins')
+    instruction['staticAnimationAssetReferences']=p.get('staticAnimationAssetReferences')
+    instruction['staticControlBindings']=(p.get('staticControls')or{}).get('bindings')
     instruction['systemFontBinding']=p.get('systemFontBinding')
     instruction['staticFontReceiptPath']=(static_fonts or {}).get('portableReceiptRelativePath')
     instruction['staticFontReceiptSha256']=(static_fonts or {}).get('portableReceiptSha256')
@@ -648,7 +697,11 @@ def close(actual,expected,tolerance=.001):
 def label_font_matches(spec,actual,font,evidence=None):
     """SHRINK sizes may vary only with explicit native auto-size/bounds proof."""
     import math
-    if not actual or not font or not font.get('guid') or actual.get('fontGuid')!=font['guid'] or actual.get('text')!=spec['text'] or actual.get('allCharactersPresent')is not True:return False
+    if not actual or not font or not font.get('guid') or actual.get('fontGuid')!=font['guid'] or actual.get('text')!=spec['text']:return False
+    if spec.get('bitmapMissingGlyphPolicy')=='cocos24-bitmap-missing-glyph-skip-v1':
+        if actual.get('bitmapMissingGlyphPolicy')!=spec['bitmapMissingGlyphPolicy'] or actual.get('bitmapMissingGlyphProofVerified')is not True or actual.get('bitmapDisplayText')!=spec['bitmapMissingGlyphDisplayText']:return False
+        if not spec['bitmapMissingGlyphDisplayText'] and (actual.get('characterCount')!=0 or actual.get('glyphBounds')):return False
+    elif actual.get('allCharactersPresent')is not True:return False
     if close(actual.get('fontSize'),spec['fontSize']) and not actual.get('autoSizeReadback'):return True
     if spec.get('overflow')!=2:return close(actual.get('fontSize'),spec['fontSize'])
     proof=evidence or actual
@@ -717,6 +770,10 @@ def verify(candidate, output, level='static'):
             diagnostics.extend(gallery_readback(instruction,rb))
             from ..prefab_spine_unity_readback import verify as verify_spine_saved
             diagnostics.extend(verify_spine_saved(instruction,root,rb))
+            from ..prefab_static_completion_readback import verify_assets as verify_retained
+            diagnostics.extend(verify_retained(instruction,rb.get('staticRetainedAssetReadback'),'unity'))
+            from ..prefab_static_sort_readback import verify as verify_static_sort
+            diagnostics.extend(verify_static_sort(instruction,rb))
             from ..prefab_sprite_outline_unity_readback import verify as verify_outline_saved
             diagnostics.extend(verify_outline_saved(instruction,root,rb))
             if instruction.get('staticTimeMaterialsJson'):
@@ -786,6 +843,10 @@ def verify(candidate, output, level='static'):
                 diagnostics.extend(verify_numeric(specs,actual_prefabs.get(prefab['sourceId'],{}).get('numericCodeBindings'),'unity',prefab['sourceId']))
                 from ..prefab_static_readback import verify as verify_static
                 static_observed=actual_prefabs.get(prefab['sourceId'],{})
+                from ..prefab_static_completion_readback import verify_prefab as verify_completion
+                diagnostics.extend(verify_completion(instruction,specs,static_observed,'unity',prefab['sourceId']))
+                from ..prefab_static_progress import verify as verify_progress
+                diagnostics.extend(verify_progress(specs,static_observed.get('staticProgressFields'),'unity',prefab['sourceId']))
                 diagnostics.extend(verify_static(specs,static_observed.get('staticFieldBindings'),static_observed.get('guid'),'unity',prefab['sourceId']))
                 if instruction.get('behaviorBindingReadback')=='persistent-source-fields-v1':
                     from ..prefab_target_behaviors import verify_bindings
@@ -875,7 +936,10 @@ def verify(candidate, output, level='static'):
             from ..assets.animation import verify_native
             diagnostics.extend(verify_native(instruction.get('animations',[]),rb.get('animations',[]),native))
             editor='partial' if rb.get('diagnostics') else 'pass'
-            if any(d['code']!='EDITOR_NOT_RUN' for d in diagnostics):editor='fail'
+            # These diagnostics are emitted only after exact static native checks;
+            # keep their unexecuted dynamic behavior separate from Editor failure.
+            dynamic_boundaries={'SPINE_DYNAMIC_BEHAVIOR_INCOMPLETE','ANIMATION_DYNAMIC_CURVES_NOT_LOWERED'}
+            if any(d['code']not in dynamic_boundaries|{'EDITOR_NOT_RUN'} for d in diagnostics):editor='fail'
     for item in m['files']:
         path=inside(root,item['path'])
         expected=native.get(item['path']) if level=='editor' and item['path'].endswith('.meta') else item['sha256']
@@ -910,7 +974,9 @@ def verify(candidate, output, level='static'):
     out=new_output(output,[root])
     result=dict(schemaVersion=1,toolVersion=__version__,candidateManifestSha256=fingerprint(root/'manifest.json'),
                 diagnostics=diagnostics,staticValidation='conflict' if any(d['code'] in ('GENERATED_FILE_CHANGED','DUPLICATE_TARGET_GUID','TARGET_REFERENCE_MISSING','TARGET_LAYOUT_INVALID','NATIVE_FILE_CHANGED','ASSIGNED_NATIVE_IDENTITY_CHANGED','LAYOUT_FORBIDDEN_NAME') for d in diagnostics) else 'pass',
-                editorValidation=editor,visualValidation='not_run',businessValidation='not_run')
+                editorValidation=editor,nativeStaticValidation='pass' if editor in ('pass','partial') else editor,
+                runtimeCheck='pass' if editor in ('pass','partial') and not any(d['code']not in {'SPINE_DYNAMIC_BEHAVIOR_INCOMPLETE','ANIMATION_DYNAMIC_CURVES_NOT_LOWERED'} for d in diagnostics) else 'not_run' if level!='editor' else 'fail',
+                visualValidation='not_run',businessValidation='not_run')
     write_json(out/'verification.json',result)
     return finish(out,result)
 

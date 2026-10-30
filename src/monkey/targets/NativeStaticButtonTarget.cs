@@ -6,6 +6,9 @@ public sealed class NativeStaticButtonTarget : MonoBehaviour
 {
     public GameObject Target;
     public bool SourceEnabled;
+    public int SourceTransition;
+    public float SourceZoomScale;
+    public float SourceDuration;
 
     // Toggle.target can name a source node without any render component. Keep
     // that exact source identity separately so a Button on this same GameObject

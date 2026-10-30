@@ -4,12 +4,14 @@ const sourceChildren=require('./static-richtext.js').sourceChildren;
 const cc=require('cc');
 const jobs=require('./jobs.js');
 const dynamic=require('./dynamic-ui.js');
+const sortQueue=require('./CreatorStaticSortQueueIntegration.js');
 const near=(a,b)=>a.length===b.length&&a.every((v,i)=>Math.abs(v-b[i])<0.001);
-function uiState(node,src) {
+function uiState(node,src,root=null) {
     if(!src.sourceGeometryProfile)return {};
     const group=node.getComponent(cc.UIOpacity);const opacity=group&&group.enabled?group.opacity:255;
-    if(node.layer!==src.sourceLayer||Math.abs(opacity-src.opacity)>.001)throw Error('Source UI layer/opacity differs: '+src.sourceId);
-    const state={sourceLayer:node.layer,opacity};
+    const sourceLayer=node.layer===src.sourceLayer || (root&&sortQueue.sourceSuppressionEvidence(root,node,src.sourceLayer));
+    if(!sourceLayer||Math.abs(opacity-src.opacity)>.001)throw Error('Source UI layer/opacity differs: '+src.sourceId);
+    const state={sourceLayer:src.sourceLayer,opacity};
     if(src.verifyUiColor||node.getComponent(cc.RichText)||node.getComponent(cc.sp.Skeleton)) {
         const renderer=node.getComponent(cc.Sprite)||node.getComponent(cc.Label)||node.getComponent(cc.RichText)||node.getComponent(cc.sp.Skeleton);
         if(!renderer)throw Error('Source UI renderer missing: '+src.sourceId);
@@ -21,14 +23,19 @@ function uiState(node,src) {
     return state;
 }
 async function serialize(plan,nodes) {
+    sortQueue.validatePlan(plan);
     const result=[];
     for(const spec of plan.sourcePrefabs||[]) {
         jobs.progress('source-prefabs',result.length,(plan.sourcePrefabs||[]).length);
         if(result.length%16===0)await new Promise(resolve=>setTimeout(resolve,0));
         if(plan.nativeDeadlineMs&&Date.now()>=plan.nativeDeadlineMs)throw Error('NATIVE_BUDGET_EXHAUSTED');
-        const root=cc.instantiate(nodes.get(spec.root));
+        const sourceRoot=nodes.get(spec.root),renderContextParent=sourceRoot&&sourceRoot.parent;
+        const renderCanvas=sourceRoot&&sortQueue.parentCanvas(sourceRoot);
+        if(!sourceRoot||!renderContextParent||!renderCanvas||!renderCanvas.enabledInHierarchy||!renderCanvas.node.activeInHierarchy)
+            throw Error('Static sort proxy requires the actual active source Canvas context: '+spec.root);
+        const root=cc.instantiate(sourceRoot);
         try {
-            root.parent=null;
+            root.parent=renderContextParent;root.setSiblingIndex(renderContextParent.children.length-1);
             if(spec.rootNamePolicy==='creator-asset-basename-v1')root.name=spec.nativeRootName;
             const mapped=new Map();const sources=new Map(plan.nodes.map(n=>[n.sourceId,n]));
             function walk(sid,n){mapped.set(sid,n);sources.get(sid).children.forEach((child,i)=>walk(child,sourceChildren(n)[i]));}walk(spec.root,root);
@@ -39,18 +46,50 @@ async function serialize(plan,nodes) {
             require('./spine-ui-transform.js').restoreAuthored(plan,mapped,cc,spec.sourceId);
             nativeInitialNodes=dynamic.settleRoot(root,mapped,plan,false);
         }
+        // settleRoot owns and tears down its temporary Scene; remount after the
+        // final layout pass before native proxy lifecycle/render readback.
+        root.parent=renderContextParent;root.setSiblingIndex(renderContextParent.children.length-1);
+        if(!root.activeInHierarchy||!renderCanvas.enabledInHierarchy)throw Error('Native sort proxy source root did not reactivate in its Canvas context');
             const prefab=new cc.Prefab();prefab.name=root.name;prefab.data=root;
-            const raw=EditorExtends.serialize(prefab),serialized=typeof raw==='string'?raw:JSON.stringify(raw);
+            const proxy=sortQueue.createForPrefab(plan,spec.root,mapped),presenter=proxy.presenter;
+            let serialized,persistentSortReadback;
+            sortQueue.prepareForSerialization(presenter);
+            try {
+                root.parent=null;
+                const raw=EditorExtends.serialize(prefab);serialized=typeof raw==='string'?raw:JSON.stringify(raw);
+                persistentSortReadback=sortQueue.readPersistent(plan,spec.root,mapped,root);
+            } finally {sortQueue.restoreAfterSerialization(presenter);root.parent=renderContextParent;}
+            const initializedSortReadback=sortQueue.readInitialized(plan,spec.root,mapped,root);
             const spineUITransformReceipt=plan.spineBinding?require('./spine-ui-transform.js').verifySerializedPrefab(plan,spec,serialized):null;
-            result.push({sourceId:spec.sourceId,path:spec.path,nativeInitialNodes,spineUITransformReceipt,serialized});
+            result.push({sourceId:spec.sourceId,path:spec.path,nativeInitialNodes,spineUITransformReceipt,
+                staticSortQueue:{create:proxy.createReadback,persistent:persistentSortReadback,initialized:initializedSortReadback},serialized});
         } finally {root.destroy();}
     }
     return result;
 }
-function read(prefab,spec,plan,info,templates,staticAssets) {
-    const root=cc.instantiate(prefab);
+function createReadContext(plan) {
+    const scene=new cc.Scene('OwnedStaticPrefabReadback');
+    const node=new cc.Node('OwnedStaticPrefabCanvas');node.layer=cc.Layers.Enum.UI_2D;node.parent=scene;
+    const ui=node.addComponent(cc.UITransform);ui.setContentSize(...plan.designSize);ui.setAnchorPoint(0,0);
+    const canvas=node.addComponent(cc.Canvas);
+    const cameraNode=new cc.Node('OwnedStaticPrefabCamera');cameraNode.parent=scene;cameraNode.setPosition(0,0,1000);
+    const camera=cameraNode.addComponent(cc.Camera);camera.projection=cc.Camera.ProjectionType.ORTHO;
+    camera.orthoHeight=plan.designSize[1]/2;camera.near=1;camera.far=2000;camera.visibility=cc.Layers.Enum.UI_2D;
+    canvas.cameraComponent=camera;
+    const sourceParent=new cc.Node('OwnedStaticPrefabDesign');sourceParent.layer=cc.Layers.Enum.UI_2D;sourceParent.parent=node;
+    const designUI=sourceParent.addComponent(cc.UITransform);designUI.setContentSize(...plan.designSize);designUI.setAnchorPoint(0,0);
+    scene._load();scene._activate(true);
+    return {scene,canvas,sourceParent};
+}
+function read(prefab,spec,plan,info,templates,staticAssets,animationContext) {
+    sortQueue.validatePlan(plan);
+    const root=cc.instantiate(prefab),context=createReadContext(plan);
     try {
         if(root.parent)throw Error('Saved prefab has external parent');
+        const {scene,canvas}=context;
+        if(!scene.activeInHierarchy||!canvas.enabledInHierarchy)throw Error('Owned native Prefab Canvas context is not active');
+        // Execute native lifecycle in an owned scene, without touching the user's open scene.
+        root.parent=context.sourceParent;
         const sources=new Map(plan.nodes.map(n=>[n.sourceId,n]));const mapped=new Map(),geometryMismatches=[];
         if(spec.rootNamePolicy&&(spec.rootNamePolicy!=='creator-asset-basename-v1'||spec.sourceRootName!==sources.get(spec.root).name||spec.nativeRootName!==spec.path.split('/').pop().slice(0,-7)))throw Error('Prefab name policy differs');
         function match(sid,node) {
@@ -58,7 +97,7 @@ function read(prefab,spec,plan,info,templates,staticAssets) {
             const expectedName=sid===spec.root&&spec.rootNamePolicy==='creator-asset-basename-v1'?spec.nativeRootName:src&&src.name;
             if(!src||expectedName!==node.name||src.children.length!==sourceChildren(node).length||!ui)throw Error('Prefab hierarchy differs: '+sid);
             const actual={position:[node.position.x,node.position.y,node.position.z],scale:[node.scale.x,node.scale.y,node.scale.z],
-                rotation:[node.rotation.x,node.rotation.y,node.rotation.z,node.rotation.w],size:[ui.width,ui.height],anchor:[ui.anchorX,ui.anchorY],active:node.active,...uiState(node,src)};
+                rotation:[node.rotation.x,node.rotation.y,node.rotation.z,node.rotation.w],size:[ui.width,ui.height],anchor:[ui.anchorX,ui.anchorY],active:node.active,...uiState(node,src,root)};
             const fields=Object.keys(actual).filter(key=>['active','sourceLayer','opacity'].includes(key)?actual[key]!==src[key]:!near(actual[key],src[key]));
             if(fields.length)geometryMismatches.push({sourceId:sid,fields,expected:Object.fromEntries(fields.map(key=>[key,src[key]])),actual:Object.fromEntries(fields.map(key=>[key,actual[key]]))});
             mapped.set(sid,node);src.children.forEach((child,i)=>match(child,sourceChildren(node)[i]));
@@ -75,6 +114,8 @@ function read(prefab,spec,plan,info,templates,staticAssets) {
             const geometry=require('./spine-ui-transform.js').readAuthored(plan,lifecycleNodes,cc,spec.sourceId);
             if(geometry.status!=='verified')throw Error('SPINE_UI_TRANSFORM_SAVED_PREFAB_MISMATCH: '+JSON.stringify(geometry));
         }
+        root.parent=context.sourceParent;root.setSiblingIndex(context.sourceParent.children.length-1);
+        if(!root.activeInHierarchy||!canvas.enabledInHierarchy)throw Error('Initialized Prefab probe did not reactivate in its Canvas context');
         match(spec.root,root);
         const persistent=new Map();
         function savedMap(sid,node){
@@ -82,6 +123,10 @@ function read(prefab,spec,plan,info,templates,staticAssets) {
             persistent.set(sid,node);sources.get(sid).children.forEach((child,i)=>savedMap(child,sourceChildren(node)[i]));
         }
         savedMap(spec.root,prefab.data);
+        // The loaded Editor instance may carry the presenter's temporary hidden
+        // layer. Independently prove the serialized Prefab retains each source
+        // layer and opacity before accepting that initialized presentation.
+        for(const id of spec.nodes){const src=dynamic.expected(sources.get(id),plan,info.nativeInitialNodes);uiState(persistent.get(id),src);}
         if(mapped.size!==spec.nodeCount||spec.nodes.some(id=>!mapped.has(id)))throw Error('Prefab node boundary differs');
         const assets=new Map(plan.assets.map(a=>[a.sourceId,a]));const components=[];const numericCodeBindings=[],behaviorBindings=[];
         for(const c of plan.components.filter(c=>c.convertible&&mapped.has(c.node))) {
@@ -108,13 +153,16 @@ function read(prefab,spec,plan,info,templates,staticAssets) {
                 if(!fontMatches||comp.string!==c.text)throw Error('Prefab font/text reference differs');
             }
             if(c.type==='cc.Label'&&comp.overflow!==(c.nativeOverflow??c.overflow))throw Error('Prefab Label overflow policy differs');
+            if(c.type==='cc.LabelOutline'&&!(comp.font instanceof cc.BitmapFont)&&
+               (comp.enableOutline!==!!c.enabled||Math.abs(comp.outlineWidth-c.width)>.0001||!near([comp.outlineColor.r,comp.outlineColor.g,comp.outlineColor.b,comp.outlineColor.a],c.outlineColor)))
+                throw Error('Prefab Label outline fields differ: '+c.sourceId);
             if(c.type==='cc.Sprite'&&comp.sizeMode!==(c.nativeSizeMode??c.sizeMode))throw Error('Prefab Sprite sizing policy differs');
             if(c.type==='cc.ScrollView'&&comp.content!==mapped.get(c.content))throw Error('Prefab scroll reference escapes graph');
             if(c.type==='cc.Button'){
                 const target=c.staticButtonBinding&&c.target?mapped.get(c.target):node;
                 if(comp.target!==target)throw Error('Prefab button reference differs');
                 if(c.staticButtonBinding){
-                    if(comp.enabled||comp.transition!==c.transition||comp.interactable!==c.interactable||Math.abs(comp.duration-c.duration)>.0001)throw Error('Static button state differs');
+                    if(comp.enabled||comp.transition!==c.transition||comp.interactable!==c.interactable||Math.abs(comp.zoomScale-c.zoomScale)>.0001||Math.abs(comp.duration-c.duration)>.0001)throw Error('Static button state differs');
                     for(const name of ['normalColor','hoverColor','pressedColor','disabledColor']){
                         const v=comp[name];if(!near([v.r,v.g,v.b,v.a],c.staticButtonBinding[name]))throw Error('Static button color differs: '+name);
                     }
@@ -139,8 +187,29 @@ function read(prefab,spec,plan,info,templates,staticAssets) {
             toggleFields=require('./static-toggle.js').Read(subset,id=>persistent.get(id),require('./static-field-integration.js').resolver(plan,persistent,staticAssets));
             if(toggleFields.fields.some(x=>!x.verified))throw Error('STATIC_TOGGLE_SAVED_READBACK_FAILED');
         }
-        return {...info,toggleFields,staticFieldBindings,spineBindings,serializedSpineBindings,prefabInstances:require('./prefab-instances.js').read(plan,mapped,templates,plan.savedPrefabs||[],spec.sourceId),nodeCount:mapped.size,savedReloaded:true,geometryVerified:geometryMismatches.length===0,geometryMismatches,referencesVerified:true,components,
+        const staticProgressFields=plan.components.filter(c=>c.staticProgressBinding&&!c.convertible&&persistent.has(c.node)).map(c=>{
+            const bar=plan.components.find(x=>x.sourceId===c.staticProgressBinding.barSpriteSourceId);
+            return require('./static-progress.js').read(persistent.get(c.node).getComponent(cc.ProgressBar),c.staticProgressBinding,persistent.get(bar.node).getComponent(cc.Sprite));
+        });
+        const staticControlFields=plan.staticControls?require('./static-controls.js').read(plan.staticControls.bindings.filter(x=>persistent.has(x.node)),persistent,require('./static-field-integration.js').resolver(plan,persistent,staticAssets)):[];
+        const animationPlan={...plan,components:plan.components.filter(c=>persistent.has(c.node))};
+        const staticAnimationFields=animationContext?require('./static-animation-integration.js').readSaved(animationPlan,persistent,animationContext.animations,animationContext.evidence,plan.staticAnimationComponentOrigins):[];
+        const staticMaskReadback=plan.staticMasks&&plan.staticMasks.masks?require('./static-masks.js'):null;
+        const maskSpecs=staticMaskReadback?plan.staticMasks.masks.filter(x=>persistent.has(x.node)):[];
+        const resolveMaskSprite=uuid=>staticMaskReadback.resolveSprite(plan,staticAssets,uuid);
+        const staticMaskFields=staticMaskReadback?staticMaskReadback.readStaticMasks(maskSpecs,persistent,resolveMaskSprite):[];
+        const staticMaskInitializedFields=staticMaskReadback?staticMaskReadback.readStaticMasks(maskSpecs,mapped,resolveMaskSprite,{initialized:true}):[];
+        if(staticMaskFields.some(row=>!row.verified)||staticMaskInitializedFields.some(row=>!row.verified))
+            throw Error('STATIC_MASK_PERSISTENT_OR_INITIALIZED_READBACK_FAILED');
+        const staticLayoutFields=plan.layoutCompletion?require('./static-layout-completion.js').read(plan.layoutCompletion,persistent).staticLayoutFields:[];
+        const prefabInstances=require('./prefab-instances.js').read(plan,mapped,templates,plan.savedPrefabs||[],spec.sourceId);
+        const staticSortPersistent=sortQueue.readPersistent(plan,spec.root,persistent,prefab.data);
+        const staticSortInitialized=sortQueue.readInitialized(plan,spec.root,mapped,root);
+        const bitmapMissingGlyphFields=plan.bitmapMissingGlyphs?require('./bitmap-missing-glyphs.js').read(plan.bitmapMissingGlyphs,persistent,mapped,staticAssets,cc):[];
+        const staticLayoutProbe=plan.layoutCompletion?require('./static-layout-completion.js').probe(plan,mapped):null;
+        return {...info,bitmapMissingGlyphFields,staticLayoutProbe,staticMaskFields,staticMaskInitializedFields,staticLayoutFields,staticAnimationFields,staticControlFields,staticProgressFields,toggleFields,staticFieldBindings,spineBindings,serializedSpineBindings,prefabInstances,
+            staticSortQueue:{persistent:staticSortPersistent,initialized:staticSortInitialized},nodeCount:mapped.size,savedReloaded:true,geometryVerified:geometryMismatches.length===0,geometryMismatches,referencesVerified:true,components,
             numericCodeBindings,behaviorBindings,rootNamePolicy:spec.rootNamePolicy||'source-name-v1',sourceRootName:sources.get(spec.root).name,nativeRootName:root.name};
-    } finally {root.destroy();}
+    } finally {root.destroy();context.scene._activate(false);context.scene.destroy();}
 }
 module.exports={serialize,read,uiState};

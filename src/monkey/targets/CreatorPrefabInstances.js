@@ -3,6 +3,8 @@
 // by the installed SDK; no source graph or interpreter is included in Player.
 const cc=require('cc');
 const dynamic=require('./dynamic-ui.js');
+const sourceChildren=require('./static-richtext.js').sourceChildren;
+const sortQueue=require('./CreatorStaticSortQueueIntegration.js');
 let current=null,sequence=0;
 const api=()=>{
     const u=cc.Prefab._utils,p=globalThis.EditorExtends&&EditorExtends.PrefabUtils;
@@ -63,7 +65,7 @@ function keep(plan,scene,nodes,result,nativeAssets){if(current)throw Error('Nati
 function release(id){if(current&&current.id===id){dynamic.release(current.scene);current.scene.destroy();current=null;}}
 function mapTree(root,spec,plan) {
     const source=new Map(plan.nodes.map(n=>[n.sourceId,n])),mapped=new Map();
-    function walk(id,node){const s=source.get(id);if(!s||!node||s.children.length!==node.children.length)throw Error('Native template topology differs: '+id);mapped.set(id,node);s.children.forEach((child,i)=>walk(child,node.children[i]));}
+    function walk(id,node){const s=source.get(id),children=node&&sourceChildren(node);if(!s||!node||s.children.length!==children.length)throw Error('Native template topology differs: '+id);mapped.set(id,node);s.children.forEach((child,i)=>walk(child,children[i]));}
     walk(spec.root,root);return mapped;
 }
 function value(v,replacements=new Map()) {
@@ -74,7 +76,7 @@ function value(v,replacements=new Map()) {
     if(v instanceof cc.ValueType&&typeof v.clone==='function')return v.clone();
     if(Object.getPrototypeOf(v)===Object.prototype)return Object.fromEntries(Object.entries(v).map(([k,x])=>[k,value(x,replacements)]));
     const name=cc.js.getClassName(v),ctor=v.constructor,keys=ctor&&ctor.__values__;
-    if(typeof name==='string'&&name.startsWith('Monkey.StaticFields.')&&cc.js.getClassByName(name)===ctor&&Array.isArray(keys)) {
+    if(typeof name==='string'&&(name.startsWith('Monkey.StaticFields.')||['MonkeyStaticAnimationClipSlot','MonkeyStaticLayoutSlot','MonkeyStaticWidgetSlot'].includes(name))&&cc.js.getClassByName(name)===ctor&&Array.isArray(keys)) {
         const copy=new ctor();for(const key of keys)copy[key]=value(v[key],replacements);return copy;
     }
     throw Error('Unsupported native serialized override value');
@@ -101,7 +103,7 @@ function delta(instance,obj,key,v,ids) {
     const {u}=api(),patch=new u.PropertyOverrideInfo(),target=new u.TargetInfo();target.localID=localID;
     patch.targetInfo=target;patch.propertyPath=[key];patch.value=value(v);instance.propertyOverrides.push(patch);obj[key]=value(v);
 }
-function instanceRoots(root){const result=[];function walk(n){if(n!==root&&n._prefab&&n._prefab.instance){result.push(n);return;}n.children.forEach(walk);}walk(root);return result;}
+function instanceRoots(root){const result=[];function walk(n){if(n!==root&&n._prefab&&n._prefab.instance){result.push(n);return;}sourceChildren(n).forEach(walk);}walk(root);return result;}
 async function prepare(state,owner,saved,load) {
     if(state.prepared.has(owner))return;
     const {plan,nodes}=state,specs=new Map(plan.sourcePrefabs.map(p=>[p.sourceId,p]));
@@ -162,6 +164,7 @@ async function prepare(state,owner,saved,load) {
     state.prepared.add(owner);
 }
 async function serializePrefab(id,sid,saved,plan,load) {
+    sortQueue.validatePlan(plan);
     const state=session(id,plan),spec=plan.sourcePrefabs.find(p=>p.sourceId===sid);if(!spec)throw Error('Unexpected native prefab owner');
     // Bind persistent asset dependencies before native instance deltas are
     // recorded, so inherited carriers serialize the same final references.
@@ -173,9 +176,13 @@ async function serializePrefab(id,sid,saved,plan,load) {
     const ownerNodes=new Map(spec.nodes.map(nodeId=>[nodeId,state.nodes.get(nodeId)]));
     require('./static-field-integration.js').createAssign(plan,ownerNodes,state.nativeAssets);
     await prepare(state,sid,saved,load);
-    const root=cc.instantiate(state.nodes.get(spec.root));
+    const sourceRoot=state.nodes.get(spec.root),renderContextParent=sourceRoot&&sourceRoot.parent;
+    const renderCanvas=sourceRoot&&sortQueue.parentCanvas(sourceRoot);
+    if(!sourceRoot||!renderContextParent||!renderCanvas||!renderCanvas.enabledInHierarchy||!renderCanvas.node.activeInHierarchy)
+        throw Error('Static sort proxy requires the actual active nested Prefab Canvas context: '+spec.root);
+    const root=cc.instantiate(sourceRoot);
     try {
-        root.parent=null;root.name=spec.nativeRootName;
+        root.parent=renderContextParent;root.setSiblingIndex(renderContextParent.children.length-1);root.name=spec.nativeRootName;
         const mapped=mapTree(root,spec,plan);
         let nativeInitialNodes=dynamic.settleRoot(root,mapped,plan);
         if(plan.spineBinding) {
@@ -184,13 +191,27 @@ async function serializePrefab(id,sid,saved,plan,load) {
             require('./spine-ui-transform.js').restoreAuthored(plan,mapped,cc,spec.sourceId);
             nativeInitialNodes=dynamic.settleRoot(root,mapped,plan,false);
         }
+        // settleRoot temporarily detaches its owned tree; restore the real
+        // source Canvas hierarchy before proxy initialization/readback.
+        root.parent=renderContextParent;root.setSiblingIndex(renderContextParent.children.length-1);
+        if(!root.activeInHierarchy||!renderCanvas.enabledInHierarchy)
+            throw Error('Nested native sort proxy root did not reactivate in its Canvas context');
+        const proxy=sortQueue.createForPrefab(plan,spec.root,mapped),presenter=proxy.presenter||null;
         const prefab=new cc.Prefab();prefab.name=root.name;prefab.data=root;
         const {p}=api();
         if(root._prefab&&root._prefab.instance)throw Error('Creator root template inheritance requires a dedicated native asset contract');
         p.addPrefabInfo(root,root,prefab);root._prefab.nestedPrefabInstanceRoots=instanceRoots(root);
-        const serialized=serializeNative(root,prefab);
+        let serialized,persistentSortReadback;
+        sortQueue.prepareForSerialization(presenter);
+        try {
+            root.parent=null;
+            serialized=serializeNative(root,prefab);
+            persistentSortReadback=sortQueue.readPersistent(plan,spec.root,mapped,root);
+        } finally {sortQueue.restoreAfterSerialization(presenter);root.parent=renderContextParent;}
+        const initializedSortReadback=sortQueue.readInitialized(plan,spec.root,mapped,root);
         const spineUITransformReceipt=plan.spineBinding?require('./spine-ui-transform.js').verifySerializedPrefab(plan,spec,serialized,{saved,templates:saved}):null;
-        return {sourceId:sid,path:spec.path,nativeInitialNodes,spineUITransformReceipt,serialized};
+        return {sourceId:sid,path:spec.path,nativeInitialNodes,spineUITransformReceipt,
+            staticSortQueue:{create:proxy.createReadback,persistent:persistentSortReadback,initialized:initializedSortReadback},serialized};
     }finally{root.destroy();}
 }
 async function finish(id,saved,plan,load) {

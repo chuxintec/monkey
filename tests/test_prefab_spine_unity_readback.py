@@ -109,6 +109,9 @@ class UnitySpineReadbackTests(unittest.TestCase):
                                           nativeBindingPlanPath=stage_path, nativeBindingPlanSha256=stage_sha),
                     nodes=[dict(sourceId=bound['sourceNodeId'], color=[10, 20, 30, 40]),
                            dict(sourceId=unbound['sourceNodeId'], color=[10, 20, 30, 40])])
+        plan['nodes'][0].update(active=True, parent=None)
+        plan['nodes'][1].update(active=True, parent=None)
+        plan['staticMasks'] = dict(masks=[])
         def component_readback(row, has_data):
             is_unbound = not has_data
             return dict(sourceComponentId=row['sourceComponentId'], rendererKind='SkeletonGraphic',
@@ -288,6 +291,69 @@ class UnitySpineReadbackTests(unittest.TestCase):
                     saved_path = root / 'Analysis/Readback/Spine' / f'{"a" * 32}.json'
                     saved = json.loads(saved_path.read_text())
                     mutate(saved)
+                    saved_path.write_text(json.dumps(saved), encoding='utf-8')
+                    diagnostics = verify(plan, root, editor_readback)
+                    self.assertTrue(any(expected_message in row['message'] for row in diagnostics),
+                                    [row['message'] for row in diagnostics])
+                finally:
+                    temp.cleanup()
+
+    def test_accepts_transient_mask_stencil_variant_only_with_exact_base_and_ancestry_proof(self):
+        temp, root, plan, editor_readback, _ = self.fixture()
+        self.addCleanup(temp.cleanup)
+        mask_node = 'gameAsset:prefab-a#3'
+        plan['nodes'][0].update(active=False, parent=mask_node)
+        plan['nodes'].append(dict(sourceId=mask_node, active=True, parent=None))
+        plan['sourcePrefabs'][0]['nodes'].append(mask_node)
+        plan['staticMasks']['masks'] = [dict(sourceId=mask_node + '/components/9', node=mask_node, enabled=True)]
+        saved_path = root / 'Analysis/Readback/Spine' / f'{"a" * 32}.json'
+        saved = json.loads(saved_path.read_text())
+        component = saved['components'][0]
+        component['canvasRendererMaterialAssetPaths'] = ['', '']
+        row = component['rendererPresentation']['renderers'][0]
+        row.update(baseMaterialAssetPath='Assets/Spine/Test/test_graphic.mat',
+                   baseMaterialAssetGuid='5' * 32, baseMaterialShader='Monkey/SpineSourceGraphicProfile/Colored',
+                   baseMaterialTextureAssetPath='Assets/Spine/Test/test.png', baseMaterialTextureGuid='3' * 32,
+                   stencilDepth=1, stencilRootSortCanvasPath='CanvasRoot',
+                   stencilMaskAncestorSourceIds=[mask_node + '/components/9'],
+                   stencilReference=1, stencilComparison=3, stencilOperation=0,
+                   stencilReadMask=1, stencilWriteMask=0, stencilColorMask=15, stencilUseAlphaClip=0,
+                   baseMaterialPersistentReferenceVerified=True, modifiedMaterialShaderMatchesBase=True,
+                   nonStencilMaterialPropertiesMatch=True, stencilAncestryVerified=True,
+                   stencilConfigurationVerified=True, transientStencilVariantVerified=True)
+        saved_path.write_text(json.dumps(saved), encoding='utf-8')
+        self.assertEqual([d for d in verify(plan, root, editor_readback) if d['severity'] == 'error'], [])
+
+    def test_rejects_transient_stencil_without_exact_properties_base_or_mask_ancestry(self):
+        mutations = [
+            (lambda row, comp: row.update(nonStencilMaterialPropertiesMatch=False), 'nonStencilMaterialPropertiesMatch'),
+            (lambda row, comp: row.update(stencilComparison=8), 'stencil material state'),
+            (lambda row, comp: row.update(baseMaterialAssetGuid='9' * 32), 'base material GUID'),
+            (lambda row, comp: row.update(stencilMaskAncestorSourceIds=['wrong-mask']), 'mask ancestry'),
+            (lambda row, comp: row.pop('transientStencilVariantVerified'), 'transientStencilVariantVerified'),
+        ]
+        for mutate, expected_message in mutations:
+            with self.subTest(expected_message=expected_message):
+                temp, root, plan, editor_readback, _ = self.fixture()
+                try:
+                    plan['staticMasks']['masks'] = [dict(sourceId='gameAsset:prefab-a#4/components/9',
+                                                         node='gameAsset:prefab-a#4', enabled=True)]
+                    saved_path = root / 'Analysis/Readback/Spine' / f'{"a" * 32}.json'
+                    saved = json.loads(saved_path.read_text())
+                    component = saved['components'][0]
+                    component['canvasRendererMaterialAssetPaths'] = ['', '']
+                    row = component['rendererPresentation']['renderers'][0]
+                    row.update(baseMaterialAssetPath='Assets/Spine/Test/test_graphic.mat',
+                               baseMaterialAssetGuid='5' * 32, baseMaterialShader='Monkey/SpineSourceGraphicProfile/Colored',
+                               baseMaterialTextureAssetPath='Assets/Spine/Test/test.png', baseMaterialTextureGuid='3' * 32,
+                               stencilDepth=1, stencilRootSortCanvasPath='CanvasRoot',
+                               stencilMaskAncestorSourceIds=['gameAsset:prefab-a#4/components/9'],
+                               stencilReference=1, stencilComparison=3, stencilOperation=0,
+                               stencilReadMask=1, stencilWriteMask=0, stencilColorMask=15, stencilUseAlphaClip=0,
+                               baseMaterialPersistentReferenceVerified=True, modifiedMaterialShaderMatchesBase=True,
+                               nonStencilMaterialPropertiesMatch=True, stencilAncestryVerified=True,
+                               stencilConfigurationVerified=True, transientStencilVariantVerified=True)
+                    mutate(row, component)
                     saved_path.write_text(json.dumps(saved), encoding='utf-8')
                     diagnostics = verify(plan, root, editor_readback)
                     self.assertTrue(any(expected_message in row['message'] for row in diagnostics),

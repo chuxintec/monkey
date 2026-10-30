@@ -6,7 +6,9 @@ using System.Linq;
 using System.Reflection;
 using Spine.Unity;
 using UnityEngine;
+using UnityEngine.Rendering;
 using UnityEngine.UI;
+using Monkey.StaticMaskSort;
 
 namespace Monkey.Targets.Spine
 {
@@ -24,6 +26,10 @@ namespace Monkey.Targets.Spine
             public string blendMode;
             public Material sourceMaterial;
             public Material graphicMaterial;
+            public string graphicMaterialAssetPath;
+            public string graphicMaterialAssetGuid;
+            public string graphicTextureAssetPath;
+            public string graphicTextureAssetGuid;
             public int expectedSrcBlend;
             public int expectedDstBlend;
         }
@@ -37,12 +43,33 @@ namespace Monkey.Targets.Spine
             public string actualMaterialShader;
             public string actualMaterialName;
             public string actualTextureName;
+            public string baseMaterialAssetPath;
+            public string baseMaterialAssetGuid;
+            public string baseMaterialShader;
+            public string baseMaterialTextureAssetPath;
+            public string baseMaterialTextureGuid;
+            public int stencilDepth;
+            public string stencilRootSortCanvasPath;
+            public string[] stencilMaskAncestorSourceIds;
+            public int stencilReference;
+            public int stencilComparison;
+            public int stencilOperation;
+            public int stencilReadMask;
+            public int stencilWriteMask;
+            public int stencilColorMask;
+            public int stencilUseAlphaClip;
             public bool rawImageEnabled;
             public bool rawImageMaskable;
             public bool rawImageMaterialReferenceVerified;
             public bool materialReferenceVerified;
             public bool textureReferenceVerified;
             public bool blendVerified;
+            public bool baseMaterialPersistentReferenceVerified;
+            public bool modifiedMaterialShaderMatchesBase;
+            public bool nonStencilMaterialPropertiesMatch;
+            public bool stencilAncestryVerified;
+            public bool stencilConfigurationVerified;
+            public bool transientStencilVariantVerified;
         }
 
         [Serializable] public sealed class Readback
@@ -422,6 +449,8 @@ namespace Monkey.Targets.Spine
             {
                 if (binding == null || binding.sourceMaterial == null || binding.graphicMaterial == null ||
                     binding.sourceMaterial.mainTexture == null || binding.graphicMaterial.mainTexture != binding.sourceMaterial.mainTexture ||
+                    String.IsNullOrWhiteSpace(binding.graphicMaterialAssetPath) || String.IsNullOrWhiteSpace(binding.graphicMaterialAssetGuid) ||
+                    String.IsNullOrWhiteSpace(binding.graphicTextureAssetPath) || String.IsNullOrWhiteSpace(binding.graphicTextureAssetGuid) ||
                     binding.graphicMaterial.shader == null || binding.graphicMaterial.shader.name != ExpectedUiShaderName ||
                     !binding.graphicMaterial.HasProperty("_SrcBlend") || !binding.graphicMaterial.HasProperty("_DstBlend") ||
                     binding.graphicMaterial.GetInt("_SrcBlend") != binding.expectedSrcBlend ||
@@ -449,6 +478,10 @@ namespace Monkey.Targets.Spine
             {
                 if (row == null || !byId.TryGetValue(row.sourceMaterialId, out var saved) ||
                     saved.sourceMaterial != row.sourceMaterial || saved.graphicMaterial != row.graphicMaterial ||
+                    saved.graphicMaterialAssetPath != row.graphicMaterialAssetPath ||
+                    saved.graphicMaterialAssetGuid != row.graphicMaterialAssetGuid ||
+                    saved.graphicTextureAssetPath != row.graphicTextureAssetPath ||
+                    saved.graphicTextureAssetGuid != row.graphicTextureAssetGuid ||
                     saved.textureSourceId != row.textureSourceId || saved.blendMode != row.blendMode ||
                     saved.expectedSrcBlend != row.expectedSrcBlend || saved.expectedDstBlend != row.expectedDstBlend)
                 { gaps.Add("persisted_material_pair_identity_mismatch:" + (row == null ? "null" : row.sourceMaterialId)); return false; }
@@ -460,6 +493,7 @@ namespace Monkey.Targets.Spine
             Material expectedModified, List<string> gaps)
         {
             var actual = renderer == null ? null : renderer.GetMaterial();
+            var baseMaterial = rawImage == null ? null : rawImage.material;
             bool materialRef = actual == expectedModified;
             var texture = rawImage == null ? null : rawImage.texture;
             bool textureRef = texture != null && binding.sourceMaterial != null &&
@@ -474,15 +508,159 @@ namespace Monkey.Targets.Spine
             if (!textureRef) gaps.Add("canvas_renderer_texture_readback_mismatch:" + index);
             if (!rawMaterialRef) gaps.Add("raw_image_profile_material_reference_mismatch:" + index);
             if (!blend) gaps.Add("ui_material_blend_readback_mismatch:" + index);
+            var stencil = ReadStencilState(rawImage, baseMaterial, actual);
+            if (!stencil.ancestryVerified) gaps.Add("stencil_mask_ancestry_readback_mismatch:" + index);
+            if (!stencil.shaderMatches) gaps.Add("stencil_material_shader_differs_from_base:" + index);
+            if (!stencil.propertiesMatch) gaps.Add("stencil_material_non_stencil_properties_differ:" + index);
+            if (!stencil.configurationVerified) gaps.Add("stencil_material_configuration_differs_from_mask_ancestry:" + index);
+            if (stencil.depth > 0 && !stencil.transientVariantVerified)
+                gaps.Add("stencil_material_transient_variant_unverified:" + index);
+            bool baseReference = baseMaterial != null && rawMaterialRef && binding.graphicMaterial == baseMaterial &&
+                !String.IsNullOrWhiteSpace(binding.graphicMaterialAssetPath) &&
+                !String.IsNullOrWhiteSpace(binding.graphicMaterialAssetGuid) &&
+                !String.IsNullOrWhiteSpace(binding.graphicTextureAssetPath) &&
+                !String.IsNullOrWhiteSpace(binding.graphicTextureAssetGuid) &&
+                baseMaterial.shader != null && baseMaterial.shader.name == ExpectedUiShaderName &&
+                baseMaterial.mainTexture == binding.sourceMaterial.mainTexture;
+            if (!baseReference) gaps.Add("persistent_graphic_base_material_reference_unverified:" + index);
             return new RendererRow { index = index, sourceMaterialId = binding.sourceMaterialId,
                 textureSourceId = binding.textureSourceId, blendMode = binding.blendMode,
                 actualMaterialShader = actual == null || actual.shader == null ? null : actual.shader.name,
                 actualMaterialName = actual == null ? null : actual.name,
                 actualTextureName = texture == null ? null : texture.name,
+                baseMaterialAssetPath = binding.graphicMaterialAssetPath,
+                baseMaterialAssetGuid = binding.graphicMaterialAssetGuid,
+                baseMaterialShader = baseMaterial == null || baseMaterial.shader == null ? null : baseMaterial.shader.name,
+                baseMaterialTextureAssetPath = binding.graphicTextureAssetPath,
+                baseMaterialTextureGuid = binding.graphicTextureAssetGuid,
+                stencilDepth = stencil.depth, stencilRootSortCanvasPath = stencil.rootCanvasPath,
+                stencilMaskAncestorSourceIds = stencil.ancestorSourceIds,
+                stencilReference = stencil.reference, stencilComparison = stencil.comparison,
+                stencilOperation = stencil.operation, stencilReadMask = stencil.readMask,
+                stencilWriteMask = stencil.writeMask, stencilColorMask = stencil.colorMask,
+                stencilUseAlphaClip = stencil.useAlphaClip,
                 rawImageEnabled = rawImage != null && rawImage.enabled,
                 rawImageMaskable = rawImage != null && rawImage.maskable,
                 rawImageMaterialReferenceVerified = rawMaterialRef,
-                materialReferenceVerified = materialRef, textureReferenceVerified = textureRef, blendVerified = blend };
+                materialReferenceVerified = materialRef, textureReferenceVerified = textureRef, blendVerified = blend,
+                baseMaterialPersistentReferenceVerified = baseReference,
+                modifiedMaterialShaderMatchesBase = stencil.shaderMatches,
+                nonStencilMaterialPropertiesMatch = stencil.propertiesMatch,
+                stencilAncestryVerified = stencil.ancestryVerified,
+                stencilConfigurationVerified = stencil.configurationVerified,
+                transientStencilVariantVerified = stencil.transientVariantVerified };
+        }
+
+        sealed class StencilReadback
+        {
+            public int depth, reference, comparison, operation, readMask, writeMask, colorMask, useAlphaClip;
+            public string rootCanvasPath;
+            public string[] ancestorSourceIds = Array.Empty<string>();
+            public bool ancestryVerified, shaderMatches, propertiesMatch, configurationVerified, transientVariantVerified;
+        }
+
+        static StencilReadback ReadStencilState(RawImage image, Material baseMaterial, Material actual)
+        {
+            var result = new StencilReadback();
+            if (image == null || baseMaterial == null || actual == null) return result;
+            var rootCanvas = MaskUtilities.FindRootSortOverrideCanvas(image.transform);
+            result.rootCanvasPath = TransformPath(rootCanvas);
+            var ancestorIds = new List<string>();
+            bool allMapped = true;
+            for (var current = image.transform.parent; current != null; current = current.parent)
+            {
+                foreach (var mask in current.GetComponents<Mask>())
+                {
+                    if (mask == null || !mask.MaskEnabled() || mask.graphic == null || !mask.graphic.IsActive()) continue;
+                    var identity = mask.GetComponent<NativeStaticMaskIdentity>();
+                    if (identity == null || String.IsNullOrWhiteSpace(identity.sourceId))
+                    { ancestorIds.Add(""); allMapped = false; }
+                    else ancestorIds.Add(identity.sourceId);
+                    break; // Match MaskUtilities.GetStencilDepth: at most one stencil per ancestor Transform.
+                }
+                if (current == rootCanvas) break;
+            }
+            result.ancestorSourceIds = ancestorIds.ToArray();
+            int sdkDepth = MaskUtilities.GetStencilDepth(image.transform, rootCanvas);
+            result.depth = image.maskable ? sdkDepth : 0;
+            result.ancestryVerified = allMapped && ancestorIds.Count == sdkDepth &&
+                ancestorIds.Distinct(StringComparer.Ordinal).Count() == ancestorIds.Count;
+            result.shaderMatches = baseMaterial.shader != null && actual.shader == baseMaterial.shader;
+            result.propertiesMatch = AreNonStencilPropertiesEqual(baseMaterial, actual);
+            result.reference = ReadInt(actual, "_Stencil"); result.comparison = ReadInt(actual, "_StencilComp");
+            result.operation = ReadInt(actual, "_StencilOp"); result.readMask = ReadInt(actual, "_StencilReadMask");
+            result.writeMask = ReadInt(actual, "_StencilWriteMask"); result.colorMask = ReadInt(actual, "_ColorMask");
+            result.useAlphaClip = ReadInt(actual, "_UseUIAlphaClip");
+            if (result.depth == 0)
+            {
+                result.configurationVerified = actual == baseMaterial && result.shaderMatches && result.propertiesMatch;
+                return result;
+            }
+
+            int stencilId = result.depth < 31 ? (1 << result.depth) - 1 : -1;
+            result.configurationVerified = stencilId >= 0 && HasStencilProperties(baseMaterial) &&
+                result.reference == stencilId && result.comparison == (int)CompareFunction.Equal &&
+                result.operation == (int)StencilOp.Keep && result.readMask == stencilId &&
+                result.writeMask == 0 && result.colorMask == (int)ColorWriteMask.All &&
+                result.useAlphaClip == 0 && !actual.IsKeywordEnabled("UNITY_UI_ALPHACLIP");
+            result.transientVariantVerified = actual != baseMaterial &&
+                (actual.hideFlags & HideFlags.HideAndDontSave) == HideFlags.HideAndDontSave &&
+                result.shaderMatches && result.propertiesMatch && result.configurationVerified && result.ancestryVerified;
+            return result;
+        }
+
+        static readonly HashSet<string> StencilPropertyNames = new HashSet<string>(StringComparer.Ordinal)
+        { "_Stencil", "_StencilComp", "_StencilOp", "_StencilReadMask", "_StencilWriteMask", "_ColorMask", "_UseUIAlphaClip" };
+
+        static bool HasStencilProperties(Material material)
+        {
+            return material != null && StencilPropertyNames.All(material.HasProperty);
+        }
+
+        static int ReadInt(Material material, string property)
+        {
+            if (material == null || !material.HasProperty(property)) return Int32.MinValue;
+            return Mathf.RoundToInt(material.GetFloat(property));
+        }
+
+        static bool AreNonStencilPropertiesEqual(Material left, Material right)
+        {
+            if (left == null || right == null || left.shader == null || left.shader != right.shader ||
+                left.mainTexture != right.mainTexture || left.renderQueue != right.renderQueue ||
+                left.enableInstancing != right.enableInstancing || left.doubleSidedGI != right.doubleSidedGI ||
+                left.globalIlluminationFlags != right.globalIlluminationFlags) return false;
+            var leftKeywords = (left.shaderKeywords ?? Array.Empty<string>()).Where(k => k != "UNITY_UI_ALPHACLIP").OrderBy(k => k, StringComparer.Ordinal);
+            var rightKeywords = (right.shaderKeywords ?? Array.Empty<string>()).Where(k => k != "UNITY_UI_ALPHACLIP").OrderBy(k => k, StringComparer.Ordinal);
+            if (!leftKeywords.SequenceEqual(rightKeywords)) return false;
+            var shader = left.shader;
+            for (int i = 0; i < shader.GetPropertyCount(); i++)
+            {
+                var name = shader.GetPropertyName(i);
+                if (StencilPropertyNames.Contains(name)) continue;
+                switch (shader.GetPropertyType(i))
+                {
+                    case ShaderPropertyType.Color: if (left.GetColor(name) != right.GetColor(name)) return false; break;
+                    case ShaderPropertyType.Vector: if (left.GetVector(name) != right.GetVector(name)) return false; break;
+                    case ShaderPropertyType.Float:
+                    case ShaderPropertyType.Range: if (!left.GetFloat(name).Equals(right.GetFloat(name))) return false; break;
+                    case ShaderPropertyType.Int: if (left.GetInt(name) != right.GetInt(name)) return false; break;
+                    case ShaderPropertyType.Texture:
+                        if (left.GetTexture(name) != right.GetTexture(name) ||
+                            left.GetTextureScale(name) != right.GetTextureScale(name) ||
+                            left.GetTextureOffset(name) != right.GetTextureOffset(name)) return false;
+                        break;
+                    default: return false;
+                }
+            }
+            return true;
+        }
+
+        static string TransformPath(Transform value)
+        {
+            if (value == null) return "";
+            var names = new Stack<string>();
+            for (var current = value; current != null; current = current.parent) names.Push(current.name);
+            return String.Join("/", names.ToArray());
         }
 
         static void ValidateBindings(MaterialBinding[] values)

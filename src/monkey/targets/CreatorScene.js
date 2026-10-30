@@ -5,6 +5,7 @@ const sourceChildren=require('./static-richtext.js').sourceChildren;
 const motion=require('./animation.js');
 const prefabs=require('./prefab.js');
 const relations=require('./prefab-instances.js');
+const staticSortQueue=require('./CreatorStaticSortQueueIntegration.js');
 const dynamic=require('./dynamic-ui.js');
 const batch=require('./batch.js');
 const jobs=require('./jobs.js');
@@ -40,6 +41,19 @@ function describe(root, plan) {
 module.exports = {
     load() {}, unload() {},
     methods: {
+        async prepareRetainedBuiltin(entry) {
+            const helper=require('./static-retained-assets.js'),material=helper.createBuiltin(entry,await loadAsset('60f7195c-ec2a-45eb-ba94-8955f60e81d0',cc.EffectAsset));
+            try{return helper.serializeBuiltin(material);}finally{material.destroy();}
+        },
+        async prepareStaticAnimationAssets(plan) {
+            const result=[];
+            for(const spec of plan.animations||[])if(spec.convertible) {
+                const clip=motion.create({...spec,assetOnly:true},new Map());
+                try {const raw=EditorExtends.serialize(clip);result.push({id:spec.id,path:spec.path,serialized:typeof raw==='string'?raw:JSON.stringify(raw)});}
+                finally{clip.destroy();}
+            }
+            return result;
+        },
         async createStaticPreview(uuid,plan){return require("./static-preview.js").create(uuid,plan,loadAsset);},
         async readStaticPreview(uuid,plan){return require("./static-preview.js").read(uuid,plan,loadAsset);},
         async prepareStaticTimeMaterial(spec, sourceId) {
@@ -82,6 +96,7 @@ module.exports = {
         async finishAssembly(id,saved,plan){return relations.finish(id,saved,plan,loadAsset);},
         async assemble(plan) {
             if (!globalThis.EditorExtends || typeof EditorExtends.serialize !== 'function') throw Error('Native serializer unavailable');
+            staticSortQueue.validatePlan(plan);
             if(plan.rendererBudget) {
                 const kib=plan.rendererBudget.macroConfig.BATCHER2D_MEM_INCREMENT;
                 if(!Number.isInteger(kib)||kib<144||kib>2303)throw Error('Invalid native tiled renderer budget');
@@ -103,6 +118,8 @@ module.exports = {
                 const native=new Map();
                 let loaded=0;
                 await batch.map(plan.assets,16,async a=>{checkTime(plan);native.set(a.sourceId,await loadAsset(a.kind==='sprite'?a.spriteFrameUuid:a.uuid,a.kind==='sprite'?cc.SpriteFrame:a.kind==='json'?cc.JsonAsset:a.kind==='audio'?cc.AudioClip:cc.Font));jobs.progress('textures',++loaded,plan.assets.length);});
+                if(plan.staticRetainedAssets)for(const [sid,asset]of await require('./static-retained-assets.js').load(plan.staticRetainedAssets))native.set(sid,asset);
+                const animationContext=plan.staticAnimationEvidence?await require('./static-animation-context.js').load(plan,loadAsset,native):null;
                 const spineAssets=new Map();
                 for(const asset of (plan.spineBinding&&plan.spineBinding.assets)||[])
                     spineAssets.set(asset.sourceId,await loadAsset(asset.creator.nativeUuid,cc.sp.SkeletonData));
@@ -204,34 +221,53 @@ module.exports = {
                     }));
                     require('./static-time-materials.js').apply(plan.staticTimeMaterials,row,material,sprites,id=>native.get(id));
                 }
-                for(const c of plan.components.filter(c=>c.convertible&&c.type==='cc.ProgressBar'))
-                    require('./progress.js').bind(nodes.get(c.node).getComponent(cc.ProgressBar),c,nodes);
+                for(const c of plan.components.filter(c=>c.type==='cc.ProgressBar')) {
+                    if(c.convertible)require('./progress.js').bind(nodes.get(c.node).getComponent(cc.ProgressBar),c,nodes);
+                    else if(c.staticProgressBinding) {
+                        const node=nodes.get(c.node),bar=plan.components.find(x=>x.sourceId===c.staticProgressBinding.barSpriteSourceId);
+                        const comp=node.addComponent(cc.ProgressBar);comp.enabled=false;
+                        require('./static-progress.js').bind(comp,c.staticProgressBinding,nodes.get(bar.node).getComponent(cc.Sprite));
+                    }
+                }
                 for(const c of plan.components.filter(c=>c.convertible&&c.type==='cc.LabelOutline')) {
                     const label=nodes.get(c.node).getComponent(cc.Label);
                     if(!label)throw Error('Outline requires mapped Label');
-                    if(!(label.font instanceof cc.BitmapFont)) {label.enableOutline=true;label.outlineColor=color(c.outlineColor);label.outlineWidth=c.width;}
+                    if(!(label.font instanceof cc.BitmapFont)) {label.enableOutline=!!c.enabled;label.outlineColor=color(c.outlineColor);label.outlineWidth=c.width;}
                     nativeRefs.push({sourceId:c.sourceId,nodeUuid:label.node.uuid,componentUuid:label.uuid,type:c.type});
                 }
                 // Components are built in an isolated, non-running Scene. Flush the
                 // public Label API after all properties/outlines so the default
                 // "Label" measurement cannot leak into the saved UITransform.
+                if(animationContext)require('./static-animation-integration.js').bind(plan,nodes,animationContext.animations,animationContext.evidence,plan.staticAnimationComponentOrigins);
+                if(plan.bitmapMissingGlyphs)require('./bitmap-missing-glyphs.js').attach(plan.bitmapMissingGlyphs,nodes,native,cc);
+                if(plan.staticMasks){const masks=require('./static-masks.js');masks.createStaticMasks(plan.staticMasks.masks,nodes,uuid=>masks.resolveSprite(plan,native,uuid));}
+                if(plan.layoutCompletion)require('./static-layout-completion.js').attach(plan.layoutCompletion,nodes);
+                if(plan.staticControls){
+                    const builtinMaterials=new Map();
+                    if(plan.staticControls.bindings.some(x=>x.sourceType==='cc.Graphics'))builtinMaterials.set('builtin-graphics',await loadAsset('f0416e68-0200-4b77-a926-4f9d16e494da',cc.Material));
+                    require('./static-controls.js').createAssign(plan.staticControls.bindings,nodes,require('./static-field-integration.js').resolver(plan,nodes,native),builtinMaterials);
+                }
                 if(plan.toggleBinding){
                     const gaps=require('./static-toggle.js').Create(plan.toggleBinding,id=>nodes.get(id),require('./static-field-integration.js').resolver(plan,nodes,native));
                     if(gaps.length)throw Error('STATIC_TOGGLE_BINDING_FAILED: '+gaps.join(','));
                 }
                 if(plan.spineBinding)require('./spine-ui-transform.js').attachPreservers(plan,nodes,cc);
                 require('./static-field-integration.js').createAssign(plan,nodes,native);
+                staticSortQueue.attachSourceIdentities(plan,nodes);
                 for(const c of plan.components.filter(c=>c.convertible&&c.type==='cc.Label')) {
                     checkTime(plan);nodes.get(c.node).getComponent(cc.Label).updateRenderData(true);
                 }
                 await resources.attach(plan,canvasNode,loadAsset);
                 const numericCodeExercise=numeric.exercise(codeEntries);
                 const animationAssets=[];
-                for(const spec of plan.animations||[])if(spec.convertible) {
+                for(const spec of plan.animations||[])if(spec.convertible&&!plan.staticAnimationEvidence) {
                     const clip=motion.create(spec,nodes);const raw=EditorExtends.serialize(clip);
                     animationAssets.push({id:spec.id,path:spec.path,serialized:typeof raw==='string'?raw:JSON.stringify(raw)});
                 }
                 if((plan.prefabInstances||[]).length || (plan.staticPrefabAssetDependencies?.dependencies||[]).length) {
+                    // Retained assemblies need the same real native Canvas lifecycle
+                    // as the non-retained path before individual Prefab serialization.
+                    dynamic.settle(scene,nodes,plan,null,true);
                     const assemblyId=relations.keep(plan,scene,nodes,{nativeRefs,animationAssets,numericCodeExercise,...describe(scene,plan)},native);
                     retained=true;return {assemblyId,nativeRefs,animationAssets,numericCodeExercise};
                 }
@@ -247,6 +283,7 @@ module.exports = {
             } finally {if(!retained){dynamic.release(scene);scene.destroy();}}
         },
         async readSaved(uuid,plan) {
+            staticSortQueue.validatePlan(plan);
             const asset=await loadAsset(uuid,cc.SceneAsset);const scene=asset.scene;
             // Loading a SceneAsset alone does not perform Scene._load, which is
             // where Creator expands native instance placeholders. Initialize
@@ -325,6 +362,10 @@ module.exports = {
             const templates=new Map();
             for(const info of plan.savedPrefabs||[])templates.set(info.sourceId,await loadAsset(info.uuid,cc.Prefab));
             const staticAssets=new Map(templates);
+            const retainedAssets=plan.staticRetainedAssets?await require('./static-retained-assets.js').load(plan.staticRetainedAssets):new Map();
+            for(const [sid,asset]of retainedAssets)staticAssets.set(sid,asset);
+            const staticRetainedAssetReadback=plan.staticRetainedAssets?await require('./static-retained-assets.js').read(plan.staticRetainedAssets,retainedAssets,plan.nativeProjectRoot):[];
+            const animationContext=plan.staticAnimationEvidence?await require('./static-animation-context.js').load(plan,loadAsset,staticAssets):null;
             if(plan.spriteOutlineBinding)staticAssets.set(plan.spriteOutlineBinding.materialSourceId,await loadAsset(plan.spriteOutlineBinding.creator.materialUuid,cc.Material));
             for(const a of (plan.spineBinding&&plan.spineBinding.assets)||[])staticAssets.set(a.sourceId,await loadAsset(a.creator.nativeUuid,cc.sp.SkeletonData));
             if(plan.materialBinding)staticAssets.set(plan.materialBinding.materialSourceId,await loadAsset(plan.materialBinding.creator.materialUuid,cc.Material));
@@ -353,7 +394,7 @@ module.exports = {
                 checkTime(plan);
                 const info=(plan.savedPrefabs||[]).find(p=>p.sourceId===spec.sourceId);
                 if(!info)throw Error('Saved prefab identity absent');
-                sourcePrefabs.push(prefabs.read(templates.get(spec.sourceId),spec,plan,info,templates,staticAssets));
+                sourcePrefabs.push(prefabs.read(templates.get(spec.sourceId),spec,plan,info,templates,staticAssets,animationContext));
             }
             const dynamicUiProbes=await dynamic.probe(plan,design,(done,total)=>jobs.progress('native-readback',sourcePrefabs.length+done,sourcePrefabs.length+total));
             const spineSpecs=plan.components.filter(c=>c.convertible&&c.spineBinding);
@@ -361,7 +402,7 @@ module.exports = {
             const spineBindings=spineModule.readCreatorSpineBindings(spineSpecs.map(c=>c.spineBinding),id=> {
                 const c=spineById.get(id);return c?mapped.get(c.node).getComponents(cc.sp.Skeleton):[];
             },id=>({sourceActivity:spineModule.sourceNodeActivity(plan,spineById.get(id).node),readbackScope:'saved_scene_mapped'}));
-            return {spineBindings,staticTimeMaterials,resourceProbes:await resources.read(plan,scene),tiledRenderer:tiledReadback(plan,mapped),dynamicUiProbes,nativeInitialNodes:plan.nativeInitialNodes,sourcePrefabs,prefabInstances,jsonAssets,audioAssets,fontPages,animations,numericCodeBindings,nodeCount:saved.length,nodes:[...mapped].map(([sourceId,n])=>({sourceId,nodeUuid:n.uuid,name:n.name,
+            return {staticRetainedAssetReadback,spineBindings,staticTimeMaterials,resourceProbes:await resources.read(plan,scene),tiledRenderer:tiledReadback(plan,mapped),dynamicUiProbes,nativeInitialNodes:plan.nativeInitialNodes,sourcePrefabs,prefabInstances,jsonAssets,audioAssets,fontPages,animations,numericCodeBindings,nodeCount:saved.length,nodes:[...mapped].map(([sourceId,n])=>({sourceId,nodeUuid:n.uuid,name:n.name,
                 position:[n.position.x,n.position.y,n.position.z],size:[n.getComponent(cc.UITransform).width,n.getComponent(cc.UITransform).height],
                 pivot:[n.getComponent(cc.UITransform).anchorX,n.getComponent(cc.UITransform).anchorY],scale:[n.scale.x,n.scale.y,n.scale.z],
                 rotation:[n.rotation.x,n.rotation.y,n.rotation.z,n.rotation.w],active:n.active,...prefabs.uiState(n,sourceNodes.get(sourceId))})),components:refs,labels,frames};

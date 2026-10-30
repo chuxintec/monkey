@@ -49,6 +49,9 @@ public static class UnityStaticAnimationBindings
         public bool convertible;
         public string nativeClipReadbackStatus;
         public string nativeClipContentStatus;
+        public string sourceEvidencePath;
+        public string sourceEvidenceGuid;
+        public string sourceEvidenceSha256;
     }
 
     [Serializable]
@@ -65,6 +68,10 @@ public static class UnityStaticAnimationBindings
         public string contentReadbackStatus;
         public string assetHashStatus;
         public string metaHashStatus;
+        public string sourceEvidencePath;
+        public string sourceEvidenceGuid;
+        public string sourceEvidenceHashStatus;
+        public string bindingObjectType;
     }
 
     [Serializable]
@@ -92,7 +99,7 @@ public static class UnityStaticAnimationBindings
         public string[] diagnostics;
     }
 
-    public static Readback Attach(GameObject target, Spec spec)
+    public static Readback Attach(GameObject target, Spec spec, bool verifyPersistedIdentity = true)
     {
         ValidateTarget(target, spec);
         var animator = target.GetComponent<Animator>();
@@ -106,12 +113,22 @@ public static class UnityStaticAnimationBindings
             AnimationClip clip = null;
             string resolvedPath = null;
             string resolvedGuid = null;
+            TextAsset sourceEvidence = null;
+            string evidencePath = null;
+            string evidenceGuid = null;
             string status = row.status;
             if (row.status == "native_clip_reference_resolved") {
-                clip = ResolveClip(row);
+                clip = ResolveClip(row, verifyPersistedIdentity);
                 resolvedPath = row.nativeClipPath;
                 resolvedGuid = row.nativeClipGuid;
             }
+            if (!string.IsNullOrWhiteSpace(row.sourceEvidencePath)) {
+                sourceEvidence = ResolveSourceEvidence(row, verifyPersistedIdentity);
+                evidencePath = row.sourceEvidencePath;
+                evidenceGuid = row.sourceEvidenceGuid;
+            }
+            if (clip == null && sourceEvidence == null)
+                throw new InvalidOperationException("STATIC_ANIMATION_SLOT_HAS_NO_REAL_ASSET_REFERENCE: " + row.sourceClipId);
             return new NativeStaticAnimationBinding.ClipSlot {
                 order = row.order,
                 sourceClipId = row.sourceClipId,
@@ -121,6 +138,10 @@ public static class UnityStaticAnimationBindings
                 nativeClipSha256 = row.assetSha256,
                 status = status,
                 nativeClip = clip,
+                sourceEvidencePath = evidencePath,
+                sourceEvidenceGuid = evidenceGuid,
+                sourceEvidenceSha256 = row.sourceEvidenceSha256,
+                sourceEvidenceAsset = sourceEvidence,
             };
         }).ToArray();
         AnimationClip defaultClip = null;
@@ -137,7 +158,53 @@ public static class UnityStaticAnimationBindings
         EditorUtility.SetDirty(marker);
         PrefabUtility.RecordPrefabInstancePropertyModifications(animator);
         PrefabUtility.RecordPrefabInstancePropertyModifications(marker);
-        return Read(target, spec);
+        return verifyPersistedIdentity ? Read(target, spec) : ReadAttached(target, spec);
+    }
+
+    static Readback ReadAttached(GameObject target, Spec spec)
+    {
+        var animator = target.GetComponent<Animator>();
+        var marker = target.GetComponent<NativeStaticAnimationBinding>();
+        if (animator == null || marker == null)return Failure(spec, "STATIC_ANIMATION_NATIVE_COMPONENT_MISSING");
+        var expected = (spec.clips ?? Array.Empty<ClipSpec>()).OrderBy(row => row.order).ToArray();
+        var actual = marker.SourceClips.OrderBy(row => row.order).ToArray();
+        bool matches = !animator.enabled && !marker.enabled
+            && marker.SourceComponentId == spec.sourceComponentId
+            && marker.SourceNodeId == spec.sourceNodeId
+            && marker.SourceEnabled == spec.sourceEnabled
+            && marker.SourceEnabledKnown == spec.sourceEnabledKnown
+            && marker.SourcePlayOnLoad == spec.sourcePlayOnLoad
+            && marker.SourcePlayOnLoadKnown == spec.sourcePlayOnLoadKnown
+            && marker.SourceDefaultClipKnown == spec.sourceDefaultClipKnown
+            && marker.HasSourceDefaultClip == spec.hasSourceDefaultClip
+            && marker.SourceDefaultClipId == spec.sourceDefaultClipId
+            && marker.SourceClipOrder.SequenceEqual(spec.sourceClipOrder ?? Array.Empty<string>(), StringComparer.Ordinal)
+            && expected.Length == actual.Length;
+        for (int i = 0; i < expected.Length && i < actual.Length; i++) {
+            var row = expected[i]; var saved = actual[i];
+            var expectedClip = row.status == "native_clip_reference_resolved" ? ResolveClip(row, false) : null;
+            var expectedEvidence = !string.IsNullOrWhiteSpace(row.sourceEvidencePath) ? ResolveSourceEvidence(row, false) : null;
+            matches &= saved.order == row.order && saved.sourceClipId == row.sourceClipId
+                && saved.planAnimationId == row.planAnimationId
+                && saved.nativeClip == expectedClip && saved.sourceEvidenceAsset == expectedEvidence
+                && (expectedClip != null || expectedEvidence != null);
+        }
+        var expectedDefault = spec.hasSourceDefaultClip && spec.defaultClipReferenceStatus == "resolved"
+            ? actual.FirstOrDefault(row => row.sourceClipId == spec.sourceDefaultClipId)?.nativeClip : null;
+        matches &= marker.SourceDefaultClip == expectedDefault;
+        return new Readback {
+            status = matches ? "attached_pending_save" : "mismatch",
+            sourceComponentId = marker.SourceComponentId, targetComponentId = spec.targetComponentId,
+            sourceNodeId = marker.SourceNodeId, targetNodeId = spec.targetNodeId,
+            sourceEnabled = marker.SourceEnabled, sourceEnabledKnown = marker.SourceEnabledKnown,
+            sourcePlayOnLoad = marker.SourcePlayOnLoad, sourcePlayOnLoadKnown = marker.SourcePlayOnLoadKnown,
+            sourceDefaultClipId = marker.SourceDefaultClipId, sourceDefaultClipKnown = marker.SourceDefaultClipKnown,
+            sourceClipOrder = marker.SourceClipOrder, hasSourceDefaultClip = marker.HasSourceDefaultClip,
+            animatorPresent = true, animatorDisabled = !animator.enabled, markerDisabled = !marker.enabled,
+            defaultClipReferenceStatus = spec.defaultClipReferenceStatus,
+            playbackExecuted = false,
+            diagnostics = matches ? Array.Empty<string>() : new[] { "In-memory animation references or disabled state differ before save." },
+        };
     }
 
     // Read is intentionally non-mutating. The caller invokes it after save/reopen
@@ -171,6 +238,7 @@ public static class UnityStaticAnimationBindings
             var row = expected[i];
             var saved = i < actual.Length ? actual[i] : null;
             bool shouldHaveAsset = row.status == "native_clip_reference_resolved";
+            bool shouldHaveEvidence = !string.IsNullOrWhiteSpace(row.sourceEvidencePath);
             string path = saved == null || saved.nativeClip == null ? null : AssetDatabase.GetAssetPath(saved.nativeClip);
             string guid = string.IsNullOrEmpty(path) ? null : AssetDatabase.AssetPathToGUID(path);
             string assetHashStatus = shouldHaveAsset && !string.IsNullOrEmpty(path)
@@ -181,13 +249,29 @@ public static class UnityStaticAnimationBindings
                 ? Hash(Path.GetFullPath(Path.Combine(Directory.GetParent(Application.dataPath).FullName, path)) + ".meta") == row.metaSha256
                     ? "verified" : "mismatch"
                 : "not_applicable";
+            string evidencePath = saved == null || saved.sourceEvidenceAsset == null ? null : AssetDatabase.GetAssetPath(saved.sourceEvidenceAsset);
+            string evidenceGuid = string.IsNullOrEmpty(evidencePath) ? null : AssetDatabase.AssetPathToGUID(evidencePath);
+            string evidenceHashStatus = shouldHaveEvidence && !string.IsNullOrEmpty(evidencePath)
+                ? Hash(Path.GetFullPath(Path.Combine(Directory.GetParent(Application.dataPath).FullName, evidencePath))) == row.sourceEvidenceSha256
+                    ? "verified" : "mismatch"
+                : "not_applicable";
             bool matches = saved != null && saved.order == row.order && saved.sourceClipId == row.sourceClipId
                 && saved.planAnimationId == row.planAnimationId && saved.status == row.status
                 && (shouldHaveAsset
                     ? saved.nativeClip != null && path == row.nativeClipPath && guid == row.nativeClipGuid
+                        && saved.nativeClipPath == row.nativeClipPath && saved.nativeClipGuid == row.nativeClipGuid
+                        && saved.nativeClipSha256 == row.assetSha256
                         && saved.nativeClip.name == row.nativeName && assetHashStatus == "verified"
                         && (string.IsNullOrEmpty(row.metaSha256) || metaHashStatus == "verified")
-                    : saved.nativeClip == null);
+                    : saved.nativeClip == null)
+                && (shouldHaveEvidence
+                    ? saved.sourceEvidenceAsset != null && evidencePath == row.sourceEvidencePath
+                        && evidenceGuid == row.sourceEvidenceGuid
+                        && saved.sourceEvidencePath == row.sourceEvidencePath
+                        && saved.sourceEvidenceGuid == row.sourceEvidenceGuid
+                        && saved.sourceEvidenceSha256 == row.sourceEvidenceSha256
+                        && evidenceHashStatus == "verified"
+                    : saved.sourceEvidenceAsset == null);
             clipsMatch &= matches;
             clipReadbacks[i] = new ClipReadback {
                 order = row.order,
@@ -201,6 +285,10 @@ public static class UnityStaticAnimationBindings
                 contentReadbackStatus = row.nativeClipContentStatus ?? "not_run",
                 assetHashStatus = assetHashStatus,
                 metaHashStatus = metaHashStatus,
+                sourceEvidencePath = evidencePath,
+                sourceEvidenceGuid = evidenceGuid,
+                sourceEvidenceHashStatus = evidenceHashStatus,
+                bindingObjectType = saved != null && saved.nativeClip != null ? "AnimationClip" : "TextAsset",
             };
         }
         bool defaultMatches = !spec.hasSourceDefaultClip || spec.defaultClipReferenceStatus != "resolved"
@@ -235,16 +323,17 @@ public static class UnityStaticAnimationBindings
         };
     }
 
-    static AnimationClip ResolveClip(ClipSpec spec)
+    static AnimationClip ResolveClip(ClipSpec spec, bool verifyPersistedIdentity = true)
     {
         if (string.IsNullOrWhiteSpace(spec.nativeClipPath) || !spec.nativeClipPath.StartsWith("Assets/", StringComparison.Ordinal)
-            || spec.nativeClipPath.Contains("..") || string.IsNullOrWhiteSpace(spec.nativeClipGuid)
-            || string.IsNullOrWhiteSpace(spec.assetSha256))
+            || spec.nativeClipPath.Contains("..") || (verifyPersistedIdentity
+                && (string.IsNullOrWhiteSpace(spec.nativeClipGuid) || string.IsNullOrWhiteSpace(spec.assetSha256))))
             throw new InvalidOperationException("STATIC_ANIMATION_CLIP_IDENTITY_INCOMPLETE: " + spec.sourceClipId);
         var clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(spec.nativeClipPath);
-        if (clip == null || AssetDatabase.AssetPathToGUID(spec.nativeClipPath) != spec.nativeClipGuid
-            || clip.name != spec.nativeName)
+        if (clip == null || (verifyPersistedIdentity && (AssetDatabase.AssetPathToGUID(spec.nativeClipPath) != spec.nativeClipGuid
+            || clip.name != spec.nativeName)))
             throw new InvalidOperationException("STATIC_ANIMATION_CLIP_ASSET_IDENTITY_MISMATCH: " + spec.nativeClipPath);
+        if (!verifyPersistedIdentity)return clip;
         var projectRoot = Directory.GetParent(Application.dataPath).FullName;
         var assetAbsolutePath = Path.GetFullPath(Path.Combine(projectRoot, spec.nativeClipPath));
         var actualHash = Hash(assetAbsolutePath);
@@ -256,6 +345,25 @@ public static class UnityStaticAnimationBindings
                 throw new InvalidOperationException("STATIC_ANIMATION_CLIP_META_HASH_MISMATCH: " + spec.nativeClipPath);
         }
         return clip;
+    }
+
+    static TextAsset ResolveSourceEvidence(ClipSpec spec, bool verifyPersistedIdentity = true)
+    {
+        if (string.IsNullOrWhiteSpace(spec.sourceEvidencePath)
+            || !spec.sourceEvidencePath.StartsWith("Assets/", StringComparison.Ordinal)
+            || spec.sourceEvidencePath.Contains("..")
+            || (verifyPersistedIdentity && (string.IsNullOrWhiteSpace(spec.sourceEvidenceGuid)
+                || string.IsNullOrWhiteSpace(spec.sourceEvidenceSha256))))
+            throw new InvalidOperationException("STATIC_ANIMATION_SOURCE_EVIDENCE_IDENTITY_INCOMPLETE: " + spec.sourceClipId);
+        var asset = AssetDatabase.LoadAssetAtPath<TextAsset>(spec.sourceEvidencePath);
+        if (asset == null || (verifyPersistedIdentity && AssetDatabase.AssetPathToGUID(spec.sourceEvidencePath) != spec.sourceEvidenceGuid))
+            throw new InvalidOperationException("STATIC_ANIMATION_SOURCE_EVIDENCE_IDENTITY_MISMATCH: " + spec.sourceEvidencePath);
+        if (!verifyPersistedIdentity)return asset;
+        var root = Directory.GetParent(Application.dataPath).FullName;
+        var absolute = Path.GetFullPath(Path.Combine(root, spec.sourceEvidencePath));
+        if (Hash(absolute) != spec.sourceEvidenceSha256)
+            throw new InvalidOperationException("STATIC_ANIMATION_SOURCE_EVIDENCE_HASH_MISMATCH: " + spec.sourceEvidencePath);
+        return asset;
     }
 
     static void ValidateTarget(GameObject target, Spec spec)

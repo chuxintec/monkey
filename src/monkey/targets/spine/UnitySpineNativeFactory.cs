@@ -994,10 +994,18 @@ namespace Monkey.Targets.Spine
             var factors = Monkey.Targets.SpineMaterials.UnitySpineMaterialBindings.BlendFactors(mode, pma);
             if (!GraphicProfileMaterialMatches(graphicMaterial, graphicMaterial.shader, sourceMaterial.mainTexture, mode, pma))
                 throw new InvalidOperationException("SPINE_UI_GRAPHIC_MATERIAL_PROFILE_MISMATCH:" + sourceMaterialId);
+            var graphicPath = AssetDatabase.GetAssetPath(graphicMaterial);
+            var graphicGuid = String.IsNullOrWhiteSpace(graphicPath) ? null : AssetDatabase.AssetPathToGUID(graphicPath);
+            var texturePath = AssetDatabase.GetAssetPath(graphicMaterial.mainTexture);
+            var textureGuid = String.IsNullOrWhiteSpace(texturePath) ? null : AssetDatabase.AssetPathToGUID(texturePath);
+            if (String.IsNullOrWhiteSpace(graphicGuid) || String.IsNullOrWhiteSpace(textureGuid))
+                throw new InvalidOperationException("SPINE_UI_GRAPHIC_MATERIAL_PERSISTENT_IDENTITY_MISSING:" + sourceMaterialId);
             bindings.Add(new UnitySpineGraphicMaterialPresentation.MaterialBinding
             {
                 sourceMaterialId = sourceMaterialId, textureSourceId = textureSourceId, blendMode = mode,
                 sourceMaterial = sourceMaterial, graphicMaterial = graphicMaterial,
+                graphicMaterialAssetPath = graphicPath, graphicMaterialAssetGuid = graphicGuid,
+                graphicTextureAssetPath = texturePath, graphicTextureAssetGuid = textureGuid,
                 expectedSrcBlend = factors[0], expectedDstBlend = factors[1],
             });
         }

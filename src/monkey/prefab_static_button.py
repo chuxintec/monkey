@@ -10,7 +10,7 @@ DEFAULT_COLORS={'normalColor':[255,255,255,255],'hoverColor':[255,255,255,255],
 
 def enrich(ir):
     if ir.get('sourceProfile') not in ('cocos-2.4.15-bundle','cocos-2.4.15-project'):return
-    rows=[c for c in ir['components']if c['type']=='cc.Button'and c.get('transition')==1]
+    rows=[c for c in ir['components']if c['type']=='cc.Button'and c.get('transition') in (0,1,3)]
     if not rows or not ir.get('sourceManifestPath'):return
     raw=io.stage_bytes(Path(ir['sourceManifestPath']))
     if io.sha(raw)!=ir.get('sourceManifestSha256'):fail('BUTTON_SOURCE_CHANGED',ir['sourceManifestPath'],'Frozen source changed')
@@ -19,7 +19,7 @@ def enrich(ir):
         source,node,_=_resolve_component(manifest,c['sourceId'],'cc.Button')
         if node!=c['node']:fail('BUTTON_NODE_CHANGED',c['sourceId'],'Source node differs')
         spec={'sourceId':c['sourceId'],'sourceNodeId':node,'sourceEnabled':c.get('enabled',True),
-              'sourceFields':source,'defaultsSource':DEFAULT_SOURCE,'behavior':'disabled','eventsBound':False}
+              'sourceTransition':c['transition'],'sourceZoomScale':c.get('zoomScale',1.2),'sourceFields':source,'defaultsSource':DEFAULT_SOURCE,'behavior':'disabled','eventsBound':False}
         for name,default in DEFAULT_COLORS.items():
             present,value,_=_pick(source,('_N$'+name,name),name)
             if present:

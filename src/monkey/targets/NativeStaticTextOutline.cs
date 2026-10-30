@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using TMPro;
 using UnityEngine;
 
@@ -38,6 +39,7 @@ public sealed class NativeStaticTextOutline : MonoBehaviour
     [SerializeField] TMP_Text target;
     [SerializeField, Min(0f)] float sourceOutlineWidth;
     [SerializeField] Color sourceOutlineColor = Color.black;
+    [SerializeField] List<PersistentMaterialVariant> persistentVariants = new List<PersistentMaterialVariant>();
 
     readonly Dictionary<TMP_FontAsset, MaterialVariant> variants = new Dictionary<TMP_FontAsset, MaterialVariant>();
     readonly Dictionary<TMP_SubMeshUI, SubmeshBaseline> submeshBaselines = new Dictionary<TMP_SubMeshUI, SubmeshBaseline>();
@@ -53,6 +55,19 @@ public sealed class NativeStaticTextOutline : MonoBehaviour
         public Material material;
     }
 
+    [Serializable]
+    sealed class PersistentMaterialVariant
+    {
+        public TMP_FontAsset font;
+        public Material material;
+        public Material parentFontMaterial;
+        public Material sourceFontMaterial;
+        public Texture atlas;
+        public float fontSize;
+        public float outlineWidth;
+        public Color outlineColor;
+    }
+
     sealed class SubmeshBaseline
     {
         public TMP_SubMeshUI submesh;
@@ -64,6 +79,112 @@ public sealed class NativeStaticTextOutline : MonoBehaviour
     public float SourceOutlineWidth { get { return sourceOutlineWidth; } }
     public Color SourceOutlineColor { get { return sourceOutlineColor; } }
     public Readback LastReadback { get { return lastReadback; } }
+
+    /// <summary>
+    /// Register a verified, owned persistent material produced during capture.
+    /// A null parent material identifies the primary face; fallback faces bind
+    /// to the exact persistent primary material used to derive TMP's fallback.
+    /// Runtime reuse remains gated by every serialized style/resource identity.
+    /// </summary>
+    public bool RegisterPersistentMaterialVariant(TMP_FontAsset font, Material material,
+        Material parentFontMaterial, float fontSize, Texture atlas, out string diagnostic)
+    {
+        diagnostic = null;
+        if (target == null || font == null || font.material == null || material == null || atlas == null ||
+            !Finite(fontSize) || fontSize <= 0f || target.fontSize != fontSize ||
+            !Finite(sourceOutlineWidth) || sourceOutlineWidth < 0f)
+            return FailRegistration("NATIVE_STATIC_TEXT_OUTLINE_PERSISTENT_VARIANT_INPUT_INVALID", out diagnostic);
+        if (parentFontMaterial == null)
+        {
+            if (target.font != font || !FontOwnsAtlas(font, atlas) || material.GetTexture("_MainTex") != atlas)
+                return FailRegistration("NATIVE_STATIC_TEXT_OUTLINE_PRIMARY_VARIANT_SOURCE_MISMATCH", out diagnostic);
+        }
+        else if (parentFontMaterial != target.fontSharedMaterial || target.font == font || !FontOwnsAtlas(font, atlas) ||
+                 material.GetTexture("_MainTex") != atlas)
+            return FailRegistration("NATIVE_STATIC_TEXT_OUTLINE_FALLBACK_VARIANT_SOURCE_MISMATCH", out diagnostic);
+        if (!HasConfiguredStyle(material, font, fontSize))
+            return FailRegistration("NATIVE_STATIC_TEXT_OUTLINE_PERSISTENT_VARIANT_STYLE_MISMATCH", out diagnostic);
+        if (persistentVariants == null) persistentVariants = new List<PersistentMaterialVariant>();
+        var existing = persistentVariants.Find(row => row != null && row.font == font && row.material != null &&
+            row.parentFontMaterial == parentFontMaterial && row.sourceFontMaterial == font.material && row.atlas == atlas &&
+            row.fontSize == fontSize && row.outlineWidth == sourceOutlineWidth && row.outlineColor == sourceOutlineColor);
+        if (existing == null)
+        {
+            persistentVariants.Add(new PersistentMaterialVariant {
+                font = font,
+                material = material,
+                parentFontMaterial = parentFontMaterial,
+                sourceFontMaterial = font.material,
+                atlas = atlas,
+                fontSize = fontSize,
+                outlineWidth = sourceOutlineWidth,
+                outlineColor = sourceOutlineColor,
+            });
+        }
+        else if (existing.material != material)
+            return FailRegistration("NATIVE_STATIC_TEXT_OUTLINE_PERSISTENT_VARIANT_COLLISION", out diagnostic);
+        return true;
+    }
+
+    /// <summary>Capture-only style application to a temporary material candidate.</summary>
+    public bool ConfigureCaptureCandidate(Material material, TMP_FontAsset font, float fontSize,
+        out string diagnostic)
+    {
+        diagnostic = null;
+        if (material == null || font == null || !Finite(fontSize) || fontSize <= 0f)
+            return FailRegistration("NATIVE_STATIC_TEXT_OUTLINE_CAPTURE_CANDIDATE_INPUT_INVALID", out diagnostic);
+        try
+        {
+            ConfigureMaterial(material, font, fontSize);
+            return true;
+        }
+        catch (Exception error)
+        {
+            return FailRegistration("NATIVE_STATIC_TEXT_OUTLINE_CAPTURE_CANDIDATE_CONFIGURE_FAILED:" + error.GetType().Name,
+                out diagnostic);
+        }
+    }
+
+    static bool FontOwnsAtlas(TMP_FontAsset font, Texture atlas)
+    {
+        return font != null && atlas != null && font.atlasTextures != null && font.atlasTextures.Any(row => row == atlas);
+    }
+
+    bool TryGetPersistentVariant(TMP_FontAsset font, Material parentFontMaterial, Texture atlas, out Material material)
+    {
+        material = null;
+        if (persistentVariants == null || target == null || font == null) return false;
+        var matches = persistentVariants.Where(row => row != null && row.font == font && row.material != null &&
+            row.parentFontMaterial == parentFontMaterial && row.sourceFontMaterial == font.material && row.atlas == atlas &&
+            row.fontSize == target.fontSize && row.outlineWidth == sourceOutlineWidth && row.outlineColor == sourceOutlineColor).ToArray();
+        if (matches.Length != 1) return false;
+        var candidate = matches[0].material;
+        if (candidate.GetTexture("_MainTex") != atlas || !HasConfiguredStyle(candidate, font, target.fontSize)) return false;
+        material = candidate;
+        return true;
+    }
+
+    bool HasConfiguredStyle(Material material, TMP_FontAsset font, float labelFontSize)
+    {
+        if (material == null || font == null || font.material == null ||
+            !material.HasProperty("_GradientScale") || !material.HasProperty("_OutlineWidth") ||
+            !material.HasProperty("_OutlineColor") || !font.material.HasProperty("_GradientScale")) return false;
+        var gradient = font.material.GetFloat("_GradientScale");
+        var pointSize = font.faceInfo.pointSize;
+        if (!Finite(gradient) || gradient <= 1f || !Finite(pointSize) || pointSize <= 0f || !Finite(labelFontSize) || labelFontSize <= 0f)
+            return false;
+        var width = sourceOutlineWidth * pointSize / labelFontSize / (gradient - 1f);
+        var faceDilate = font.material.HasProperty("_FaceDilate") ? font.material.GetFloat("_FaceDilate") : 0f;
+        return Finite(width) && Mathf.Approximately(material.GetFloat("_GradientScale"), gradient) &&
+            Mathf.Approximately(material.GetFloat("_OutlineWidth"), width) && material.GetColor("_OutlineColor") == sourceOutlineColor &&
+            (!material.HasProperty("_FaceDilate") || Mathf.Approximately(material.GetFloat("_FaceDilate"), faceDilate));
+    }
+
+    static bool FailRegistration(string message, out string diagnostic)
+    {
+        diagnostic = message;
+        return false;
+    }
 
     public void Configure(TMP_Text text, float width, Color color)
     {
@@ -210,8 +331,10 @@ public sealed class NativeStaticTextOutline : MonoBehaviour
     {
         if (target == null || target.font == null)
             throw new InvalidOperationException("NATIVE_STATIC_TEXT_OUTLINE_TEXT_UNAVAILABLE");
-        var primary = GetVariant(target.font);
-        bool requiresPaddingUpdate = ConfigureMaterial(primary, target.font, target.fontSize);
+        var primaryAtlas = target.font.material == null ? null : target.font.material.GetTexture("_MainTex");
+        var hasPersistentPrimary = TryGetPersistentVariant(target.font, null, primaryAtlas, out var primary);
+        if (!hasPersistentPrimary) primary = GetVariant(target.font);
+        bool requiresPaddingUpdate = hasPersistentPrimary ? false : ConfigureMaterial(primary, target.font, target.fontSize);
         if (target.fontSharedMaterial != primary)
         {
             target.fontSharedMaterial = primary;
@@ -282,8 +405,10 @@ public sealed class NativeStaticTextOutline : MonoBehaviour
 
             // Build the primary material first. TMP's fallback material manager uses
             // this as the source style while taking atlas and gradient from each face.
-            var primary = GetVariant(target.font);
-            bool requiresPaddingUpdate = ConfigureMaterial(primary, target.font, fontSize);
+            var primaryAtlas = target.font.material == null ? null : target.font.material.GetTexture("_MainTex");
+            var hasPersistentPrimary = TryGetPersistentVariant(target.font, null, primaryAtlas, out var primary);
+            if (!hasPersistentPrimary) primary = GetVariant(target.font);
+            bool requiresPaddingUpdate = hasPersistentPrimary ? false : ConfigureMaterial(primary, target.font, fontSize);
             if (target.fontSharedMaterial != primary)
             {
                 target.fontSharedMaterial = primary;
@@ -312,8 +437,10 @@ public sealed class NativeStaticTextOutline : MonoBehaviour
                         lastReadback = Failure("NATIVE_STATIC_TEXT_OUTLINE_FALLBACK_MATERIAL_MISSING: " + font.name);
                         return;
                     }
-                    material = GetVariant(font, fallbackTemplate);
-                    requiresPaddingUpdate |= ConfigureMaterial(material, font, fontSize);
+                    var fallbackAtlas = fallbackTemplate.GetTexture("_MainTex");
+                    var hasPersistentFallback = TryGetPersistentVariant(font, primary, fallbackAtlas, out material);
+                    if (!hasPersistentFallback) material = GetVariant(font, fallbackTemplate);
+                    if (!hasPersistentFallback) requiresPaddingUpdate |= ConfigureMaterial(material, font, fontSize);
                     var submeshes = target.GetComponentsInChildren<TMP_SubMeshUI>(true);
                     bool found = false;
                     foreach (var submesh in submeshes)

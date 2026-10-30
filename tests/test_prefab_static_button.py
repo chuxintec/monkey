@@ -29,3 +29,16 @@ class StaticButtonTests(unittest.TestCase):
         with tempfile.TemporaryDirectory()as tmp:
             ir=self.candidate(Path(tmp).resolve());Path(ir['sourceManifestPath']).write_text('{}')
             with self.assertRaises(ParseError):enrich(ir)
+
+    def test_none_and_external_scale_targets_preserve_disabled_source_policy(self):
+        for transition,zoom in [(0,1.1),(3,.85)]:
+            with tempfile.TemporaryDirectory() as tmp:
+                ir=self.candidate(Path(tmp).resolve(),{'_N$transition':transition,'zoomScale':zoom})
+                c=ir['components'][0];c.update(transition=transition,zoomScale=zoom,target='b:panel#9')
+                enrich(ir);spec=c['staticButtonBinding']
+                self.assertEqual(spec['sourceTransition'],transition)
+                self.assertEqual(spec['sourceZoomScale'],zoom)
+                self.assertEqual(c['target'],'b:panel#9')
+                self.assertEqual(spec['behavior'],'disabled')
+                self.assertFalse(spec['eventsBound'])
+                self.assertTrue(spec['renderReady'])

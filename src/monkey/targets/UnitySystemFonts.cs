@@ -97,6 +97,8 @@ public static class UnitySystemFonts
         public string sourceFontFamilyEvidence;
         public string sourceSerializedFontUuid;
         public bool sourceSystemFont;
+        public string sourceEffectiveFontPolicy;
+        public string sourceEffectiveFamily;
         public string nativeFontAssetId;
         public string nativeFontAssetPath;
         public string[] nativeFallbackAssetIds;
@@ -231,6 +233,7 @@ public static class UnitySystemFonts
         public string sourceFontFamilyEvidence;
         public string sourceSerializedFontUuid;
         public bool sourceSystemFont;
+        public string sourceEffectiveFontPolicy;
         public string resolvedPrimaryFamily;
         public string resolvedPrimaryStyleName;
         public string newCharacterBoundary;
@@ -995,7 +998,13 @@ public static class UnitySystemFonts
                 throw new InvalidOperationException("SYSTEM_FONT_LABEL_ID_INVALID_OR_DUPLICATE");
             // JsonUtility materializes a JSON null string as an empty string.
             // The producer has already verified that the source UUID is absent.
-            if (label.sourceSystemFont != true || !string.IsNullOrEmpty(label.sourceSerializedFontUuid))
+            bool sourceNullFontFallback = !label.sourceSystemFont
+                && label.sourceFontFamily == "Arial"
+                && ((label.sourceEffectiveFontPolicy == "creator24-null-font-ttf-Arial"
+                     && label.sourceFontFamilyEvidence == "creator24-renderer-utils-getFontFamily-null-branch")
+                    || (label.sourceEffectiveFontPolicy == "creator24-ttf-null-font-effective-family-arial-v1"
+                        && label.sourceEffectiveFamily == "Arial"));
+            if ((!label.sourceSystemFont && !sourceNullFontFallback) || !string.IsNullOrEmpty(label.sourceSerializedFontUuid))
                 throw new InvalidOperationException("SYSTEM_FONT_SOURCE_BINDING_INVALID: explicit source font cannot enter this plan");
             if (!byId.TryGetValue(label.nativeFontAssetId, out var primary) || primary.role != "primary")
                 throw new InvalidOperationException("SYSTEM_FONT_PRIMARY_ASSET_MISSING: " + label.nativeFontAssetId);
@@ -1248,6 +1257,7 @@ public static class UnitySystemFonts
                 sourceFontFamilyEvidence = label.sourceFontFamilyEvidence,
                 sourceSerializedFontUuid = label.sourceSerializedFontUuid,
                 sourceSystemFont = label.sourceSystemFont,
+                sourceEffectiveFontPolicy = label.sourceEffectiveFontPolicy,
                 resolvedPrimaryFamily = label.resolvedPrimaryFamily,
                 resolvedPrimaryStyleName = label.resolvedPrimaryStyleName,
                 newCharacterBoundary = label.newCharacterBoundary,
